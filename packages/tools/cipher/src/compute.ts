@@ -182,7 +182,7 @@ function operationFor(r: ResolvedCipher): CipherOperation {
 
 /** What to call each key source in a result field. */
 const KEY_SOURCE_LABELS: Record<KeySource, string> = {
-  custom: "Typed in",
+  directinput: "Direct Input",
   pbkdf2: "PBKDF2",
   evpkdf: "EvpKDF (EVP_BytesToKey)",
   hkdf: "HKDF",
