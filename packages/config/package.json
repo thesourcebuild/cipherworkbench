@@ -1,0 +1,13 @@
+{
+  "name": "@ocs/config",
+  "version": "0.1.1",
+  "private": true,
+  "files": ["tsconfig"],
+  "exports": {
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/library.json": "./tsconfig/library.json",
+    "./tsconfig/react.json": "./tsconfig/react.json",
+    "./tsconfig/next.json": "./tsconfig/next.json",
+    "./tsconfig/node.json": "./tsconfig/node.json"
+  }
+}

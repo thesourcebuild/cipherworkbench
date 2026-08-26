@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Library (just-in-time, consumed as TS source)",
+  "extends": "./base.json",
+  "//lib": "DOM is here for the Web Crypto types, not for the document. `crypto.subtle` is what RSA runs on — @noble has no RSA — and SubtleCrypto's parameter types (CryptoKey, RsaPssParams, RsaOaepParams, JsonWebKey, BufferSource) are declared in lib.dom rather than by @types/node, which defers to it. Every library package here is consumed as TS source by the web app, so a consumer's own typecheck compiles these files too: narrowing the lib to one package would only move the failure to @ocs/registry, which is exactly where it first appeared. What keeps compute code away from `document` and `window` is now eslint's no-restricted-globals rule over packages/algos, packages/tools and packages/cipher-engine, added when this lib widened.",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "noEmit": true,
+    "types": ["node"]
+  }
+}

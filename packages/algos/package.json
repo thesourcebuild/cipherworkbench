@@ -1,0 +1,20 @@
+{
+  "name": "@ocs/algos",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Pure, zero-dependency implementations of the algorithms @noble and @scure do not provide. Deliberately free of any @ocs/* import as well: nothing here knows what a tool, a spec or a catalogue is, so every function can be tested against its published vectors with no engine or UI in the way.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./crc": "./src/crc/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

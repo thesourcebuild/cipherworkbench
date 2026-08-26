@@ -1,0 +1,13 @@
+node_modules
+dist
+out
+.next
+renderer
+release
+pnpm-lock.yaml
+*.md
+
+# Vendored third-party source, kept byte-identical to upstream apart from a documented set of
+# patches. Reformatting it would destroy the only thing that makes it reviewable — a clean diff
+# against inexorabletash/text-encoding v0.7.0. See the header of encoding.js.
+packages/encodings/src/vendor/

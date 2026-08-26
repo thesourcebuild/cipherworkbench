@@ -1,0 +1,21 @@
+{
+  "name": "@ocs/encodings",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Legacy character encodings, for turning typed text into bytes in GBK, Big5, Shift_JIS, EUC-JP/KR, gb18030, ISO-2022-JP, the ISO-8859 set and the Windows code pages. TextEncoder in every browser emits UTF-8 and nothing else — by design, per the WHATWG standard — so encoding to these needs shipped tables. The encoding catalogue itself lives in @ocs/contracts, since a share link carries these ids; the 635 KB of vendored engine and tables sits behind a dynamic import in `./src/legacy.ts` and loads the first time one of these encodings is actually selected.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ocs/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

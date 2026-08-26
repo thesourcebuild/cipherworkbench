@@ -1,0 +1,16 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "packages/tools/*"
+
+# pnpm 10+ blocks postinstall scripts unless a package is listed here.
+# `electron` needs its postinstall to download the platform binary.
+#
+# Note what is NOT here, and never should be: this app has no native modules.
+# Every algorithm is pure ESM (@noble/*, @scure/*, @ocs/algos), which is what
+# lets one bundle serve a browser tab and an Electron renderer unchanged.
+onlyBuiltDependencies:
+  - electron
+  - esbuild
+  - "@tailwindcss/oxide"
+  - unrs-resolver

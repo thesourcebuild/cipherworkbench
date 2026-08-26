@@ -1,0 +1,25 @@
+{
+  "name": "@ocs/engine",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "//sideEffects": "Pure functions and generic data only. Without this, the barrel index forces every module into any bundle that imports one function.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "//": "Tool-agnostic catalogue/codec/compute/lint engine. Every packages/tools/<family> package depends on this instead of reimplementing it.",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ocs/contracts": "workspace:*",
+    "@ocs/encodings": "workspace:*",
+    "@scure/base": "^1.2.6",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

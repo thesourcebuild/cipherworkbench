@@ -1,0 +1,33 @@
+{
+  "name": "@ocs/desktop",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Cipher Workbench — desktop shell",
+  "author": "Cipher Workbench contributors",
+  "main": "dist/main/index.cjs",
+  "scripts": {
+    "build:renderer": "rimraf renderer && cpy \"../web/out/**\" renderer",
+    "build:main": "rimraf dist && tsup",
+    "build": "pnpm build:renderer && pnpm build:main",
+    "dev": "tsup --watch --onSuccess \"node scripts/run-electron.mjs --dev\"",
+    "start": "node scripts/run-electron.mjs",
+    "smoke": "cross-env OCS_SMOKE=1 node scripts/run-electron.mjs",
+    "package": "electron-builder --config electron-builder.config.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "//": "There are NO runtime dependencies, and that is the point. Every algorithm in this app is pure ESM (@noble, @scure, @ocs/algos), so tsup inlines the entire main and preload graph and electron-builder ships nothing but the bundle plus the static renderer — no native module, no asarUnpack, no postinstall compile step. @ocs/web is a devDependency that is never imported: it exists so Turborepo orders the web build before build:renderer copies its output. The electron version is pinned exactly because electron-builder downloads binaries for one specific release and refuses a range.",
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "@ocs/contracts": "workspace:*",
+    "@ocs/web": "workspace:*",
+    "@types/node": "^22.20.1",
+    "cpy-cli": "^7.0.0",
+    "cross-env": "^10.1.0",
+    "electron": "43.2.0",
+    "electron-builder": "^26.15.3",
+    "rimraf": "^6.1.3",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@ocs/mac",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Message authentication codes. Four tools: HMAC over any catalogued hash, KMAC (SHA-3's native MAC), Poly1305, and AES-CMAC. Same manifest/definition split as the other families — `./manifests` is eager and dependency-free, `./definition` reaches @noble.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.1.0",
+    "@noble/hashes": "^2.2.0",
+    "@ocs/algos": "workspace:*",
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

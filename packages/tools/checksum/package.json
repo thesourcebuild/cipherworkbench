@@ -1,0 +1,27 @@
+{
+  "name": "@ocs/checksum",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "The pre-CRC checksums: sums, XOR, LRC, BCC, Fletcher and Adler-32. A separate family from @ocs/crc because a sum and a polynomial division are different ideas, not two strengths of one — see the note on ToolFamily. One tool per named checksum rather than one tool with a variant dropdown, because the names are what people search for and there are nine of them, not sixty-seven. `./manifests` is eager and dependency-free; `./definition` is the on-demand half that reaches @ocs/algos.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ocs/algos": "workspace:*",
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

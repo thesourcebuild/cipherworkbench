@@ -1,0 +1,31 @@
+{
+  "name": "@ocs/format",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Text formats: URL, HTML entities, JWT, JSON, XML, case, UUID, password. Unlike every other family here, almost none of this is implemented in the repo -- each tool is a catalogue over a mature library, because one exists for each job and a second implementation would add a way to be wrong rather than a way to be right. See the note in src/index.ts for what each dependency is and why it was chosen. `./manifests` is eager and dependency-free; `./definition` is the on-demand half that pulls the libraries in.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "@xmldom/xmldom": "^0.9.11",
+    "change-case": "^5.4.4",
+    "entities": "^8.0.0",
+    "jsonc-parser": "^3.3.1",
+    "uuid": "^14.0.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

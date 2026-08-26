@@ -1,0 +1,120 @@
+# The two gates the Pages workflow cannot run, and the two Node versions it does not use.
+#
+# `pages.yml` runs typecheck, lint and the unit suite on Node 24 and then publishes the web bundle.
+# What it structurally cannot cover is anything needing a real Electron renderer or a PowerShell host,
+# and what it chooses not to cover is the older Node versions `engines` still admits. Both are here.
+#
+# Deliberately a separate workflow rather than extra jobs in `pages.yml`, and not a dependency of the
+# deploy. The smoke test drives a real browser through twenty-odd probes and has had genuine races in
+# its history -- three were fixed in one sitting -- so a flake in it must not block publishing a static
+# site. Two workflows means two status checks, which says plainly which half is unhappy.
+name: Verify
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The packaged renderer, plus the two checks that need a PowerShell host.
+  #
+  # Windows rather than Linux-with-xvfb, for three reasons that all point the same way: `win:check`
+  # and `win:version` *only* run on a PowerShell host, so a Windows runner is required for them
+  # regardless; the product ships a Windows installer, so this is closest to the artifact; and the
+  # smoke probes were written and verified on Windows, which is the platform where a failure is most
+  # likely to be a real regression rather than a runner difference nobody can reproduce.
+  # ---------------------------------------------------------------------------
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      # 24, matching `pages.yml` and the version this repo develops on -- see the note there about the
+      # two test files whose oracle is the platform. Electron's own floor is 22.12.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Plain `build`, never `build:pages`. They differ by NEXT_PUBLIC_BASE_PATH, and a desktop bundle
+      # built with the subpath asks for /CipherWorkbench/_next/... over app:// and loads nothing. The
+      # two overwrite the same out/, which is why this job never runs the Pages build.
+      - run: pnpm build
+
+      # The gate nothing else can be: it drives the *packaged* renderer and catches a CSP that blocks
+      # hydration, a lazy chunk that fails to resolve over app://, a lost secure context, and a compute
+      # worker that silently fell back to the main thread.
+      - name: Smoke-test the packaged renderer
+        run: pnpm --filter @ocs/desktop smoke
+
+      # ASCII and both PowerShell hosts. This exists because the failure it catches is invisible
+      # everywhere else: a UTF-8 em-dash in a comment breaks the whole file under Windows PowerShell
+      # 5.1 only, and every launcher dot-sources lib/common.ps1.
+      - run: pnpm win:check
+
+      # And the version file agrees with all twenty-one manifests. `tests/version.test.ts` asserts the
+      # same thing on every platform; this is the PowerShell reader of it, so both halves are exercised.
+      - run: pnpm win:version -Check
+
+  # ---------------------------------------------------------------------------
+  # The floor `engines` claims, and the version whose platform oracles are absent.
+  #
+  # `engines.node` says >=20.11 and that describes the app rather than the test suite. This makes the
+  # claim checkable: the suite must be green on both, with the two oracle-dependent files skipping
+  # themselves and saying why rather than failing. If a dependency raises its own floor, this is where
+  # that shows up -- as a failure here rather than as a bug report from somebody on Node 20.
+  #
+  # Tests only. There is no point building the web bundle three times, and `pages.yml` already builds
+  # it on the version that ships.
+  # ---------------------------------------------------------------------------
+  node-floor:
+    runs-on: ubuntu-latest
+    strategy:
+      # Both are reported even when one fails, because "20 is broken and 22 is fine" is the useful
+      # answer and cancelling the sibling hides half of it.
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      # Expect skips here, not failures, and the counts are measured rather than assumed:
+      #
+      #   Node 24  3880 passed, 0 skipped     <- what pages.yml runs
+      #   Node 22  3844 passed, 36 skipped
+      #   Node 20  3841 passed, 39 skipped
+      #
+      # Three capabilities are missing below 24, and each is a *platform* gap rather than a defect
+      # here. Node 22 and 20 expose no ML-KEM/ML-DSA/SLH-DSA key type, so the post-quantum parity file
+      # has no oracle. Both answer the WHATWG single-byte indexes out of ICU's legacy converter tables,
+      # so the encoding comparisons would be testing correct tables against a wrong oracle. And Node
+      # 20's OpenSSL 3.0 lists `sm3` in getHashes() and then refuses it for RSA signing, which is the
+      # extra three skips at 20.
+      #
+      # A *failure* in any of them means a guard has stopped working -- each one is paired with an
+      # assertion that fails if the capability is missing on a platform that should have it.
+      - run: pnpm test

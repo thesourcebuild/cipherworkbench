@@ -1,0 +1,27 @@
+{
+  "name": "@ocs/parity",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Parity: the bit, the frame it travels in, and the overlapping-bit codes that locate an error rather than only noticing one. A separate family from @ocs/checksum because a parity bit is not arithmetic over a message -- it is one bit of a single unit, interleaved with the data rather than appended to it, and it lives in the wire format. See the note on ToolFamily. `./manifests` is eager and dependency-free; `./definition` is the on-demand half that reaches @ocs/algos.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ocs/algos": "workspace:*",
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

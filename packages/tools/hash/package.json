@@ -1,0 +1,28 @@
+{
+  "name": "@ocs/hash",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "One package, many tools: every digest algorithm is its own ToolManifest but they all share this catalogue, compute path and lint rule set. `./manifests` is eager and dependency-free so the sidebar can list every algorithm without loading @noble; `./definition` is the on-demand half that actually binds to it.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.2.0",
+    "@ocs/algos": "workspace:*",
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

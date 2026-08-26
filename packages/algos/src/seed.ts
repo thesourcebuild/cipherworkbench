@@ -1,0 +1,228 @@
+/**
+ * SEED, the Korean national block cipher, from RFC 4269 (KS X 1213).
+ *
+ * Mandated in South Korea for years -- online banking, government services and the accompanying
+ * ActiveX plugins all used it -- so a great deal of Korean data is encrypted with nothing else. A
+ * 16-round Feistel network with a 128-bit block and a 128-bit key, and OpenSSL keeps it in the legacy
+ * provider, which Node does not load: RFC 4269's own four test vectors are the check.
+ *
+ * Three things to know.
+ *
+ * **The SS-boxes are derived, not stored.** The specification gives two 8-bit S-boxes and then, as an
+ * optimisation, four 32-bit "SS-boxes" built from them by masking and rotation. Storing the SS tables
+ * would be 4 KB of constants; storing S0 and S1 is 512 bytes and the four SS tables come from the
+ * masking rule at load, exactly as ARIA's SB3/SB4 and Camellia's SBOX2/3/4 are derived here. Fewer
+ * tables, fewer chances to be wrong.
+ *
+ * **The key schedule adds and subtracts, and rotates a 64-bit half by 8 bits per round.** Odd rounds
+ * rotate `Key0 || Key1` right, even rounds rotate `Key2 || Key3` left. Getting the parity backwards
+ * gives a cipher that inverts perfectly and matches nothing -- the usual failure mode here.
+ *
+ * **`KC` starts from the golden ratio.** `KC1` is 0x9e3779b9 and each subsequent constant is the
+ * previous rotated left by one bit, which is why the table below is written out rather than looped:
+ * it is easier to check against the RFC that way, and the vectors catch any slip.
+ */
+import type { BlockCipher } from "./blockmodes";
+
+const BLOCK = 16;
+const KEY_LEN = 16;
+
+/** RFC 4269 appendix A.1's two 8-bit S-boxes, parsed from the RFC. */
+const S0: readonly number[] = [
+  0xa9, 0x85, 0xd6, 0xd3, 0x54, 0x1d, 0xac, 0x25, 0x5d, 0x43, 0x18, 0x1e,
+  0x51, 0xfc, 0xca, 0x63, 0x28, 0x44, 0x20, 0x9d, 0xe0, 0xe2, 0xc8, 0x17,
+  0xa5, 0x8f, 0x03, 0x7b, 0xbb, 0x13, 0xd2, 0xee, 0x70, 0x8c, 0x3f, 0xa8,
+  0x32, 0xdd, 0xf6, 0x74, 0xec, 0x95, 0x0b, 0x57, 0x5c, 0x5b, 0xbd, 0x01,
+  0x24, 0x1c, 0x73, 0x98, 0x10, 0xcc, 0xf2, 0xd9, 0x2c, 0xe7, 0x72, 0x83,
+  0x9b, 0xd1, 0x86, 0xc9, 0x60, 0x50, 0xa3, 0xeb, 0x0d, 0xb6, 0x9e, 0x4f,
+  0xb7, 0x5a, 0xc6, 0x78, 0xa6, 0x12, 0xaf, 0xd5, 0x61, 0xc3, 0xb4, 0x41,
+  0x52, 0x7d, 0x8d, 0x08, 0x1f, 0x99, 0x00, 0x19, 0x04, 0x53, 0xf7, 0xe1,
+  0xfd, 0x76, 0x2f, 0x27, 0xb0, 0x8b, 0x0e, 0xab, 0xa2, 0x6e, 0x93, 0x4d,
+  0x69, 0x7c, 0x09, 0x0a, 0xbf, 0xef, 0xf3, 0xc5, 0x87, 0x14, 0xfe, 0x64,
+  0xde, 0x2e, 0x4b, 0x1a, 0x06, 0x21, 0x6b, 0x66, 0x02, 0xf5, 0x92, 0x8a,
+  0x0c, 0xb3, 0x7e, 0xd0, 0x7a, 0x47, 0x96, 0xe5, 0x26, 0x80, 0xad, 0xdf,
+  0xa1, 0x30, 0x37, 0xae, 0x36, 0x15, 0x22, 0x38, 0xf4, 0xa7, 0x45, 0x4c,
+  0x81, 0xe9, 0x84, 0x97, 0x35, 0xcb, 0xce, 0x3c, 0x71, 0x11, 0xc7, 0x89,
+  0x75, 0xfb, 0xda, 0xf8, 0x94, 0x59, 0x82, 0xc4, 0xff, 0x49, 0x39, 0x67,
+  0xc0, 0xcf, 0xd7, 0xb8, 0x0f, 0x8e, 0x42, 0x23, 0x91, 0x6c, 0xdb, 0xa4,
+  0x34, 0xf1, 0x48, 0xc2, 0x6f, 0x3d, 0x2d, 0x40, 0xbe, 0x3e, 0xbc, 0xc1,
+  0xaa, 0xba, 0x4e, 0x55, 0x3b, 0xdc, 0x68, 0x7f, 0x9c, 0xd8, 0x4a, 0x56,
+  0x77, 0xa0, 0xed, 0x46, 0xb5, 0x2b, 0x65, 0xfa, 0xe3, 0xb9, 0xb1, 0x9f,
+  0x5e, 0xf9, 0xe6, 0xb2, 0x31, 0xea, 0x6d, 0x5f, 0xe4, 0xf0, 0xcd, 0x88,
+  0x16, 0x3a, 0x58, 0xd4, 0x62, 0x29, 0x07, 0x33, 0xe8, 0x1b, 0x05, 0x79,
+  0x90, 0x6a, 0x2a, 0x9a,
+];
+
+const S1: readonly number[] = [
+  0x38, 0xe8, 0x2d, 0xa6, 0xcf, 0xde, 0xb3, 0xb8, 0xaf, 0x60, 0x55, 0xc7,
+  0x44, 0x6f, 0x6b, 0x5b, 0xc3, 0x62, 0x33, 0xb5, 0x29, 0xa0, 0xe2, 0xa7,
+  0xd3, 0x91, 0x11, 0x06, 0x1c, 0xbc, 0x36, 0x4b, 0xef, 0x88, 0x6c, 0xa8,
+  0x17, 0xc4, 0x16, 0xf4, 0xc2, 0x45, 0xe1, 0xd6, 0x3f, 0x3d, 0x8e, 0x98,
+  0x28, 0x4e, 0xf6, 0x3e, 0xa5, 0xf9, 0x0d, 0xdf, 0xd8, 0x2b, 0x66, 0x7a,
+  0x27, 0x2f, 0xf1, 0x72, 0x42, 0xd4, 0x41, 0xc0, 0x73, 0x67, 0xac, 0x8b,
+  0xf7, 0xad, 0x80, 0x1f, 0xca, 0x2c, 0xaa, 0x34, 0xd2, 0x0b, 0xee, 0xe9,
+  0x5d, 0x94, 0x18, 0xf8, 0x57, 0xae, 0x08, 0xc5, 0x13, 0xcd, 0x86, 0xb9,
+  0xff, 0x7d, 0xc1, 0x31, 0xf5, 0x8a, 0x6a, 0xb1, 0xd1, 0x20, 0xd7, 0x02,
+  0x22, 0x04, 0x68, 0x71, 0x07, 0xdb, 0x9d, 0x99, 0x61, 0xbe, 0xe6, 0x59,
+  0xdd, 0x51, 0x90, 0xdc, 0x9a, 0xa3, 0xab, 0xd0, 0x81, 0x0f, 0x47, 0x1a,
+  0xe3, 0xec, 0x8d, 0xbf, 0x96, 0x7b, 0x5c, 0xa2, 0xa1, 0x63, 0x23, 0x4d,
+  0xc8, 0x9e, 0x9c, 0x3a, 0x0c, 0x2e, 0xba, 0x6e, 0x9f, 0x5a, 0xf2, 0x92,
+  0xf3, 0x49, 0x78, 0xcc, 0x15, 0xfb, 0x70, 0x75, 0x7f, 0x35, 0x10, 0x03,
+  0x64, 0x6d, 0xc6, 0x74, 0xd5, 0xb4, 0xea, 0x09, 0x76, 0x19, 0xfe, 0x40,
+  0x12, 0xe0, 0xbd, 0x05, 0xfa, 0x01, 0xf0, 0x2a, 0x5e, 0xa9, 0x56, 0x43,
+  0x85, 0x14, 0x89, 0x9b, 0xb0, 0xe5, 0x48, 0x79, 0x97, 0xfc, 0x1e, 0x82,
+  0x21, 0x8c, 0x1b, 0x5f, 0x77, 0x54, 0xb2, 0x1d, 0x25, 0x4f, 0x00, 0x46,
+  0xed, 0x58, 0x52, 0xeb, 0x7e, 0xda, 0xc9, 0xfd, 0x30, 0x95, 0x65, 0x3c,
+  0xb6, 0xe4, 0xbb, 0x7c, 0x0e, 0x50, 0x39, 0x26, 0x32, 0x84, 0x69, 0x93,
+  0x37, 0xe7, 0x24, 0xa4, 0xcb, 0x53, 0x0a, 0x87, 0xd9, 0x4c, 0x83, 0x8f,
+  0xce, 0x3b, 0x4a, 0xb7,
+];
+
+/**
+ * The four 32-bit SS-boxes, derived from S0 and S1.
+ *
+ * The masking rule is RFC 4269 section 2.2's: each SS-box places the same substituted byte in all four
+ * positions, masked differently per position, and the four rotate the mask pattern between them. The
+ * permutation property of S0 and S1 is checked at load, since it is what the derivation relies on.
+ */
+/**
+ * `SS0[0]`, as RFC 4269 appendix A.2 prints it.
+ *
+ * Exported so a test can assert the derivation against a published value rather than only against the
+ * four block vectors. The mask rotation is the one part of this file a vector failure would not
+ * localise, and it is the part that was wrong first -- so the module also refuses to load if the
+ * derived table disagrees with this.
+ */
+export const SEED_SS0_FIRST = 0x2989a1a8;
+
+const SS: readonly Uint32Array[] = (() => {
+  for (const box of [S0, S1]) {
+    if (new Set(box).size !== 256) throw new Error("A SEED S-box is not a permutation of 0..255.");
+  }
+  const M = [0xfc, 0xf3, 0xcf, 0x3f] as const;
+  // Which base S-box each SS-box uses, and how far the mask pattern is rotated for it.
+  const spec = [
+    { base: S0, shift: 0 },
+    { base: S1, shift: 1 },
+    { base: S0, shift: 2 },
+    { base: S1, shift: 3 },
+  ] as const;
+
+  return spec.map(({ base, shift }) => {
+    const table = new Uint32Array(256);
+    for (let x = 0; x < 256; x++) {
+      const value = base[x]!;
+      let word = 0;
+      /**
+       * Byte `position` counting from the least significant, masked with `M[(position + shift) % 4]`.
+       *
+       * The RFC writes each SS-box most significant byte first -- SS0 is `m3 || m2 || m1 || m0` -- so
+       * read from the bottom the masks run m0, m1, m2, m3, and each later SS-box rotates that order by
+       * one. Getting the rotation backwards is not a subtle failure: it gives a cipher that inverts
+       * perfectly and reproduces none of RFC 4269's four vectors, which is how this was caught.
+       */
+      for (let position = 0; position < 4; position++) {
+        const mask = M[(position + shift) % 4]!;
+        word |= (value & mask) << (8 * position);
+      }
+      table[x] = word >>> 0;
+    }
+    return table;
+  });
+})();
+
+if (SS[0]![0] !== SEED_SS0_FIRST) {
+  throw new Error("SEED's derived SS0 does not match RFC 4269's published first entry.");
+}
+
+/** RFC 4269's key-schedule constants: the golden ratio, rotated left one bit per round. */
+const KC: readonly number[] = [
+  0x9e3779b9, 0x3c6ef373, 0x78dde6e6, 0xf1bbcdcc, 0xe3779b99, 0xc6ef3733, 0x8dde6e67, 0x1bbcdccf,
+  0x3779b99e, 0x6ef3733c, 0xdde6e678, 0xbbcdccf1, 0x779b99e3, 0xef3733c6, 0xde6e678d, 0xbcdccf1b,
+];
+
+const u32 = (x: number): number => x >>> 0;
+
+/** The G function: four SS-box lookups, XORed. */
+const g = (x: number): number =>
+  u32(SS[0]![x & 0xff]! ^ SS[1]![(x >>> 8) & 0xff]! ^ SS[2]![(x >>> 16) & 0xff]! ^ SS[3]![(x >>> 24) & 0xff]!);
+
+const loadWords = (bytes: Uint8Array, count: number): number[] =>
+  Array.from({ length: count }, (_, i) =>
+    u32((bytes[4 * i]! << 24) | (bytes[4 * i + 1]! << 16) | (bytes[4 * i + 2]! << 8) | bytes[4 * i + 3]!),
+  );
+
+/** The 16 round keys, each a pair of 32-bit words. */
+function schedule(key: Uint8Array): [number, number][] {
+  if (key.length !== KEY_LEN) {
+    throw new Error(`SEED's key is 16 bytes; this one is ${key.length}.`);
+  }
+  let [k0, k1, k2, k3] = loadWords(key, 4) as [number, number, number, number];
+  const keys: [number, number][] = [];
+
+  const rotate = (high: number, low: number, right: boolean): [number, number] => {
+    // A 64-bit rotation by 8, done in bigint because the halves cross the 32-bit boundary.
+    const joined = (BigInt(high) << 32n) | BigInt(low);
+    const wrap = (1n << 64n) - 1n;
+    const moved = right ? (joined >> 8n) | (joined << 56n) : (joined << 8n) | (joined >> 56n);
+    const value = moved & wrap;
+    return [Number(value >> 32n) >>> 0, Number(value & 0xffffffffn) >>> 0];
+  };
+
+  for (let round = 0; round < 16; round++) {
+    keys.push([g(u32(k0 + k2 - KC[round]!)), g(u32(k1 - k3 + KC[round]!))]);
+    if (round % 2 === 0) [k0, k1] = rotate(k0, k1, true);
+    else [k2, k3] = rotate(k2, k3, false);
+  }
+  return keys;
+}
+
+/** The round function F, which is three nested G applications with additions between them. */
+function f(r0: number, r1: number, k0: number, k1: number): [number, number] {
+  const a = u32(r0 ^ k0);
+  const b = u32(r1 ^ k1);
+  const c = g(u32(a ^ b));
+  const d = g(u32(c + a));
+  const e = g(u32(d + c));
+  return [u32(e + d), e];
+}
+
+function run(rk: readonly [number, number][], src: Uint8Array, dst: Uint8Array): void {
+  const words = loadWords(src, 4);
+  let [l0, l1, r0, r1] = words as [number, number, number, number];
+
+  for (let round = 0; round < 16; round++) {
+    const [f0, f1] = f(r0, r1, rk[round]![0], rk[round]![1]);
+    const n0 = u32(l0 ^ f0);
+    const n1 = u32(l1 ^ f1);
+    if (round === 15) {
+      // The final round does not swap, which is the standard Feistel ending.
+      l0 = n0;
+      l1 = n1;
+    } else {
+      l0 = r0;
+      l1 = r1;
+      r0 = n0;
+      r1 = n1;
+    }
+  }
+
+  const out = [l0, l1, r0, r1];
+  for (let i = 0; i < 4; i++) {
+    dst[4 * i] = (out[i]! >>> 24) & 0xff;
+    dst[4 * i + 1] = (out[i]! >>> 16) & 0xff;
+    dst[4 * i + 2] = (out[i]! >>> 8) & 0xff;
+    dst[4 * i + 3] = out[i]! & 0xff;
+  }
+}
+
+/** SEED as a `BlockCipher`. Decryption is the same network with the round keys reversed. */
+export function createSeed(key: Uint8Array): BlockCipher {
+  const rk = schedule(key);
+  const reversed = [...rk].reverse();
+  return {
+    blockSize: BLOCK,
+    encryptBlock: (src, dst) => run(rk, src, dst),
+    decryptBlock: (src, dst) => run(reversed, src, dst),
+  };
+}

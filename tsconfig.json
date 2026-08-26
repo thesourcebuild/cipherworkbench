@@ -1,0 +1,9 @@
+{
+  "//": "Root config exists only so editors resolve workspace paths. Each package has its own.",
+  "extends": "./packages/config/tsconfig/base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [],
+  "exclude": ["node_modules", "**/dist", "**/out", "**/.next", "**/renderer", "**/release"]
+}

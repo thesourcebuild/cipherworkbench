@@ -1,0 +1,453 @@
+/**
+ * Kalyna -- DSTU 7624:2014, the Ukrainian national block cipher standard.
+ *
+ * An AES-shaped SPN with three deliberate departures, and each one is a place an implementation goes
+ * quietly wrong:
+ *
+ *  - **The round keys are *added*, not XORed** -- pre-whitening and post-whitening use addition modulo
+ *    2^64 per column, and the rounds in between use XOR. So encryption ends with `+` and decryption
+ *    begins with `-`, and a version that XORed throughout inverts itself perfectly and matches nothing.
+ *  - **The state is columns of 64 bits, held little-endian.** ShiftRows is therefore expressed here as
+ *    masked exchanges between columns rather than as byte rotations within rows, which is how the
+ *    reference does it and how the shift amounts stay legible across three block sizes.
+ *  - **The key schedule runs the cipher's own round function.** `Kt` is derived by three full
+ *    substitute-shift-mix layers over a state seeded with the *sizes* of the block and key, and then
+ *    every even round key is another two layers on top of that. There is no cheap schedule to check
+ *    against; getting it wrong is a whole-cipher failure.
+ *
+ * Five (block, key) pairings exist: 128/128, 128/256, 256/256, 256/512 and 512/512 -- the key is either
+ * the block size or twice it, and the round count follows the *key* (10, 14, 14, 18, 18). All five are
+ * verified in both directions against DSTU 7624's own vectors as carried by Bouncy Castle.
+ *
+ * **512-bit blocks are the widest in this repo**, and the mode layer in `blockmodes.ts` needed no change
+ * for them -- which is the third time that generic layer has paid for itself. GCM and CCM are *not*
+ * offered: both assume a 128-bit block, and Kalyna-128 having one while Kalyna-512 does not would make
+ * the mode list depend on the parameter set, which the form cannot express.
+ *
+ * ## What is stored and what is derived
+ *
+ * Four 256-byte S-boxes are stored; their four inverses are **computed at load** and checked to be
+ * permutations, on the same principle as ARIA's SB3/SB4 and Camellia's SBOX2/3/4. That is a kilobyte of
+ * table that cannot be mistyped, and it matters here more than usual: a wrong entry in an *inverse* box
+ * leaves encryption completely correct, so only a decryption vector would ever catch it.
+ *
+ * The multiplication helpers are the reference's bit-sliced form. `mulX` doubles all eight bytes of a
+ * column at once in GF(2^8) under Kalyna's polynomial (0x11d, the same as AES's), and `mulX2`
+ * quadruples them; the MixColumns matrix is then eight rotations of the column combined with those two.
+ * Storing the matrix instead would be no faster and one more thing to get wrong.
+ */
+
+import type { BlockCipher } from "./blockmodes";
+
+const MASK64 = (1n << 64n) - 1n;
+
+/**
+ * The four forward S-boxes, from DSTU 7624:2014.
+ *
+ * Exported because DSTU 7564 -- Kupyna, the companion hash standard -- uses exactly these four, and its
+ * MixColumns is this file's too. So `kupyna.ts` stores nothing at all, and Kalyna's own published vectors
+ * are what stands behind both.
+ */
+export const KALYNA_S_BOXES: readonly Uint8Array[] = [
+  /** DSTU 7624 S0. */
+  new Uint8Array([
+    0xa8, 0x43, 0x5f, 0x06, 0x6b, 0x75, 0x6c, 0x59, 0x71, 0xdf, 0x87, 0x95, 0x17, 0xf0, 0xd8, 0x09,
+    0x6d, 0xf3, 0x1d, 0xcb, 0xc9, 0x4d, 0x2c, 0xaf, 0x79, 0xe0, 0x97, 0xfd, 0x6f, 0x4b, 0x45, 0x39,
+    0x3e, 0xdd, 0xa3, 0x4f, 0xb4, 0xb6, 0x9a, 0x0e, 0x1f, 0xbf, 0x15, 0xe1, 0x49, 0xd2, 0x93, 0xc6,
+    0x92, 0x72, 0x9e, 0x61, 0xd1, 0x63, 0xfa, 0xee, 0xf4, 0x19, 0xd5, 0xad, 0x58, 0xa4, 0xbb, 0xa1,
+    0xdc, 0xf2, 0x83, 0x37, 0x42, 0xe4, 0x7a, 0x32, 0x9c, 0xcc, 0xab, 0x4a, 0x8f, 0x6e, 0x04, 0x27,
+    0x2e, 0xe7, 0xe2, 0x5a, 0x96, 0x16, 0x23, 0x2b, 0xc2, 0x65, 0x66, 0x0f, 0xbc, 0xa9, 0x47, 0x41,
+    0x34, 0x48, 0xfc, 0xb7, 0x6a, 0x88, 0xa5, 0x53, 0x86, 0xf9, 0x5b, 0xdb, 0x38, 0x7b, 0xc3, 0x1e,
+    0x22, 0x33, 0x24, 0x28, 0x36, 0xc7, 0xb2, 0x3b, 0x8e, 0x77, 0xba, 0xf5, 0x14, 0x9f, 0x08, 0x55,
+    0x9b, 0x4c, 0xfe, 0x60, 0x5c, 0xda, 0x18, 0x46, 0xcd, 0x7d, 0x21, 0xb0, 0x3f, 0x1b, 0x89, 0xff,
+    0xeb, 0x84, 0x69, 0x3a, 0x9d, 0xd7, 0xd3, 0x70, 0x67, 0x40, 0xb5, 0xde, 0x5d, 0x30, 0x91, 0xb1,
+    0x78, 0x11, 0x01, 0xe5, 0x00, 0x68, 0x98, 0xa0, 0xc5, 0x02, 0xa6, 0x74, 0x2d, 0x0b, 0xa2, 0x76,
+    0xb3, 0xbe, 0xce, 0xbd, 0xae, 0xe9, 0x8a, 0x31, 0x1c, 0xec, 0xf1, 0x99, 0x94, 0xaa, 0xf6, 0x26,
+    0x2f, 0xef, 0xe8, 0x8c, 0x35, 0x03, 0xd4, 0x7f, 0xfb, 0x05, 0xc1, 0x5e, 0x90, 0x20, 0x3d, 0x82,
+    0xf7, 0xea, 0x0a, 0x0d, 0x7e, 0xf8, 0x50, 0x1a, 0xc4, 0x07, 0x57, 0xb8, 0x3c, 0x62, 0xe3, 0xc8,
+    0xac, 0x52, 0x64, 0x10, 0xd0, 0xd9, 0x13, 0x0c, 0x12, 0x29, 0x51, 0xb9, 0xcf, 0xd6, 0x73, 0x8d,
+    0x81, 0x54, 0xc0, 0xed, 0x4e, 0x44, 0xa7, 0x2a, 0x85, 0x25, 0xe6, 0xca, 0x7c, 0x8b, 0x56, 0x80,
+  ]),
+  /** DSTU 7624 S1. */
+  new Uint8Array([
+    0xce, 0xbb, 0xeb, 0x92, 0xea, 0xcb, 0x13, 0xc1, 0xe9, 0x3a, 0xd6, 0xb2, 0xd2, 0x90, 0x17, 0xf8,
+    0x42, 0x15, 0x56, 0xb4, 0x65, 0x1c, 0x88, 0x43, 0xc5, 0x5c, 0x36, 0xba, 0xf5, 0x57, 0x67, 0x8d,
+    0x31, 0xf6, 0x64, 0x58, 0x9e, 0xf4, 0x22, 0xaa, 0x75, 0x0f, 0x02, 0xb1, 0xdf, 0x6d, 0x73, 0x4d,
+    0x7c, 0x26, 0x2e, 0xf7, 0x08, 0x5d, 0x44, 0x3e, 0x9f, 0x14, 0xc8, 0xae, 0x54, 0x10, 0xd8, 0xbc,
+    0x1a, 0x6b, 0x69, 0xf3, 0xbd, 0x33, 0xab, 0xfa, 0xd1, 0x9b, 0x68, 0x4e, 0x16, 0x95, 0x91, 0xee,
+    0x4c, 0x63, 0x8e, 0x5b, 0xcc, 0x3c, 0x19, 0xa1, 0x81, 0x49, 0x7b, 0xd9, 0x6f, 0x37, 0x60, 0xca,
+    0xe7, 0x2b, 0x48, 0xfd, 0x96, 0x45, 0xfc, 0x41, 0x12, 0x0d, 0x79, 0xe5, 0x89, 0x8c, 0xe3, 0x20,
+    0x30, 0xdc, 0xb7, 0x6c, 0x4a, 0xb5, 0x3f, 0x97, 0xd4, 0x62, 0x2d, 0x06, 0xa4, 0xa5, 0x83, 0x5f,
+    0x2a, 0xda, 0xc9, 0x00, 0x7e, 0xa2, 0x55, 0xbf, 0x11, 0xd5, 0x9c, 0xcf, 0x0e, 0x0a, 0x3d, 0x51,
+    0x7d, 0x93, 0x1b, 0xfe, 0xc4, 0x47, 0x09, 0x86, 0x0b, 0x8f, 0x9d, 0x6a, 0x07, 0xb9, 0xb0, 0x98,
+    0x18, 0x32, 0x71, 0x4b, 0xef, 0x3b, 0x70, 0xa0, 0xe4, 0x40, 0xff, 0xc3, 0xa9, 0xe6, 0x78, 0xf9,
+    0x8b, 0x46, 0x80, 0x1e, 0x38, 0xe1, 0xb8, 0xa8, 0xe0, 0x0c, 0x23, 0x76, 0x1d, 0x25, 0x24, 0x05,
+    0xf1, 0x6e, 0x94, 0x28, 0x9a, 0x84, 0xe8, 0xa3, 0x4f, 0x77, 0xd3, 0x85, 0xe2, 0x52, 0xf2, 0x82,
+    0x50, 0x7a, 0x2f, 0x74, 0x53, 0xb3, 0x61, 0xaf, 0x39, 0x35, 0xde, 0xcd, 0x1f, 0x99, 0xac, 0xad,
+    0x72, 0x2c, 0xdd, 0xd0, 0x87, 0xbe, 0x5e, 0xa6, 0xec, 0x04, 0xc6, 0x03, 0x34, 0xfb, 0xdb, 0x59,
+    0xb6, 0xc2, 0x01, 0xf0, 0x5a, 0xed, 0xa7, 0x66, 0x21, 0x7f, 0x8a, 0x27, 0xc7, 0xc0, 0x29, 0xd7,
+  ]),
+  /** DSTU 7624 S2. */
+  new Uint8Array([
+    0x93, 0xd9, 0x9a, 0xb5, 0x98, 0x22, 0x45, 0xfc, 0xba, 0x6a, 0xdf, 0x02, 0x9f, 0xdc, 0x51, 0x59,
+    0x4a, 0x17, 0x2b, 0xc2, 0x94, 0xf4, 0xbb, 0xa3, 0x62, 0xe4, 0x71, 0xd4, 0xcd, 0x70, 0x16, 0xe1,
+    0x49, 0x3c, 0xc0, 0xd8, 0x5c, 0x9b, 0xad, 0x85, 0x53, 0xa1, 0x7a, 0xc8, 0x2d, 0xe0, 0xd1, 0x72,
+    0xa6, 0x2c, 0xc4, 0xe3, 0x76, 0x78, 0xb7, 0xb4, 0x09, 0x3b, 0x0e, 0x41, 0x4c, 0xde, 0xb2, 0x90,
+    0x25, 0xa5, 0xd7, 0x03, 0x11, 0x00, 0xc3, 0x2e, 0x92, 0xef, 0x4e, 0x12, 0x9d, 0x7d, 0xcb, 0x35,
+    0x10, 0xd5, 0x4f, 0x9e, 0x4d, 0xa9, 0x55, 0xc6, 0xd0, 0x7b, 0x18, 0x97, 0xd3, 0x36, 0xe6, 0x48,
+    0x56, 0x81, 0x8f, 0x77, 0xcc, 0x9c, 0xb9, 0xe2, 0xac, 0xb8, 0x2f, 0x15, 0xa4, 0x7c, 0xda, 0x38,
+    0x1e, 0x0b, 0x05, 0xd6, 0x14, 0x6e, 0x6c, 0x7e, 0x66, 0xfd, 0xb1, 0xe5, 0x60, 0xaf, 0x5e, 0x33,
+    0x87, 0xc9, 0xf0, 0x5d, 0x6d, 0x3f, 0x88, 0x8d, 0xc7, 0xf7, 0x1d, 0xe9, 0xec, 0xed, 0x80, 0x29,
+    0x27, 0xcf, 0x99, 0xa8, 0x50, 0x0f, 0x37, 0x24, 0x28, 0x30, 0x95, 0xd2, 0x3e, 0x5b, 0x40, 0x83,
+    0xb3, 0x69, 0x57, 0x1f, 0x07, 0x1c, 0x8a, 0xbc, 0x20, 0xeb, 0xce, 0x8e, 0xab, 0xee, 0x31, 0xa2,
+    0x73, 0xf9, 0xca, 0x3a, 0x1a, 0xfb, 0x0d, 0xc1, 0xfe, 0xfa, 0xf2, 0x6f, 0xbd, 0x96, 0xdd, 0x43,
+    0x52, 0xb6, 0x08, 0xf3, 0xae, 0xbe, 0x19, 0x89, 0x32, 0x26, 0xb0, 0xea, 0x4b, 0x64, 0x84, 0x82,
+    0x6b, 0xf5, 0x79, 0xbf, 0x01, 0x5f, 0x75, 0x63, 0x1b, 0x23, 0x3d, 0x68, 0x2a, 0x65, 0xe8, 0x91,
+    0xf6, 0xff, 0x13, 0x58, 0xf1, 0x47, 0x0a, 0x7f, 0xc5, 0xa7, 0xe7, 0x61, 0x5a, 0x06, 0x46, 0x44,
+    0x42, 0x04, 0xa0, 0xdb, 0x39, 0x86, 0x54, 0xaa, 0x8c, 0x34, 0x21, 0x8b, 0xf8, 0x0c, 0x74, 0x67,
+  ]),
+  /** DSTU 7624 S3. */
+  new Uint8Array([
+    0x68, 0x8d, 0xca, 0x4d, 0x73, 0x4b, 0x4e, 0x2a, 0xd4, 0x52, 0x26, 0xb3, 0x54, 0x1e, 0x19, 0x1f,
+    0x22, 0x03, 0x46, 0x3d, 0x2d, 0x4a, 0x53, 0x83, 0x13, 0x8a, 0xb7, 0xd5, 0x25, 0x79, 0xf5, 0xbd,
+    0x58, 0x2f, 0x0d, 0x02, 0xed, 0x51, 0x9e, 0x11, 0xf2, 0x3e, 0x55, 0x5e, 0xd1, 0x16, 0x3c, 0x66,
+    0x70, 0x5d, 0xf3, 0x45, 0x40, 0xcc, 0xe8, 0x94, 0x56, 0x08, 0xce, 0x1a, 0x3a, 0xd2, 0xe1, 0xdf,
+    0xb5, 0x38, 0x6e, 0x0e, 0xe5, 0xf4, 0xf9, 0x86, 0xe9, 0x4f, 0xd6, 0x85, 0x23, 0xcf, 0x32, 0x99,
+    0x31, 0x14, 0xae, 0xee, 0xc8, 0x48, 0xd3, 0x30, 0xa1, 0x92, 0x41, 0xb1, 0x18, 0xc4, 0x2c, 0x71,
+    0x72, 0x44, 0x15, 0xfd, 0x37, 0xbe, 0x5f, 0xaa, 0x9b, 0x88, 0xd8, 0xab, 0x89, 0x9c, 0xfa, 0x60,
+    0xea, 0xbc, 0x62, 0x0c, 0x24, 0xa6, 0xa8, 0xec, 0x67, 0x20, 0xdb, 0x7c, 0x28, 0xdd, 0xac, 0x5b,
+    0x34, 0x7e, 0x10, 0xf1, 0x7b, 0x8f, 0x63, 0xa0, 0x05, 0x9a, 0x43, 0x77, 0x21, 0xbf, 0x27, 0x09,
+    0xc3, 0x9f, 0xb6, 0xd7, 0x29, 0xc2, 0xeb, 0xc0, 0xa4, 0x8b, 0x8c, 0x1d, 0xfb, 0xff, 0xc1, 0xb2,
+    0x97, 0x2e, 0xf8, 0x65, 0xf6, 0x75, 0x07, 0x04, 0x49, 0x33, 0xe4, 0xd9, 0xb9, 0xd0, 0x42, 0xc7,
+    0x6c, 0x90, 0x00, 0x8e, 0x6f, 0x50, 0x01, 0xc5, 0xda, 0x47, 0x3f, 0xcd, 0x69, 0xa2, 0xe2, 0x7a,
+    0xa7, 0xc6, 0x93, 0x0f, 0x0a, 0x06, 0xe6, 0x2b, 0x96, 0xa3, 0x1c, 0xaf, 0x6a, 0x12, 0x84, 0x39,
+    0xe7, 0xb0, 0x82, 0xf7, 0xfe, 0x9d, 0x87, 0x5c, 0x81, 0x35, 0xde, 0xb4, 0xa5, 0xfc, 0x80, 0xef,
+    0xcb, 0xbb, 0x6b, 0x76, 0xba, 0x5a, 0x7d, 0x78, 0x0b, 0x95, 0xe3, 0xad, 0x74, 0x98, 0x3b, 0x36,
+    0x64, 0x6d, 0xdc, 0xf0, 0x59, 0xa9, 0x4c, 0x17, 0x7f, 0x91, 0xb8, 0xc9, 0x57, 0x1b, 0xe0, 0x61,
+  ]),
+];
+
+/**
+ * The four inverse S-boxes, derived rather than transcribed.
+ *
+ * The load-time assertion is not decoration: a forward box that is not a permutation would silently
+ * leave holes in its inverse, and every *encryption* vector would still pass.
+ */
+const T_BOXES: readonly Uint8Array[] = KALYNA_S_BOXES.map((box, index) => {
+  const inverse = new Uint8Array(256);
+  const seen = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) {
+    inverse[box[i]!] = i;
+    seen[box[i]!] = 1;
+  }
+  for (let i = 0; i < 256; i++) {
+    if (!seen[i]) throw new Error(`Kalyna S-box ${index} is not a permutation.`);
+  }
+  return inverse;
+});
+
+/** Rotate a 64-bit column right by `n` bits -- the reference's `rotate(n, x)`. */
+const ror64 = (n: number, x: bigint): bigint =>
+  n === 0 ? x : ((x >> BigInt(n)) | (x << BigInt(64 - n))) & MASK64;
+
+/** Double every byte of the column in GF(2^8) mod 0x11d, eight at a time. */
+const mulX = (n: bigint): bigint =>
+  ((((n & 0x7f7f7f7f7f7f7f7fn) << 1n) & MASK64) ^ (((n & 0x8080808080808080n) >> 7n) * 0x1dn)) &
+  MASK64;
+
+/** Quadruple every byte of the column. Two reduction terms, because two bits leave each byte. */
+const mulX2 = (n: bigint): bigint =>
+  ((((n & 0x3f3f3f3f3f3f3f3fn) << 2n) & MASK64) ^
+    (((n & 0x8080808080808080n) >> 6n) * 0x1dn) ^
+    (((n & 0x4040404040404040n) >> 6n) * 0x1dn)) &
+  MASK64;
+
+const mixColumn = (c: bigint): bigint => {
+  const x1 = mulX(c);
+  let u = ror64(8, c) ^ c;
+  u ^= ror64(16, u);
+  u ^= ror64(48, c);
+  const v = mulX2(u ^ c ^ x1);
+  return (u ^ ror64(32, v) ^ ror64(40, x1) ^ ror64(48, x1)) & MASK64;
+};
+
+/**
+ * The inverse MixColumns, as eight successive doublings combined into eight coefficients.
+ *
+ * Written this way rather than as a matrix multiply because the inverse matrix's entries are 0xAD,
+ * 0x95, 0x76 and so on -- eight distinct multipliers per row, which as a table is 2 KB and as an
+ * expression is `x0..x7` reused.
+ */
+function mixColumnInv(c: bigint): bigint {
+  let x0 = c;
+  const x1 = mulX(x0);
+  const x2 = mulX(x1);
+  const x3 = mulX(x2);
+  const x4 = mulX(x3);
+  let x5 = mulX(x4);
+  const x6 = mulX(x5);
+  let x7 = mulX(x6);
+  const m5 = x0 ^ x3 ^ x6;
+  x0 ^= x2;
+  const m3 = x3 ^ x5 ^ x7;
+  const m0 = m3 ^ x0;
+  let m6 = x0 ^ x4;
+  const m1 = m6 ^ x7;
+  x5 ^= x1;
+  x7 ^= x1 ^ x6;
+  const m2 = x2 ^ x4 ^ x5 ^ x6;
+  const m4 = x0 ^ x3 ^ x5;
+  m6 ^= x7;
+  const m7 = x3 ^ x7;
+  return (
+    (m0 ^
+      ror64(8, m1) ^
+      ror64(16, m2) ^
+      ror64(24, m3) ^
+      ror64(32, m4) ^
+      ror64(40, m5) ^
+      ror64(48, m6) ^
+      ror64(56, m7)) &
+    MASK64
+  );
+}
+
+/**
+ * ShiftRows as a list of masked column exchanges, one list per block width.
+ *
+ * Each entry swaps the masked bits of two columns, and the sequence is what moves row `r` left by
+ * `r * blockWords / 8` bytes. Running the list backwards is exactly the inverse, which is why there is
+ * one table here rather than two -- and why `invShiftRows` cannot drift out of step with `shiftRows`.
+ */
+const SHIFT_STEPS: Record<number, readonly (readonly [number, number, bigint])[]> = {
+  2: [[0, 1, 0xffffffff00000000n]],
+  4: [
+    [0, 2, 0xffffffff00000000n],
+    [1, 3, 0x0000ffffffff0000n],
+    [0, 1, 0xffff0000ffff0000n],
+    [2, 3, 0xffff0000ffff0000n],
+  ],
+  8: [
+    [0, 4, 0xffffffff00000000n],
+    [1, 5, 0x00ffffffff000000n],
+    [2, 6, 0x0000ffffffff0000n],
+    [3, 7, 0x000000ffffffff00n],
+    [0, 2, 0xffff0000ffff0000n],
+    [1, 3, 0x00ffff0000ffff00n],
+    [4, 6, 0xffff0000ffff0000n],
+    [5, 7, 0x00ffff0000ffff00n],
+    [0, 1, 0xff00ff00ff00ff00n],
+    [2, 3, 0xff00ff00ff00ff00n],
+    [4, 5, 0xff00ff00ff00ff00n],
+    [6, 7, 0xff00ff00ff00ff00n],
+  ],
+};
+
+/** The (block bits, key bits) pairings the standard defines, and the round count of each. */
+export interface KalynaVariant {
+  blockBits: 128 | 256 | 512;
+  keyBits: 128 | 256 | 512;
+  rounds: 10 | 14 | 18;
+}
+
+export const KALYNA_VARIANTS: readonly KalynaVariant[] = [
+  { blockBits: 128, keyBits: 128, rounds: 10 },
+  { blockBits: 128, keyBits: 256, rounds: 14 },
+  { blockBits: 256, keyBits: 256, rounds: 14 },
+  { blockBits: 256, keyBits: 512, rounds: 18 },
+  { blockBits: 512, keyBits: 512, rounds: 18 },
+];
+
+/**
+ * The first entry of the standard's own S0, exported so a test can check the table was not mistyped.
+ *
+ * Same arrangement as SEED's `SEED_SS0_FIRST`: the tables here are the one thing that could not be
+ * derived, so the published first row is what stands behind them.
+ */
+export const KALYNA_S0_FIRST = 0xa8;
+
+export function createKalyna(key: Uint8Array, blockBits: 128 | 256 | 512 = 128): BlockCipher {
+  const keyBits = key.length * 8;
+  const variant = KALYNA_VARIANTS.find((v) => v.blockBits === blockBits && v.keyBits === keyBits);
+  if (!variant) {
+    const legal = KALYNA_VARIANTS.filter((v) => v.blockBits === blockBits)
+      .map((v) => v.keyBits / 8)
+      .join(" or ");
+    throw new Error(
+      `Kalyna with a ${blockBits}-bit block takes a key of ${legal} bytes; got ${key.length}.`,
+    );
+  }
+
+  const columns = blockBits >>> 6;
+  const keyColumns = keyBits >>> 6;
+  const { rounds } = variant;
+  const steps = SHIFT_STEPS[columns]!;
+
+  const workingKey: bigint[] = [];
+  for (let i = 0; i < keyColumns; i++) {
+    let word = 0n;
+    for (let b = 0; b < 8; b++) word |= BigInt(key[i * 8 + b]!) << BigInt(8 * b);
+    workingKey.push(word);
+  }
+
+  let state: bigint[] = new Array<bigint>(columns).fill(0n);
+  const add64 = (a: bigint, b: bigint): bigint => (a + b) & MASK64;
+  const sub64 = (a: bigint, b: bigint): bigint => (a - b) & MASK64;
+
+  const substitute = (boxes: readonly Uint8Array[]): void => {
+    for (let i = 0; i < columns; i++) {
+      let word = 0n;
+      for (let b = 0; b < 8; b++) {
+        const byte = Number((state[i]! >> BigInt(8 * b)) & 0xffn);
+        word |= BigInt(boxes[b & 3]![byte]!) << BigInt(8 * b);
+      }
+      state[i] = word;
+    }
+  };
+
+  const shiftRows = (inverse: boolean): void => {
+    const order = inverse ? [...steps].reverse() : steps;
+    for (const [a, b, mask] of order) {
+      const diff = (state[a]! ^ state[b]!) & mask;
+      state[a] = state[a]! ^ diff;
+      state[b] = state[b]! ^ diff;
+    }
+  };
+
+  /** The forward round layer, shared by the cipher and by the whole key schedule. */
+  const layer = (): void => {
+    substitute(KALYNA_S_BOXES);
+    shiftRows(false);
+    for (let i = 0; i < columns; i++) state[i] = mixColumn(state[i]!);
+  };
+
+  // --- Kt: three layers over a state seeded with the block and key sizes. ---
+  const k0 = new Array<bigint>(columns);
+  const k1 = new Array<bigint>(columns);
+  for (let i = 0; i < columns; i++) {
+    k0[i] = workingKey[i]!;
+    // With a key the same width as the block there is only one half, so both halves are the key.
+    k1[i] = columns === keyColumns ? workingKey[i]! : workingKey[columns + i]!;
+  }
+  state[0] = add64(state[0]!, BigInt(columns + keyColumns + 1));
+  for (let i = 0; i < columns; i++) state[i] = add64(state[i]!, k0[i]!);
+  layer();
+  for (let i = 0; i < columns; i++) state[i] = state[i]! ^ k1[i]!;
+  layer();
+  for (let i = 0; i < columns; i++) state[i] = add64(state[i]!, k0[i]!);
+  layer();
+  const kt = state.slice();
+
+  // --- The even round keys. ---
+  const roundKeys: bigint[][] = Array.from({ length: rounds + 1 }, () =>
+    new Array<bigint>(columns).fill(0n),
+  );
+  const rotating = workingKey.slice();
+  const tempKey = new Array<bigint>(columns);
+  let round = 0;
+  /**
+   * The round constant, one bit per even round key, shifted left each time.
+   *
+   * 0x0001000100010001 rather than 1: it is added to *every* 16-bit lane of `Kt`, and the shift moves
+   * all four at once. With 18 rounds it reaches bit 9, so it never leaves the low half of a lane.
+   */
+  let tmv = 0x0001000100010001n;
+  const evenRoundKey = (sourceOffset: number): void => {
+    for (let i = 0; i < columns; i++) tempKey[i] = add64(kt[i]!, tmv);
+    for (let i = 0; i < columns; i++) {
+      state[i] = add64(rotating[sourceOffset + i]!, tempKey[i]!);
+    }
+    layer();
+    for (let i = 0; i < columns; i++) state[i] = state[i]! ^ tempKey[i]!;
+    layer();
+    for (let i = 0; i < columns; i++) state[i] = add64(state[i]!, tempKey[i]!);
+    roundKeys[round] = state.slice();
+  };
+  for (;;) {
+    evenRoundKey(0);
+    if (round === rounds) break;
+    /**
+     * A key wider than the block yields *two* round keys per rotation, from its two halves.
+     *
+     * This is the one place the schedule genuinely branches on the pairing rather than on a size, and
+     * skipping it produces a correct-looking cipher for 128/128, 256/256 and 512/512 and a wrong one
+     * for the other two.
+     */
+    if (columns !== keyColumns) {
+      round += 2;
+      tmv = (tmv << 1n) & MASK64;
+      evenRoundKey(columns);
+      if (round === rounds) break;
+    }
+    round += 2;
+    tmv = (tmv << 1n) & MASK64;
+    rotating.push(rotating.shift()!);
+  }
+
+  /**
+   * The odd round keys, each a byte-level rotation of the even key below it.
+   *
+   * The amount is 8 bits for a 128-bit block and 24 for the wider two, with the source column advancing
+   * as well -- so it is a rotation of the whole round key left by `2 + columns / 4` words plus a byte
+   * offset, expressed the way the reference expresses it.
+   */
+  const rotateRoundKey = (source: readonly bigint[]): bigint[] => {
+    const out = new Array<bigint>(columns);
+    if (columns === 2) {
+      out[0] = ((source[0]! >> 56n) | ((source[1]! << 8n) & MASK64)) & MASK64;
+      out[1] = ((source[1]! >> 56n) | ((source[0]! << 8n) & MASK64)) & MASK64;
+      return out;
+    }
+    const lead = columns === 4 ? 1 : 2;
+    for (let i = 0; i < columns; i++) {
+      const a = source[(lead + i) % columns]!;
+      const b = source[(lead + i + 1) % columns]!;
+      out[i] = ((a >> 24n) | ((b << 40n) & MASK64)) & MASK64;
+    }
+    return out;
+  };
+  for (let r = 1; r < rounds; r += 2) roundKeys[r] = rotateRoundKey(roundKeys[r - 1]!);
+
+  const load = (src: Uint8Array): bigint[] => {
+    const out = new Array<bigint>(columns);
+    for (let i = 0; i < columns; i++) {
+      let word = 0n;
+      for (let b = 0; b < 8; b++) word |= BigInt(src[i * 8 + b]!) << BigInt(8 * b);
+      out[i] = word;
+    }
+    return out;
+  };
+  const store = (dst: Uint8Array): void => {
+    for (let i = 0; i < columns; i++) {
+      for (let b = 0; b < 8; b++) dst[i * 8 + b] = Number((state[i]! >> BigInt(8 * b)) & 0xffn);
+    }
+  };
+
+  return {
+    blockSize: columns * 8,
+    encryptBlock(src, dst) {
+      state = load(src);
+      for (let i = 0; i < columns; i++) state[i] = add64(state[i]!, roundKeys[0]![i]!);
+      for (let r = 0; ; ) {
+        layer();
+        if (++r === rounds) break;
+        for (let i = 0; i < columns; i++) state[i] = state[i]! ^ roundKeys[r]![i]!;
+      }
+      for (let i = 0; i < columns; i++) state[i] = add64(state[i]!, roundKeys[rounds]![i]!);
+      store(dst);
+    },
+    decryptBlock(src, dst) {
+      state = load(src);
+      for (let i = 0; i < columns; i++) state[i] = sub64(state[i]!, roundKeys[rounds]![i]!);
+      for (let r = rounds; ; ) {
+        for (let i = 0; i < columns; i++) state[i] = mixColumnInv(state[i]!);
+        shiftRows(true);
+        substitute(T_BOXES);
+        if (--r === 0) break;
+        for (let i = 0; i < columns; i++) state[i] = state[i]! ^ roundKeys[r]![i]!;
+      }
+      for (let i = 0; i < columns; i++) state[i] = sub64(state[i]!, roundKeys[0]![i]!);
+      store(dst);
+    },
+  };
+}

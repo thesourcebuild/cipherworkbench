@@ -1,0 +1,32 @@
+{
+  "name": "@ocs/registry",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Static list of installed tools. TOOL_MANIFESTS is eager (cheap \u2014 strings only); loadTool() dynamically imports the owning family package so the sidebar only pays for what the user opens. One switch case per family, not per tool: the hash family alone contributes dozens of ids.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ocs/asymmetric": "workspace:*",
+    "@ocs/checksum": "workspace:*",
+    "@ocs/cipher": "workspace:*",
+    "@ocs/classical": "workspace:*",
+    "@ocs/crc": "workspace:*",
+    "@ocs/encoding": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "@ocs/format": "workspace:*",
+    "@ocs/hash": "workspace:*",
+    "@ocs/kdf": "workspace:*",
+    "@ocs/mac": "workspace:*",
+    "@ocs/parity": "workspace:*"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

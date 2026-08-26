@@ -1,0 +1,29 @@
+{
+  "name": "@ocs/encoding",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Encodings: hex, Base32, Base58, Base64, CBOR. The first four come from @scure/base, which is already audited and already in the tree; CBOR is @ocs/algos, because no library met this app's constraints. Every tool is bidirectional -- `direction` is an option rather than two tools, since Base64 and un-Base64 are one thing with an arrow on it. `./manifests` is eager and dependency-free; `./definition` is the on-demand half.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.2.0",
+    "@ocs/algos": "workspace:*",
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "@scure/base": "^1.2.6",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

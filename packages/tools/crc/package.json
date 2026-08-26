@@ -1,0 +1,27 @@
+{
+  "name": "@ocs/crc",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "One tool per CRC width rather than one per named model: the RevEng catalogue has 67 entries and putting all of them in the sidebar would bury the 22 hashes next to them. The variants live in a dropdown inside each width's tool, which is also where the Custom parameter mode goes. `./manifests` is eager and dependency-free; `./definition` is the on-demand half that reaches @ocs/algos.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ocs/algos": "workspace:*",
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

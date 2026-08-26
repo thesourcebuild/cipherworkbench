@@ -1,0 +1,56 @@
+/*
+ * Shared design tokens. Imported once by the app's globals.css, after
+ * `@import "tailwindcss"`.
+ *
+ * Both light and dark are defined: the desktop window follows the OS theme and
+ * the web page follows the browser, so neither can be assumed.
+ */
+
+/*
+ * `dark:` utilities activate from a `.dark` class on `<html>` rather than
+ * `prefers-color-scheme` directly, so the Settings overlay's Light/Dark/System
+ * picker can override the OS preference — see apps/web/app/use-theme.ts, which
+ * sets that class (and, in "system" mode, keeps it following the OS setting).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-mono:
+    ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Diagnostic severity — used by the checks panel and the result banner. */
+  --color-severity-error: oklch(0.58 0.21 25);
+  --color-severity-insecure: oklch(0.62 0.19 40);
+  --color-severity-warning: oklch(0.72 0.15 85);
+  --color-severity-info: oklch(0.62 0.12 240);
+
+  /*
+   * Verification outcome. Deliberately not the same green/red as a generic
+   * success/error toast: a match here is a factual claim about two byte strings,
+   * and it needs to read as its own kind of statement — hence its own pair of
+   * tokens, used by MonoBlock's `tone` and by the verify panel's border.
+   */
+  --color-verify-match: oklch(0.6 0.15 155);
+  --color-verify-mismatch: oklch(0.58 0.21 25);
+
+  /*
+   * "You are here": the sidebar's family and category dots, and a switch that is on.
+   *
+   * Its own token rather than a palette class, because two unrelated components have to agree on it
+   * and because the shade is the sort of thing that gets tuned. Deliberately darker and less
+   * saturated than --color-verify-match, which is a *claim* about two byte strings and should be the
+   * brighter green of the two; this one is ambient state, on screen the whole time, and a bright
+   * green dot next to every heading competed with the content for attention.
+   */
+  --color-nav-here: oklch(0.55 0.12 160);
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  body {
+    @apply bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@ocs/asymmetric",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Public-key cryptography. Seven tools: RSA (WebCrypto, since @noble has none), ECDSA, Ed25519 and ECDH (all @noble/curves), and the three FIPS post-quantum schemes ML-KEM, ML-DSA and SLH-DSA (@noble/post-quantum, chosen because it is pure ESM -- every other implementation available is a native addon or a WASM blob the desktop CSP forbids). The first family where key generation is an operation in its own right and where one tool has more than two operations.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.1.0",
+    "@noble/hashes": "^2.2.0",
+    "@noble/post-quantum": "0.7.0",
+    "@ocs/algos": "workspace:*",
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "@scure/base": "^1.2.6",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

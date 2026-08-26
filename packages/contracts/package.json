@@ -1,0 +1,25 @@
+{
+  "name": "@ocs/contracts",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "//": "sideEffects:false lets bundlers drop unused modules. Everything here is pure declarations — importing a type must not drag zod schema construction into the client bundle. Tool-agnostic only: no tool's own spec/catalogue data lives here, that's packages/tools/<family>.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./diagnostic": "./src/diagnostic.ts",
+    "./options": "./src/options.ts",
+    "./encoding": "./src/encoding.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

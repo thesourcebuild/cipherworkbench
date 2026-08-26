@@ -1,0 +1,30 @@
+{
+  "name": "@ocs/kdf",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Key derivation and password hashing. Five tools: PBKDF2, HKDF, scrypt, Argon2 and bcrypt. The password-hashing three carry a Verify mode, because checking a stored hash is what people actually do with them. bcryptjs is a real runtime dependency — pure JS, zero deps, browser-safe — since @noble has no bcrypt.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./pure": "./src/pure.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts",
+    "./key-source": "./src/key-source.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.2.0",
+    "@ocs/algos": "workspace:*",
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "bcryptjs": "^3.0.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}
