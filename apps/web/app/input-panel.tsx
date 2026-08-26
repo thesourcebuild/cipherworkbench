@@ -376,7 +376,7 @@ export function InputPanel({
                 // the bytes being hashed.
                 autoCorrect="off"
                 autoCapitalize="off"
-                rows={6}
+                rows={10}
                 placeholder={PLACEHOLDERS[input.mode]}
                 className={cn(
                   "w-full resize-y rounded-md border px-3 py-2 font-mono text-xs",
