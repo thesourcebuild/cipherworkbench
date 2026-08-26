@@ -1,6 +1,6 @@
 {
   "name": "@ocs/contracts",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "//": "sideEffects:false lets bundlers drop unused modules. Everything here is pure declarations — importing a type must not drag zod schema construction into the client bundle. Tool-agnostic only: no tool's own spec/catalogue data lives here, that's packages/tools/<family>.",

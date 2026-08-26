@@ -20,6 +20,8 @@
 | `pnpm build` | Web static export to `apps/web/out`, then desktop bundle |
 | `pnpm web` | Next.js dev server on http://localhost:3000 |
 | `pnpm desktop` | Electron against the dev server (`pnpm web`), with HMR |
+| `pnpm win:version` | Sync all workspace `package.json` manifests to root `version` file (`-Set X.Y.Z` to bump, `-Check` to verify) |
+| `pnpm sh:version` | Linux/macOS version sync (`--set X.Y.Z` to bump, `--check` to verify) |
 | `pnpm win:verify` | Run script check, typecheck, lint, test, build, and desktop smoke check |
 | `pnpm win:package` | Create Windows installers and web zip into `dist/<version>/` |
 | `pnpm sh:package` | Create Linux packages (.AppImage, .deb), web zip, and source zip |
@@ -41,6 +43,8 @@ Cipher Workbench verifies algorithms against reference implementations and nativ
 The monorepo build order is **web export → renderer copy → desktop main bundle**. `@ocs/web` is declared as a devDependency of `apps/desktop` so Turborepo enforces build ordering.
 
 ## Things that will bite you
+
+**Version mismatches across manifests.** The root `version` file is the single source of truth. Manually editing `version` leaves the 22 workspace `package.json` files out of sync, causing `pnpm win:version -Check` to fail in CI. Always bump using `pnpm win:version -Set X.Y.Z` (or `pnpm sh:version --set X.Y.Z`), or run `pnpm win:version` after updating the `version` file.
 
 **`ELECTRON_RUN_AS_NODE`.** VS Code's extension host exports this, and it leaks into the integrated terminal. With it set, `electron .` runs as plain Node, `require("electron")` returns a stub, and the app dies with `Cannot read properties of undefined (reading 'registerSchemesAsPrivileged')`. `apps/desktop/scripts/run-electron.mjs` strips it, which is why every Electron launcher goes through that script.
 
