@@ -2031,11 +2031,11 @@ function checkKeySource(window: BrowserWindow): Promise<ComputeProbe> {
 
        const source = await waitFor('[data-ocs-option="keySource"] select', 5000);
        if (!source) return { error: "there is no Key source control" };
-       if (source.value !== "custom") {
-         return { error: "Key source opens on " + (source.value || "(not set)") + " rather than custom" };
+       if (source.value !== "directinput") {
+         return { error: "Key source opens on " + (source.value || "(not set)") + " rather than directinput" };
        }
        const offered = Array.from(source.options).filter((o) => o.value !== "").map((o) => o.value).join(",");
-       if (offered !== "custom,pbkdf2,evpkdf,hkdf,scrypt,argon2,bcryptpbkdf") {
+       if (offered !== "directinput,pbkdf2,evpkdf,hkdf,scrypt,argon2,bcryptpbkdf") {
          return { error: "Key source offers " + offered };
        }
 
@@ -2101,9 +2101,9 @@ function checkKeySource(window: BrowserWindow): Promise<ComputeProbe> {
        if (!fieldOf("nonce")) return { error: "the IV field did not come back under Key only" };
 
        // Back to a state the later probes expect.
-       setSelect(source, "custom");
+       setSelect(source, "directinput");
        await sleep(300);
-       if (!fieldOf("key")) return { error: "the Key field did not come back under Custom" };
+       if (!fieldOf("key")) return { error: "the Key field did not come back under Direct Input" };
 
        return { digest: "7 sources, key swapped for password, openssl value matched" };
      })()`,

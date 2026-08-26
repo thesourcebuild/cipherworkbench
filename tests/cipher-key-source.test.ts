@@ -185,7 +185,7 @@ describe("key source: what is derived", () => {
     };
     const nonce = cipherCatalogueFor("aes").require("nonce");
 
-    expect(isAvailableOn(nonce, tagsFor({ [OPTION_MODE]: "cbc" })), "Custom").toBe(true);
+    expect(isAvailableOn(nonce, tagsFor({ [OPTION_MODE]: "cbc" })), "Direct Input").toBe(true);
     expect(
       isAvailableOn(
         nonce,
@@ -206,7 +206,7 @@ describe("key source: what is derived", () => {
 
   it("every source derives a usable key, and the result names which", async () => {
     for (const source of KEY_SOURCES) {
-      if (source === "custom") continue;
+      if (source === "directinput") continue;
       const options: Record<string, unknown> = {
         ...PASSWORD,
         [OPTION_MODE]: "cbc",

@@ -85,7 +85,7 @@ function keyOption(
      * mode returned `undefined` before, and `isAvailableOn` reads a missing tag as "not available", so
      * this gate would have deleted their key field outright.
      */
-    availableOn: [keySourceTag("custom")],
+    availableOn: [keySourceTag("directinput")],
     summary,
     detail,
     order: 10,

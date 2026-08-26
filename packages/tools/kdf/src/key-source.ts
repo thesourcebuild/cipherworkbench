@@ -198,7 +198,7 @@ import { KDF_HASHES, DEFAULT_KDF_HASH } from "./catalogue/tool-meta";
  * the same functions above -- there is one PBKDF2 in this repo, not two.
  */
 export const KEY_SOURCES = [
-  "custom",
+  "directinput",
   "pbkdf2",
   "evpkdf",
   "hkdf",
@@ -216,7 +216,7 @@ export type KeySource = (typeof KEY_SOURCES)[number];
 export const keySourceTag = (source: KeySource): string => `key:${source}`;
 
 /** Every source but `custom` -- what the password, salt and derivation controls are gated on. */
-export const DERIVED_TAGS: readonly string[] = KEY_SOURCES.filter((s) => s !== "custom").map(
+export const DERIVED_TAGS: readonly string[] = KEY_SOURCES.filter((s) => s !== "directinput").map(
   keySourceTag,
 );
 
@@ -252,7 +252,7 @@ export type KdfDerives = (typeof KDF_DERIVES)[number];
 export const KDF_ENVELOPES = ["none", "openssl"] as const;
 export type KdfEnvelope = (typeof KDF_ENVELOPES)[number];
 
-export const DEFAULT_KEY_SOURCE: KeySource = "custom";
+export const DEFAULT_KEY_SOURCE: KeySource = "directinput";
 export const DEFAULT_KDF_DERIVES: KdfDerives = "key-iv";
 export const DEFAULT_KDF_ENVELOPE: KdfEnvelope = "none";
 /** `openssl enc -pbkdf2`'s own default, so the first thing anyone tries reproduces OpenSSL. */
@@ -302,7 +302,7 @@ export function keySourceOptions<TGroup extends string>(groups: {
       group: select,
       kind: "enum",
       choices: [
-        { value: "custom", label: "Custom", summary: "Type the key bytes yourself" },
+        { value: "directinput", label: "Direct Input", summary: "Type the key bytes yourself" },
         { value: "pbkdf2", label: "PBKDF2", summary: "RFC 8018, and openssl enc -pbkdf2" },
         {
           value: "evpkdf",
@@ -672,7 +672,7 @@ export function keySourceProblem(
   params: KeySourceParams,
   direction: "encrypt" | "decrypt",
 ): { problem: string; optionId: string } | undefined {
-  if (params.source === "custom") return undefined;
+  if (params.source === "directinput") return undefined;
 
   if (params.password.length === 0) {
     return { problem: "Enter a password to derive the key from.", optionId: OPTION_PASSWORD };
@@ -724,7 +724,7 @@ export function keySourceProblem(
  */
 export function deriveKeySourceBytes(params: KeySourceParams, dkLen: number): Uint8Array {
   switch (params.source) {
-    case "custom":
+    case "directinput":
       throw new Error("deriveKeySourceBytes was called with the key source set to Custom.");
     case "pbkdf2":
       return derivePbkdf2(params.hash, params.password, params.salt, params.iterations, dkLen);

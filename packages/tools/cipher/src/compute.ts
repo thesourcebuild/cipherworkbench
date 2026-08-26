@@ -234,7 +234,7 @@ const PADDING_LABELS: Record<PaddingScheme, string> = {
  * asked for and equals `key.length` under Custom, so one expression is right in both states.
  */
 const keyBytesFor = (r: ResolvedCipher): number =>
-  r.keySource === "custom" ? r.key.length : r.derivedKeyLength;
+  r.keySource === "directinput" ? r.key.length : r.derivedKeyLength;
 
 /**
  * What to call the construction in the result panel.
@@ -321,7 +321,7 @@ function fields(r: ResolvedCipher, output: Uint8Array): ToolResultField[] {
    * Only when a KDF actually ran -- `key` is empty under Custom's own resolve and this is called from
    * `computeCipher`, after the derivation, so the bytes are real by the time it renders.
    */
-  if (r.keySource !== "custom" && r.key.length > 0) {
+  if (r.keySource !== "directinput" && r.key.length > 0) {
     out.push({
       label: "Derived key",
       value: encodeHex(r.key),
@@ -432,7 +432,7 @@ export async function computeCipher(spec: CipherSpec, input: Uint8Array): Promis
    * download Argon2. `computeCipher` being async is what makes that free -- no `prepare` hook, no
    * synchronous accessor to guard.
    */
-  if (r.keySource !== "custom") {
+  if (r.keySource !== "directinput") {
     const kdf = await import("@ocs/kdf/key-source");
     const params = { ...r.keySourceParams };
 

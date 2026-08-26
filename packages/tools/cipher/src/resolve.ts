@@ -461,7 +461,7 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
 
   const keyResult = decodeBytesOption(catalogue, spec.options, OPTION_KEY);
   if (!keyResult.ok) return { ok: false, problem: keyResult.error, optionId: OPTION_KEY };
-  if (keySource === "custom" && keyResult.bytes.length === 0) {
+  if (keySource === "directinput" && keyResult.bytes.length === 0) {
     return { ok: false, problem: "Enter a key, or press Generate.", optionId: OPTION_KEY };
   }
 
@@ -508,7 +508,7 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
    * cipher wants, so there is nothing here that could disagree -- and `key` is empty under a KDF, which
    * every one of these checks would read as wrong.
    */
-  if (keySource === "custom" && exact && !exact.includes(keyResult.bytes.length)) {
+  if (keySource === "directinput" && exact && !exact.includes(keyResult.bytes.length)) {
     return {
       ok: false,
       problem: mode?.keyLengths
@@ -524,9 +524,9 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
   // Skipped where a set has pinned an exact length above: the union's bounds are wider by
   // construction and would only ever accept something the set has already refused.
   const min =
-    keySource !== "custom" || paramSet || instance ? undefined : keyOption.bytesLength?.min;
+    keySource !== "directinput" || paramSet || instance ? undefined : keyOption.bytesLength?.min;
   const max =
-    keySource !== "custom" || paramSet || instance ? undefined : keyOption.bytesLength?.max;
+    keySource !== "directinput" || paramSet || instance ? undefined : keyOption.bytesLength?.max;
   if (min !== undefined && keyResult.bytes.length < min) {
     return {
       ok: false,
@@ -562,7 +562,7 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
    * of bug that makes a feature unreachable. The KDF is asked for exactly `needed` extra bytes, so
    * there is nothing here that could disagree.
    */
-  const ivIsDerived = keySource !== "custom" && derivedParams.derives === "key-iv";
+  const ivIsDerived = keySource !== "directinput" && derivedParams.derives === "key-iv";
   if (!ivIsDerived && accepted.length > 1 && !accepted.includes(nonceResult.bytes.length)) {
     const label =
       spec.variant === "aes"
@@ -679,11 +679,11 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
        * `cipherGenerateLength` makes and keeps the two agreeing.
        */
       derivedKeyLength:
-        keySource === "custom"
+        keySource === "directinput"
           ? keyResult.bytes.length
           : (exact?.[exact.length - 1] ?? keyResult.bytes.length),
       derivedIvLength:
-        keySource !== "custom" && derivedParams.derives === "key-iv"
+        keySource !== "directinput" && derivedParams.derives === "key-iv"
           ? requiredNonceLength(spec.variant, mode, paramSetId)
           : 0,
       key: keyResult.bytes,

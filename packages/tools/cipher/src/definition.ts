@@ -65,7 +65,7 @@ export function cipherVariantTags(toolId: string, spec: CipherSpec): readonly st
    * The IV is the user's unless a KDF is deriving it. `mode` is undefined for a shaped or stream
    * cipher, whose nonce field is gated on nothing at all, so there is nothing to withhold there.
    */
-  const derivesIv = source !== "custom" && readKdfDerives(spec.options) === "key-iv";
+  const derivesIv = source !== "directinput" && readKdfDerives(spec.options) === "key-iv";
   if (!derivesIv) {
     tags.push(TAG_IV_MANUAL);
     if (mode) tags.push(`iv:${mode}`);

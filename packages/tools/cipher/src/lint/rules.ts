@@ -335,7 +335,7 @@ export const RULES: readonly LintRule<CipherSpec>[] = [
        * `computeCipher`, so this rule cannot see them -- and the chance a derivation lands on one of
        * DES's 64 weak keys is 2^-50. Staying quiet is the honest answer rather than a gap.
        */
-      if (result.resolved.keySource !== "custom") return [];
+      if (result.resolved.keySource !== "directinput") return [];
 
       const key = result.resolved.key;
       // 3DES is three 8-byte keys; any of them being weak weakens that stage of the EDE.
@@ -454,7 +454,7 @@ export const RULES: readonly LintRule<CipherSpec>[] = [
       if (result.resolved.mode?.id !== "xts") return [];
       // Same reasoning as C006: a derived key has no bytes to compare until compute runs, and two
       // equal halves out of a KDF is a 2^-128 event rather than a mistake to warn about.
-      if (result.resolved.keySource !== "custom") return [];
+      if (result.resolved.keySource !== "directinput") return [];
 
       const key = result.resolved.key;
       const half = key.length / 2;
@@ -690,7 +690,7 @@ export const RULES: readonly LintRule<CipherSpec>[] = [
       const result = resolveCipher(spec);
       if (!result.ok) return [];
       const r = result.resolved;
-      if (r.keySource === "custom" || r.direction !== "encrypt") return [];
+      if (r.keySource === "directinput" || r.direction !== "encrypt") return [];
       if (r.keySourceParams.envelope !== "openssl") return [];
       if (r.keySourceParams.salt.length > 0) return [];
       return [
