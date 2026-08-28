@@ -2057,6 +2057,8 @@ function checkKeySource(window: BrowserWindow): Promise<ComputeProbe> {
         * openssl enc -aes-256-cbc -pbkdf2 -iter 10000 -S 0011223344556677 -pass pass:hunter2.
         */
        setField(password, "hunter2");
+       const saltSelect = control("kdfSalt", "select");
+       if (saltSelect) setSelect(saltSelect, "hex");
        setField(fieldOf("kdfSalt"), "0011223344556677");
        const iterations = fieldOf("pbkdf2Iterations");
        if (!iterations) return { error: "no Iterations field under PBKDF2" };
