@@ -1,0 +1,37 @@
+<!--
+  Source of truth for the application icon. The .ico (Windows) and .png (Linux,
+  and the window icon everywhere) are generated from this — see the note in
+  apps/desktop/resources/README.md. electron-builder picks them up from this
+  directory via `directories.buildResources`.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Cipher Workbench">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#334155"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="shackle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#94a3b8"/>
+      <stop offset="1" stop-color="#475569"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="52" fill="#0b1220"/>
+
+  <!-- Shackle. -->
+  <path d="M84 112V84a44 44 0 0 1 88 0v28" fill="none" stroke="url(#shackle)" stroke-width="20" stroke-linecap="round"/>
+
+  <!-- Body. -->
+  <rect x="56" y="108" width="144" height="104" rx="22" fill="url(#body)" stroke="#64748b" stroke-width="4"/>
+
+  <!--
+    Four hex nibbles across the lock face: the digest this app exists to produce,
+    rendered as the thing you actually look at when you compare one.
+  -->
+  <g fill="#38bdf8" font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace" font-size="30" font-weight="700" text-anchor="middle">
+    <text x="94" y="150">a</text>
+    <text x="162" y="150">7</text>
+    <text x="94" y="192">f</text>
+    <text x="162" y="192">3</text>
+  </g>
+</svg>

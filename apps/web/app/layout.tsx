@@ -56,6 +56,16 @@ export const metadata: Metadata = {
     locale: "en",
   },
   twitter: { card: "summary", title: SITE_NAME, description: SITE_DESCRIPTION },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [
+      { url: "/icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   /**
    * `format-detection` off, and this is not cosmetic for this app.
    *
