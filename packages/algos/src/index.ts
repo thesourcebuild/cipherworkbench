@@ -21,6 +21,7 @@ export * from "./chaskey";
 export * from "./checksum";
 export * from "./citycrc";
 export * from "./cityhash";
+export * from "./cobblestone";
 export * from "./crc/index";
 export * from "./crc32c";
 export * from "./cubehash";
@@ -29,6 +30,7 @@ export * from "./des";
 export * from "./ecc";
 export * from "./echo";
 export * from "./farmhash";
+export * from "./fernet";
 export * from "./fnv";
 /**
  * `./fsb-pi` is deliberately NOT re-exported here.

@@ -4,8 +4,10 @@ import {
   AES_BLOCK_SIZE,
   DEFAULT_AES_MODE_FALLBACK,
   OPTION_AAD,
+  OPTION_CONTEXT,
   OPTION_KEY,
   OPTION_NONCE,
+  OPTION_SALT,
   OPTION_TWEAK,
   readAesKeySizeBytes,
   readAnubisVariant,
@@ -20,9 +22,13 @@ import {
   readRc5Rounds,
   readTagLen,
   readTagLenFrom,
+  readTimestamp,
+  readTtl,
   type CipherDirection,
 } from "./pure";
 import {
+  AES_MODES,
+  COBBLESTONE_INSTANCES,
   getAesMode,
   getCipherInstance,
   getCipherTool,
@@ -125,6 +131,14 @@ export interface ResolvedCipher {
    * and a CBC IV and a tweak are both in play at once.
    */
   tweak: Uint8Array;
+  /** Fernet: explicit creation timestamp in seconds since epoch. */
+  timestamp?: number | bigint;
+  /** Fernet: TTL expiration in seconds. */
+  ttl?: number;
+  /** Cobblestone: application context bound to key derivation. */
+  context: Uint8Array;
+  /** Cobblestone: 24-byte per-message salt. */
+  salt: Uint8Array;
   drop: number;
   /** True when the construction authenticates as well as encrypts. */
   aead: boolean;
@@ -173,6 +187,8 @@ export function requiredNonceLength(
      */
     return mode.aead ? mode.nonceLen : (paramSet?.blockSize ?? tool.block.size);
   }
+
+  if (toolId === "fernet" || toolId === "cobblestone") return 0;
 
   /**
    * A shaped cipher declares its own nonce widths on the metadata.
@@ -233,6 +249,8 @@ export function acceptedNonceLengths(
   mode: AesModeMeta | undefined,
   paramSetId?: string,
 ): readonly number[] {
+  if (toolId === "fernet") return [0, 16];
+  if (toolId === "cobblestone") return [];
   const tool = getCipherTool(toolId);
   const paramSet = tool ? getParamSet(tool, paramSetId) : undefined;
   if (tool?.block) {
@@ -331,6 +349,10 @@ export function cipherKeyLengths(spec: CipherSpec): readonly number[] | undefine
    * the only narrowing there is, and refusing a mismatch with the size named is the whole point of it.
    */
   if (mode?.keyLengths) return mode.keyLengths;
+  if (spec.variant === "cobblestone") {
+    const inst = COBBLESTONE_INSTANCES.find((i) => i.id === paramSetId);
+    return [inst?.keyLen ?? 16];
+  }
   return paramSet
     ? [paramSet.keyLength]
     : instance
@@ -391,6 +413,10 @@ export function cipherGenerateLength(spec: CipherSpec, optionId: string): number
    * the mode's own length is the answer -- XTS wants 32 or 64 and SIV 32, 48 or 64.
    */
   if (optionId === OPTION_KEY) {
+    if (spec.variant === "cobblestone") {
+      const inst = COBBLESTONE_INSTANCES.find((i) => i.id === readParamSet(spec.options));
+      return inst?.keyLen ?? 16;
+    }
     if (spec.variant !== "aes") return undefined;
     /*
      * The last of whatever the field will accept, which is the same function the field's own check
@@ -440,7 +466,10 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
   const paramSet = getParamSet(tool, paramSetId);
   // Instances share `OPTION_PARAM_SET` with block ciphers' parameter sets -- see the note on
   // `shape.instances`. Exactly one of the two is ever defined, because a tool has `block` or `shape`.
-  const instance = getCipherInstance(tool, paramSetId);
+  const instance =
+    spec.variant === "cobblestone"
+      ? (COBBLESTONE_INSTANCES.find((i) => i.id === paramSetId) ?? COBBLESTONE_INSTANCES[0])
+      : getCipherInstance(tool, paramSetId);
   const blockSize = paramSet?.blockSize ?? tool.block?.size;
 
   const catalogue = cipherCatalogueFor(spec.variant);
@@ -641,6 +670,22 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
     };
   }
 
+  const contextResult = decodeBytesOption(catalogue, spec.options, OPTION_CONTEXT);
+  if (!contextResult.ok) return { ok: false, problem: contextResult.error, optionId: OPTION_CONTEXT };
+
+  const saltResult = decodeBytesOption(catalogue, spec.options, OPTION_SALT);
+  if (!saltResult.ok) return { ok: false, problem: saltResult.error, optionId: OPTION_SALT };
+  if (spec.variant === "cobblestone" && saltResult.bytes.length !== 0 && saltResult.bytes.length !== 24) {
+    return {
+      ok: false,
+      problem: `Cobblestone salt must be 0 or 24 bytes (leave empty to generate a fresh random salt); this one is ${saltResult.bytes.length} bytes.`,
+      optionId: OPTION_SALT,
+    };
+  }
+
+  const timestamp = readTimestamp(spec.options);
+  const ttl = readTtl(spec.options);
+
   const aead = spec.variant === "aes" ? (mode?.aead ?? false) : tool.aead;
   /**
    * Every AEAD here uses a 16-byte tag except AEGIS, which offers 16 or 32.
@@ -695,6 +740,10 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
       gostSbox: readGostSbox(spec.options),
       anubisVariant: readAnubisVariant(spec.options),
       tweak: tweakResult.bytes,
+      timestamp,
+      ttl,
+      context: contextResult.bytes,
+      salt: saltResult.bytes,
       drop: readDrop(spec.options),
       aead,
       tagLen,

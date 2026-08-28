@@ -1,4 +1,4 @@
-import { encodeHex, type ToolResult, type ToolResultField } from "@ocs/engine";
+import { encodeHex, type ToolResult, type ToolResultField, type ToolStream } from "@ocs/engine";
 import {
   aegisOperation,
   aesOperation,
@@ -6,6 +6,9 @@ import {
   blockCipherOperation,
   chacha20Operation,
   chachaPolyOperation,
+  cobblestoneOperation,
+  createCobblestoneStream,
+  fernetOperation,
   lwcOperation,
   rc4Operation,
   salsaOperation,
@@ -22,7 +25,7 @@ import {
   type ResolvedCipher,
 } from "./resolve";
 import type { CipherSpec } from "./spec";
-import type { PaddingScheme } from "@ocs/algos";
+import { readBigUint64BE, type CobblestoneVariant, type PaddingScheme } from "@ocs/algos";
 import { opensslHeader, type KeySource } from "@ocs/kdf/key-source";
 import { concatBytes, randomBytes } from "@ocs/engine";
 
@@ -54,6 +57,20 @@ function operationFor(r: ResolvedCipher): CipherOperation {
       return salsaOperation(r.key, r.nonce, true);
     case "salsa20":
       return salsaOperation(r.key, r.nonce, false);
+    case "fernet":
+      return fernetOperation(r.key, {
+        timestamp: r.timestamp,
+        iv: r.nonce,
+        ttl: r.ttl,
+      });
+    case "cobblestone":
+      return cobblestoneOperation(r.key, {
+        variant:
+          (r.instance?.id as CobblestoneVariant) ??
+          (r.key.length === 32 ? "cobblestone256" : "cobblestone128"),
+        context: r.context,
+        salt: r.salt,
+      });
     case "des":
     case "3des":
     case "sm4":
@@ -400,6 +417,53 @@ function fields(r: ResolvedCipher, output: Uint8Array): ToolResultField[] {
     });
   }
 
+  if (r.toolId === "fernet") {
+    if (r.direction === "encrypt" && output.length >= 57) {
+      const ts = Number(readBigUint64BE(output, 1));
+      const iv = output.slice(9, 25);
+      const hmacVal = output.slice(output.length - 32);
+      out.push({
+        label: "Token timestamp",
+        value: `${new Date(ts * 1000).toISOString().replace(".000Z", "Z")} (${ts})`,
+        hint: "Recorded in the token header as a 64-bit big-endian integer.",
+      });
+      out.push({
+        label: "Token IV",
+        value: encodeHex(iv),
+        hint: "16-byte initialization vector for AES-128-CBC.",
+      });
+      out.push({
+        label: "HMAC",
+        value: encodeHex(hmacVal),
+        hint: "HMAC-SHA256 over Version (0x80) || Timestamp || IV || Ciphertext.",
+      });
+    }
+  }
+
+  if (r.toolId === "cobblestone") {
+    if (r.direction === "encrypt" && output.length >= 56) {
+      const salt = output.slice(0, 24);
+      const commitment = output.slice(24, 56);
+      const payloadLen = output.length - 56;
+      const chunks = Math.floor(payloadLen / 16400) + 1;
+      out.push({
+        label: "Salt",
+        value: encodeHex(salt),
+        hint: "24-byte per-message salt in header.",
+      });
+      out.push({
+        label: "Key commitment",
+        value: encodeHex(commitment),
+        hint: "32-byte HKDF commitment binding key, salt, and context.",
+      });
+      out.push({
+        label: "Chunk count",
+        value: `${chunks} chunks`,
+        hint: "16 KiB chunks with short final chunk framing.",
+      });
+    }
+  }
+
   return out;
 }
 
@@ -587,4 +651,54 @@ export async function computeCipher(spec: CipherSpec, input: Uint8Array): Promis
 
     return { error: message };
   }
+}
+
+/**
+ * Creates an incremental streaming tool stream for ciphers that support streaming (e.g. Cobblestone).
+ */
+export function createCipherStream(spec: CipherSpec): ToolStream {
+  const result = resolveCipher(spec);
+  if (!result.ok) {
+    return {
+      update: () => {},
+      finish: () => ({ error: result.problem }),
+    };
+  }
+  const r = result.resolved;
+  if (r.toolId === "cobblestone") {
+    const stream = createCobblestoneStream(r.key, r.direction, {
+      variant:
+        (r.instance?.id as CobblestoneVariant) ??
+        (r.key.length === 32 ? "cobblestone256" : "cobblestone128"),
+      context: r.context,
+      salt: r.salt,
+    });
+    const chunks: Uint8Array[] = [];
+    return {
+      update(chunk: Uint8Array) {
+        const out = stream.update(chunk);
+        if (out.length > 0) chunks.push(out);
+      },
+      finish(): ToolResult {
+        try {
+          const final = stream.finalize();
+          if (final.length > 0) chunks.push(final);
+          const totalLen = chunks.reduce((a, b) => a + b.length, 0);
+          const combined = new Uint8Array(totalLen);
+          let offset = 0;
+          for (const c of chunks) {
+            combined.set(c, offset);
+            offset += c.length;
+          }
+          return {
+            bytes: combined,
+            fields: fields(r, combined),
+          };
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : String(err) };
+        }
+      },
+    };
+  }
+  throw new Error(`Streaming is not supported for cipher tool "${r.toolId}".`);
 }

@@ -19,15 +19,21 @@ import {
   OPTION_PARAM_SET,
   OPTION_NONCE,
   OPTION_TAG_LEN,
+  OPTION_TIMESTAMP,
+  OPTION_TTL,
+  OPTION_CONTEXT,
+  OPTION_SALT,
   TAG_CHACHA_COUNTER,
   TAG_IV_MANUAL,
   TAG_RC4,
 } from "../pure";
 import {
   AES_MODES,
+  COBBLESTONE_INSTANCES,
   getAesMode,
   requireCipherTool,
   type AesModeMeta,
+  type CipherInstance,
   type CipherParamSet,
   type CipherToolMeta,
 } from "./tool-meta";
@@ -615,6 +621,105 @@ function salsaOptions(
     ),
   ];
 }
+
+const FERNET_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
+  DIRECTION_OPTION,
+  {
+    id: OPTION_KEY,
+    label: "Key",
+    group: "key",
+    kind: "bytes",
+    bytesLength: { exact: [32], generate: 32 },
+    defaultBytesEncoding: "base64url",
+    secret: true,
+    availableOn: [keySourceTag("directinput")],
+    summary: "32 bytes: 16-byte HMAC signing key and 16-byte AES-128 encryption key.",
+    detail:
+      "A Fernet key is 32 bytes (256 bits), usually represented in URL-safe base64 encoding. The first 16 bytes sign the message with HMAC-SHA256, and the second 16 bytes encrypt the message with AES-128 in CBC mode.",
+    order: 10,
+  },
+  nonceOption(
+    { exact: [0, 16], generate: 16 },
+    "IV",
+    "16 bytes, or empty for a fresh random IV.",
+    "Fernet generates a random 16-byte initialization vector per message. Provide an explicit value to reproduce published test vectors.",
+  ),
+  {
+    id: OPTION_TIMESTAMP,
+    label: "Timestamp",
+    group: "aead",
+    kind: "text",
+    arg: { placeholder: "Auto (current time) or seconds since epoch e.g. 499162800" },
+    summary: "Creation timestamp in seconds since Jan 1 1970 UTC.",
+    detail:
+      "Recorded in the token header as a 64-bit unsigned big-endian integer. Leave empty to record current time.",
+    order: 30,
+  },
+  {
+    id: OPTION_TTL,
+    label: "TTL (seconds)",
+    group: "aead",
+    kind: "number",
+    arg: { placeholder: "Optional TTL in seconds e.g. 60", min: 0 },
+    summary: "Time-to-live limit for decryption.",
+    detail:
+      "When decrypting, specifies the maximum allowed age of the token in seconds. If the token is older than the TTL, decryption fails with an expiration error.",
+    order: 40,
+  },
+];
+
+function cobblestoneOptions(instances: readonly CipherInstance[]): readonly OptionDef<CipherOptionGroup>[] {
+  return [
+    DIRECTION_OPTION,
+    {
+      id: OPTION_PARAM_SET,
+      label: "Parameter set",
+      group: "algorithm",
+      kind: "enum",
+      choices: instances.map((inst) => ({
+        value: inst.id,
+        label: inst.label,
+        summary: inst.summary,
+      })),
+      summary: "Which Cobblestone instantiation to run.",
+      detail:
+        "Cobblestone-128 uses SHA-512 with AES-128-GCM and a 16-byte key; this is the primary recommendation. Cobblestone-256 uses SHA-512 with AES-256-GCM and a 32-byte key for compliance-oriented environments. Both use 16 KiB chunks and HKDF-Expand key commitment.",
+      order: 5,
+    },
+    keyOption(
+      { exact: [16, 32], generate: 16 },
+      "16 bytes for Cobblestone-128, 32 bytes for Cobblestone-256.",
+      "Input key material used with HKDF-Expand (SHA-512) to derive the single-use AEAD key, base nonce, and 32-byte key commitment.",
+    ),
+    {
+      id: OPTION_CONTEXT,
+      label: "Context / Domain separation",
+      group: "aead",
+      kind: "bytes",
+      bytesLength: { min: 0, max: 4096 },
+      defaultBytesEncoding: "utf-8",
+      summary: "Application context bound into key derivation. May be empty.",
+      detail:
+        "Binds the ciphertext to an application domain or purpose string. Decryption fails with a commitment error unless the identical context is supplied.",
+      order: 20,
+    },
+    {
+      id: OPTION_SALT,
+      label: "Salt",
+      group: "key",
+      kind: "bytes",
+      bytesLength: { exact: [0, 24], generate: 24 },
+      defaultBytesEncoding: "utf-8",
+      availableOn: [TAG_IV_MANUAL],
+      summary: "24-byte per-message salt. Leave empty for a fresh random salt.",
+      detail:
+        "Cobblestone prepends 24 bytes of salt to the ciphertext before the 32-byte commitment. Leave empty when encrypting to draw fresh random bytes.",
+      order: 30,
+    },
+  ];
+}
+
+const COBBLESTONE_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = cobblestoneOptions(COBBLESTONE_INSTANCES);
 
 /**
  * A block cipher this repo implements: DES, 3DES, SM4.
@@ -1357,6 +1462,8 @@ export function cipherCatalogueFor(toolId: string): OptionCatalogue<CipherOption
         8,
         "64 bits, the original width. Small enough that random choice risks a collision, so Salsa20 expects a counter rather than a random nonce — which is precisely the problem XSalsa20 was introduced to remove.",
       ),
+      fernet: FERNET_OPTIONS,
+      cobblestone: COBBLESTONE_OPTIONS,
     };
 
     const options =

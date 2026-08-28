@@ -99,6 +99,9 @@ export function createSpec(options?: { variant?: string }): CipherSpec {
   if (tool.shape?.instances) {
     base[OPTION_PARAM_SET] = tool.shape.defaultInstance ?? tool.shape.instances[0]!.id;
   }
+  if (variant === "cobblestone") {
+    base[OPTION_PARAM_SET] = "cobblestone128";
+  }
   /**
    * AEGIS's tag length, which is the only other select this family renders.
    *

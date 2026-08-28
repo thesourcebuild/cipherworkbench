@@ -2,7 +2,7 @@ import type { ToolDefinition } from "@ocs/engine";
 import { cipherCatalogueFor } from "./catalogue/options";
 import { OPTION_GROUP_META } from "./catalogue/groups";
 import { CIPHER_TOOL_IDS, DEFAULT_AES_MODE, requireCipherTool } from "./catalogue/tool-meta";
-import { computeCipher } from "./compute";
+import { computeCipher, createCipherStream } from "./compute";
 import { describeSpec } from "./explain/describe";
 import { RULES } from "./lint/rules";
 import { CIPHER_MANIFESTS } from "./manifest";
@@ -76,10 +76,6 @@ export function cipherVariantTags(toolId: string, spec: CipherSpec): readonly st
 
 /**
  * Builds the full contract for one cipher tool.
- *
- * `createStream` is absent for all five, and the manifest agrees. An AEAD cannot emit
- * authenticated output before it has seen every byte, and CBC needs the whole ciphertext to
- * strip padding — a property of the constructions rather than a gap in the implementation.
  */
 export function cipherToolDefinition(toolId: string): ToolDefinition<CipherSpec> {
   requireCipherTool(toolId);
@@ -95,6 +91,7 @@ export function cipherToolDefinition(toolId: string): ToolDefinition<CipherSpec>
     specSchema: CipherSpec,
     describe: describeSpec,
     compute: computeCipher,
+    ...(manifest.streaming ? { createStream: createCipherStream } : {}),
     /**
      * So Generate offers a length this tool will actually accept.
      *
@@ -121,8 +118,14 @@ export function cipherToolDefinition(toolId: string): ToolDefinition<CipherSpec>
 
 export { CIPHER_TOOL_IDS };
 
-// Re-exported from the lazy side: all of these reach an implementation.
-export { computeCipher, constructionLabel } from "./compute";
+export {
+  fernetOperation,
+  fernetCrypto,
+  cobblestoneOperation,
+  cobblestoneCrypto,
+  createCobblestoneStream,
+} from "./bindings";
+export { computeCipher, createCipherStream, constructionLabel } from "./compute";
 export {
   acceptedNonceLengths,
   cipherAcceptedByteLengths,

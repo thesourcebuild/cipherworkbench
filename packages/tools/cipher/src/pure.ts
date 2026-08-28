@@ -30,6 +30,12 @@ export const OPTION_TWEAK = "tweak";
 export const OPTION_GOST_SBOX = "gostSbox";
 export const OPTION_ANUBIS_VARIANT = "anubisVariant";
 export const OPTION_TAG_LEN = "tagLen";
+/** Fernet: optional timestamp (seconds) and TTL (seconds). */
+export const OPTION_TIMESTAMP = "timestamp";
+export const OPTION_TTL = "ttl";
+/** Cobblestone: context and salt. */
+export const OPTION_CONTEXT = "context";
+export const OPTION_SALT = "salt";
 
 /** `availableOn` tags. */
 export const TAG_AEAD = "aead";
@@ -89,6 +95,30 @@ export function readDrop(options: OptionValues): number {
   const raw = optNumber(options, OPTION_DROP);
   if (raw === undefined || !Number.isInteger(raw) || raw < 0) return 0;
   return Math.min(raw, 65536);
+}
+
+/** Fernet: optional timestamp in seconds since epoch. */
+export function readTimestamp(options: OptionValues): number | undefined {
+  const num = optNumber(options, OPTION_TIMESTAMP);
+  if (num !== undefined && num >= 0) return num;
+  const str = optString(options, OPTION_TIMESTAMP);
+  if (str && str.trim().length > 0) {
+    const parsed = Number(str.trim());
+    if (!isNaN(parsed) && parsed >= 0) return parsed;
+  }
+  return undefined;
+}
+
+/** Fernet: optional TTL in seconds. */
+export function readTtl(options: OptionValues): number | undefined {
+  const num = optNumber(options, OPTION_TTL);
+  if (num !== undefined && num >= 0) return num;
+  const str = optString(options, OPTION_TTL);
+  if (str && str.trim().length > 0) {
+    const parsed = Number(str.trim());
+    if (!isNaN(parsed) && parsed >= 0) return parsed;
+  }
+  return undefined;
 }
 
 /**

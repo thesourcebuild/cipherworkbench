@@ -1,6 +1,6 @@
 {
   "name": "@ocs/cipher",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@noble/ciphers": "^2.1.0",
+    "@noble/hashes": "^2.2.0",
     "@ocs/algos": "workspace:*",
     "@ocs/contracts": "workspace:*",
     "@ocs/engine": "workspace:*",

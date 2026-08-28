@@ -141,6 +141,15 @@ import {
   xoodyakDecrypt,
   xoodyakEncrypt,
   zuc,
+  fernetEncryptBytes,
+  fernetDecryptBytes,
+  type FernetCrypto,
+  cobblestoneEncrypt,
+  cobblestoneDecrypt,
+  type CobblestoneCrypto,
+  CobblestoneEncryptor,
+  CobblestoneDecryptor,
+  type CobblestoneVariant,
   type ElephantVariant,
   type IsapVariant,
   type PhotonBeetleRate,
@@ -150,6 +159,9 @@ import {
   type BlockCipher,
   type BlockMode,
 } from "@ocs/algos";
+import { hmac } from "@noble/hashes/hmac.js";
+import { sha256, sha512 } from "@noble/hashes/sha2.js";
+import { expand } from "@noble/hashes/hkdf.js";
 import { randomBytes } from "@ocs/engine";
 
 /**
@@ -909,4 +921,107 @@ export function rc4Operation(key: Uint8Array, drop: number): CipherOperation {
   // both directions would produce a different keystream the second time.
   const run = (data: Uint8Array) => rc4(key, data, drop);
   return { encrypt: run, decrypt: run };
+}
+
+export const fernetCrypto: FernetCrypto = {
+  aesCbcEncrypt: (key, iv, pt) => cbc(key, iv).encrypt(pt),
+  aesCbcDecrypt: (key, iv, ct) => cbc(key, iv).decrypt(ct),
+  hmacSha256: (key, data) => hmac(sha256, key, data),
+};
+
+export function fernetOperation(
+  key: Uint8Array,
+  options: { timestamp?: number | bigint; iv?: Uint8Array; ttl?: number } = {},
+): CipherOperation {
+  return {
+    encrypt: (plaintext: Uint8Array) =>
+      fernetEncryptBytes(fernetCrypto, key, plaintext, {
+        timestamp: options.timestamp,
+        iv: options.iv && options.iv.length > 0 ? options.iv : undefined,
+      }).token,
+    decrypt: (ciphertext: Uint8Array) =>
+      fernetDecryptBytes(fernetCrypto, key, ciphertext, { ttl: options.ttl }).plaintext,
+  };
+}
+
+export function hkdfExpandSha512(prk: Uint8Array, info: Uint8Array, length: number): Uint8Array {
+  const hashLen = 64;
+  const n = Math.ceil(length / hashLen);
+  if (n > 255) throw new Error("HKDF output length too large");
+  const okm = new Uint8Array(length);
+  let t = new Uint8Array(0);
+  let written = 0;
+  for (let i = 1; i <= n; i++) {
+    const input = new Uint8Array(t.length + info.length + 1);
+    input.set(t, 0);
+    input.set(info, t.length);
+    input[input.length - 1] = i;
+    t = hmac(sha512, prk, input);
+    const toCopy = Math.min(hashLen, length - written);
+    okm.set(t.subarray(0, toCopy), written);
+    written += toCopy;
+  }
+  return okm;
+}
+
+export const cobblestoneCrypto: CobblestoneCrypto = {
+  hkdfExpandSha512,
+  aesGcmEncrypt: (key, nonce, pt, aad) => gcm(key, nonce, aad).encrypt(pt),
+  aesGcmDecrypt: (key, nonce, ct, aad) => gcm(key, nonce, aad).decrypt(ct),
+};
+
+export function cobblestoneOperation(
+  key: Uint8Array,
+  options: {
+    variant?: CobblestoneVariant;
+    context?: Uint8Array;
+    salt?: Uint8Array;
+  } = {},
+): CipherOperation {
+  const variant = options.variant ?? (key.length === 32 ? "cobblestone256" : "cobblestone128");
+  return {
+    encrypt: (plaintext: Uint8Array) =>
+      cobblestoneEncrypt(cobblestoneCrypto, key, plaintext, {
+        variant,
+        context: options.context,
+        salt: options.salt && options.salt.length > 0 ? options.salt : undefined,
+      }).ciphertext,
+    decrypt: (ciphertext: Uint8Array) =>
+      cobblestoneDecrypt(cobblestoneCrypto, key, ciphertext, {
+        variant,
+        context: options.context,
+      }).plaintext,
+  };
+}
+
+export function createCobblestoneStream(
+  key: Uint8Array,
+  direction: "encrypt" | "decrypt",
+  options: {
+    variant?: CobblestoneVariant;
+    context?: Uint8Array;
+    salt?: Uint8Array;
+  } = {},
+) {
+  const variant = options.variant ?? (key.length === 32 ? "cobblestone256" : "cobblestone128");
+  if (direction === "encrypt") {
+    const encryptor = new CobblestoneEncryptor(cobblestoneCrypto, key, {
+      variant,
+      context: options.context,
+      salt: options.salt && options.salt.length > 0 ? options.salt : undefined,
+    });
+    return {
+      update: (chunk: Uint8Array) => encryptor.update(chunk),
+      finalize: () => encryptor.finalize(),
+    };
+  } else {
+    const decryptor = new CobblestoneDecryptor(cobblestoneCrypto, key, {
+      variant,
+      context: options.context,
+    });
+    return {
+      update: (chunk: Uint8Array) => decryptor.update(chunk),
+      finalize: () => decryptor.finalize(),
+    };
+  }
 }

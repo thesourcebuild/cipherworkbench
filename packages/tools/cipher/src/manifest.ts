@@ -33,12 +33,11 @@ function toManifest(meta: CipherToolMeta): ToolManifest {
     supportsVerify: true,
     supportsFile: true,
     /**
-     * No cipher here streams, and the reason is inherent rather than an implementation gap.
-     * An AEAD cannot emit authenticated output until it has seen every byte, and CBC needs
-     * the whole ciphertext to strip padding. The input panel says so for any tool with
-     * `supportsFile && !streaming`, which is the honest position.
+     * Most ciphers do not stream, because an AEAD cannot emit authenticated output until it has seen
+     * every byte, and CBC needs the whole ciphertext to strip padding. Cobblestone is the streaming
+     * chunked encryption exception that does stream incrementally.
      */
-    streaming: false,
+    streaming: meta.streaming ?? false,
   };
 }
 

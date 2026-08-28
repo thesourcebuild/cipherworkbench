@@ -43,6 +43,25 @@ export interface CipherInstance {
   tagLen?: number;
 }
 
+export const COBBLESTONE_INSTANCES: readonly CipherInstance[] = [
+  {
+    id: "cobblestone128",
+    label: "Cobblestone-128",
+    summary: "SHA-512 + AES-128-GCM, 16-byte key (recommended)",
+    keyLen: 16,
+    nonceLen: 0,
+    tagLen: 16,
+  },
+  {
+    id: "cobblestone256",
+    label: "Cobblestone-256",
+    summary: "SHA-512 + AES-256-GCM, 32-byte key (compliance-oriented)",
+    keyLen: 32,
+    nonceLen: 0,
+    tagLen: 16,
+  },
+];
+
 export interface CipherToolMeta {
   id: string;
   label: string;
@@ -52,6 +71,8 @@ export interface CipherToolMeta {
   security: SecurityPosture;
   tags: readonly string[];
   summary: string;
+  /** True when the cipher supports incremental streaming operations. */
+  streaming?: boolean;
   /**
    * Set for a block cipher this repo implements itself, rather than one noble provides.
    *
@@ -196,6 +217,52 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     tags: ["xchacha20", "poly1305", "aead", "libsodium", "24-byte nonce", "encrypt", "decrypt"],
     summary:
       "ChaCha20-Poly1305 with a 192-bit nonce, so random nonces stop being a counting problem.",
+  },
+  {
+    id: "fernet",
+    label: "Fernet",
+    category: "Recipes",
+    aead: true,
+    security: "modern",
+    tags: [
+      "fernet",
+      "symmetric",
+      "aes-cbc",
+      "hmac-sha256",
+      "cryptography.io",
+      "token",
+      "authenticated",
+      "timestamp",
+      "python",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "Python cryptography's symmetric authenticated encryption recipe. AES-128-CBC with PKCS7 padding and HMAC-SHA256.",
+  },
+  {
+    id: "cobblestone",
+    label: "Cobblestone",
+    category: "Streaming AEAD",
+    aead: true,
+    security: "modern",
+    streaming: true,
+    tags: [
+      "cobblestone",
+      "c2sp",
+      "chunked-encryption",
+      "streaming",
+      "aead",
+      "aes-gcm",
+      "sha512",
+      "hkdf",
+      "key commitment",
+      "cryptography.io",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "C2SP chunked streaming symmetric encryption up to 4 PiB. SHA-512 key derivation with commitment and AES-GCM.",
   },
   {
     id: "chacha20",

@@ -870,13 +870,16 @@ describe("catalogue and manifests", () => {
     }
   });
 
-  it("claims no streaming, and does not provide one", () => {
-    // An AEAD cannot emit authenticated output before it has seen every byte, and CBC needs
-    // the whole ciphertext to strip padding. Both are properties of the construction.
+  it("claims streaming only for tools that implement it (Cobblestone)", () => {
     for (const meta of CIPHER_TOOLS) {
       const tool = cipherToolDefinition(meta.id);
-      expect(tool.streaming, meta.id).toBe(false);
-      expect(tool.createStream, meta.id).toBeUndefined();
+      if (meta.streaming) {
+        expect(tool.streaming, meta.id).toBe(true);
+        expect(tool.createStream, meta.id).toBeDefined();
+      } else {
+        expect(tool.streaming, meta.id).toBe(false);
+        expect(tool.createStream, meta.id).toBeUndefined();
+      }
     }
   });
 
