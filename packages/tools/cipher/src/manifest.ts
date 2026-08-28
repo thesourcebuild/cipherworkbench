@@ -10,10 +10,18 @@ import { CIPHER_TOOLS, type CipherToolMeta } from "./catalogue/tool-meta";
  * plenty of decrypted output is not text and mojibake would be worse than honest bytes.
  */
 const CIPHER_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
-  "hex",
   "hex-upper",
+  "hex",
   "base64",
   "base64url",
+  "latin1",
+];
+
+const FERNET_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
+  "base64url",
+  "hex-upper",
+  "hex",
+  "base64",
   "latin1",
 ];
 
@@ -28,7 +36,7 @@ function toManifest(meta: CipherToolMeta): ToolManifest {
     // The first family where `inverse` is decryption rather than verification.
     directions: ["forward", "inverse"],
     security: meta.security,
-    outputEncodings: CIPHER_OUTPUT_ENCODINGS,
+    outputEncodings: meta.id === "fernet" ? FERNET_OUTPUT_ENCODINGS : CIPHER_OUTPUT_ENCODINGS,
     readsInput: true,
     supportsVerify: true,
     supportsFile: true,

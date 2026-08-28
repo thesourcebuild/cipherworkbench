@@ -14,8 +14,8 @@ import {
  * mojibake somewhere.
  */
 const DIGEST_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
-  "hex",
   "hex-upper",
+  "hex",
   "base64",
   "base64url",
   "base32",

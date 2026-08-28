@@ -11,8 +11,8 @@ import { CRC_TOOLS, type CrcToolMeta } from "./catalogue/tool-meta";
  * that family's manifest leaves it out.
  */
 const CHECKSUM_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
-  "hex",
   "hex-upper",
+  "hex",
   "decimal",
   "base64",
   "octal",

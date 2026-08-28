@@ -1,6 +1,6 @@
 {
   "name": "@ocs/engine",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "type": "module",
   "//sideEffects": "Pure functions and generic data only. Without this, the barrel index forces every module into any bundle that imports one function.",

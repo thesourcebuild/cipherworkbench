@@ -73,7 +73,7 @@ export function ToolWorkbench({
 }: ToolWorkbenchProps) {
   const [tool, setTool] = useState<ToolDefinition<ToolSpecBase> | undefined>();
   const [spec, setSpec] = useState<ToolSpecBase | undefined>();
-  const [outputEncoding, setOutputEncoding] = useState<OutputEncoding>("hex");
+  const [outputEncoding, setOutputEncoding] = useState<OutputEncoding>("hex-upper");
   const [expected, setExpected] = useState("");
   const [loadError, setLoadError] = useState<string | undefined>();
 
@@ -619,7 +619,7 @@ function pickOutputEncoding(
   tool: ToolDefinition<ToolSpecBase>,
   restore: ParsedShare | undefined,
 ): OutputEncoding {
-  const fallback = tool.outputEncodings[0] ?? "hex";
+  const fallback = tool.outputEncodings[0] ?? "hex-upper";
   if (!restore?.outputEncoding) return fallback;
   const parsed = OutputEncodingSchema.safeParse(restore.outputEncoding);
   // Offered by this tool, not merely a valid encoding somewhere — a CRC's

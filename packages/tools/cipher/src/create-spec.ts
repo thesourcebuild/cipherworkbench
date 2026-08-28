@@ -8,6 +8,7 @@ import {
   OPTION_ANUBIS_VARIANT,
   OPTION_GOST_SBOX,
   OPTION_TAG_LEN,
+  OPTION_TIMESTAMP_FORMAT,
   SPEC_VERSION,
 } from "./pure";
 import { cipherCatalogueFor } from "./catalogue/options";
@@ -125,6 +126,8 @@ export function createSpec(options?: { variant?: string }): CipherSpec {
   if (cipherCatalogueFor(variant).get(OPTION_GOST_SBOX)) base[OPTION_GOST_SBOX] = "test";
   if (cipherCatalogueFor(variant).get(OPTION_ANUBIS_VARIANT))
     base[OPTION_ANUBIS_VARIANT] = "tweaked";
+  if (cipherCatalogueFor(variant).get(OPTION_TIMESTAMP_FORMAT))
+    base[OPTION_TIMESTAMP_FORMAT] = "auto";
 
   return { specVersion: SPEC_VERSION, variant, options: base };
 }

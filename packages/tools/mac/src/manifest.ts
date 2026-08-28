@@ -7,8 +7,8 @@ import { MAC_TOOLS, type MacToolMeta } from "./catalogue/tool-meta";
  * would invite someone to compare two of them as integers.
  */
 const MAC_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
-  "hex",
   "hex-upper",
+  "hex",
   "base64",
   "base64url",
   "base32",

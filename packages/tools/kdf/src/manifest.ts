@@ -3,8 +3,8 @@ import type { ToolManifest } from "@ocs/engine";
 import { KDF_TOOLS, type KdfToolMeta } from "./catalogue/tool-meta";
 
 const KDF_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
-  "hex",
   "hex-upper",
+  "hex",
   "base64",
   "base64url",
   "base32",

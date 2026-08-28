@@ -30,7 +30,8 @@ export const OPTION_TWEAK = "tweak";
 export const OPTION_GOST_SBOX = "gostSbox";
 export const OPTION_ANUBIS_VARIANT = "anubisVariant";
 export const OPTION_TAG_LEN = "tagLen";
-/** Fernet: optional timestamp (seconds) and TTL (seconds). */
+/** Fernet: optional timestamp format (auto, iso8601, epoch), timestamp (seconds), and TTL (seconds). */
+export const OPTION_TIMESTAMP_FORMAT = "timestampFormat";
 export const OPTION_TIMESTAMP = "timestamp";
 export const OPTION_TTL = "ttl";
 /** Cobblestone: context and salt. */
@@ -97,14 +98,24 @@ export function readDrop(options: OptionValues): number {
   return Math.min(raw, 65536);
 }
 
-/** Fernet: optional timestamp in seconds since epoch. */
+/** Fernet: optional timestamp in seconds since epoch or parsed from ISO 8601 string. */
 export function readTimestamp(options: OptionValues): number | undefined {
+  const format = optString(options, OPTION_TIMESTAMP_FORMAT);
+  if (format === "auto") {
+    const str = optString(options, OPTION_TIMESTAMP);
+    if (!str || str.trim().length === 0) return undefined;
+  }
   const num = optNumber(options, OPTION_TIMESTAMP);
   if (num !== undefined && num >= 0) return num;
   const str = optString(options, OPTION_TIMESTAMP);
   if (str && str.trim().length > 0) {
-    const parsed = Number(str.trim());
-    if (!isNaN(parsed) && parsed >= 0) return parsed;
+    const trimmed = str.trim();
+    const parsedNum = Number(trimmed);
+    if (!isNaN(parsedNum) && parsedNum >= 0) return parsedNum;
+    const parsedDate = Date.parse(trimmed);
+    if (!isNaN(parsedDate) && parsedDate >= 0) {
+      return Math.floor(parsedDate / 1000);
+    }
   }
   return undefined;
 }

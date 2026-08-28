@@ -177,6 +177,36 @@ describe("Fernet Specification & Test Vectors", () => {
     expect(new TextDecoder().decode(pt)).toBe("Cipher Workbench Fernet Support");
   });
 
+  it("parses ISO 8601 timestamps and Unix epoch seconds via readTimestamp", async () => {
+    const { readTimestamp, OPTION_TIMESTAMP, OPTION_TIMESTAMP_FORMAT } = await import("@ocs/cipher/pure");
+
+    // ISO 8601 UTC with milliseconds (e.g. user request)
+    expect(readTimestamp({ [OPTION_TIMESTAMP]: "2026-08-28T22:06:49.784Z" })).toBe(1787954809);
+
+    // ISO 8601 with timezone offset (official test vector now: "1985-10-26T01:20:00-07:00")
+    expect(readTimestamp({ [OPTION_TIMESTAMP]: "1985-10-26T01:20:00-07:00" })).toBe(499162800);
+
+    // Unix epoch as string and number
+    expect(readTimestamp({ [OPTION_TIMESTAMP]: "499162800" })).toBe(499162800);
+    expect(readTimestamp({ [OPTION_TIMESTAMP]: 499162800 })).toBe(499162800);
+
+    // Auto mode format selection returns undefined (current time)
+    expect(
+      readTimestamp({
+        [OPTION_TIMESTAMP_FORMAT]: "auto",
+        [OPTION_TIMESTAMP]: "",
+      }),
+    ).toBeUndefined();
+
+    // Explicit format mode with ISO string
+    expect(
+      readTimestamp({
+        [OPTION_TIMESTAMP_FORMAT]: "iso8601",
+        [OPTION_TIMESTAMP]: "2026-08-28T22:06:49.784Z",
+      }),
+    ).toBe(1787954809);
+  });
+
   // Invalid vectors from invalid.json
   it("rejects invalid tokens from official invalid.json suite", () => {
     const secret = "cw_0x689RpI-jtRR7oE8h_eQsKImvJapLeSbXpwF4e4=";

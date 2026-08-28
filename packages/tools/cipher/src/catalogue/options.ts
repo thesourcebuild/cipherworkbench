@@ -1,3 +1,4 @@
+import type { BytesEncoding } from "@ocs/contracts/encoding";
 import { createOptionCatalogue, type OptionCatalogue, type OptionDef } from "@ocs/engine";
 import {
   AES_KEY_SIZES,
@@ -19,6 +20,7 @@ import {
   OPTION_PARAM_SET,
   OPTION_NONCE,
   OPTION_TAG_LEN,
+  OPTION_TIMESTAMP_FORMAT,
   OPTION_TIMESTAMP,
   OPTION_TTL,
   OPTION_CONTEXT,
@@ -59,6 +61,7 @@ function keyOption(
   bytesLength: OptionDef["bytesLength"],
   summary: string,
   detail: string,
+  defaultBytesEncoding: BytesEncoding = "utf-8",
 ): OptionDef<CipherOptionGroup> {
   return {
     id: OPTION_KEY,
@@ -67,23 +70,9 @@ function keyOption(
     kind: "bytes",
     bytesLength,
     /*
-     * `utf-8`, not hex, and the choice is worth stating because it is the opposite of what a published
-     * vector wants.
-     *
-     * A key people *type* is text -- a passphrase, a shared secret out of a config file -- and hex would
-     * read "1234" as two bytes rather than four characters, deriving a different key from what the user
-     * believes they entered. That is the same judgement `M007` records for HMAC's key, made here for the
-     * same reason and with the same caveat: reading a *hex* key with this selected gives a valid key of
-     * the wrong bytes, and the only thing that catches it is the length check. A 64-character AES-256
-     * key read as text is 64 bytes and is refused; a 32-character one under AES-256 is 32 bytes and is
-     * not, so that one case is silent. The selector is one click away and the byte counter beside the
-     * field is what makes the difference visible.
-     *
-     * Safe to change *because the key is `secret: true`* and therefore never in a share link or saved
-     * state -- no stored value can shift meaning underneath it. The nonce below has no such protection;
-     * see its own note.
+     * `utf-8` by default for ciphers, except token recipes like Fernet that use `base64url`.
      */
-    defaultBytesEncoding: "utf-8",
+    defaultBytesEncoding,
     secret: true,
     /*
      * Only while the key is typed rather than derived. One line here covers all eleven call sites --
@@ -117,6 +106,7 @@ function nonceOption(
   summary: string,
   detail: string,
   availableOn?: readonly string[],
+  defaultBytesEncoding: BytesEncoding = "utf-8",
 ): OptionDef<CipherOptionGroup> {
   return {
     id: OPTION_NONCE,
@@ -125,18 +115,9 @@ function nonceOption(
     kind: "bytes",
     bytesLength,
     /*
-     * `utf-8`, matching the key. See its note for the reasoning and the one case the length check does
-     * not catch.
-     *
-     * One difference matters and it is a real cost, not a caveat: a nonce is deliberately **not** marked
-     * secret, because it travels in the clear beside the ciphertext in every real protocol -- so unlike
-     * the key it *is* carried in a share link. A link created before this change that never touched the
-     * selector omits the companion key, so its nonce is now read as text rather than hex and means
-     * different bytes. Accepted knowingly: this is a 0.1.0 with no published links, and the alternative
-     * -- one field reading text and the field beside it reading hex -- is the kind of split that makes
-     * people distrust both.
+     * `utf-8` by default, except recipes like Fernet that use `base64url`.
      */
-    defaultBytesEncoding: "utf-8",
+    defaultBytesEncoding,
     /*
      * Gated on a *conjunction*, encoded as a tag because `isAvailableOn` cannot express one.
      *
@@ -626,24 +607,54 @@ const FERNET_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
   DIRECTION_OPTION,
   keyOption(
     { exact: [32], generate: 32 },
-    "32 bytes: 16-byte HMAC signing key and 16-byte AES-128 encryption key.",
-    "A Fernet key is 32 bytes (256 bits). The first 16 bytes sign the message with HMAC-SHA256, and the second 16 bytes encrypt the message with AES-128 in CBC mode.",
+    "32 bytes: 16-byte HMAC signing key and 16-byte AES-128 encryption key (Base64url-encoded).",
+    "A Fernet key is 32 bytes (256 bits), typically represented as a URL-safe Base64 string. The first 16 bytes sign the message with HMAC-SHA256, and the second 16 bytes encrypt the message with AES-128 in CBC mode.",
+    "base64url",
   ),
   nonceOption(
     { exact: [0, 16], generate: 16 },
     "IV",
     "16 bytes, or empty for a fresh random IV.",
     "Fernet generates a random 16-byte initialization vector per message. Provide an explicit value to reproduce published test vectors.",
+    undefined,
+    "base64url",
   ),
+  {
+    id: OPTION_TIMESTAMP_FORMAT,
+    label: "Timestamp format",
+    group: "aead",
+    kind: "enum",
+    choices: [
+      {
+        value: "auto",
+        label: "Auto (current time)",
+        summary: "Record current system time when generating tokens.",
+      },
+      {
+        value: "iso8601",
+        label: "ISO 8601 (date & time)",
+        summary: "e.g. 2026-08-28T22:06:49.784Z or 1985-10-26T01:20:00-07:00",
+      },
+      {
+        value: "epoch",
+        label: "Unix epoch (seconds)",
+        summary: "Raw integer seconds since Jan 1 1970 UTC e.g. 499162800",
+      },
+    ],
+    summary: "How the creation timestamp is provided.",
+    detail:
+      "Fernet stores an 8-byte big-endian Unix timestamp in every token. Choose Auto to use current time, or select ISO 8601 or Unix Epoch to supply a custom timestamp.",
+    order: 25,
+  },
   {
     id: OPTION_TIMESTAMP,
     label: "Timestamp",
     group: "aead",
     kind: "text",
-    arg: { placeholder: "Auto (current time) or seconds since epoch e.g. 499162800" },
-    summary: "Creation timestamp in seconds since Jan 1 1970 UTC.",
+    arg: { placeholder: "e.g. 2026-08-28T22:06:49.784Z or 499162800" },
+    summary: "Creation timestamp in ISO 8601 or Unix epoch seconds.",
     detail:
-      "Recorded in the token header as a 64-bit unsigned big-endian integer. Leave empty to record current time.",
+      "Recorded in the token header as a 64-bit unsigned big-endian integer. Accepts ISO 8601 date strings (e.g. 2026-08-28T22:06:49.784Z) or seconds since epoch.",
     order: 30,
   },
   {

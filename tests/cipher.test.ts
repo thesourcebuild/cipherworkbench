@@ -886,8 +886,22 @@ describe("catalogue and manifests", () => {
   it("offers latin1 output, which no other family does, but not as the default", () => {
     for (const manifest of CIPHER_MANIFESTS) {
       expect(manifest.outputEncodings).toContain("latin1");
-      expect(manifest.outputEncodings[0]).toBe("hex");
+      if (manifest.id === "fernet") {
+        expect(manifest.outputEncodings[0]).toBe("base64url");
+      } else {
+        expect(manifest.outputEncodings[0]).toBe("hex-upper");
+      }
     }
+  });
+
+  it("defaults Fernet key, IV and result encodings to base64url", () => {
+    const fernetDef = cipherToolDefinition("fernet");
+    const keyDef = fernetDef.catalogue.get(OPTION_KEY);
+    const nonceDef = fernetDef.catalogue.get(OPTION_NONCE);
+    expect(keyDef?.defaultBytesEncoding).toBe("base64url");
+    expect(nonceDef?.defaultBytesEncoding).toBe("base64url");
+    const fernetManifest = CIPHER_MANIFESTS.find((m) => m.id === "fernet");
+    expect(fernetManifest?.outputEncodings[0]).toBe("base64url");
   });
 
   it("hides the nonce under ECB and the AAD under the unauthenticated modes", () => {

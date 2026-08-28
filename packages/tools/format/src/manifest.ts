@@ -22,8 +22,8 @@ const TEXT_ONLY: readonly OutputEncoding[] = ["utf-8"];
  * copy-paste that loses data. Every other entry is a spelling of the same bytes.
  */
 const BYTE_ENCODINGS: readonly OutputEncoding[] = [
-  "hex",
   "hex-upper",
+  "hex",
   "base64",
   "base64url",
   "base32",

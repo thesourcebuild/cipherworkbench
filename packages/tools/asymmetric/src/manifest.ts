@@ -9,8 +9,8 @@ import { ASYMMETRIC_TOOLS, type AsymmetricToolMeta } from "./catalogue/tool-meta
  * of the six operations produces something a person would want to read as characters.
  */
 const ASYMMETRIC_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
-  "hex",
   "hex-upper",
+  "hex",
   "base64",
   "base64url",
   "latin1",

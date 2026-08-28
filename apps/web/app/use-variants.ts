@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  iterateStream,
   runStreams,
   type StreamProgress,
   type ToolDefinition,
@@ -11,6 +10,7 @@ import {
   type ToolVariantValues,
 } from "@ocs/engine";
 import { decodeInput } from "@ocs/engine";
+import { computeVariantsFile } from "./file-compute";
 import type { InputState } from "./input-state";
 
 export type VariantsStatus = "idle" | "running" | "done" | "error";
@@ -43,10 +43,8 @@ export interface VariantsState {
  * same reason, as a file whose settings have moved on.
  *
  * One pass over the input feeds every stream (`runStreams`), so a second variant costs CPU and no
- * extra I/O, and they all finish together. It runs on the main thread rather than in the compute
- * worker: `runStream` awaits between chunks, so the event loop is never blocked for longer than one
- * chunk across all the engines, and the worker's message protocol carries a single result rather than
- * a table of them.
+ * extra I/O, and they all finish together. File streaming runs in a Web Worker so the main thread
+ * is never blocked and progress updates remain fluid even over multi-gigabyte files.
  */
 export function useVariants(
   tool: ToolDefinition<ToolSpecBase> | undefined,
@@ -112,59 +110,68 @@ export function useVariants(
 
     void (async () => {
       try {
-        const chunks =
-          input.mode === "file"
-            ? input.file
-              ? iterateStream(input.file.stream())
-              : undefined
-            : (() => {
-                const decoded = decodeInput(input.text, input.mode, input.textEncoding);
-                return decoded.ok ? once(decoded.bytes) : undefined;
-              })();
-
-        if (!chunks) {
-          if (live()) {
-            setStatus("error");
-            setError(
-              input.mode === "file"
-                ? "Choose a file first."
-                : "The input cannot be read in the selected source mode.",
-            );
+        if (input.mode === "file") {
+          if (!input.file) {
+            if (live()) {
+              setStatus("error");
+              setError("Choose a file first.");
+            }
+            return;
           }
-          return;
-        }
 
-        /*
-         * Load every row's implementation before building any stream. `stream()` is synchronous by
-         * contract, and the hash family reaches its algorithms through a dynamic import so that one
-         * tool does not download every table -- so a sibling row's module may not be here yet. Done
-         * for all rows at once rather than per row because `runStreams` fans one read head out to
-         * all of them, so they all have to exist before the first chunk is dispatched.
-         */
-        await Promise.all(table.rows.map((row) => row.prepare?.()));
-        if (!live()) return;
-
-        const results = await runStreams(
-          table.rows.map((row) => row.stream()),
-          chunks,
-          {
-            ...(input.file ? { totalBytes: input.file.size } : {}),
-            onProgress: (next) => {
-              if (live()) setProgress(next);
+          const next = await computeVariantsFile(tool, spec, input.file, {
+            onProgress: (nextProgress) => {
+              if (live()) setProgress(nextProgress);
             },
             signal: controller.signal,
-          },
-        );
+          });
 
-        if (!live()) return;
-        const next = new Map<string, Uint8Array>();
-        results.forEach((result, index) => {
-          const row = table.rows[index];
-          if (row && result.bytes) next.set(row.id, result.bytes);
-        });
-        setValues(next);
-        setRanKey(inputKey);
-        setStatus("done");
+          if (!live()) return;
+          setValues(next);
+          setRanKey(inputKey);
+          setStatus("done");
+        } else {
+          const decoded = decodeInput(input.text, input.mode, input.textEncoding);
+          if (!decoded.ok) {
+            if (live()) {
+              setStatus("error");
+              setError("The input cannot be read in the selected source mode.");
+            }
+            return;
+          }
+
+          /*
+           * Load every row's implementation before building any stream. `stream()` is synchronous by
+           * contract, and the hash family reaches its algorithms through a dynamic import so that one
+           * tool does not download every table -- so a sibling row's module may not be here yet. Done
+           * for all rows at once rather than per row because `runStreams` fans one read head out to
+           * all of them, so they all have to exist before the first chunk is dispatched.
+           */
+          await Promise.all(table.rows.map((row) => row.prepare?.()));
+          if (!live()) return;
+
+          const results = await runStreams(
+            table.rows.map((row) => row.stream()),
+            once(decoded.bytes),
+            {
+              totalBytes: decoded.bytes.length,
+              onProgress: (nextProgress) => {
+                if (live()) setProgress(nextProgress);
+              },
+              signal: controller.signal,
+            },
+          );
+
+          if (!live()) return;
+          const next = new Map<string, Uint8Array>();
+          results.forEach((result, index) => {
+            const row = table.rows[index];
+            if (row && result.bytes) next.set(row.id, result.bytes);
+          });
+          setValues(next);
+          setRanKey(inputKey);
+          setStatus("done");
+        }
       } catch (thrown) {
         // A cancelled run is not a failure; `stop` has already put the status back.
         if (thrown instanceof DOMException && thrown.name === "AbortError") return;

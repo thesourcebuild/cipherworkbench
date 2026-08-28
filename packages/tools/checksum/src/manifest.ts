@@ -11,8 +11,8 @@ import { CHECKSUM_TOOLS, type ChecksumToolMeta } from "./catalogue/tool-meta";
  * why the hash family leaves it out.
  */
 const CHECKSUM_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
-  "hex",
   "hex-upper",
+  "hex",
   "decimal",
   "base64",
   "octal",

@@ -1,6 +1,7 @@
 import {
   iterateStream,
   runStream,
+  runStreams,
   type StreamProgress,
   type ToolDefinition,
   type ToolResult,
@@ -49,6 +50,27 @@ export async function computeFile(
     }
   }
   return computeOnMainThread(tool, spec, file, options);
+}
+
+export async function computeVariantsFile(
+  tool: ToolDefinition<ToolSpecBase>,
+  spec: ToolSpecBase,
+  file: File,
+  options: FileComputeOptions = {},
+): Promise<Map<string, Uint8Array>> {
+  if (workerSupported) {
+    try {
+      return await computeVariantsInWorker(tool.id, spec, file, options);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      workerSupported = false;
+      console.warn(
+        "Falling back to main-thread variants hashing; the compute worker is unavailable.",
+        error,
+      );
+    }
+  }
+  return computeVariantsOnMainThread(tool, spec, file, options);
 }
 
 function computeInWorker(
@@ -108,7 +130,71 @@ function computeInWorker(
       reject(new Error(event.message || "The compute worker failed to start."));
     });
 
-    const request: ComputeRequest = { jobId, toolId, spec, file };
+    const request: ComputeRequest = { kind: "single", jobId, toolId, spec, file };
+    worker.postMessage(request);
+  });
+}
+
+function computeVariantsInWorker(
+  toolId: string,
+  spec: ToolSpecBase,
+  file: File,
+  { onProgress, signal }: FileComputeOptions,
+): Promise<Map<string, Uint8Array>> {
+  return new Promise<Map<string, Uint8Array>>((resolve, reject) => {
+    const worker = new Worker(new URL("./compute.worker.ts", import.meta.url), {
+      type: "module",
+    });
+    const jobId = ++jobCounter;
+
+    const cleanup = () => {
+      worker.terminate();
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      cleanup();
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort);
+
+    worker.addEventListener("message", (event: MessageEvent<ComputeResponse>) => {
+      const message = event.data;
+      if (message.jobId !== jobId) return;
+
+      switch (message.type) {
+        case "progress":
+          onProgress?.({
+            bytesProcessed: message.bytesProcessed,
+            ...(message.totalBytes === undefined ? {} : { totalBytes: message.totalBytes }),
+          });
+          break;
+        case "variants-done": {
+          cleanup();
+          const map = new Map<string, Uint8Array>();
+          for (const item of message.results) {
+            if (item.bytes) map.set(item.id, item.bytes);
+          }
+          resolve(map);
+          break;
+        }
+        case "error":
+          cleanup();
+          reject(new Error(message.message));
+          break;
+      }
+    });
+
+    worker.addEventListener("error", (event) => {
+      cleanup();
+      reject(new Error(event.message || "The compute worker failed to start."));
+    });
+
+    const request: ComputeRequest = { kind: "variants", jobId, toolId, spec, file };
     worker.postMessage(request);
   });
 }
@@ -129,4 +215,30 @@ async function computeOnMainThread(
     ...(onProgress ? { onProgress } : {}),
     ...(signal ? { signal } : {}),
   });
+}
+
+async function computeVariantsOnMainThread(
+  tool: ToolDefinition<ToolSpecBase>,
+  spec: ToolSpecBase,
+  file: File,
+  { onProgress, signal }: FileComputeOptions,
+): Promise<Map<string, Uint8Array>> {
+  if (!tool.variants) return new Map();
+  const table = tool.variants(spec);
+  await Promise.all(table.rows.map((row) => row.prepare?.()));
+  const results = await runStreams(
+    table.rows.map((row) => row.stream()),
+    iterateStream(file.stream()),
+    {
+      totalBytes: file.size,
+      ...(onProgress ? { onProgress } : {}),
+      ...(signal ? { signal } : {}),
+    },
+  );
+  const map = new Map<string, Uint8Array>();
+  results.forEach((result, index) => {
+    const row = table.rows[index];
+    if (row && result.bytes) map.set(row.id, result.bytes);
+  });
+  return map;
 }

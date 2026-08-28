@@ -10,10 +10,10 @@ import { appIcon } from "./window";
  */
 
 /** SHA-256("abc"), FIPS 180-4 §B.1. The check value the probe below demands. */
-const SHA256_ABC = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+const SHA256_ABC = "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD";
 
 /** CRC-32/ISO-HDLC of "123456789", from the RevEng catalogue. */
-const CRC32_CHECK = "cbf43926";
+const CRC32_CHECK = "CBF43926";
 
 /**
  * The 8-bit and 16-bit sum of "123456789" — 0xDD and 0x01DD.
@@ -22,8 +22,8 @@ const CRC32_CHECK = "cbf43926";
  * only appears if changing the width selector re-ran the compute. The sum family's whole catalogue
  * is enum options, which nothing else here exercises in the packaged build.
  */
-const SUM8_CHECK = "dd";
-const SUM16_CHECK = "01dd";
+const SUM8_CHECK = "DD";
+const SUM16_CHECK = "01DD";
 
 /**
  * RFC 8032 section 7.1 TEST 2: the Ed25519 signature over the single byte 0x72 — "r" as
@@ -43,7 +43,7 @@ const SUM16_CHECK = "01dd";
  * fetched on demand -- and a lazy chunk that fails to resolve over the app:// protocol is
  * exactly the class of packaging fault this smoke test exists to catch.
  */
-const SHIFT_JIS_SHA256 = "7fa11a31677814a9d558e8854002a5bb79bac5b1adba7ebc992365a7f483b688";
+const SHIFT_JIS_SHA256 = "7FA11A31677814A9D558E8854002A5BB79BAC5B1ADBA7EBC992365A7F483B688";
 
 /**
  * Streebog-256 of RFC 6986's example 1 message, the digit string "0123456789...012".
@@ -55,11 +55,11 @@ const SHIFT_JIS_SHA256 = "7fa11a31677814a9d558e8854002a5bb79bac5b1adba7ebc992365
 const UUID_V5_EXAMPLE = "2ed6657d-e927-568b-95e1-2665a8aea6a2";
 
 const STREEBOG_256_RFC_EXAMPLE =
-  "9d151eefd8590b89daa6ba6cb74af9275dd051026bb149a452fd84e5e57b5500";
+  "9D151EEFD8590B89DAA6BA6CB74AF9275DD051026BB149A452FD84E5E57B5500";
 const ED25519_SECRET = "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb";
 const ED25519_SIGNATURE =
-  "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da" +
-  "085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00";
+  "92A009A9F0D4CAB8720E820B5F642540A2B27B5416503F8FB3762223EBDB69DA" +
+  "085AC1E43E15996E458F3613D0F11D8C387B2EAEB4302AEEB00D291612BB0C00";
 
 interface ComputeProbe {
   digest?: string;
@@ -125,8 +125,8 @@ function checkFileCompute(window: BrowserWindow): Promise<ComputeProbe> {
        while (Date.now() < deadline) {
          await new Promise((r) => setTimeout(r, 100));
          const text = (document.querySelector(SETTLED)?.textContent ?? "")
-           .replace(/\\s+/g, "");
-         if (/^[0-9a-f]{64}$/.test(text)) return { digest: text };
+           .replace(/[^0-9a-fA-F]/g, "");
+         if (/^[0-9a-fA-F]{64}$/.test(text)) return { digest: text };
        }
        return { error: "no digest appeared within 10s of dropping a file" };
      })()`,
@@ -402,7 +402,7 @@ function checkToolSwitch(window: BrowserWindow): Promise<ComputeProbe> {
        // characters, so shape alone cannot tell them apart -- and switching tool computes it
        // immediately, before this probe types anything. Requiring a *different* settled value is what
        // makes this probe about CRC-32("123456789") rather than about any eight hex digits.
-       const before = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-f]/g, "");
+       const before = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-fA-F]/g, "");
 
        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
        setter.call(input, "123456789");
@@ -412,10 +412,10 @@ function checkToolSwitch(window: BrowserWindow): Promise<ComputeProbe> {
        let last = "";
        while (Date.now() < computeDeadline) {
          await sleep(100);
-         last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/\\s+/g, "");
-         if (last !== before && /^[0-9a-f]{8}$/.test(last)) return { digest: last };
+         last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-fA-F]/g, "");
+         if (last !== before && /^[0-9a-fA-F]{8}$/.test(last)) return { digest: last };
        }
-       return { error: \`no CRC-32 value appeared; the result panel showed "\${last}"\` };
+       return { error: 'no CRC-32 value appeared; the result panel showed ' + JSON.stringify(last) };
      })()`,
   ) as Promise<ComputeProbe>;
 }
@@ -478,15 +478,15 @@ function checkChecksumFamily(window: BrowserWindow): Promise<ComputeProbe> {
          let last = "";
          while (Date.now() < deadline) {
            await sleep(100);
-           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/\\s+/g, "");
+           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-fA-F]/g, "");
            if (pattern.test(last)) return last;
          }
          return { showed: last };
        };
 
-       const narrow = await readResult(/^[0-9a-f]{2}$/);
+       const narrow = await readResult(/^[0-9a-fA-F]{2}$/);
        if (typeof narrow !== "string") {
-         return { error: \`no 8-bit sum appeared; the result panel showed "\${narrow.showed}"\` };
+         return { error: 'no 8-bit sum appeared; the result panel showed ' + JSON.stringify(narrow.showed) };
        }
 
        // The width lives two components deep behind a masked-or-not control wrapper, hence the
@@ -497,9 +497,9 @@ function checkChecksumFamily(window: BrowserWindow): Promise<ComputeProbe> {
        selectSetter.call(width, "16");
        width.dispatchEvent(new Event("change", { bubbles: true }));
 
-       const wide = await readResult(/^[0-9a-f]{4}$/);
+       const wide = await readResult(/^[0-9a-fA-F]{4}$/);
        if (typeof wide !== "string") {
-         return { error: \`widening to 16 bits changed nothing; the result panel showed "\${wide.showed}"\` };
+         return { error: 'widening to 16 bits changed nothing; the result panel showed ' + JSON.stringify(wide.showed) };
        }
 
        return { digest: narrow + "/" + wide };
@@ -1044,7 +1044,8 @@ function checkManualCompute(window: BrowserWindow): Promise<ComputeProbe> {
        const shown = () =>
          (document.querySelector("[data-ocs-result]")?.textContent ?? "")
            .replace(/\\s+/g, "")
-           .replace(/^0[xX]/, "");
+           .replace(/^0[xX]/, "")
+           .toLowerCase();
        const sizeText = () =>
          (document.querySelector("[data-ocs-input-size]")?.textContent ?? "").trim();
 
@@ -2069,7 +2070,7 @@ function checkKeySource(window: BrowserWindow): Promise<ComputeProbe> {
        await sleep(600);
 
        const SETTLED = '[data-ocs-result][data-ocs-status="done"]';
-       const hexOf = (el) => (el ? el.textContent.replace(/[^0-9a-fA-F]/g, "") : "");
+       const hexOf = (el) => (el ? el.textContent.replace(/[^0-9a-fA-F]/g, "").toLowerCase() : "");
        const waitForValue = async (want) => {
          const deadline = Date.now() + 15000;
          for (;;) {
@@ -2419,7 +2420,7 @@ function checkRandomTools(window: BrowserWindow): Promise<ComputeProbe> {
         * asserts on a hex result.
         */
        const bare = (text) => text.replace(/\\s+/g, "");
-       const hex = await settle((text) => /^[0-9a-f]{40}$/.test(bare(text)), 12000);
+       const hex = await settle((text) => /^[0-9a-fA-F]{40}$/.test(bare(text)), 12000);
        if (!hex.value) return { error: "20 bytes of hex never appeared, saw " + JSON.stringify(hex.last) };
 
        const encodingMenu = document.querySelector("[data-ocs-output-encoding]");
@@ -2434,8 +2435,8 @@ function checkRandomTools(window: BrowserWindow): Promise<ComputeProbe> {
        if (!base64.value) {
          return { error: "base64 never appeared, saw " + JSON.stringify(base64.last) };
        }
-       // Back to hex, because the probes share one window.
-       setValue(encodingMenu, "hex");
+       // Back to default hex-upper, because the probes share one window.
+       setValue(encodingMenu, "hex-upper");
 
        return { digest: bare(hex.value).length + "/" + decimals.value.split("\\n").length };
      })()`,
@@ -2989,12 +2990,12 @@ function checkAsymmetric(window: BrowserWindow): Promise<ComputeProbe> {
          // which matters, because this string is a JS template literal inside a TS template
          // literal and a "\s" that loses one backslash on the way through matches nothing.
          last = (document.querySelector(SETTLED)?.textContent ?? "").replace(
-           /[^0-9a-f]/g,
+           /[^0-9a-fA-F]/g,
            "",
          );
-         if (/^[0-9a-f]{128}$/.test(last)) return { digest: last };
+         if (/^[0-9a-fA-F]{128}$/.test(last)) return { digest: last };
        }
-       return { error: \`no Ed25519 signature appeared; the result panel showed "\${last}"\` };
+       return { error: 'no Ed25519 signature appeared; the result panel showed ' + JSON.stringify(last) };
      })()`,
   ) as Promise<ComputeProbe>;
 }
@@ -3063,7 +3064,7 @@ function checkLegacyEncoding(window: BrowserWindow): Promise<ComputeProbe> {
        // Same hazard as the tool-switch probe: this arrives on SHA-256 with the previous probe's
        // "r" still typed, computes a perfectly good 64-character digest of it, and 64 characters is
        // exactly the shape this probe is looking for.
-       const before = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-f]/g, "");
+       const before = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-fA-F]/g, "");
 
        const select = await waitFor("[data-ocs-input-encoding]", 10000);
        if (!select) return { error: "no input encoding selector" };
@@ -3084,12 +3085,12 @@ function checkLegacyEncoding(window: BrowserWindow): Promise<ComputeProbe> {
        while (Date.now() < deadline) {
          await sleep(100);
          last = (document.querySelector(SETTLED)?.textContent ?? "").replace(
-           /[^0-9a-f]/g,
+           /[^0-9a-fA-F]/g,
            "",
          );
-         if (last !== before && /^[0-9a-f]{64}$/.test(last)) return { digest: last };
+         if (last !== before && /^[0-9a-fA-F]{64}$/.test(last)) return { digest: last };
        }
-       return { error: \`no digest appeared; the result panel showed "\${last}"\` };
+       return { error: 'no digest appeared; the result panel showed ' + JSON.stringify(last) };
      })()`,
   ) as Promise<ComputeProbe>;
 }
@@ -3169,10 +3170,10 @@ function checkStreebog(window: BrowserWindow): Promise<ComputeProbe> {
        let last = "";
        while (Date.now() < deadline) {
          await sleep(100);
-         last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-f]/g, "");
-         if (/^[0-9a-f]{64}$/.test(last)) return { digest: last };
+         last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-fA-F]/g, "");
+         if (/^[0-9a-fA-F]{64}$/.test(last)) return { digest: last };
        }
-       return { error: \`no digest appeared; the result panel showed "\${last}"\` };
+       return { error: 'no digest appeared; the result panel showed ' + JSON.stringify(last) };
      })()`,
   ) as Promise<ComputeProbe>;
 }
@@ -3449,7 +3450,7 @@ function checkMd6(window: BrowserWindow): Promise<ComputeProbe> {
          let last = "";
          while (Date.now() < deadline) {
            await sleep(100);
-           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-f]/g, "");
+           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-fA-F]/g, "").toLowerCase();
            if (test(last)) return { value: last };
          }
          return { last };
@@ -3596,7 +3597,7 @@ function checkQuarkVariant(window: BrowserWindow): Promise<ComputeProbe> {
          let last = "";
          while (Date.now() < deadline) {
            await sleep(100);
-           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-f]/g, "");
+           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-fA-F]/g, "");
            if (test(last)) return { value: last };
          }
          return { last };
@@ -3706,7 +3707,7 @@ function checkFsbTable(window: BrowserWindow): Promise<ComputeProbe> {
          let last = "";
          while (Date.now() < deadline) {
            await sleep(100);
-           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-f]/g, "");
+           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-fA-F]/g, "").toLowerCase();
            if (test(last)) return { value: last };
          }
          return { last };
@@ -3803,7 +3804,7 @@ function checkRapidhashVersion(window: BrowserWindow): Promise<ComputeProbe> {
          let last = "";
          while (Date.now() < deadline) {
            await sleep(100);
-           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-f]/g, "");
+           last = (document.querySelector(SETTLED)?.textContent ?? "").replace(/[^0-9a-fA-F]/g, "").toLowerCase();
            if (test(last)) return { value: last };
          }
          return { last };
@@ -4166,14 +4167,14 @@ function checkPostQuantum(window: BrowserWindow): Promise<ComputeProbe> {
        while (Date.now() < deadline) {
          await sleep(100);
          const hex = (document.querySelector(SETTLED)?.textContent ?? "").replace(
-           /[^0-9a-f]/g,
+           /[^0-9a-fA-F]/g,
            "",
          );
          last = hex.length;
          // 1952 bytes, which is ML-DSA-65's public key and nothing else in this app's output.
          if (last === 3904) return { digest: String(last) };
        }
-       return { error: \`no ML-DSA public key appeared; the panel showed \${last} hex characters\` };
+       return { error: 'no ML-DSA public key appeared; the panel showed ' + last + ' hex characters' };
      })()`,
   ) as Promise<ComputeProbe>;
 }
