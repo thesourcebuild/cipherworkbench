@@ -345,15 +345,14 @@ export function keySourceOptions<TGroup extends string>(groups: {
     },
     {
       /*
-       * Hex, unlike the password: a salt is bytes rather than text, `openssl enc -S` takes hex, and the
-       * eight bytes in a `Salted__` header are not printable.
+       * Text (UTF-8) by default, matching key and IV options.
        */
       id: OPTION_KDF_SALT,
       label: "Salt",
       group: input,
       kind: "bytes",
       bytesLength: { min: 0, max: 64, generate: 8 },
-      defaultBytesEncoding: "hex",
+      defaultBytesEncoding: "utf-8",
       availableOn: derived,
       summary: "Public, and unique per password.",
       detail:

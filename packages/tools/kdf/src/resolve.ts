@@ -86,7 +86,7 @@ export type ResolveResult =
  * Decodes one of this tool's `bytes` options.
  *
  * Delegates to the engine so the fallback encoding comes from the option definition rather
- * than being assumed here. `info` defaults to UTF-8 and `salt` to hex; hardcoding either
+ * than being assumed here. `info` and `salt` default to UTF-8; hardcoding either
  * would make the form's selector disagree with what is actually computed.
  */
 function decodeOption(spec: KdfSpec, id: string) {

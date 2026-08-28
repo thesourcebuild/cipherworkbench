@@ -146,7 +146,7 @@ export const OPTIONS: readonly OptionDef<HashOptionGroup>[] = [
     // RFC 7693: 16 bytes for BLAKE2b, 8 for BLAKE2s. Exact, not a range -- the parameter block has
     // a fixed field, and noble rejects anything else.
     bytesLength: { exact: [8, 16], generate: 16 },
-    defaultBytesEncoding: "hex",
+    defaultBytesEncoding: "utf-8",
     availableOn: [TAG_BLAKE_SALT],
     summary: "Randomises the function itself. 16 bytes for BLAKE2b, 8 for BLAKE2s.",
     detail:

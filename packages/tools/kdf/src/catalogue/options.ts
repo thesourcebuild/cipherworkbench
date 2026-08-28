@@ -72,7 +72,7 @@ const SALT_OPTION: OptionDef<KdfOptionGroup> = {
   group: "secret",
   kind: "bytes",
   bytesLength: { min: 1, max: 1024, generate: RECOMMENDED_SALT_BYTES },
-  defaultBytesEncoding: "hex",
+  defaultBytesEncoding: "utf-8",
   summary: "Unique per password. Not secret.",
   detail:
     "A salt stops one precomputed table from attacking every stored password at once, and stops two identical passwords producing identical hashes. It does not need to be secret and is normally stored alongside the hash, which is why it is not marked secret here and does travel in a share link. What it does need is to be different for every password: 16 random bytes is the usual choice.",
