@@ -1,6 +1,6 @@
 {
   "name": "@ocs/ui",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "//": "CSS is listed as a side effect so tree-shaking cannot drop the theme import; the components themselves are pure.",

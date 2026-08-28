@@ -161,7 +161,6 @@ import {
 } from "@ocs/algos";
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256, sha512 } from "@noble/hashes/sha2.js";
-import { expand } from "@noble/hashes/hkdf.js";
 import { randomBytes } from "@ocs/engine";
 
 /**

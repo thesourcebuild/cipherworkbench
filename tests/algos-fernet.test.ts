@@ -46,7 +46,18 @@ describe("Fernet Specification & Test Vectors", () => {
     expect(encryptionKey[15]).toBe(31);
   });
 
+  it("parses valid Fernet tokens into structured fields", () => {
+    const tokenBytes = base64url.decode(vectorGenerate.token);
+    const parsed = fernetParseToken(tokenBytes);
+    expect(parsed.version).toBe(FERNET_VERSION);
+    expect(parsed.timestamp).toBe(vectorGenerate.timestamp);
+    expect(parsed.iv).toEqual(new Uint8Array(vectorGenerate.iv));
+    expect(parsed.ciphertext.length).toBe(16);
+    expect(parsed.hmac.length).toBe(32);
+  });
+
   it("refuses keys that are not exactly 32 bytes", () => {
+    expect(FERNET_KEY_LENGTH).toBe(32);
     expect(() => fernetSplitKey(new Uint8Array(16))).toThrow(
       /Fernet key must be exactly 32 bytes/,
     );

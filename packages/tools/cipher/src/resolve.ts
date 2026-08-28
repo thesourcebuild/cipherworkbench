@@ -27,7 +27,6 @@ import {
   type CipherDirection,
 } from "./pure";
 import {
-  AES_MODES,
   COBBLESTONE_INSTANCES,
   getAesMode,
   getCipherInstance,
