@@ -624,20 +624,11 @@ function salsaOptions(
 
 const FERNET_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
   DIRECTION_OPTION,
-  {
-    id: OPTION_KEY,
-    label: "Key",
-    group: "key",
-    kind: "bytes",
-    bytesLength: { exact: [32], generate: 32 },
-    defaultBytesEncoding: "base64url",
-    secret: true,
-    availableOn: [keySourceTag("directinput")],
-    summary: "32 bytes: 16-byte HMAC signing key and 16-byte AES-128 encryption key.",
-    detail:
-      "A Fernet key is 32 bytes (256 bits), usually represented in URL-safe base64 encoding. The first 16 bytes sign the message with HMAC-SHA256, and the second 16 bytes encrypt the message with AES-128 in CBC mode.",
-    order: 10,
-  },
+  keyOption(
+    { exact: [32], generate: 32 },
+    "32 bytes: 16-byte HMAC signing key and 16-byte AES-128 encryption key.",
+    "A Fernet key is 32 bytes (256 bits). The first 16 bytes sign the message with HMAC-SHA256, and the second 16 bytes encrypt the message with AES-128 in CBC mode.",
+  ),
   nonceOption(
     { exact: [0, 16], generate: 16 },
     "IV",
