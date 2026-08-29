@@ -82,6 +82,9 @@ export function createSpec(options?: { variant?: string }): KdfSpec {
       base[OPTION_ROUNDS] = OPENSSH_DEFAULT_ROUNDS;
       base[OPTION_KEY_LENGTH] = OPENSSH_KEY_IV_BYTES;
       break;
+    default:
+      base[OPTION_KEY_LENGTH] = 32;
+      break;
   }
 
   return { specVersion: SPEC_VERSION, variant, options: base };

@@ -863,6 +863,13 @@ describe("metadata and bindings agree", () => {
        * number cannot describe it, the entry carries the default size's, and HMAC is not offered.
        */
       "fsb",
+      "poseidon",
+      "rescueprime",
+      "haraka256",
+      "haraka512",
+      "meowhash",
+      "komihash",
+      "nhash",
     ]);
     for (const meta of HASH_ALGORITHMS) {
       expect(

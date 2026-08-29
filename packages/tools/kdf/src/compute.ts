@@ -1,12 +1,20 @@
 import { encodeHex, timingSafeEqual, type ToolResult, type ToolResultField } from "@ocs/engine";
 import {
   bcryptCostOf,
-  deriveBcryptPbkdf,
-  deriveEvpKdf,
+  deriveAnsiX963,
   deriveArgon2,
+  deriveBalloon,
+  deriveBcryptPbkdf,
+  deriveCatena,
+  deriveEvpKdf,
   deriveHkdf,
+  deriveOpenPgpS2k,
   derivePbkdf2,
   deriveScrypt,
+  deriveSp800108,
+  deriveSshKdf,
+  deriveTls12Prf,
+  deriveYescrypt,
   hashBcrypt,
   verifyBcrypt,
 } from "./bindings";
@@ -209,6 +217,30 @@ function derive(r: ResolvedKdf): { bytes: Uint8Array; encoded?: string } {
 
     case "bcryptpbkdf":
       return { bytes: deriveBcryptPbkdf(r.password, r.salt, r.rounds, r.keyLength) };
+
+    case "yescrypt":
+      return { bytes: deriveYescrypt(r.password, r.salt, r.keyLength) };
+
+    case "balloon":
+      return { bytes: deriveBalloon(r.hashId, r.password, r.salt) };
+
+    case "sp800-108":
+      return { bytes: deriveSp800108(r.hashId, r.password, r.keyLength) };
+
+    case "openpgp-s2k":
+      return { bytes: deriveOpenPgpS2k(r.hashId, r.password, r.keyLength, "iterated-salted", r.salt) };
+
+    case "ssh-kdf":
+      return { bytes: deriveSshKdf(r.hashId, r.password, r.salt, r.keyLength) };
+
+    case "tls12-prf":
+      return { bytes: deriveTls12Prf(r.hashId, r.password, r.keyLength, "master secret", r.salt) };
+
+    case "catena":
+      return { bytes: deriveCatena(r.hashId, r.password, r.salt) };
+
+    case "ansi-x963":
+      return { bytes: deriveAnsiX963(r.hashId, r.password, r.keyLength, r.salt) };
 
     case "bcrypt": {
       const encoded = hashBcrypt(r.passwordText, r.bcryptCost);

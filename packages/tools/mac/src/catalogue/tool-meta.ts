@@ -169,6 +169,36 @@ export const MAC_TOOLS: readonly MacToolMeta[] = [
       "MAC built from AES rather than a hash — RFC 4493. Used where a device already has AES and no hash.",
     streaming: false,
   },
+  {
+    id: "chaskey",
+    label: "Chaskey MAC",
+    category: "Block cipher",
+    outputLen: 16,
+    security: "modern",
+    tags: ["chaskey", "mac", "iso18033", "iso29192", "lightweight", "microcontroller", "arx"],
+    summary: "ISO/IEC 29192-6 lightweight 128-bit ARX microcontroller message authentication code.",
+    streaming: false,
+  },
+  {
+    id: "pelican",
+    label: "Pelican MAC",
+    category: "Block cipher",
+    outputLen: 16,
+    security: "modern",
+    tags: ["pelican", "mac", "aes", "daemen", "rijmen", "fast"],
+    summary: "High-speed 4-round AES-based MAC designed by Joan Daemen and Vincent Rijmen.",
+    streaming: false,
+  },
+  {
+    id: "poly1305-aes",
+    label: "Poly1305-AES",
+    category: "One-time",
+    outputLen: 16,
+    security: "modern",
+    tags: ["poly1305", "aes", "poly1305-aes", "mac", "bernstein", "one-time"],
+    summary: "D. J. Bernstein's original 2005 Poly1305-AES authentication construction.",
+    streaming: false,
+  },
 ];
 
 const BY_ID = new Map(MAC_TOOLS.map((t) => [t.id, t]));

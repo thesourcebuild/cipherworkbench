@@ -1,10 +1,13 @@
 import type { ToolResult, ToolResultField, ToolStream } from "@ocs/engine";
 import {
   computeAsconPrfShort,
+  computeChaskey,
   computeCmac,
   computeHmac,
   computeKmac,
+  computePelican,
   computePoly1305,
+  computePoly1305Aes,
   computeSiphash,
   createAsconMacStream,
   createAsconPrfStream,
@@ -150,6 +153,15 @@ export async function computeMac(spec: MacSpec, input: Uint8Array): Promise<Tool
       }
       case "asconprfs":
         tag = computeAsconPrfShort(r.key, input, r.outputLen);
+        break;
+      case "chaskey":
+        tag = computeChaskey(r.key, input);
+        break;
+      case "pelican":
+        tag = computePelican(r.key, input);
+        break;
+      case "poly1305-aes":
+        tag = computePoly1305Aes(r.key, input);
         break;
       default:
         return { error: `No compute path for MAC tool: ${r.toolId}` };

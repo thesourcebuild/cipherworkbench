@@ -106,6 +106,16 @@ import {
   SIMON_SPECK_VARIANTS,
   createTwofish,
   createTripleDes,
+  createKeeloq,
+  createSaturnin,
+  spritzCrypt,
+  crypto1Crypt,
+  dectDscCrypt,
+  geaCrypt,
+  adiantumEncrypt,
+  adiantumDecrypt,
+  hctr2Encrypt,
+  hctr2Decrypt,
   decryptBlockMode,
   encryptBlockMode,
   padBlocks,
@@ -566,6 +576,8 @@ export function blockCipherOperation(
      * a Kalyna-512 request answered with a 128-bit block would encrypt successfully and match nothing.
      */
     kalyna: (k: Uint8Array) => createKalyna(k, kalynaBlockBits(paramSetId)),
+    keeloq: createKeeloq,
+    saturnin: createSaturnin,
   };
   const factory = factories[toolId];
   if (!factory) throw new Error(`No block cipher implementation for "${toolId}".`);
@@ -756,12 +768,37 @@ export function streamCipherOperation(
     trivium: (data) => triviumCrypt(key, nonce, data),
     sosemanuk: (data) => sosemanukCrypt(key, nonce, data),
     snow3g: (data) => snow3gCrypt(key, nonce, data),
+    spritz: (data) => spritzCrypt(key, nonce, data),
+    crypto1: (data) => crypto1Crypt(key, data),
+    "dect-dsc": (data) => dectDscCrypt(key, nonce, data),
+    dectdsc: (data) => dectDscCrypt(key, nonce, data),
+    gea: (data) => geaCrypt(key, nonce, data),
   };
   const run = ciphers[toolId];
   if (!run) throw new Error(`No stream cipher implementation for "${toolId}".`);
   // A fresh engine per call, as RC4 does: these all advance state with the keystream, so one instance
   // shared across both directions would produce a different keystream the second time.
   return { encrypt: run, decrypt: run };
+}
+
+export function wideBlockCipherOperation(
+  toolId: string,
+  key: Uint8Array,
+  nonce: Uint8Array,
+): CipherOperation {
+  if (toolId === "adiantum") {
+    return {
+      encrypt: (data) => adiantumEncrypt(key, nonce, data),
+      decrypt: (data) => adiantumDecrypt(key, nonce, data),
+    };
+  }
+  if (toolId === "hctr2") {
+    return {
+      encrypt: (data) => hctr2Encrypt(key, nonce, data),
+      decrypt: (data) => hctr2Decrypt(key, nonce, data),
+    };
+  }
+  throw new Error(`No wide block cipher implementation for "${toolId}".`);
 }
 
 /**

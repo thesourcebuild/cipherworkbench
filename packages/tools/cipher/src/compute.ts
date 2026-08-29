@@ -13,6 +13,7 @@ import {
   rc4Operation,
   salsaOperation,
   streamCipherOperation,
+  wideBlockCipherOperation,
   xchachaPolyOperation,
   xsalsaPolyOperation,
   type CipherOperation,
@@ -130,6 +131,8 @@ function operationFor(r: ResolvedCipher): CipherOperation {
     case "clefia":
     case "mars":
     case "kalyna":
+    case "keeloq":
+    case "saturnin":
       return blockCipherOperation(
         r.toolId,
         r.mode!.id,
@@ -151,11 +154,7 @@ function operationFor(r: ResolvedCipher): CipherOperation {
     case "chacha20orig":
       return chacha20Operation(r.toolId, r.key, r.nonce, r.counter);
     /**
-     * The six ciphers that declare `stream` on their metadata.
-     *
-     * Listed by id rather than dispatched on `requireCipherTool(r.toolId).shape` being set, because an
-     * exhaustive switch is what makes a tool added without a binding fail here by name -- which is the
-     * whole argument for the throwing `Record` one layer down.
+     * The stream ciphers that declare `stream` on their metadata.
      */
     case "zuc128":
     case "zuc256":
@@ -167,7 +166,14 @@ function operationFor(r: ResolvedCipher): CipherOperation {
     case "trivium":
     case "sosemanuk":
     case "snow3g":
+    case "spritz":
+    case "crypto1":
+    case "dect-dsc":
+    case "gea":
       return streamCipherOperation(r.toolId, r.key, r.nonce);
+    case "adiantum":
+    case "hctr2":
+      return wideBlockCipherOperation(r.toolId, r.key, r.nonce);
     /**
      * The nine NIST lightweight finalists.
      *

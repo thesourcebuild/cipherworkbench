@@ -1155,6 +1155,30 @@ function shapeNotesFor(toolId: string): { key: string; nonce: string; instance?:
       instance:
         "Three key sizes, and the only other thing that changes is the length of the wide permutation -- 1024, 1152 or 1280 rounds. The narrow permutation is 640 for all three. TinyJAMBU-128 is the primary member; the larger keys buy margin against multi-key attacks rather than against anything known.",
     },
+    adiantum: {
+      key: "256 bits (32 bytes). Used for ChaCha12 encryption and derived AES/Poly1305 evaluation.",
+      nonce: "96 bits (12 bytes) tweak / IV. Uniquely identifies each sector or disk block.",
+    },
+    hctr2: {
+      key: "256 bits (32 bytes). Used for AES-CTR, AES-ECB middle permutation, and POLYVAL keying.",
+      nonce: "128 bits (16 bytes) tweak. Sector / block index for wide-block encryption.",
+    },
+    spritz: {
+      key: "128 or 256 bits (16 or 32 bytes). Squeezed through Spritz sponge initial state.",
+      nonce: "Optional IV (0, 8, or 16 bytes). Spritz absorbs the IV into its sponge state.",
+    },
+    crypto1: {
+      key: "48 bits (6 bytes). The secret key stored on the Mifare Classic RFID card / sector.",
+      nonce: "32 bits (4 bytes) UID / challenge nonce from the RFID card.",
+    },
+    "dect-dsc": {
+      key: "64 bits (8 bytes) cordless authentication / encryption key.",
+      nonce: "32 to 40 bits (4-5 bytes) initialization vector from DECT standard frame counter.",
+    },
+    gea: {
+      key: "64 bits (8 bytes) GPRS ciphering key Kc.",
+      nonce: "32 bits (4 bytes) frame counter direction vector.",
+    },
   };
   const note = notes[toolId];
   if (!note) throw new Error(`No key and nonce explanation for shaped cipher "${toolId}".`);
@@ -1400,6 +1424,10 @@ function keyNoteFor(toolId: string): string {
       "Exactly 128 bits. The schedule is addition rather than substitution: the eight whitening bytes are the key's own bytes reordered, and each of the 128 round-key bytes is a key byte plus one of 128 constants that come from a 7-bit LFSR. Every key bit is used and none is expanded.",
     kalyna:
       "The parameter set above decides the length: DSTU 7624 pairs each block size with a key of the same width or twice it, and the round count follows the key. Press Generate after choosing a set, not before -- a 32-byte key is legal for both Kalyna-128/256 and Kalyna-256/256, so the length alone does not say which cipher you are running.",
+    keeloq:
+      "Exactly 64 bits (8 bytes). The secret manufacturing or vehicle transmitter hopping key.",
+    saturnin:
+      "Exactly 256 bits (32 bytes). Used across all super-rounds for 256-bit post-quantum block cipher security.",
   };
   const note = notes[toolId];
   if (!note)

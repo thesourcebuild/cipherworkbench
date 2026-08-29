@@ -27,6 +27,9 @@ import {
   createWhirlpool,
   createHighwayHash,
   siphash24,
+  chaskeyMac,
+  pelicanMac,
+  poly1305AesMac,
 } from "@ocs/algos";
 import { requireHmacHash } from "./catalogue/tool-meta";
 
@@ -317,3 +320,19 @@ export function createPoly1305Stream(key: Uint8Array): MacHasher {
 export function computeCmac(key: Uint8Array, message: Uint8Array): Uint8Array {
   return cmac(message, key);
 }
+
+export function computeChaskey(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return chaskeyMac(key, message);
+}
+
+export function computePelican(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return pelicanMac(key, message);
+}
+
+export function computePoly1305Aes(key: Uint8Array, message: Uint8Array): Uint8Array {
+  const keyR = key.subarray(0, 16);
+  const keyK = key.subarray(16, 32);
+  const nonce = new Uint8Array(16);
+  return poly1305AesMac(keyR, keyK, nonce, message);
+}
+

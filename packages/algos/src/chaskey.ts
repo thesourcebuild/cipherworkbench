@@ -113,3 +113,67 @@ export function createChaskeyLts(key: Uint8Array): BlockCipher {
     decryptBlock: (src, dst) => run(src, dst, true),
   };
 }
+
+function doubleSubkey(k: number[]): number[] {
+  const msb = (k[3]! >>> 31) & 1;
+  const out = [
+    u32((k[0]! << 1) | (k[1]! >>> 31)),
+    u32((k[1]! << 1) | (k[2]! >>> 31)),
+    u32((k[2]! << 1) | (k[3]! >>> 31)),
+    u32(k[3]! << 1),
+  ];
+  if (msb) out[0] = u32(out[0]! ^ 0x87);
+  return out;
+}
+
+/**
+ * Computes Chaskey MAC (ISO/IEC 29192-6).
+ *
+ * @param rounds Number of permutation rounds (8 for standard Chaskey, 16 for Chaskey-LTS).
+ */
+export function chaskeyMac(key: Uint8Array, message: Uint8Array, rounds: 8 | 16 = 8): Uint8Array {
+  if (key.length !== BLOCK) throw new Error("Chaskey MAC key must be 16 bytes.");
+  const k = [0, 1, 2, 3].map((i) => load(key, i));
+  const k1 = doubleSubkey(k);
+  const k2 = doubleSubkey(k1);
+
+  const v = [...k];
+  const fullBlocks = Math.floor(message.length / BLOCK);
+  const remaining = message.length % BLOCK;
+  const isPadded = remaining !== 0 || message.length === 0;
+  const numBlocks = isPadded ? fullBlocks + 1 : fullBlocks;
+
+  for (let b = 0; b < numBlocks - 1; b++) {
+    for (let i = 0; i < 4; i++) {
+      v[i] = u32(v[i]! ^ load(message.subarray(b * BLOCK), i));
+    }
+    for (let r = 0; r < rounds; r++) permuteRound(v);
+  }
+
+  // Last block
+  const lastBlock = new Uint8Array(BLOCK);
+  if (isPadded) {
+    if (remaining > 0) {
+      lastBlock.set(message.subarray(fullBlocks * BLOCK));
+    }
+    lastBlock[remaining] = 0x01; // pad with 0x01 followed by 0x00
+    for (let i = 0; i < 4; i++) {
+      const mWord = load(lastBlock, i);
+      v[i] = u32(v[i]! ^ mWord ^ k2[i]!);
+    }
+  } else {
+    for (let i = 0; i < 4; i++) {
+      const mWord = load(message.subarray((numBlocks - 1) * BLOCK), i);
+      v[i] = u32(v[i]! ^ mWord ^ k1[i]!);
+    }
+  }
+
+  for (let r = 0; r < rounds; r++) permuteRound(v);
+
+  const tag = new Uint8Array(BLOCK);
+  for (let i = 0; i < 4; i++) {
+    store(u32(v[i]! ^ k[i]!), tag, i);
+  }
+  return tag;
+}
+

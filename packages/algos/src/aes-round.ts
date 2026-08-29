@@ -1,29 +1,7 @@
 /**
- * A single AES round, and the AES S-box it is built on.
- *
- * Here because AEGIS is specified in terms of `AESRound(in, rk)` -- SubBytes, ShiftRows, MixColumns,
- * AddRoundKey, exactly one round -- and no library this project uses exposes the primitive.
- * `@noble/ciphers` offers AES as a cipher and nothing below it, which is a reasonable API and not the
- * one a permutation-based AEAD needs.
- *
- * Two things worth knowing.
- *
- * **The S-box is shared with ARIA.** RFC 5794 defines ARIA's SB1 as AES's S-box, which is where this
- * table came from -- parsed out of that RFC by script rather than typed. Two independent published
- * vector sets therefore check it: ARIA's three appendix vectors, and the `AESRound` vector in the
- * AEGIS draft's appendix A.1. Only the forward direction exists here; AEGIS never inverts a round,
- * and neither does anything else in this repo.
- *
- * **The AES state is column-major.** Byte i is row `i mod 4` of column `i div 4`, which is what makes
- * ShiftRows a shift of *rows* look like a stride through the array. Getting that transposed produces a
- * round function that is self-consistent and matches nothing -- the AESRound vector is the guard.
+ * A single AES round, key expansion, and block encryption/decryption routines.
  */
 
-/**
- * The AES S-box, FIPS 197 figure 7.
- *
- * Byte-for-byte identical to RFC 5794's SB1, which is the document it was extracted from.
- */
 export const AES_SBOX = new Uint8Array([
   0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
   0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
@@ -43,18 +21,23 @@ export const AES_SBOX = new Uint8Array([
   0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16,
 ]);
 
-/** Multiplication by x in GF(2^8) with AES's reduction polynomial. */
+export const AES_INV_SBOX = new Uint8Array(256);
+for (let i = 0; i < 256; i++) {
+  AES_INV_SBOX[AES_SBOX[i]!] = i;
+}
+
 const xtime = (x: number): number => ((x << 1) ^ (x & 0x80 ? 0x1b : 0)) & 0xff;
 
-/**
- * One AES round: `out = MixColumns(ShiftRows(SubBytes(in))) ^ rk`.
- *
- * Column by column, because ShiftRows and MixColumns both work within a column once the row shift has
- * been folded into the index: byte (row r, column c) of the shifted state is byte (row r, column
- * c + r mod 4) of the input, which is the `4 * ((c + r) % 4) + r` below.
- *
- * `out` may not alias `in`.
- */
+const mul = (a: number, b: number): number => {
+  let res = 0;
+  let temp = a;
+  for (let i = 0; i < 8; i++) {
+    if ((b & (1 << i)) !== 0) res ^= temp;
+    temp = xtime(temp);
+  }
+  return res & 0xff;
+};
+
 export function aesRound(input: Uint8Array, rk: Uint8Array, out: Uint8Array): void {
   for (let c = 0; c < 4; c++) {
     const a0 = AES_SBOX[input[4 * c + 0]!]!;
@@ -66,5 +49,163 @@ export function aesRound(input: Uint8Array, rk: Uint8Array, out: Uint8Array): vo
     out[4 * c + 1] = (a0 ^ xtime(a1) ^ xtime(a2) ^ a2 ^ a3 ^ rk[4 * c + 1]!) & 0xff;
     out[4 * c + 2] = (a0 ^ a1 ^ xtime(a2) ^ xtime(a3) ^ a3 ^ rk[4 * c + 2]!) & 0xff;
     out[4 * c + 3] = (xtime(a0) ^ a0 ^ a1 ^ a2 ^ xtime(a3) ^ rk[4 * c + 3]!) & 0xff;
+  }
+}
+
+export function aesSubBytesShiftRows(input: Uint8Array, rk: Uint8Array, out: Uint8Array): void {
+  for (let c = 0; c < 4; c++) {
+    out[4 * c + 0] = (AES_SBOX[input[4 * c + 0]!]! ^ rk[4 * c + 0]!) & 0xff;
+    out[4 * c + 1] = (AES_SBOX[input[4 * ((c + 1) & 3) + 1]!]! ^ rk[4 * c + 1]!) & 0xff;
+    out[4 * c + 2] = (AES_SBOX[input[4 * ((c + 2) & 3) + 2]!]! ^ rk[4 * c + 2]!) & 0xff;
+    out[4 * c + 3] = (AES_SBOX[input[4 * ((c + 3) & 3) + 3]!]! ^ rk[4 * c + 3]!) & 0xff;
+  }
+}
+
+const RCON = new Uint8Array([0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]);
+
+export function aes128KeySchedule(key: Uint8Array): Uint8Array[] {
+  const rks: Uint8Array[] = new Array(11);
+  const words = new Uint32Array(44);
+  for (let i = 0; i < 4; i++) {
+    words[i] = (key[4 * i]! | (key[4 * i + 1]! << 8) | (key[4 * i + 2]! << 16) | (key[4 * i + 3]! << 24)) >>> 0;
+  }
+
+  for (let i = 4; i < 44; i++) {
+    let temp = words[i - 1]!;
+    if (i % 4 === 0) {
+      const rot = (temp >>> 8) | (temp << 24);
+      const b0 = AES_SBOX[rot & 0xff]!;
+      const b1 = AES_SBOX[(rot >>> 8) & 0xff]!;
+      const b2 = AES_SBOX[(rot >>> 16) & 0xff]!;
+      const b3 = AES_SBOX[(rot >>> 24) & 0xff]!;
+      const sub = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+      const rconWord = RCON[(i / 4) - 1]!;
+      temp = (sub ^ rconWord) >>> 0;
+    }
+    words[i] = (words[i - 4]! ^ temp) >>> 0;
+  }
+
+  for (let r = 0; r <= 10; r++) {
+    const rk = new Uint8Array(16);
+    for (let c = 0; c < 4; c++) {
+      const w = words[r * 4 + c]!;
+      rk[4 * c + 0] = w & 0xff;
+      rk[4 * c + 1] = (w >>> 8) & 0xff;
+      rk[4 * c + 2] = (w >>> 16) & 0xff;
+      rk[4 * c + 3] = (w >>> 24) & 0xff;
+    }
+    rks[r] = rk;
+  }
+  return rks;
+}
+
+export function aes128EncryptBlock(rks: Uint8Array[], input: Uint8Array, out: Uint8Array): void {
+  let state = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) state[i] = input[i]! ^ rks[0]![i]!;
+
+  const next = new Uint8Array(16);
+  for (let r = 1; r < 10; r++) {
+    aesRound(state, rks[r]!, next);
+    state.set(next, 0);
+  }
+  aesSubBytesShiftRows(state, rks[10]!, out);
+}
+
+export function aes256KeySchedule(key: Uint8Array): Uint8Array[] {
+  const rks: Uint8Array[] = new Array(15);
+  const words = new Uint32Array(60);
+  for (let i = 0; i < 8; i++) {
+    words[i] = (key[4 * i]! | (key[4 * i + 1]! << 8) | (key[4 * i + 2]! << 16) | (key[4 * i + 3]! << 24)) >>> 0;
+  }
+
+  for (let i = 8; i < 60; i++) {
+    let temp = words[i - 1]!;
+    if (i % 8 === 0) {
+      const rot = (temp >>> 8) | (temp << 24);
+      const b0 = AES_SBOX[rot & 0xff]!;
+      const b1 = AES_SBOX[(rot >>> 8) & 0xff]!;
+      const b2 = AES_SBOX[(rot >>> 16) & 0xff]!;
+      const b3 = AES_SBOX[(rot >>> 24) & 0xff]!;
+      const sub = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+      const rconWord = RCON[(i / 8) - 1]!;
+      temp = (sub ^ rconWord) >>> 0;
+    } else if (i % 8 === 4) {
+      const b0 = AES_SBOX[temp & 0xff]!;
+      const b1 = AES_SBOX[(temp >>> 8) & 0xff]!;
+      const b2 = AES_SBOX[(temp >>> 16) & 0xff]!;
+      const b3 = AES_SBOX[(temp >>> 24) & 0xff]!;
+      temp = (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) >>> 0;
+    }
+    words[i] = (words[i - 8]! ^ temp) >>> 0;
+  }
+
+  for (let r = 0; r <= 14; r++) {
+    const rk = new Uint8Array(16);
+    for (let c = 0; c < 4; c++) {
+      const w = words[r * 4 + c]!;
+      rk[4 * c + 0] = w & 0xff;
+      rk[4 * c + 1] = (w >>> 8) & 0xff;
+      rk[4 * c + 2] = (w >>> 16) & 0xff;
+      rk[4 * c + 3] = (w >>> 24) & 0xff;
+    }
+    rks[r] = rk;
+  }
+  return rks;
+}
+
+export function aes256EncryptBlock(rks: Uint8Array[], input: Uint8Array, out: Uint8Array): void {
+  let state = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) state[i] = input[i]! ^ rks[0]![i]!;
+
+  const next = new Uint8Array(16);
+  for (let r = 1; r < 14; r++) {
+    aesRound(state, rks[r]!, next);
+    state.set(next, 0);
+  }
+  aesSubBytesShiftRows(state, rks[14]!, out);
+}
+
+function invShiftRowsSubBytes(state: Uint8Array): void {
+  const tmp = new Uint8Array(16);
+  for (let c = 0; c < 4; c++) {
+    tmp[4 * c + 0] = AES_INV_SBOX[state[4 * c + 0]!]!;
+    tmp[4 * c + 1] = AES_INV_SBOX[state[4 * ((c + 3) & 3) + 1]!]!;
+    tmp[4 * c + 2] = AES_INV_SBOX[state[4 * ((c + 2) & 3) + 2]!]!;
+    tmp[4 * c + 3] = AES_INV_SBOX[state[4 * ((c + 1) & 3) + 3]!]!;
+  }
+  state.set(tmp, 0);
+}
+
+function invMixColumns(state: Uint8Array): void {
+  const tmp = new Uint8Array(16);
+  for (let c = 0; c < 4; c++) {
+    const s0 = state[4 * c + 0]!;
+    const s1 = state[4 * c + 1]!;
+    const s2 = state[4 * c + 2]!;
+    const s3 = state[4 * c + 3]!;
+
+    tmp[4 * c + 0] = mul(s0, 0x0e) ^ mul(s1, 0x0b) ^ mul(s2, 0x0d) ^ mul(s3, 0x09);
+    tmp[4 * c + 1] = mul(s0, 0x09) ^ mul(s1, 0x0e) ^ mul(s2, 0x0b) ^ mul(s3, 0x0d);
+    tmp[4 * c + 2] = mul(s0, 0x0d) ^ mul(s1, 0x09) ^ mul(s2, 0x0e) ^ mul(s3, 0x0b);
+    tmp[4 * c + 3] = mul(s0, 0x0b) ^ mul(s1, 0x0d) ^ mul(s2, 0x09) ^ mul(s3, 0x0e);
+  }
+  state.set(tmp, 0);
+}
+
+export function aes256DecryptBlock(rks: Uint8Array[], input: Uint8Array, out: Uint8Array): void {
+  let state = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) state[i] = input[i]! ^ rks[14]![i]!;
+
+  for (let r = 13; r >= 1; r--) {
+    invShiftRowsSubBytes(state);
+    const rk = rks[r]!;
+    for (let i = 0; i < 16; i++) state[i] = state[i]! ^ rk[i]!;
+    invMixColumns(state);
+  }
+
+  invShiftRowsSubBytes(state);
+  const rk0 = rks[0]!;
+  for (let i = 0; i < 16; i++) {
+    out[i] = state[i]! ^ rk0[i]!;
   }
 }

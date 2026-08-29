@@ -26,7 +26,7 @@ import type { CrcModel } from "./model";
  * bit-at-a-time engine in `./engine.ts`, because a byte-indexed table cannot exist when the index is
  * wider than the register -- and they have no lookup table in the app for the same reason.
  *
- * Parsed out of the fetched RevEng page by script rather than typed, like every other table in this
+ * Parsed out of the fetched RevEng page, like every other table in this
  * repo that came from a document. Each carries the catalogue's own check value, and
  * `tests/crc.test.ts` asserts all fifteen.
  */

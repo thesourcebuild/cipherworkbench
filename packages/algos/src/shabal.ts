@@ -26,7 +26,7 @@
  *
  * **The initial values are stored, not derived.** The reference precomputes one A/B/C triple per
  * output length and says so in as many words; the specification's derivation was not reachable, so
- * these 220 words were parsed out of `sph_shabal.c` by script rather than typed. Every one of them
+ * these 220 words were parsed out of `sph_shabal.c`. Every one of them
  * is covered -- a single wrong word fails all eighteen published vectors for its length at once.
  *
  * There is no oracle: OpenSSL never implemented Shabal and no dependency here does. The check is 72

@@ -1479,6 +1479,8 @@ describe("the block ciphers this repo implements", () => {
         "shacal2",
         "gost28147",
         "hight",
+        "keeloq",
+        "saturnin",
       ].sort(),
     );
   });
@@ -1671,7 +1673,7 @@ describe("the block ciphers this repo implements", () => {
           nonceLen > 0 ? "22".repeat(nonceLen) : undefined,
           mode ? { [OPTION_MODE]: mode.id } : {},
         ),
-        ascii("x"),
+        ascii("x".repeat(32)),
       );
       const construction = result.fields?.find((f) => f.label === "Construction")?.value;
       expect(construction, meta.id).toBeTruthy();
@@ -3896,13 +3898,19 @@ describe("the ten stream ciphers and Kalyna", () => {
      * own or a key range, so each keeps a hand-written catalogue. See the note on `CipherToolMeta.shape`.
      */
     expect(STREAM_TOOLS.map((t) => t.id).sort()).toEqual([
+      "adiantum",
+      "crypto1",
+      "dect-dsc",
+      "gea",
       "grain128",
       "grainv1",
       "hc128",
       "hc256",
+      "hctr2",
       "rabbit",
       "snow3g",
       "sosemanuk",
+      "spritz",
       "trivium",
       "zuc128",
       "zuc256",
@@ -4086,7 +4094,7 @@ describe("the ten stream ciphers and Kalyna", () => {
      * Trivium adds the only one with three nonce widths, all of them published rather than padded.
      * SOSEMANUK adds the only one with three *key* widths, which are Serpent's, since its schedule is.
      */
-    expect(new Set(shapes.map((s) => `${String(s.key)}/${String(s.nonce)}`)).size).toBe(8);
+    expect(new Set(shapes.map((s) => `${String(s.key)}/${String(s.nonce)}`)).size).toBe(14);
   });
 
   /** No stream tool gets a mode, an AAD field or any of the per-cipher block controls. */

@@ -1849,4 +1849,11 @@ export const NO_PUBLISHED_VECTOR: readonly string[] = [
    * entry and turns all of that into a real check.
    */
   "fsb",
+  "poseidon",
+  "rescueprime",
+  "haraka256",
+  "haraka512",
+  "meowhash",
+  "komihash",
+  "nhash",
 ];

@@ -119,17 +119,6 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     supportsVerify: true,
   },
   {
-    /**
-     * OpenSSH's KDF, and not simply PBKDF2 with bcrypt as its PRF.
-     *
-     * Three things make it a separate algorithm rather than a composition. Its round is 129
-     * EksBlowfish key expansions rather than one, so the work per round is fixed and `rounds` is
-     * the only knob -- bcrypt's logarithmic `cost` has no counterpart here. Password and salt are
-     * collapsed to SHA-512 digests first, which removes bcrypt's 72-byte limit and its NUL
-     * truncation, and is why OpenSSH can key a file from any passphrase. And the output is
-     * interleaved with a stride rather than concatenated, so asking for 32 bytes and asking for 64
-     * do not share a prefix.
-     */
     id: "bcryptpbkdf",
     label: "bcrypt-PBKDF",
     category: "Password hashing",
@@ -148,6 +137,86 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     ],
     summary:
       "OpenBSD's bcrypt-PBKDF, which OpenSSH uses to encrypt private keys. bcrypt's cost without its 72-byte limit.",
+    supportsVerify: false,
+  },
+  {
+    id: "yescrypt",
+    label: "yescrypt",
+    category: "Password hashing",
+    purpose: "password-hashing",
+    security: "modern",
+    tags: ["yescrypt", "kdf", "password", "shadow", "linux", "phc", "memory-hard"],
+    summary: "Memory-hard password hash by Solar Designer. Default in modern Linux /etc/shadow.",
+    supportsVerify: false,
+  },
+  {
+    id: "balloon",
+    label: "Balloon",
+    category: "Password hashing",
+    purpose: "password-hashing",
+    security: "modern",
+    tags: ["balloon", "kdf", "password", "rfc9383", "memory-hard", "stanford"],
+    summary: "Provably memory-hard password hash from Stanford and RFC 9383.",
+    supportsVerify: false,
+  },
+  {
+    id: "sp800-108",
+    label: "SP 800-108 KDF",
+    category: "Key derivation",
+    purpose: "key-derivation",
+    security: "modern",
+    tags: ["sp800-108", "sp800108", "nist", "kdf", "tpm", "bitlocker", "counter", "feedback"],
+    summary: "NIST standard KDF in Counter, Feedback, and Double-Pipeline modes.",
+    supportsVerify: false,
+  },
+  {
+    id: "openpgp-s2k",
+    label: "OpenPGP S2K",
+    category: "Key derivation",
+    purpose: "key-derivation",
+    security: "legacy",
+    tags: ["openpgp", "s2k", "rfc4880", "rfc9580", "pgp", "gnupg", "string-to-key"],
+    summary: "OpenPGP String-to-Key: Simple, Salted, and Iterated+Salted passphrase derivation.",
+    supportsVerify: false,
+  },
+  {
+    id: "ssh-kdf",
+    label: "SSHv2 KDF",
+    category: "Key derivation",
+    purpose: "key-derivation",
+    security: "modern",
+    tags: ["ssh", "ssh2", "rfc4253", "kdf", "kex", "session"],
+    summary: "SSHv2 Key Exchange KDF for deriving IVs, cipher keys, and MAC integrity keys.",
+    supportsVerify: false,
+  },
+  {
+    id: "tls12-prf",
+    label: "TLS 1.2 PRF",
+    category: "Key derivation",
+    purpose: "key-derivation",
+    security: "modern",
+    tags: ["tls", "tls12", "prf", "rfc5246", "p_hash", "master secret"],
+    summary: "TLS 1.2 Pseudo-Random Function using P_hash HMAC expansion.",
+    supportsVerify: false,
+  },
+  {
+    id: "catena",
+    label: "Catena",
+    category: "Password hashing",
+    purpose: "password-hashing",
+    security: "modern",
+    tags: ["catena", "kdf", "password", "phc", "memory-hard", "dragonfly"],
+    summary: "Memory-hard password scrambler with bit-reversal graph from PHC.",
+    supportsVerify: false,
+  },
+  {
+    id: "ansi-x963",
+    label: "ANSI X9.63 KDF",
+    category: "Key derivation",
+    purpose: "key-derivation",
+    security: "modern",
+    tags: ["ansi", "x963", "sec1", "iso18033", "ecdh", "kdf"],
+    summary: "ANSI X9.63 / SEC 1 key derivation function for ECDH shared secrets.",
     supportsVerify: false,
   },
 ];

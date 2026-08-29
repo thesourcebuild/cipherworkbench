@@ -926,13 +926,13 @@ describe("catalogue and manifests", () => {
     expect(tool.variantTag!(specFor("argon2", { [OPTION_MODE]: "verify" }))).toBe("verify");
   });
 
-  it("marks the two tools that are not first choices", () => {
-    // PBKDF2 and bcrypt are both legacy, and both for stated reasons.
+  it("marks the legacy tools that are not first choices", () => {
+    // PBKDF2, bcrypt, and OpenPGP S2K are legacy.
     expect(
       KDF_MANIFESTS.filter((m) => m.security === "legacy")
         .map((m) => m.id)
         .sort(),
-    ).toEqual(["bcrypt", "pbkdf2"]);
+    ).toEqual(["bcrypt", "openpgp-s2k", "pbkdf2"]);
   });
 });
 
@@ -996,8 +996,8 @@ describe("createSpec", () => {
   });
 
   it("rejects an unknown variant", () => {
-    expect(() => createSpec({ variant: "balloon" })).toThrow(/Unknown KDF tool/);
-    expect(() => requireKdfTool("balloon")).toThrow(/balloon/);
+    expect(() => createSpec({ variant: "nonexistent_kdf_tool" })).toThrow(/Unknown KDF tool/);
+    expect(() => requireKdfTool("nonexistent_kdf_tool")).toThrow(/nonexistent_kdf_tool/);
   });
 
   it("round-trips through the zod schema", () => {

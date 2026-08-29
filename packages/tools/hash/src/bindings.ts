@@ -172,6 +172,12 @@ const M_WYHASH = lazyModule("wyhash", () => import("@ocs/algos/wyhash"));
 const M_XXHASH3 = lazyModule("xxhash3", () => import("@ocs/algos/xxhash3"));
 const M_XXHASH32 = lazyModule("xxhash32", () => import("@ocs/algos/xxhash32"));
 const M_XXHASH64 = lazyModule("xxhash64", () => import("@ocs/algos/xxhash64"));
+const M_POSEIDON = lazyModule("poseidon", () => import("@ocs/algos/poseidon"));
+const M_RESCUEPRIME = lazyModule("rescue-prime", () => import("@ocs/algos/rescue-prime"));
+const M_HARAKA = lazyModule("haraka", () => import("@ocs/algos/haraka"));
+const M_MEOWHASH = lazyModule("meowhash", () => import("@ocs/algos/meowhash"));
+const M_KOMIHASH = lazyModule("komihash", () => import("@ocs/algos/komihash"));
+const M_NHASH = lazyModule("nhash", () => import("@ocs/algos/nhash"));
 
 // ── the shims, which the binding table reads as though they were imports ───
 
@@ -233,6 +239,13 @@ const rapidhashBytes = lazyFn(M_RAPIDHASH, "rapidhashBytes");
 const spookyhash = lazyFn(M_SPOOKYHASH, "spookyhash");
 const t1ha = lazyFn(M_T1HA, "t1ha");
 const wyhashBytes = lazyFn(M_WYHASH, "wyhashBytes");
+const poseidonHash = lazyFn(M_POSEIDON, "poseidonHash");
+const rescuePrimeHash = lazyFn(M_RESCUEPRIME, "rescuePrimeHash");
+const haraka256Hash = lazyFn(M_HARAKA, "haraka256Hash");
+const haraka512Hash = lazyFn(M_HARAKA, "haraka512Hash");
+const meowHash = lazyFn(M_MEOWHASH, "meowHash");
+const komihash = lazyFn(M_KOMIHASH, "komihash");
+const nhash = lazyFn(M_NHASH, "nhash");
 
 /**
  * The one export here that is a value rather than a function, so it cannot be a `lazyFn` shim: read
@@ -807,6 +820,13 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   // algorithms, which is not worth a second control kind.
   xxh3: seededXxh3(createXxh3_64),
   xxh128: seededXxh3(createXxh3_128),
+  poseidon: { create: () => bufferedHasher(poseidonHash) },
+  rescueprime: { create: () => bufferedHasher(rescuePrimeHash) },
+  haraka256: { create: () => bufferedHasher(haraka256Hash) },
+  haraka512: { create: () => bufferedHasher(haraka512Hash) },
+  meowhash: { create: () => bufferedHasher(meowHash) },
+  komihash: { create: () => bufferedHasher(komihash) },
+  nhash: { create: () => bufferedHasher(nhash) },
 };
 
 /**
@@ -923,6 +943,13 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   xxh3: M_XXHASH3,
   xxh32: M_XXHASH32,
   xxh64: M_XXHASH64,
+  poseidon: M_POSEIDON,
+  rescueprime: M_RESCUEPRIME,
+  haraka256: M_HARAKA,
+  haraka512: M_HARAKA,
+  meowhash: M_MEOWHASH,
+  komihash: M_KOMIHASH,
+  nhash: M_NHASH,
 };
 
 /**

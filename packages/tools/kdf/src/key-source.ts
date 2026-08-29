@@ -6,7 +6,115 @@ import { blake2b } from "@noble/hashes/blake2.js";
 import { md5, sha1 } from "@noble/hashes/legacy.js";
 import { sha256, sha384, sha512 } from "@noble/hashes/sha2.js";
 import { sha3_256 } from "@noble/hashes/sha3.js";
-import { bcryptPbkdf } from "@ocs/algos";
+import {
+  ansiX963Kdf,
+  balloonHash,
+  bcryptPbkdf,
+  catenaHash,
+  kdfSp800108,
+  openpgpS2k,
+  sshKdf,
+  tls12Prf,
+  yescryptKdf,
+} from "@ocs/algos";
+import { hmac } from "@noble/hashes/hmac.js";
+
+export function deriveBalloon(
+  hashId: string,
+  password: Uint8Array,
+  salt: Uint8Array,
+  sCost: number = 16,
+  tCost: number = 3,
+  delta: number = 3,
+): Uint8Array {
+  const hash = requireHash(hashId);
+  return (balloonHash as any)((data: any) => (hash as any)(data), password, salt, { sCost, tCost, delta });
+}
+
+export function deriveSp800108(
+  hashId: string,
+  keyIn: Uint8Array,
+  keyLength: number,
+  mode: "counter" | "feedback" | "double-pipeline" = "counter",
+  label: Uint8Array = new Uint8Array(0),
+  context: Uint8Array = new Uint8Array(0),
+  iv?: Uint8Array,
+): Uint8Array {
+  const hash = requireHash(hashId);
+  const prf = (k: any, m: any) => hmac(hash, k, m);
+  return (kdfSp800108 as any)(prf, keyIn, keyLength, { mode, label, context, iv });
+}
+
+export function deriveOpenPgpS2k(
+  hashId: string,
+  passphrase: Uint8Array,
+  keyLength: number,
+  type: "simple" | "salted" | "iterated-salted" = "iterated-salted",
+  salt: Uint8Array = new Uint8Array(0),
+  count: number = 65536,
+): Uint8Array {
+  const hash = requireHash(hashId);
+  return (openpgpS2k as any)((data: any) => (hash as any)(data), passphrase, keyLength, { type, salt, count });
+}
+
+export function deriveSshKdf(
+  hashId: string,
+  k: Uint8Array,
+  h: Uint8Array,
+  keyLength: number,
+  keyType: "A" | "B" | "C" | "D" | "E" | "F" = "C",
+  sessionId?: Uint8Array,
+): Uint8Array {
+  const hash = requireHash(hashId);
+  return (sshKdf as any)((data: any) => (hash as any)(data), k, h, keyLength, { keyType, sessionId });
+}
+
+export function deriveTls12Prf(
+  hashId: string,
+  secret: Uint8Array,
+  length: number,
+  label: string | Uint8Array = "master secret",
+  seed: Uint8Array = new Uint8Array(0),
+): Uint8Array {
+  const hash = requireHash(hashId);
+  const hmacFn = (k: any, m: any) => hmac(hash, k, m);
+  return (tls12Prf as any)(hmacFn, secret, length, { label, seed });
+}
+
+export function deriveCatena(
+  hashId: string,
+  password: Uint8Array,
+  salt: Uint8Array,
+  lambda: number = 10,
+  tCost: number = 1,
+): Uint8Array {
+  const hash = requireHash(hashId);
+  return (catenaHash as any)((data: any) => (hash as any)(data), password, salt, { lambda, tCost });
+}
+
+export function deriveAnsiX963(
+  hashId: string,
+  z: Uint8Array,
+  keyLength: number,
+  sharedInfo?: Uint8Array,
+): Uint8Array {
+  const hash = requireHash(hashId);
+  return (ansiX963Kdf as any)((data: any) => (hash as any)(data), z, keyLength, { sharedInfo });
+}
+
+export function deriveYescrypt(
+  password: Uint8Array,
+  salt: Uint8Array,
+  keyLength: number,
+  n: number = 1024,
+  r: number = 8,
+  p: number = 1,
+): Uint8Array {
+  const pbkdf2Fn = (pass: Uint8Array, s: Uint8Array, iter: number, len: number) =>
+    pbkdf2(sha256, pass, s, { c: iter, dkLen: len });
+  return (yescryptKdf as any)(pbkdf2Fn, password, salt, keyLength, { n, r, p });
+}
+
 
 /**
  * The six key derivations, and the option catalogue that lets another family offer them.

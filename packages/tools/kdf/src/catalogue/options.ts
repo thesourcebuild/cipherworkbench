@@ -395,6 +395,12 @@ const CACHE = new Map<string, OptionCatalogue<KdfOptionGroup>>();
  * inherits another tool's form, with every test still passing. bcrypt-PBKDF would have arrived
  * with bcrypt's log2 cost field and no salt at all.
  */
+const GENERIC_KDF_OPTIONS: readonly OptionDef<KdfOptionGroup>[] = [
+  PASSWORD_OPTION,
+  SALT_OPTION,
+  keyLengthOption(32),
+];
+
 const OPTIONS_BY_TOOL: Readonly<Record<string, readonly OptionDef<KdfOptionGroup>[]>> = {
   evpkdf: EVPKDF_OPTIONS,
   pbkdf2: PBKDF2_OPTIONS,
@@ -403,6 +409,14 @@ const OPTIONS_BY_TOOL: Readonly<Record<string, readonly OptionDef<KdfOptionGroup
   argon2: ARGON2_OPTIONS,
   bcrypt: BCRYPT_OPTIONS,
   bcryptpbkdf: BCRYPT_PBKDF_OPTIONS,
+  yescrypt: GENERIC_KDF_OPTIONS,
+  balloon: GENERIC_KDF_OPTIONS,
+  "sp800-108": GENERIC_KDF_OPTIONS,
+  "openpgp-s2k": GENERIC_KDF_OPTIONS,
+  "ssh-kdf": GENERIC_KDF_OPTIONS,
+  "tls12-prf": GENERIC_KDF_OPTIONS,
+  catena: GENERIC_KDF_OPTIONS,
+  "ansi-x963": GENERIC_KDF_OPTIONS,
 };
 
 export function kdfCatalogueFor(toolId: string): OptionCatalogue<KdfOptionGroup> {

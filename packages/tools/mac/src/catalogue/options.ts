@@ -322,6 +322,27 @@ export function macCatalogueFor(toolId: string): OptionCatalogue<MacOptionGroup>
       asconmac: ASCON_MAC_OPTIONS,
       asconprf: asconPrfOptions(1024, 32),
       asconprfs: asconPrfOptions(16, 16),
+      chaskey: [
+        keyOption(
+          { exact: [16], generate: 16 },
+          "Exactly 16 bytes (128-bit key).",
+          "hex",
+        ),
+      ],
+      pelican: [
+        keyOption(
+          { exact: [16], generate: 16 },
+          "Exactly 16 bytes (128-bit AES key).",
+          "hex",
+        ),
+      ],
+      "poly1305-aes": [
+        keyOption(
+          { exact: [32], generate: 32 },
+          "Exactly 32 bytes (16-byte Poly1305 evaluation key r + 16-byte AES key k).",
+          "hex",
+        ),
+      ],
     };
     const options = byTool[toolId];
     if (!options) throw new Error(`No option catalogue for MAC tool "${toolId}".`);
