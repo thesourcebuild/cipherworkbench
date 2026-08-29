@@ -112,7 +112,7 @@ export function ResultPanel({
        * message above a value already dimmed to show exactly that.
        */
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {outputEncodings.length > 1 && (
             <select
               /**
@@ -127,7 +127,7 @@ export function ResultPanel({
               aria-label="Output encoding"
               value={outputEncoding}
               onChange={(event) => onOutputEncodingChange(event.target.value as OutputEncoding)}
-              className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-950"
+              className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-full dark:border-slate-700 dark:bg-slate-950"
             >
               {outputEncodings.map((encoding) => (
                 <option key={encoding} value={encoding}>
@@ -145,7 +145,7 @@ export function ResultPanel({
               aria-label="Hex prefix"
               value={hexPrefix}
               onChange={(event) => setHexPrefix(event.target.value as HexPrefix)}
-              className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-950"
+              className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-full dark:border-slate-700 dark:bg-slate-950"
             >
               {(Object.keys(HEX_PREFIX_LABEL) as HexPrefix[]).map((prefix) => (
                 <option key={prefix} value={prefix}>

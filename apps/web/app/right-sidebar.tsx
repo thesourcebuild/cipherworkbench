@@ -34,15 +34,16 @@ export function RightSidebar({ tabs }: { tabs: SidebarTab[] }) {
 
   if (collapsed) {
     return (
-      <div className="flex w-11 shrink-0 flex-col items-center pt-1">
+      <div className="flex w-full lg:w-11 shrink-0 flex-row lg:flex-col items-center justify-between lg:justify-start pt-1">
         <button
           type="button"
           onClick={() => setCollapsed(false)}
           aria-label="Expand panel"
           title="Expand panel"
-          className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          className="flex items-center gap-2 rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
         >
           <ChevronIcon direction="left" />
+          <span className="lg:hidden">Show settings & checks</span>
         </button>
       </div>
     );
@@ -60,7 +61,7 @@ export function RightSidebar({ tabs }: { tabs: SidebarTab[] }) {
       every panel in here folds, so a long Info table can be got out of the way without scrolling at
       all.
     */
-    <div className="w-72 shrink-0 space-y-4">
+    <div className="w-full lg:w-72 lg:shrink-0 space-y-4">
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
         <div className="flex gap-1">
           {tabs.map((tab) => (

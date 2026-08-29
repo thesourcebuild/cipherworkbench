@@ -403,8 +403,8 @@ export function ToolWorkbench({
       item defaults to `min-width: auto` and refuses to go below its content width, which once left
       the row 102px wider than `<main>` with the difference cropped off the right-hand rail.
     */
-    <div className="flex min-w-0 gap-6">
-      <div className="min-w-0 flex-1 space-y-4">
+    <div className="flex flex-col lg:flex-row min-w-0 gap-6">
+      <div className="min-w-0 flex-1 space-y-4 w-full">
         <ToolHeader manifest={tool} description={tool.describe(spec)} />
 
         <InputPanel

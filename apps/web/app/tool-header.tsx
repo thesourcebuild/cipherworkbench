@@ -39,42 +39,36 @@ export function ToolHeader({
 
   return (
     <div className="mb-4">
-      <div className="flex flex-wrap items-baseline gap-2">
-        <h1 className="text-base font-semibold">{manifest.label}</h1>
-        {/*
-          A label, with no tooltip and no dotted underline.
-          It carried a `securityNote` -- a sentence per tool, also shown in a banner below -- which
-          is gone. What is left says what the tool is in one word, which is all a badge can be
-          trusted to say: the word is a property of the algorithm, whereas a sentence is written
-          once and then has to stay true across every option the tool grew. The Checks panel is
-          where the caveats are, because a lint rule reads the spec.
-        */}
-        <span
-          className={cn(
-            "rounded border px-1.5 py-px text-[10px] font-medium",
-            POSTURE_STYLE[manifest.security],
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100">{manifest.label}</h1>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span
+            className={cn(
+              "shrink-0 whitespace-nowrap rounded border px-1.5 py-px text-[10px] font-medium",
+              POSTURE_STYLE[manifest.security],
+            )}
+          >
+            {POSTURE_LABEL[manifest.security]}
+          </span>
+          {manifest.directions.length === 1 && manifest.directions[0] === "forward" && (
+            <span
+              title="A one-way function. There is no inverse to compute — nothing here, or anywhere, can turn a digest back into its input."
+              className="shrink-0 whitespace-nowrap cursor-help rounded border border-slate-300 px-1.5 py-px text-[10px] font-medium text-slate-500 underline decoration-dotted dark:border-slate-700 dark:text-slate-400"
+            >
+              One-way
+            </span>
           )}
-        >
-          {POSTURE_LABEL[manifest.security]}
-        </span>
-        {manifest.directions.length === 1 && manifest.directions[0] === "forward" && (
-          <span
-            title="A one-way function. There is no inverse to compute — nothing here, or anywhere, can turn a digest back into its input."
-            className="cursor-help rounded border border-slate-300 px-1.5 py-px text-[10px] font-medium text-slate-500 underline decoration-dotted dark:border-slate-700 dark:text-slate-400"
-          >
-            One-way
-          </span>
-        )}
-        {manifest.streaming && (
-          <span
-            title="Can be fed a file in chunks, so file size is not limited by memory."
-            className="cursor-help rounded border border-slate-300 px-1.5 py-px text-[10px] font-medium text-slate-500 underline decoration-dotted dark:border-slate-700 dark:text-slate-400"
-          >
-            Streaming
-          </span>
-        )}
+          {manifest.streaming && (
+            <span
+              title="Can be fed a file in chunks, so file size is not limited by memory."
+              className="shrink-0 whitespace-nowrap cursor-help rounded border border-slate-300 px-1.5 py-px text-[10px] font-medium text-slate-500 underline decoration-dotted dark:border-slate-700 dark:text-slate-400"
+            >
+              Streaming
+            </span>
+          )}
+        </div>
       </div>
-      <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+      <p className="mt-1 text-xs text-slate-600 break-words dark:text-slate-400">
         {description ?? manifest.summary}
       </p>
     </div>

@@ -198,126 +198,94 @@ export function InputPanel({
         {readsInput && (
           <>
             <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
+              Source
+              <select
+                /**
+                 * Driven by the desktop smoke test, which switches to File to push a real file
+                 * through the streaming worker and back to Text afterwards. It sets `value` and
+                 * dispatches `change` rather than clicking, because an `<option>` is not clickable
+                 * the way the segmented buttons this replaced were. `data-ocs-mode` stays on each
+                 * option so a probe can still find one by mode without matching on label text.
+                 */
+                data-ocs-input-mode=""
+                aria-label="Input source"
+                value={input.mode}
+                onChange={(event) => setMode(event.target.value as ByteSourceMode)}
+                className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-full dark:border-slate-700 dark:bg-slate-950"
+              >
+                {modes.map((mode) => (
+                  <option
+                    key={mode}
+                    value={mode}
+                    data-ocs-mode={mode}
+                    title={MODE_HINT[mode]}
+                  >
+                    {BYTE_SOURCE_MODE_LABEL[mode]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {input.mode === "text" && (
               <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
-                Source
+                Encoding
                 <select
-                  /**
-                   * Driven by the desktop smoke test, which switches to File to push a real file
-                   * through the streaming worker and back to Text afterwards. It sets `value` and
-                   * dispatches `change` rather than clicking, because an `<option>` is not clickable
-                   * the way the segmented buttons this replaced were. `data-ocs-mode` stays on each
-                   * option so a probe can still find one by mode without matching on label text.
-                   */
-                  data-ocs-input-mode=""
-                  aria-label="Input source"
-                  value={input.mode}
-                  onChange={(event) => setMode(event.target.value as ByteSourceMode)}
-                  className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-950"
+                  // Paired with `data-ocs-input`: the smoke test drives this to prove the lazy
+                  // encoding-table chunk resolves over app:// in the packaged build.
+                  data-ocs-input-encoding=""
+                  value={input.textEncoding}
+                  onChange={(event) =>
+                    onChange({ ...input, textEncoding: event.target.value as TextEncoding })
+                  }
+                  className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-[200px] sm:max-w-xs truncate dark:border-slate-700 dark:bg-slate-950"
                 >
-                  {modes.map((mode) => (
-                    <option
-                      key={mode}
-                      value={mode}
-                      data-ocs-mode={mode}
-                      title={MODE_HINT[mode]}
-                    >
-                      {BYTE_SOURCE_MODE_LABEL[mode]}
-                    </option>
+                  {ENCODING_GROUPS.map(({ group, encodings }) => (
+                    <optgroup key={group} label={ENCODING_GROUP_LABEL[group]}>
+                      {encodings.map((encoding) => (
+                        <option
+                          key={encoding.id}
+                          value={encoding.id}
+                          title={encoding.summary}
+                        >
+                          {encoding.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </label>
+            )}
 
-              {input.mode === "text" && (
-                <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
-                  Encoding
-                  <select
-                    // Paired with `data-ocs-input`: the smoke test drives this to prove the lazy
-                    // encoding-table chunk resolves over app:// in the packaged build.
-                    data-ocs-input-encoding=""
-                    value={input.textEncoding}
-                    onChange={(event) =>
-                      onChange({ ...input, textEncoding: event.target.value as TextEncoding })
-                    }
-                    className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] dark:border-slate-700 dark:bg-slate-950"
-                  >
-                    {ENCODING_GROUPS.map(({ group, encodings }) => (
-                      <optgroup key={group} label={ENCODING_GROUP_LABEL[group]}>
-                        {encodings.map((encoding) => (
-                          <option
-                            key={encoding.id}
-                            value={encoding.id}
-                            title={encoding.summary}
-                          >
-                            {encoding.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </label>
-              )}
-
-              {/**
-               * One Clear, one corner, every source.
-               *
-               * It lived inside the drop zone in file mode, beside "Choose another" -- so the same
-               * control moved to a different part of the panel depending on the source, and the eye had
-               * to go looking for it again after every switch. A file is just another source; discarding
-               * what is loaded is the same action either way, and `isInputBlank` already knows which of
-               * the two "nothing to clear" means.
-               *
-               * `ml-auto` rather than a second row: it belongs beside the controls that decide how the
-               * input is read. Disabled rather than hidden when there is nothing to clear, because a
-               * control that appears on the first keystroke moves the textarea down a line as you start
-               * typing -- and this panel has had enough of that.
-               *
-               * The one thing that does *not* live here is the Test input menu, which loads a canned
-               * string. It was in this row and made four controls where two of them fitted, wrapping the
-               * row onto a second line on any window narrower than comfortable. It is in the right
-               * rail's Settings tab now, with the other controls you set once.
-               */}
-              {/**
-               * Copy, immediately left of Clear, and the two are a matched pair on purpose.
-               *
-               * Same 24px circle, and deliberately *not* coloured: `ClearButton` is tinted red because
-               * it discards something, and copying takes nothing away, so a second colour beside it
-               * would imply a distinction that is not there. `ml-auto` moved here from Clear, since it
-               * is now the left end of the pair that sits in the corner.
-               *
-               * Disabled in file mode rather than hidden. There is nothing to copy -- the file is
-               * streamed from disk and never becomes text in the box -- but a control that vanished on
-               * a source switch would leave the row a different shape depending on how the input
-               * arrived, which is exactly what the Clear note below argues against. The title says why
-               * it is unavailable, which is more use than an absence.
-               */}
-              <CopyIconButton
-                className="ml-auto"
-                value={() => input.text}
-                writeClipboard={(text) => platform().copyToClipboard(text)}
-                disabled={input.mode === "file" || input.text === ""}
-                aria-label="Copy the input"
-                title={
-                  input.mode === "file"
-                    ? "Nothing to copy: a file is read from disk rather than into the box."
-                    : "Copy the text in the box above."
-                }
-              />
-              <ClearButton
-                disabled={isInputBlank(input)}
-                onClick={() =>
-                  onChange(
+            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                <CopyIconButton
+                  value={() => input.text}
+                  writeClipboard={(text) => platform().copyToClipboard(text)}
+                  disabled={input.mode === "file" || input.text === ""}
+                  aria-label="Copy the input"
+                  title={
                     input.mode === "file"
-                      ? { ...input, file: undefined }
-                      : { ...input, text: "" },
-                  )
-                }
-                aria-label={input.mode === "file" ? "Remove this file" : "Clear the input"}
-                title={
-                  input.mode === "file"
-                    ? "Forget this file. The source stays on File."
-                    : "Empty the box above. The source and encoding stay as they are."
-                }
-              />
+                      ? "Nothing to copy: a file is read from disk rather than into the box."
+                      : "Copy the text in the box above."
+                  }
+                />
+                <ClearButton
+                  disabled={isInputBlank(input)}
+                  onClick={() =>
+                    onChange(
+                      input.mode === "file"
+                        ? { ...input, file: undefined }
+                        : { ...input, text: "" },
+                    )
+                  }
+                  aria-label={input.mode === "file" ? "Remove this file" : "Clear the input"}
+                  title={
+                    input.mode === "file"
+                      ? "Forget this file. The source stays on File."
+                      : "Empty the box above. The source and encoding stay as they are."
+                  }
+                />
+              </div>
             </div>
 
             {input.mode === "file" ? (

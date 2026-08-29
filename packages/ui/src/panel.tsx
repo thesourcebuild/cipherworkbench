@@ -37,7 +37,7 @@ export function Panel({
       {...props}
     >
       {(title || actions) && (
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
           <div className="min-w-0 flex-1">
             {title &&
               (collapsible ? (
@@ -59,7 +59,7 @@ export function Panel({
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{description}</p>
             )}
           </div>
-          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+          {actions && <div className="flex flex-wrap shrink-0 items-center gap-2">{actions}</div>}
         </header>
       )}
       {open && <div className="px-4 py-3">{children}</div>}

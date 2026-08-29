@@ -627,7 +627,7 @@ function BytesControl({
 
   return (
     <Field option={option} problem={problem} hint={`${option.summary} — ${counter}`}>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
         <input
           type="text"
           value={value}
@@ -678,10 +678,10 @@ function Field({
   if (inline) {
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
           {/* A fixed column so several rows line up rather than each finding its own width. */}
           <Label option={option} className="w-24 shrink-0" />
-          {children}
+          <div className="min-w-0 flex-1">{children}</div>
         </div>
         {note}
       </div>

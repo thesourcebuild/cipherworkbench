@@ -60,6 +60,7 @@ export interface AppShellProps {
 export function AppShell({ initialToolId }: AppShellProps = {}) {
   const [selectedId, setSelectedId] = useState(initialToolId ?? DEFAULT_TOOL_ID);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /**
    * Which category the settings overlay opens on.
@@ -202,12 +203,23 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-2 dark:border-slate-800">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold tracking-tight">Cipher Workbench</span>
-          <span className="hidden text-[11px] text-slate-500 sm:inline dark:text-slate-400">
-            Hashes, checksums, MACs and ciphers — computed and verified
-          </span>
+      <header className="flex shrink-0 items-center justify-between border-b border-slate-200 px-3 sm:px-4 py-2 dark:border-slate-800">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMobileDrawerOpen(true)}
+            aria-label="Open tools menu"
+            title="Open tools menu"
+            className="lg:hidden rounded-md border border-slate-200 p-1.5 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <MenuIcon />
+          </button>
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-semibold tracking-tight">Cipher Workbench</span>
+            <span className="hidden text-[11px] text-slate-500 sm:inline dark:text-slate-400">
+              Hashes, checksums, MACs and ciphers — computed and verified
+            </span>
+          </div>
         </div>
         <button
           type="button"
@@ -229,9 +241,32 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
         onClose={() => setSettingsOpen(false)}
       />
 
+      {/* Mobile Tools Drawer */}
+      {mobileDrawerOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileDrawerOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white shadow-2xl dark:bg-slate-900">
+            <Sidebar
+              manifests={TOOL_MANIFESTS}
+              families={FAMILIES}
+              selectedId={selectedId}
+              onSelect={(id) => {
+                setSelectedId(id);
+                setMobileDrawerOpen(false);
+              }}
+              onCollapse={() => setMobileDrawerOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         <aside
-          className={`shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-[width] duration-150 dark:border-slate-800 dark:bg-slate-900 ${
+          className={`hidden lg:block shrink-0 overflow-hidden border-r border-slate-200 bg-white transition-[width] duration-150 dark:border-slate-800 dark:bg-slate-900 ${
             sidebarOpen ? "w-64" : "w-11"
           }`}
         >
@@ -261,21 +296,8 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
         {/*
           One scroll container for the whole content area, and its scrollbar is at the window's right
           edge where a scrollbar belongs.
-
-          This went through two wrong shapes first, and both are worth naming. It began as this plus a
-          right rail that was `sticky` with its own `max-h` and `overflow-y-auto`: two scrollbars a few
-          pixels apart, the inner one moving the rail's panels and the outer one moving the rail
-          itself, so which one a drag reached depended on which pixel was grabbed. Making each column
-          its own scroll container fixed that and produced a third problem -- the workbench column's
-          scrollbar then sat *inside* the layout, floating in the 24px gutter between the panels and
-          the rail, which reads as a nested-scroll artefact rather than as the page's scrollbar.
-
-          There is no arrangement with all three of: one scrollbar, a rail pinned while you scroll, and
-          a rail taller than the viewport that stays reachable. A pinned rail must scroll itself, and
-          that is the second scrollbar. So the rail is not pinned: it scrolls with everything else,
-          which is what an ordinary document does and what needs no explaining to anyone.
         */}
-        <main ref={setWorkbenchScroller} className="flex-1 overflow-y-auto p-6">
+        <main ref={setWorkbenchScroller} className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 min-w-0">
           {manifest ? (
             <ToolWorkbench
               // Remounting on tool change is deliberate: it discards the previous
