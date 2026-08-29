@@ -2484,9 +2484,13 @@ function checkInputCopy(window: BrowserWindow): Promise<ComputeProbe> {
     );
   }
   clipboard.writeText("");
+  window.show();
+  window.focus();
+  window.webContents.focus();
   return window.webContents
     .executeJavaScript(
       `(async () => {
+       window.focus();
        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
        const box = () => document.querySelector("[data-ocs-input]");
        /*
