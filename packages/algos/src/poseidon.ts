@@ -14,13 +14,6 @@ export function exp5(x: bigint, p: bigint): bigint {
   return (x4 * x) % p;
 }
 
-// Grain LFSR generated round constants and MDS matrix for t=3 (2 inputs -> 1 output)
-const C_T3: bigint[] = [
-  0x0000000000000000n, 0x1111111111111111n, 0x2222222222222222n,
-  0x3333333333333333n, 0x4444444444444444n, 0x5555555555555555n,
-  0x6666666666666666n, 0x7777777777777777n, 0x8888888888888888n,
-];
-
 // Standard Cauchy MDS matrix generator
 function generateMds(t: number, p: bigint): bigint[][] {
   const m: bigint[][] = [];

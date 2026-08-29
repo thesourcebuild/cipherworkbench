@@ -1,6 +1,6 @@
 {
   "name": "cipherworkbench",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "GPL-3.0-only",
   "private": true,
   "//type": "The workspace root itself ships no JS; this is here so vitest.config.ts loads as ESM under Vite's native config loader instead of warning about CommonJS.",
@@ -11,7 +11,7 @@
     "node": ">=20.11"
   },
   "scripts": {
-    "build": "turbo run build",
+    "build": "pnpm typecheck && pnpm lint && turbo run build",
     "dev": "turbo run dev",
     "typecheck": "turbo run typecheck && tsc -p tests",
     "//pretest": "Runs before `test` automatically -- pnpm's own lifecycle convention, no test-runner plumbing needed. Syncs every workspace manifest to the current `version` file before vitest.config.ts even loads, so bumping only the root file (the mistake tests/version.test.ts exists to catch) can no longer fail the suite: the sync always happens, for whatever the file says next, not for one version fixed by hand. The test itself is untouched and still fails on a genuine mismatch -- one introduced by editing a package.json directly rather than through this path -- so it stays a real gate rather than becoming decoration.",

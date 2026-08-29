@@ -27,7 +27,6 @@ import {
   rescuePrimeHashBytes,
   saturninEncryptBlock,
   saturninDecryptBlock,
-  sp800108Mode,
   kdfSp800108,
   spritzEncrypt,
   sshKdf,

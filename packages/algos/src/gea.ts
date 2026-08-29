@@ -8,9 +8,9 @@ export class GeaCipher {
   r3: number = 0; // 33 bits (BigInt / number)
 
   init(key64: Uint8Array, iv32: Uint8Array): void {
-    let k0 = (key64[0]! | (key64[1]! << 8) | (key64[2]! << 16) | (key64[3]! << 24)) >>> 0;
-    let k1 = (key64[4]! | (key64[5]! << 8) | (key64[6]! << 16) | (key64[7]! << 24)) >>> 0;
-    let iv = (iv32[0]! | (iv32[1]! << 8) | (iv32[2]! << 16) | (iv32[3]! << 24)) >>> 0;
+    const k0 = (key64[0]! | (key64[1]! << 8) | (key64[2]! << 16) | (key64[3]! << 24)) >>> 0;
+    const k1 = (key64[4]! | (key64[5]! << 8) | (key64[6]! << 16) | (key64[7]! << 24)) >>> 0;
+    const iv = (iv32[0]! | (iv32[1]! << 8) | (iv32[2]! << 16) | (iv32[3]! << 24)) >>> 0;
 
     this.r1 = (k0 ^ iv) & 0x7fffffff;
     this.r2 = (k1 ^ iv) >>> 0;

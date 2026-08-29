@@ -43,7 +43,7 @@ export function sshKdf(
   const charByte = new Uint8Array([keyType.charCodeAt(0)]);
 
   const out = new Uint8Array(keyLength);
-  let k1 = hashFn(concat(k, h, charByte, sessionId));
+  const k1 = hashFn(concat(k, h, charByte, sessionId));
   let written = Math.min(k1.length, keyLength);
   out.set(k1.subarray(0, written), 0);
 

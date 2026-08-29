@@ -2,15 +2,6 @@
  * Mifare Crypto-1 -- 48-bit proprietary stream cipher used in Mifare Classic RFID smart cards.
  */
 
-function parity32(x: number): number {
-  x ^= x >>> 16;
-  x ^= x >>> 8;
-  x ^= x >>> 4;
-  x ^= x >>> 2;
-  x ^= x >>> 1;
-  return x & 1;
-}
-
 const FA_TABLE = 0x9e98; // 4-variable boolean function
 const FB_TABLE = 0xb48e; // 4-variable boolean function
 const FC_TABLE = 0xec57e80a; // 5-variable boolean function

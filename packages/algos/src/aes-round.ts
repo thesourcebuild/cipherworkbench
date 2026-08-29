@@ -100,7 +100,7 @@ export function aes128KeySchedule(key: Uint8Array): Uint8Array[] {
 }
 
 export function aes128EncryptBlock(rks: Uint8Array[], input: Uint8Array, out: Uint8Array): void {
-  let state = new Uint8Array(16);
+  const state = new Uint8Array(16);
   for (let i = 0; i < 16; i++) state[i] = input[i]! ^ rks[0]![i]!;
 
   const next = new Uint8Array(16);
@@ -154,7 +154,7 @@ export function aes256KeySchedule(key: Uint8Array): Uint8Array[] {
 }
 
 export function aes256EncryptBlock(rks: Uint8Array[], input: Uint8Array, out: Uint8Array): void {
-  let state = new Uint8Array(16);
+  const state = new Uint8Array(16);
   for (let i = 0; i < 16; i++) state[i] = input[i]! ^ rks[0]![i]!;
 
   const next = new Uint8Array(16);
@@ -193,7 +193,7 @@ function invMixColumns(state: Uint8Array): void {
 }
 
 export function aes256DecryptBlock(rks: Uint8Array[], input: Uint8Array, out: Uint8Array): void {
-  let state = new Uint8Array(16);
+  const state = new Uint8Array(16);
   for (let i = 0; i < 16; i++) state[i] = input[i]! ^ rks[14]![i]!;
 
   for (let r = 13; r >= 1; r--) {

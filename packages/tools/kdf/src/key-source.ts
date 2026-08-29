@@ -19,6 +19,10 @@ import {
 } from "@ocs/algos";
 import { hmac } from "@noble/hashes/hmac.js";
 
+function toNobleBytes(b: Uint8Array): Uint8Array<ArrayBuffer> {
+  return b as unknown as Uint8Array<ArrayBuffer>;
+}
+
 export function deriveBalloon(
   hashId: string,
   password: Uint8Array,
@@ -28,7 +32,7 @@ export function deriveBalloon(
   delta: number = 3,
 ): Uint8Array {
   const hash = requireHash(hashId);
-  return (balloonHash as any)((data: any) => (hash as any)(data), password, salt, { sCost, tCost, delta });
+  return balloonHash((data) => hash(toNobleBytes(data)), password, salt, { sCost, tCost, delta });
 }
 
 export function deriveSp800108(
@@ -41,8 +45,8 @@ export function deriveSp800108(
   iv?: Uint8Array,
 ): Uint8Array {
   const hash = requireHash(hashId);
-  const prf = (k: any, m: any) => hmac(hash, k, m);
-  return (kdfSp800108 as any)(prf, keyIn, keyLength, { mode, label, context, iv });
+  const prf = (k: Uint8Array, m: Uint8Array) => hmac(hash, toNobleBytes(k), toNobleBytes(m));
+  return kdfSp800108(prf, keyIn, keyLength, { mode, label, context, iv });
 }
 
 export function deriveOpenPgpS2k(
@@ -54,7 +58,7 @@ export function deriveOpenPgpS2k(
   count: number = 65536,
 ): Uint8Array {
   const hash = requireHash(hashId);
-  return (openpgpS2k as any)((data: any) => (hash as any)(data), passphrase, keyLength, { type, salt, count });
+  return openpgpS2k((data) => hash(toNobleBytes(data)), passphrase, keyLength, { type, salt, count });
 }
 
 export function deriveSshKdf(
@@ -66,7 +70,7 @@ export function deriveSshKdf(
   sessionId?: Uint8Array,
 ): Uint8Array {
   const hash = requireHash(hashId);
-  return (sshKdf as any)((data: any) => (hash as any)(data), k, h, keyLength, { keyType, sessionId });
+  return sshKdf((data) => hash(toNobleBytes(data)), k, h, keyLength, { keyType, sessionId });
 }
 
 export function deriveTls12Prf(
@@ -77,8 +81,8 @@ export function deriveTls12Prf(
   seed: Uint8Array = new Uint8Array(0),
 ): Uint8Array {
   const hash = requireHash(hashId);
-  const hmacFn = (k: any, m: any) => hmac(hash, k, m);
-  return (tls12Prf as any)(hmacFn, secret, length, { label, seed });
+  const hmacFn = (k: Uint8Array, m: Uint8Array) => hmac(hash, toNobleBytes(k), toNobleBytes(m));
+  return tls12Prf(hmacFn, secret, length, { label, seed });
 }
 
 export function deriveCatena(
@@ -89,7 +93,7 @@ export function deriveCatena(
   tCost: number = 1,
 ): Uint8Array {
   const hash = requireHash(hashId);
-  return (catenaHash as any)((data: any) => (hash as any)(data), password, salt, { lambda, tCost });
+  return catenaHash((data) => hash(toNobleBytes(data)), password, salt, { lambda, tCost });
 }
 
 export function deriveAnsiX963(
@@ -99,7 +103,7 @@ export function deriveAnsiX963(
   sharedInfo?: Uint8Array,
 ): Uint8Array {
   const hash = requireHash(hashId);
-  return (ansiX963Kdf as any)((data: any) => (hash as any)(data), z, keyLength, { sharedInfo });
+  return ansiX963Kdf((data) => hash(toNobleBytes(data)), z, keyLength, { sharedInfo });
 }
 
 export function deriveYescrypt(
@@ -111,8 +115,8 @@ export function deriveYescrypt(
   p: number = 1,
 ): Uint8Array {
   const pbkdf2Fn = (pass: Uint8Array, s: Uint8Array, iter: number, len: number) =>
-    pbkdf2(sha256, pass, s, { c: iter, dkLen: len });
-  return (yescryptKdf as any)(pbkdf2Fn, password, salt, keyLength, { n, r, p });
+    pbkdf2(sha256, toNobleBytes(pass), toNobleBytes(s), { c: iter, dkLen: len });
+  return yescryptKdf(pbkdf2Fn, password, salt, keyLength, { n, r, p });
 }
 
 
