@@ -205,6 +205,8 @@ export function ToolWorkbench({
    */
   const tables = useMemo(() => (tool && spec ? (tool.tables?.(spec) ?? []) : []), [tool, spec]);
 
+  const infoFields = useMemo(() => (tool && spec ? (tool.info?.(spec) ?? []) : []), [tool, spec]);
+
   const lintResult = useMemo(
     () => (tool && spec ? lint(spec, tool.lintRules) : undefined),
     [tool, spec],
@@ -513,6 +515,10 @@ export function ToolWorkbench({
 
         <ResultPanel
           state={state}
+          manifest={tool}
+          spec={spec}
+          input={input}
+          infoFields={infoFields}
           outputEncodings={tool.outputEncodings}
           outputEncoding={outputEncoding}
           onOutputEncodingChange={setOutputEncoding}

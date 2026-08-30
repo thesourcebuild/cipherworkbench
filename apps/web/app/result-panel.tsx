@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 import type { OutputEncoding } from "@ocs/contracts";
 import { OUTPUT_ENCODING_LABEL } from "@ocs/contracts";
-import { encodeOutput, type ToolResult } from "@ocs/engine";
+import { encodeOutput, type ToolManifest, type ToolResult, type ToolResultField, type ToolSpecBase } from "@ocs/engine";
 import { Button, CopyButton, MonoBlock, Panel, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
+import { buildExportPayload, downloadJsonFile } from "./export-json";
 import { FieldTable } from "./field-table";
+import type { InputState } from "./input-state";
 import type { ComputeState } from "./use-compute";
 
 /**
@@ -31,6 +33,10 @@ function acceptsHexPrefix(encoding: OutputEncoding): boolean {
 
 export interface ResultPanelProps {
   state: ComputeState;
+  manifest?: ToolManifest;
+  spec?: ToolSpecBase;
+  input?: InputState;
+  infoFields?: readonly ToolResultField[];
   outputEncodings: readonly OutputEncoding[];
   outputEncoding: OutputEncoding;
   onOutputEncodingChange: (next: OutputEncoding) => void;
@@ -53,6 +59,10 @@ export interface ResultPanelProps {
  */
 export function ResultPanel({
   state,
+  manifest,
+  spec,
+  input,
+  infoFields,
   outputEncodings,
   outputEncoding,
   onOutputEncodingChange,
@@ -74,6 +84,11 @@ export function ResultPanel({
     () => renderPrimary(state.result, outputEncoding, hexPrefix),
     [state.result, outputEncoding, hexPrefix],
   );
+
+  const exportPayload = useMemo(() => {
+    if (!manifest || !spec || !input) return undefined;
+    return buildExportPayload(manifest, spec, input, state.result, outputEncoding, infoFields);
+  }, [manifest, spec, input, state.result, outputEncoding, infoFields]);
 
   /**
    * The size of what is on screen, as a caption under it.
@@ -159,6 +174,17 @@ export function ResultPanel({
             disabled={primary === ""}
             writeClipboard={(text) => platform().copyToClipboard(text)}
           />
+          {exportPayload && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={primary === "" && !state.result?.error}
+              onClick={() => downloadJsonFile(`${manifest?.id ?? "tool"}-export`, exportPayload)}
+              title="Download computation JSON file"
+            >
+              Save JSON
+            </Button>
+          )}
         </div>
       }
     >
