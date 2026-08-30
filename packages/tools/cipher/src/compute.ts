@@ -133,6 +133,11 @@ function operationFor(r: ResolvedCipher): CipherOperation {
     case "kalyna":
     case "keeloq":
     case "saturnin":
+    case "shacal1":
+    case "qarma":
+    case "mantis":
+    case "craft":
+    case "midori":
       return blockCipherOperation(
         r.toolId,
         r.mode!.id,
@@ -166,6 +171,10 @@ function operationFor(r: ResolvedCipher): CipherOperation {
     case "trivium":
     case "sosemanuk":
     case "snow3g":
+    case "snow-v":
+    case "isaac":
+    case "pcg64":
+    case "xoshiro256":
     case "spritz":
     case "crypto1":
     case "dect-dsc":

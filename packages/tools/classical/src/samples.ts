@@ -277,6 +277,90 @@ const SAMPLES_BY_TOOL: Record<string, readonly ToolSample[]> = {
       text: LOREM_IPSUM,
     },
   ],
+  m209: [
+    {
+      id: "tactical",
+      label: "TACTICAL DISPATCH",
+      note: "US WWII Hagelin M-209 field transmission.",
+      text: "TACTICAL AIR SUPPORT NEEDED AT COORDINATES",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  lorenz: [
+    {
+      id: "teleprinter",
+      label: "HIGH COMMAND TELEPRINTER",
+      note: "Lorenz SZ40/SZ42 strategic teleprinter ciphertext.",
+      text: "GENERAL COMMUNIQUE SITUATION REPORT",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  solitaire: [
+    {
+      id: "cryptonomicon",
+      label: "CRYPTONOMICON",
+      note: "Bruce Schneier's Solitaire deck cipher example.",
+      text: "DO NOT USE PC USE PENCIL AND DECK OF CARDS",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  adfgx: [
+    {
+      id: "field",
+      label: "FIELD DISPATCH 1918",
+      note: "WWI German ADFGX 5x5 fractionating cipher.",
+      text: "ATTACK ENEMY FLANK AT DAWN",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  nihilist: [
+    {
+      id: "revolution",
+      label: "SECRET DISPATCH",
+      note: "Russian Nihilist fractionating coordinate addition cipher.",
+      text: "MEET AT THE BRIDGE AT MIDNIGHT",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  "straddling-checkerboard": [
+    {
+      id: "espionage",
+      label: "ESPIONAGE TRANSMISSION",
+      note: "Variable-length digit substitution without spaces.",
+      text: "AGENT CONFIRMED OPERATION IN PROGRESS",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
 };
 
 export function samplesFor(toolId: string): readonly ToolSample[] | undefined {

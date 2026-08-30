@@ -11,6 +11,16 @@ import {
   chaoEncrypt,
   chaoDecrypt,
   enigmaCrypt,
+  m209Crypt,
+  lorenzCrypt,
+  solitaireEncrypt,
+  solitaireDecrypt,
+  adfgxEncrypt,
+  adfgxDecrypt,
+  nihilistEncrypt,
+  nihilistDecrypt,
+  straddlingCheckerboardEncrypt,
+  straddlingCheckerboardDecrypt,
 } from "@ocs/algos";
 
 describe("Advanced Classical Ciphers", () => {
@@ -93,6 +103,66 @@ describe("Advanced Classical Ciphers", () => {
       const msg = "HELLOWORLD";
       const ct = enigmaCrypt(msg, { rotors: ["I", "II", "III"], positions: "AAA" });
       const pt = enigmaCrypt(ct, { rotors: ["I", "II", "III"], positions: "AAA" });
+      expect(pt).toBe(msg);
+    });
+  });
+
+  describe("Hagelin M-209", () => {
+    it("encrypts and decrypts reciprocally across 6 pinwheels and drum lugs", () => {
+      const msg = "ATTACKATDAWN";
+      const ct = m209Crypt(msg, { rotorPositions: "AAAAAA" });
+      expect(ct).not.toBe(msg);
+      const pt = m209Crypt(ct, { rotorPositions: "AAAAAA" });
+      expect(pt).toBe(msg);
+    });
+  });
+
+  describe("Lorenz SZ40/SZ42", () => {
+    it("encrypts and decrypts 5-bit Vernam stream under 12-wheel stepping logic", () => {
+      const msg = "SECRETTELEPRINTERREPORT";
+      const ct = lorenzCrypt(msg, { wheelPositions: "AAAAAAAAAAAA" });
+      expect(ct).not.toBe(msg);
+      const pt = lorenzCrypt(ct, { wheelPositions: "AAAAAAAAAAAA" });
+      expect(pt).toBe(msg);
+    });
+  });
+
+  describe("Solitaire (Pontifex)", () => {
+    it("encrypts and decrypts through 54-card deck manipulation", () => {
+      const msg = "DONOTUSEPCUSEPENCIL";
+      const ct = solitaireEncrypt(msg, { passphrase: "CRYPTONOMICON" });
+      expect(ct).not.toBe(msg);
+      const pt = solitaireDecrypt(ct, { passphrase: "CRYPTONOMICON" });
+      expect(pt).toBe(msg);
+    });
+  });
+
+  describe("ADFGX (5x5)", () => {
+    it("encrypts and decrypts fractionating 5x5 grid with columnar transposition", () => {
+      const msg = "ATTACKATDAWN";
+      const ct = adfgxEncrypt(msg, { gridKey: "GERMAN", transpositionKey: "CIPHER" });
+      expect(ct).not.toBe(msg);
+      const pt = adfgxDecrypt(ct, { gridKey: "GERMAN", transpositionKey: "CIPHER" });
+      expect(pt).toBe(msg);
+    });
+  });
+
+  describe("Nihilist Cipher", () => {
+    it("encrypts to coordinate numbers and decrypts back", () => {
+      const msg = "MEETATMIDNIGHT";
+      const ct = nihilistEncrypt(msg, { alphabetKey: "RUSSIAN", keyPhrase: "SECRET" });
+      expect(ct).toMatch(/^[0-9\s]+$/);
+      const pt = nihilistDecrypt(ct, { alphabetKey: "RUSSIAN", keyPhrase: "SECRET" });
+      expect(pt).toBe(msg);
+    });
+  });
+
+  describe("Straddling Checkerboard", () => {
+    it("substitutes letters to variable-length digits and reconstructs original text", () => {
+      const msg = "AGENTCONFIRMED";
+      const ct = straddlingCheckerboardEncrypt(msg, { keyword: "CIPHER" });
+      expect(ct).toMatch(/^[0-9]+$/);
+      const pt = straddlingCheckerboardDecrypt(ct, { keyword: "CIPHER" });
       expect(pt).toBe(msg);
     });
   });

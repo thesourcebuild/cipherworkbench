@@ -28,7 +28,11 @@ export type EncodingKind =
   | "base45"
   | "proquints"
   | "punycode"
-  | "bencode";
+  | "bencode"
+  | "bubble-babble"
+  | "baudot"
+  | "pgp-words"
+  | "gray-code";
 
 export interface EncodingToolMeta {
   id: string;
@@ -218,6 +222,58 @@ export const ENCODING_TOOLS: readonly EncodingToolMeta[] = [
     expansion: "usually smaller than the JSON it replaces",
     check: "6548656c6c6f",
     checkInput: '"Hello"',
+  },
+  {
+    id: "bubble-babble",
+    label: "Bubble Babble",
+    kind: "bubble-babble",
+    category: "Specialized encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["bubble-babble", "bubblebabble", "huima", "pronounceable", "digest", "encoding"],
+    summary: "Encodes binary data and cryptographic digests into pronounceable pseudo-words with built-in checksumming.",
+    expansion: "alternating vowel/consonant pairs with dashes",
+    check: "xidak-hyryk-sorex",
+  },
+  {
+    id: "baudot",
+    label: "Baudot ITA2",
+    kind: "baudot",
+    category: "Historic encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["baudot", "ita2", "teleprinter", "telex", "5-bit", "encoding"],
+    summary: "Historical 5-level teleprinter code with LTRS (letter) and FIGS (figure) shift states.",
+    expansion: "5 bits per character (packed bytes)",
+    check: "HELLO",
+  },
+  {
+    id: "pgp-words",
+    label: "PGP Word List",
+    kind: "pgp-words",
+    category: "Specialized encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["pgp", "pgp-words", "wordlist", "biometric", "phonetic", "encoding"],
+    summary: "Juola & Zimmermann's PGP biometric phonetic word list alternating two-syllable even and three-syllable odd words.",
+    expansion: "one English word per byte",
+    check: "contest avoid disclose awesome dislodge",
+  },
+  {
+    id: "gray-code",
+    label: "Gray Code",
+    kind: "gray-code",
+    category: "Specialized encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["gray", "gray-code", "reflected-binary", "rotary", "encoder"],
+    summary: "Reflected binary Gray code where adjacent integer representations differ by exactly one bit.",
+    expansion: "8-bit reflected binary Gray code bitstrings",
+    check: "01101100 01010111 01011010 01011010 01011000",
   },
 ];
 

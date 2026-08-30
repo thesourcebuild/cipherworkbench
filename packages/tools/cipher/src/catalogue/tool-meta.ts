@@ -91,7 +91,7 @@ export interface CipherToolMeta {
      * `number` on purpose: the values here decide IV lengths and padding, and every addition to the
      * list is a deliberate widening rather than something a typo can introduce.
      */
-    size: 4 | 6 | 8 | 12 | 16 | 32 | 64 | 128;
+    size: 4 | 6 | 8 | 12 | 16 | 20 | 32 | 64 | 128;
     /**
      * Bytes. The sizes the cipher accepts, in ascending order.
      *
@@ -2492,6 +2492,77 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     },
   },
   {
+    id: "shacal1",
+    label: "SHACAL-1",
+    category: "Other block ciphers",
+    aead: false,
+    security: "legacy",
+    tags: ["shacal", "shacal-1", "shacal1", "nessie", "sha-1", "davies-meyer", "encrypt", "decrypt"],
+    summary: "SHA-1's compression function as a 160-bit block cipher with keys up to 512 bits.",
+    block: {
+      size: 20,
+      keyLengths: [],
+      keyRange: { min: 16, max: 64 },
+      modes: ["cbc", "cfb", "ofb", "ctr", "ecb"],
+    },
+  },
+  {
+    id: "qarma",
+    label: "QARMA-64",
+    category: "Lightweight",
+    aead: false,
+    security: "modern",
+    tags: ["qarma", "qarma-64", "qarma64", "arm", "pac", "tweakable", "pointer-authentication", "encrypt", "decrypt"],
+    summary: "Hardware tweakable block cipher with alpha-reflection chosen for ARMv8.3-A Pointer Authentication (PAC).",
+    block: {
+      size: 8,
+      keyLengths: [16],
+      modes: ["cbc", "ctr", "ecb"],
+    },
+  },
+  {
+    id: "mantis",
+    label: "MANTIS-7",
+    category: "Lightweight",
+    aead: false,
+    security: "modern",
+    tags: ["mantis", "mantis-7", "tweakable", "memory-encryption", "low-latency", "crypto2016", "encrypt", "decrypt"],
+    summary: "Low-latency tweakable block cipher designed for memory bus and cache line encryption.",
+    block: {
+      size: 8,
+      keyLengths: [16],
+      modes: ["cbc", "ctr", "ecb"],
+    },
+  },
+  {
+    id: "craft",
+    label: "CRAFT",
+    category: "Lightweight",
+    aead: false,
+    security: "modern",
+    tags: ["craft", "tweakable", "fault-attack", "lightweight", "fse2019", "encrypt", "decrypt"],
+    summary: "Lightweight tweakable block cipher optimized for fault-attack resistance and fast round execution.",
+    block: {
+      size: 8,
+      keyLengths: [16],
+      modes: ["cbc", "ctr", "ecb"],
+    },
+  },
+  {
+    id: "midori",
+    label: "Midori-64",
+    category: "Lightweight",
+    aead: false,
+    security: "modern",
+    tags: ["midori", "midori-64", "ultra-low-energy", "iot", "asiacrypt2015", "encrypt", "decrypt"],
+    summary: "Ultra-low energy 64-bit block cipher designed for battery-less IoT and RFID devices.",
+    block: {
+      size: 8,
+      keyLengths: [16],
+      modes: ["cbc", "ctr", "ecb"],
+    },
+  },
+  {
     /**
      * GOST 28147-89, the Soviet standard, and the cipher Magma is a respelling of.
      *
@@ -2574,6 +2645,46 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     summary:
       "LTE's stream cipher. A GF(2^32) LFSR and a three-register FSM, half of it AES's S-box.",
     shape: { keyLengths: [16], nonceLengths: [16] },
+  },
+  {
+    id: "snow-v",
+    label: "SNOW-V",
+    category: "Stream",
+    aead: false,
+    security: "modern",
+    tags: ["snow-v", "snowv", "snow", "5g", "3gpp", "nr", "stream", "256-bit", "encrypt", "decrypt"],
+    summary: "3GPP 5G New Radio stream cipher combining two 16-bit LFSRs with an AES-round FSM with 256-bit security.",
+    shape: { keyLengths: [32], nonceLengths: [16] },
+  },
+  {
+    id: "isaac",
+    label: "ISAAC",
+    category: "Stream",
+    aead: false,
+    security: "modern",
+    tags: ["isaac", "isaac64", "prng", "csprng", "keystream", "jenkins", "encrypt", "decrypt"],
+    summary: "Bob Jenkins' fast cryptographic keystream PRNG with guaranteed cycle length.",
+    shape: { keyLengths: [16, 32], nonceLengths: [] },
+  },
+  {
+    id: "pcg64",
+    label: "PCG64",
+    category: "Stream",
+    aead: false,
+    security: "not-encryption",
+    tags: ["pcg", "pcg64", "dxsm", "prng", "keystream", "oneill", "encrypt", "decrypt"],
+    summary: "Melissa O'Neill's PCG64 / PCG-DXSM fast statistical PRNG keystream generator.",
+    shape: { keyLengths: [8, 16], nonceLengths: [] },
+  },
+  {
+    id: "xoshiro256",
+    label: "Xoshiro256++",
+    category: "Stream",
+    aead: false,
+    security: "not-encryption",
+    tags: ["xoshiro", "xoshiro256", "xoshiro256++", "prng", "vigna", "blackman", "encrypt", "decrypt"],
+    summary: "Blackman & Vigna's fast high-dimensional PRNG keystream generator (period 2^256-1).",
+    shape: { keyLengths: [32], nonceLengths: [] },
   },
   {
     /**

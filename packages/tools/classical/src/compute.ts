@@ -26,6 +26,16 @@ import {
   baconDecrypt,
   railFenceEncrypt,
   railFenceDecrypt,
+  m209Crypt,
+  lorenzCrypt,
+  solitaireEncrypt,
+  solitaireDecrypt,
+  adfgxEncrypt,
+  adfgxDecrypt,
+  nihilistEncrypt,
+  nihilistDecrypt,
+  straddlingCheckerboardEncrypt,
+  straddlingCheckerboardDecrypt,
 } from "@ocs/algos";
 import { optBool } from "@ocs/contracts/pure";
 import type { ToolResult, ToolResultField } from "@ocs/engine";
@@ -100,6 +110,30 @@ export async function computeClassical(
       }
       case "railfence": {
         const res = direction === "encrypt" ? railFenceEncrypt(msg, { rails: 3 }) : railFenceDecrypt(msg, { rails: 3 });
+        return { text: res };
+      }
+      case "m209": {
+        const res = m209Crypt(msg, { direction });
+        return { text: res };
+      }
+      case "lorenz": {
+        const res = lorenzCrypt(msg, { direction });
+        return { text: res };
+      }
+      case "solitaire": {
+        const res = direction === "encrypt" ? solitaireEncrypt(msg, { passphrase: "CRYPTONOMICON" }) : solitaireDecrypt(msg, { passphrase: "CRYPTONOMICON" });
+        return { text: res };
+      }
+      case "adfgx": {
+        const res = direction === "encrypt" ? adfgxEncrypt(msg, { gridKey: "GERMAN", transpositionKey: "CIPHER" }) : adfgxDecrypt(msg, { gridKey: "GERMAN", transpositionKey: "CIPHER" });
+        return { text: res };
+      }
+      case "nihilist": {
+        const res = direction === "encrypt" ? nihilistEncrypt(msg, { alphabetKey: "RUSSIAN", keyPhrase: "SECRET" }) : nihilistDecrypt(msg, { alphabetKey: "RUSSIAN", keyPhrase: "SECRET" });
+        return { text: res };
+      }
+      case "straddling-checkerboard": {
+        const res = direction === "encrypt" ? straddlingCheckerboardEncrypt(msg, { keyword: "CIPHER" }) : straddlingCheckerboardDecrypt(msg, { keyword: "CIPHER" });
         return { text: res };
       }
     }

@@ -1179,6 +1179,22 @@ function shapeNotesFor(toolId: string): { key: string; nonce: string; instance?:
       key: "64 bits (8 bytes) GPRS ciphering key Kc.",
       nonce: "32 bits (4 bytes) frame counter direction vector.",
     },
+    "snow-v": {
+      key: "256 bits (32 bytes). 3GPP 5G New Radio secret key.",
+      nonce: "128 bits (16 bytes) initialization vector.",
+    },
+    isaac: {
+      key: "128 or 256 bits (16 or 32 bytes) seed for ISAAC CSPRNG state.",
+      nonce: "No IV needed (stream state initialized from key seed).",
+    },
+    pcg64: {
+      key: "64 or 128 bits (8 or 16 bytes) seed for PCG64 / PCG-DXSM state.",
+      nonce: "No IV needed (stream state initialized from seed).",
+    },
+    xoshiro256: {
+      key: "256 bits (32 bytes) seed for four 64-bit state registers.",
+      nonce: "No IV needed.",
+    },
   };
   const note = notes[toolId];
   if (!note) throw new Error(`No key and nonce explanation for shaped cipher "${toolId}".`);
@@ -1428,6 +1444,16 @@ function keyNoteFor(toolId: string): string {
       "Exactly 64 bits (8 bytes). The secret manufacturing or vehicle transmitter hopping key.",
     saturnin:
       "Exactly 256 bits (32 bytes). Used across all super-rounds for 256-bit post-quantum block cipher security.",
+    shacal1:
+      "128 to 512 bits (16 to 64 bytes). Zero-padded to the 512-bit SHA-1 message schedule block.",
+    qarma:
+      "Exactly 128 bits (16 bytes) for QARMA-64. Used as w0 and k0 for ARM pointer authentication.",
+    mantis:
+      "Exactly 128 bits (16 bytes). Divided into k0 and k1 with alpha-reflection memory encryption.",
+    craft:
+      "Exactly 128 bits (16 bytes). Consumed as 64-bit halves K0 and K1 with periodic tweakey cycling.",
+    midori:
+      "Exactly 128 bits (16 bytes). Consumed as two 64-bit halves K0 and K1 for ultra-low energy encryption.",
   };
   const note = notes[toolId];
   if (!note)

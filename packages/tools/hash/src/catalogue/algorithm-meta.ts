@@ -2519,6 +2519,17 @@ export const HASH_ALGORITHMS: readonly HashAlgorithmMeta[] = [
     summary: "Algebraic zero-knowledge hash function over prime fields (BN254). Used in zkEVMs and Rollups.",
   },
   {
+    id: "poseidon2",
+    label: "Poseidon2",
+    category: "Zero-Knowledge",
+    outputLen: 32,
+    blockLen: 31,
+    outputMode: "fixed",
+    security: "modern",
+    tags: ["poseidon2", "poseidon", "zk", "stark", "horizen", "ethereum", "algebraic"],
+    summary: "Optimized ZK-STARK hash with simplified linear layer offering up to 4x speedup.",
+  },
+  {
     id: "rescueprime",
     label: "Rescue-Prime",
     category: "Zero-Knowledge",

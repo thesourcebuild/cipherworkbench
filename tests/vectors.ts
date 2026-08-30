@@ -1861,4 +1861,5 @@ export const NO_PUBLISHED_VECTOR: readonly string[] = [
   "reinforced-concrete",
   "anemoi",
   "griffin",
+  "poseidon2",
 ];

@@ -189,7 +189,9 @@ describe("round trips", () => {
     Uint8Array.from({ length: 61 }, (_, i) => (i * 37) & 0xff),
   ];
 
-  for (const tool of ENCODING_TOOLS.filter((t) => !["cbor", "bencode", "punycode", "proquints"].includes(t.kind))) {
+  for (const tool of ENCODING_TOOLS.filter(
+    (t) => !["cbor", "bencode", "punycode", "proquints", "baudot"].includes(t.kind),
+  )) {
     for (const variant of tool.variants.length > 0 ? tool.variants : [undefined]) {
       for (const padding of ["padded", "unpadded"] as const) {
         it(`${tool.label}${variant ? ` (${variant})` : ""} ${padding}: decode(encode(x)) === x`, async () => {

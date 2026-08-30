@@ -118,6 +118,12 @@ describe("TOOL_MANIFESTS", () => {
     trifid: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     bacon: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     railfence: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    m209: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    lorenz: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    solitaire: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    adfgx: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    nihilist: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "straddling-checkerboard": "a ciphertext is a value somebody already has, and verifyText compares it as text",
   };
 
   it("offers Verify to a text-output tool only where a value could exist to compare", () => {

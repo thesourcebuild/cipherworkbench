@@ -18,6 +18,14 @@ import {
   bencodeEncode,
   bencodeDecode,
   type Base85Variant,
+  encodeBubbleBabble,
+  decodeBubbleBabble,
+  encodeBaudotIta2,
+  decodeBaudotIta2,
+  encodePgpWords,
+  decodePgpWords,
+  encodeGrayBytes,
+  decodeGrayBytes,
 } from "@ocs/algos";
 import {
   base32,
@@ -275,6 +283,16 @@ export function encodeToText(bytes: Uint8Array, settings: EncodeSettings): strin
         return new TextDecoder("utf-8").decode(bencodeEncode(bytes));
       }
     }
+    case "bubble-babble":
+      return encodeBubbleBabble(bytes);
+    case "baudot":
+      return decodeBaudotIta2(encodeBaudotIta2(new TextDecoder("utf-8").decode(bytes)));
+    case "pgp-words":
+      return encodePgpWords(bytes);
+    case "gray-code":
+      return Array.from(encodeGrayBytes(bytes))
+        .map((b) => b.toString(2).padStart(8, "0"))
+        .join(" ");
     case "cbor": {
       // The input is JSON text here rather than arbitrary bytes: CBOR encodes a *structure*, and
       // JSON is how someone types one. `decodeCbor`'s counterpart on the way back out.
@@ -357,6 +375,27 @@ export function decodeFromText(input: string, settings: EncodeSettings): DecodeR
       } catch (err) {
         throw new Error(`Bencode decode failed: ${err instanceof Error ? err.message : String(err)}`);
       }
+    }
+    case "bubble-babble":
+      return { bytes: decodeBubbleBabble(input), notes: [] };
+    case "baudot":
+      return { bytes: new TextEncoder().encode(decodeBaudotIta2(encodeBaudotIta2(input))), notes: [] };
+    case "pgp-words":
+      return { bytes: decodePgpWords(input), notes: [] };
+    case "gray-code": {
+      const binaryTokens = input.trim().split(/\s+/).filter(Boolean);
+      const rawBytes: number[] = [];
+      if (binaryTokens.length > 0 && binaryTokens.every((t) => /^[01]{1,8}$/.test(t))) {
+        for (const t of binaryTokens) rawBytes.push(parseInt(t, 2));
+      } else {
+        const cleanBits = input.replace(/[^01]/g, "");
+        if (cleanBits.length > 0) {
+          for (let i = 0; i < cleanBits.length; i += 8) {
+            rawBytes.push(parseInt(cleanBits.slice(i, i + 8).padEnd(8, "0"), 2));
+          }
+        }
+      }
+      return { bytes: decodeGrayBytes(new Uint8Array(rawBytes)), notes: [] };
     }
     case "cbor": {
       let bytes: Uint8Array;

@@ -38,6 +38,13 @@ export function describeSpec(spec: ClassicalSpec): string {
     case "trifid":
     case "bacon":
     case "railfence":
+    case "m209":
+    case "lorenz":
+    case "solitaire":
+    case "adfgx":
+    case "nihilist":
+    case "straddling-checkerboard":
+    default:
       return tool.summary;
   }
 }

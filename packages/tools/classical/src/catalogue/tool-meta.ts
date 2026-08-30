@@ -30,7 +30,13 @@ export type ClassicalKind =
   | "bifid"
   | "trifid"
   | "bacon"
-  | "railfence";
+  | "railfence"
+  | "m209"
+  | "lorenz"
+  | "solitaire"
+  | "adfgx"
+  | "nihilist"
+  | "straddling-checkerboard";
 
 export interface ClassicalToolMeta {
   id: string;
@@ -224,6 +230,78 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     },
     tags: ["railfence", "zigzag", "transposition", "geometric", "scytale", "classical"],
     summary: "Geometric zig-zag transposition cipher writing letters along consecutive rails.",
+  },
+  {
+    id: "m209",
+    label: "M-209 cipher machine",
+    kind: "m209",
+    category: "Rotor Machine",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["m209", "hagelin", "c38", "rotor", "pinwheel", "military", "wwii", "classical"],
+    summary: "US WWII tactical mechanical cipher machine with 6 pinwheels and 27 drum bars.",
+  },
+  {
+    id: "lorenz",
+    label: "Lorenz SZ40/SZ42 machine",
+    kind: "lorenz",
+    category: "Rotor Machine",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["lorenz", "sz40", "sz42", "tunny", "teleprinter", "baudot", "bletchley", "colossus", "classical"],
+    summary: "WWII German High Command 12-wheel teleprinter stream cipher machine broken by Colossus.",
+  },
+  {
+    id: "solitaire",
+    label: "Solitaire (Pontifex) cipher",
+    kind: "solitaire",
+    category: "Playing Card Stream",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["solitaire", "pontifex", "schneier", "cryptonomicon", "playing-cards", "deck", "stream", "classical"],
+    summary: "Bruce Schneier's playing card stream cipher designed for field operations with a 54-card deck.",
+  },
+  {
+    id: "adfgx",
+    label: "ADFGX cipher",
+    kind: "adfgx",
+    category: "Polygraphic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["adfgx", "wwi", "polybius", "fractionating", "transposition", "german", "classical"],
+    summary: "WWI German 5x5 fractionating field cipher combining Polybius coordinates (ADFGX) with transposition.",
+  },
+  {
+    id: "nihilist",
+    label: "Nihilist cipher",
+    kind: "nihilist",
+    category: "Fractionating",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["nihilist", "russian", "polybius", "additive", "coordinates", "classical"],
+    summary: "19th-century Russian Nihilist cipher combining Polybius matrix coordinates with additive keys.",
+  },
+  {
+    id: "straddling-checkerboard",
+    label: "Straddling checkerboard",
+    kind: "straddling-checkerboard",
+    category: "Espionage Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["straddling-checkerboard", "vic", "espionage", "soviet", "digits", "compression", "classical"],
+    summary: "Espionage digits-to-letters substitution matrix creating variable-length digit sequences without delimiters.",
   },
 ];
 

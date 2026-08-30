@@ -1481,6 +1481,11 @@ describe("the block ciphers this repo implements", () => {
         "hight",
         "keeloq",
         "saturnin",
+        "shacal1",
+        "qarma",
+        "mantis",
+        "craft",
+        "midori",
       ].sort(),
     );
   });
@@ -3907,11 +3912,15 @@ describe("the ten stream ciphers and Kalyna", () => {
       "hc128",
       "hc256",
       "hctr2",
+      "isaac",
+      "pcg64",
       "rabbit",
+      "snow-v",
       "snow3g",
       "sosemanuk",
       "spritz",
       "trivium",
+      "xoshiro256",
       "zuc128",
       "zuc256",
     ]);
@@ -4094,7 +4103,7 @@ describe("the ten stream ciphers and Kalyna", () => {
      * Trivium adds the only one with three nonce widths, all of them published rather than padded.
      * SOSEMANUK adds the only one with three *key* widths, which are Serpent's, since its schedule is.
      */
-    expect(new Set(shapes.map((s) => `${String(s.key)}/${String(s.nonce)}`)).size).toBe(14);
+    expect(new Set(shapes.map((s) => `${String(s.key)}/${String(s.nonce)}`)).size).toBe(17);
   });
 
   /** No stream tool gets a mode, an AAD field or any of the per-cipher block controls. */

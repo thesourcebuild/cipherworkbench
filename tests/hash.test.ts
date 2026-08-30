@@ -875,6 +875,7 @@ describe("metadata and bindings agree", () => {
       "reinforced-concrete",
       "anemoi",
       "griffin",
+      "poseidon2",
     ]);
     for (const meta of HASH_ALGORITHMS) {
       expect(

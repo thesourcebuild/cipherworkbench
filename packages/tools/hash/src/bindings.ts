@@ -183,6 +183,7 @@ const M_NEPTUNE = lazyModule("neptune", () => import("@ocs/algos/neptune"));
 const M_REINFORCEDCONCRETE = lazyModule("reinforced-concrete", () => import("@ocs/algos/reinforced-concrete"));
 const M_ANEMOI = lazyModule("anemoi", () => import("@ocs/algos/anemoi"));
 const M_GRIFFIN = lazyModule("griffin", () => import("@ocs/algos/griffin"));
+const M_POSEIDON2 = lazyModule("poseidon2", () => import("@ocs/algos/poseidon2"));
 
 // ── the shims, which the binding table reads as though they were imports ───
 
@@ -256,6 +257,7 @@ const neptuneHash = lazyFn(M_NEPTUNE, "neptuneHash");
 const reinforcedConcreteHash = lazyFn(M_REINFORCEDCONCRETE, "reinforcedConcreteHash");
 const anemoiHash = lazyFn(M_ANEMOI, "anemoiHash");
 const griffinHash = lazyFn(M_GRIFFIN, "griffinHash");
+const poseidon2Hash = lazyFn(M_POSEIDON2, "poseidon2Hash");
 
 /**
  * The one export here that is a value rather than a function, so it cannot be a `lazyFn` shim: read
@@ -842,6 +844,7 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   "reinforced-concrete": { create: () => bufferedHasher(reinforcedConcreteHash) },
   anemoi: { create: () => bufferedHasher(anemoiHash) },
   griffin: { create: () => bufferedHasher(griffinHash) },
+  poseidon2: { create: () => bufferedHasher(poseidon2Hash) },
 };
 
 /**
@@ -970,6 +973,7 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   "reinforced-concrete": M_REINFORCEDCONCRETE,
   anemoi: M_ANEMOI,
   griffin: M_GRIFFIN,
+  poseidon2: M_POSEIDON2,
 };
 
 /**

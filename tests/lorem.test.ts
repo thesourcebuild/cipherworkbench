@@ -526,7 +526,9 @@ describe("every cipher tool in CIPHER_MANIFESTS over 3,832 bytes (Lorem Ipsum)",
 });
 
 describe("every standard encoding tool in ENCODING_MANIFESTS over 3,832 bytes (Lorem Ipsum)", () => {
-  const NON_STRUCTURED = ENCODING_MANIFESTS.filter((m) => m.id !== "cbor" && m.id !== "bencode");
+  const NON_STRUCTURED = ENCODING_MANIFESTS.filter(
+    (m) => m.id !== "cbor" && m.id !== "bencode" && m.id !== "baudot",
+  );
   for (const manifest of NON_STRUCTURED) {
     it(`${manifest.label} (${manifest.id}) encodes and decodes the multi-paragraph Lorem Ipsum passage`, async () => {
       const def = encodingToolDefinition(manifest.id);
@@ -558,4 +560,17 @@ describe("every standard encoding tool in ENCODING_MANIFESTS over 3,832 bytes (L
       expect(encodeHex(decResult.bytes!), `${manifest.id} round trip`).toBe(encodeHex(bytes));
     });
   }
+
+  it("Baudot ITA2 encodes and decodes uppercase teleprinter text", async () => {
+    const def = encodingToolDefinition("baudot");
+    const upperText = "LOREM IPSUM DOLOR SIT AMET TELEPRINTER 1945";
+    const inputBytes = new TextEncoder().encode(upperText);
+    const encSpec = { ...def.createSpec(), options: { [ENCODING_DIR]: "encode" } };
+    const encResult = await def.compute(encSpec, inputBytes);
+    expect(encResult.text).toBe(upperText);
+
+    const decSpec = { ...def.createSpec(), options: { [ENCODING_DIR]: "decode" } };
+    const decResult = await def.compute(decSpec, new TextEncoder().encode(encResult.text!));
+    expect(new TextDecoder().decode(decResult.bytes!)).toBe(upperText);
+  });
 });
