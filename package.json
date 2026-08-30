@@ -1,6 +1,6 @@
 {
   "name": "cipherworkbench",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "license": "GPL-3.0-only",
   "private": true,
   "//type": "The workspace root itself ships no JS; this is here so vitest.config.ts loads as ESM under Vite's native config loader instead of warning about CommonJS.",

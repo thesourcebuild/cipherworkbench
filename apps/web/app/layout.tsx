@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { THEME_STORAGE_KEY } from "./theme-constants";
 import {
+  BASE_PATH,
   SITE_DESCRIPTION,
   SITE_KEYWORDS,
   SITE_NAME,
@@ -58,12 +59,13 @@ export const metadata: Metadata = {
   twitter: { card: "summary", title: SITE_NAME, description: SITE_DESCRIPTION },
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+      { url: `${BASE_PATH}/icon.svg`, type: "image/svg+xml" },
+      { url: `${BASE_PATH}/favicon.ico`, sizes: "any" },
+      { url: `${BASE_PATH}/icon.png`, type: "image/png", sizes: "512x512" },
     ],
     apple: [
-      { url: "/icon.png", sizes: "180x180", type: "image/png" },
+      { url: `${BASE_PATH}/apple-touch-icon.png`, sizes: "180x180", type: "image/png" },
+      { url: `${BASE_PATH}/icon.png`, sizes: "180x180", type: "image/png" },
     ],
   },
   /**
