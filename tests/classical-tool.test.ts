@@ -124,8 +124,9 @@ describe("the family's shape", () => {
   });
 
   it("refuses an unknown tool id by name", () => {
-    // `vigenere` rather than a number up from the newest thing: a fictional id that stays fictional.
-    expect(() => classicalToolDefinition("vigenere")).toThrow(/Unknown classical tool: vigenere/);
+    expect(() => classicalToolDefinition("nonexistent-classical-cipher")).toThrow(
+      /Unknown classical tool: nonexistent-classical-cipher/,
+    );
   });
 });
 

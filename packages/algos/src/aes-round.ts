@@ -209,3 +209,17 @@ export function aes256DecryptBlock(rks: Uint8Array[], input: Uint8Array, out: Ui
     out[i] = state[i]! ^ rk0[i]!;
   }
 }
+
+export function aes128BlockEncrypt(key: Uint8Array, block: Uint8Array): Uint8Array {
+  const rks = aes128KeySchedule(key);
+  const out = new Uint8Array(16);
+  aes128EncryptBlock(rks, block, out);
+  return out;
+}
+
+export function aes256BlockEncrypt(key: Uint8Array, block: Uint8Array): Uint8Array {
+  const rks = aes256KeySchedule(key);
+  const out = new Uint8Array(16);
+  aes256EncryptBlock(rks, block, out);
+  return out;
+}

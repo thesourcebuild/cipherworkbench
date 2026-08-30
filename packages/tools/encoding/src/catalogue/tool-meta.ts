@@ -17,7 +17,18 @@ import {
   type Variant,
 } from "../pure";
 
-export type EncodingKind = "hex" | "base32" | "base58" | "base64" | "cbor";
+export type EncodingKind =
+  | "hex"
+  | "base32"
+  | "base58"
+  | "base64"
+  | "cbor"
+  | "base85"
+  | "base91"
+  | "base45"
+  | "proquints"
+  | "punycode"
+  | "bencode";
 
 export interface EncodingToolMeta {
   id: string;
@@ -115,6 +126,85 @@ export const ENCODING_TOOLS: readonly EncodingToolMeta[] = [
     check: "SGVsbG8=",
   },
   {
+    id: "base85",
+    label: "Base85 (Ascii85 / Z85)",
+    kind: "base85",
+    category: "Base-N",
+    exposes: [OPTION_VARIANT],
+    defaults: { [OPTION_VARIANT]: "ascii85" },
+    variants: ["ascii85", "z85", "rfc1924"],
+    tags: ["base85", "ascii85", "z85", "zeromq", "postscript", "pdf"],
+    summary: "Four bytes to five characters — Adobe Ascii85, ZeroMQ Z85, and RFC 1924.",
+    expansion: "5 characters per 4 bytes (125%)",
+    check: "87cURDZ",
+  },
+  {
+    id: "base91",
+    label: "basE91",
+    kind: "base91",
+    category: "Dense binary",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["base91", "dense", "binary", "ascii", "henke"],
+    summary: "High-density binary-to-ASCII encoding with 91 printable characters and 123% overhead.",
+    expansion: "about 1.23 characters per byte (123%)",
+    check: ">OwJh>A",
+  },
+  {
+    id: "base45",
+    label: "Base45",
+    kind: "base45",
+    category: "QR & compact",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["base45", "rfc 9285", "qr code", "covid certificate", "alphanumeric"],
+    summary: "RFC 9285 alphanumeric encoding for QR codes and health certificates.",
+    expansion: "3 characters per 2 bytes (150%)",
+    check: "%69 VD92EX0",
+    checkInput: "Hello!!",
+  },
+  {
+    id: "proquints",
+    label: "Proquints",
+    kind: "proquints",
+    category: "Identifiers",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["proquints", "pronounceable", "quintuplets", "identifier", "ip address"],
+    summary: "Pronounceable quintuplets (consonant-vowel-consonant-vowel-consonant) for binary identifiers.",
+    expansion: "5 characters per 2 bytes",
+    check: "hodoj-kudos-kusab",
+  },
+  {
+    id: "punycode",
+    label: "Punycode",
+    kind: "punycode",
+    category: "Text & IDNA",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["punycode", "rfc 3492", "idna", "unicode", "domain", "bootstring"],
+    summary: "RFC 3492 Bootstring encoding used in Internationalized Domain Names (IDNA).",
+    expansion: "variable (inserts ASCII delta code points)",
+    check: "Hello-",
+  },
+  {
+    id: "bencode",
+    label: "Bencode",
+    kind: "bencode",
+    category: "Binary structures",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["bencode", "bittorrent", "bep 0003", "torrent", "p2p", "serialization"],
+    summary: "BitTorrent protocol structured serializer for byte strings, integers, lists, and dicts.",
+    expansion: "variable (structured type tags)",
+    check: "5:Hello",
+  },
+  {
     id: "cbor",
     label: "CBOR",
     kind: "cbor",
@@ -156,6 +246,9 @@ export const VARIANT_ALPHABET: Partial<Record<Variant, string>> = {
   check: "Bitcoin's, plus a 4-byte SHA-256d checksum",
   standard: "A-Z a-z 0-9 + /",
   urlsafe: "A-Z a-z 0-9 - _",
+  ascii85: "! to u (ASCII 33-117)",
+  z85: "0-9 a-z A-Z . - : + = ^ ! / * ? & < > ( ) [ ] { } @ % $ #",
+  rfc1924: "0-9 A-Z a-z ! # $ % & ( ) * + - ; < = > ? @ ^ _ ` { | } ~",
 };
 
 export const VARIANT_LABEL: Record<Variant, string> = {
@@ -168,4 +261,8 @@ export const VARIANT_LABEL: Record<Variant, string> = {
   check: "Base58check",
   standard: "Standard",
   urlsafe: "URL-safe",
+  ascii85: "Ascii85",
+  z85: "ZeroMQ Z85",
+  rfc1924: "RFC 1924",
 };
+

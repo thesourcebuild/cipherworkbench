@@ -34,6 +34,9 @@ export const VARIANTS = [
   "check",
   "standard",
   "urlsafe",
+  "ascii85",
+  "z85",
+  "rfc1924",
 ] as const;
 export type Variant = (typeof VARIANTS)[number];
 

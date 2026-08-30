@@ -31,6 +31,13 @@ export function describeSpec(spec: ClassicalSpec): string {
     case "hill-cipher":
     case "foursquare":
     case "chaocipher":
+    case "enigma":
+    case "vigenere":
+    case "playfair":
+    case "bifid":
+    case "trifid":
+    case "bacon":
+    case "railfence":
       return tool.summary;
   }
 }

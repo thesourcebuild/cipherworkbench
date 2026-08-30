@@ -13,6 +13,19 @@ import {
   fourSquareDecrypt,
   chaoEncrypt,
   chaoDecrypt,
+  enigmaCrypt,
+  vigenereEncrypt,
+  vigenereDecrypt,
+  playfairEncrypt,
+  playfairDecrypt,
+  bifidEncrypt,
+  bifidDecrypt,
+  trifidEncrypt,
+  trifidDecrypt,
+  baconEncrypt,
+  baconDecrypt,
+  railFenceEncrypt,
+  railFenceDecrypt,
 } from "@ocs/algos";
 import { optBool } from "@ocs/contracts/pure";
 import type { ToolResult, ToolResultField } from "@ocs/engine";
@@ -57,6 +70,34 @@ export async function computeClassical(
       }
       case "chaocipher": {
         const res = direction === "encrypt" ? chaoEncrypt(msg) : chaoDecrypt(msg);
+        return { text: res };
+      }
+      case "enigma": {
+        const res = enigmaCrypt(msg);
+        return { text: res };
+      }
+      case "vigenere": {
+        const res = direction === "encrypt" ? vigenereEncrypt(msg, { key: "LEMON" }) : vigenereDecrypt(msg, { key: "LEMON" });
+        return { text: res };
+      }
+      case "playfair": {
+        const res = direction === "encrypt" ? playfairEncrypt(msg, { key: "PLAYFAIR" }) : playfairDecrypt(msg, { key: "PLAYFAIR" });
+        return { text: res };
+      }
+      case "bifid": {
+        const res = direction === "encrypt" ? bifidEncrypt(msg, { key: "BIFID" }) : bifidDecrypt(msg, { key: "BIFID" });
+        return { text: res };
+      }
+      case "trifid": {
+        const res = direction === "encrypt" ? trifidEncrypt(msg, { key: "TRIFID" }) : trifidDecrypt(msg, { key: "TRIFID" });
+        return { text: res };
+      }
+      case "bacon": {
+        const res = direction === "encrypt" ? baconEncrypt(msg) : baconDecrypt(msg);
+        return { text: res };
+      }
+      case "railfence": {
+        const res = direction === "encrypt" ? railFenceEncrypt(msg, { rails: 3 }) : railFenceDecrypt(msg, { rails: 3 });
         return { text: res };
       }
     }

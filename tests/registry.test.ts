@@ -111,6 +111,13 @@ describe("TOOL_MANIFESTS", () => {
     "hill-cipher": "a ciphertext is a value somebody already has, and verifyText compares it as text",
     foursquare: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     chaocipher: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    enigma: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    vigenere: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    playfair: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    bifid: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    trifid: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    bacon: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    railfence: "a ciphertext is a value somebody already has, and verifyText compares it as text",
   };
 
   it("offers Verify to a text-output tool only where a value could exist to compare", () => {

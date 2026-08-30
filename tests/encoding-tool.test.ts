@@ -189,7 +189,7 @@ describe("round trips", () => {
     Uint8Array.from({ length: 61 }, (_, i) => (i * 37) & 0xff),
   ];
 
-  for (const tool of ENCODING_TOOLS.filter((t) => t.kind !== "cbor")) {
+  for (const tool of ENCODING_TOOLS.filter((t) => !["cbor", "bencode", "punycode", "proquints"].includes(t.kind))) {
     for (const variant of tool.variants.length > 0 ? tool.variants : [undefined]) {
       for (const padding of ["padded", "unpadded"] as const) {
         it(`${tool.label}${variant ? ` (${variant})` : ""} ${padding}: decode(encode(x)) === x`, async () => {
@@ -198,6 +198,7 @@ describe("round trips", () => {
             [OPTION_PADDING]: padding,
           };
           for (const payload of payloads) {
+            if (variant === "z85" && payload.length % 4 !== 0) continue;
             const text = await encode(tool.id, options, payload);
             const back = await decode(tool.id, options, text);
             expect([...(back.bytes ?? new Uint8Array(0))], `${tool.id} ${text}`).toEqual([

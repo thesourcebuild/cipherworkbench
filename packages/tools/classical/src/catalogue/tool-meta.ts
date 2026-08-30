@@ -22,7 +22,14 @@ export type ClassicalKind =
   | "vic-cipher"
   | "hill-cipher"
   | "foursquare"
-  | "chaocipher";
+  | "chaocipher"
+  | "enigma"
+  | "vigenere"
+  | "playfair"
+  | "bifid"
+  | "trifid"
+  | "bacon"
+  | "railfence";
 
 export interface ClassicalToolMeta {
   id: string;
@@ -131,6 +138,90 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     },
     tags: ["chaocipher", "john-byrne", "dynamic-substitution", "permuting-alphabet", "classical"],
     summary: "John F. Byrne's 1918 cipher using two rotating, permuting alphabet wheels.",
+  },
+  {
+    id: "enigma",
+    label: "Enigma Machine (M3/M4)",
+    kind: "enigma",
+    category: "Rotor Machine",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["enigma", "enigma-m3", "enigma-m4", "wehrmacht", "kriegsmarine", "rotor", "turing", "bletchley", "classical"],
+    summary: "WWII German electromechanical cipher with interchangeable rotors, reflector, plugboard, and double-stepping.",
+  },
+  {
+    id: "vigenere",
+    label: "Vigenère cipher",
+    kind: "vigenere",
+    category: "Polyalphabetic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["vigenere", "beaufort", "tabula-recta", "polyalphabetic", "autokey", "classical"],
+    summary: "Polyalphabetic substitution cipher using a keyword and the tabula recta.",
+  },
+  {
+    id: "playfair",
+    label: "Playfair cipher",
+    kind: "playfair",
+    category: "Polygraphic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["playfair", "wheatstone", "digraph", "matrix", "5x5", "classical"],
+    summary: "First practical digraph substitution cipher using a 5x5 key matrix.",
+  },
+  {
+    id: "bifid",
+    label: "Bifid cipher",
+    kind: "bifid",
+    category: "Fractionating",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["bifid", "delastelle", "fractionating", "polybius", "transposition", "classical"],
+    summary: "Delastelle's 2-coordinate fractionating cipher combining Polybius substitution with period transposition.",
+  },
+  {
+    id: "trifid",
+    label: "Trifid cipher",
+    kind: "trifid",
+    category: "Fractionating",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["trifid", "delastelle", "fractionating", "3d", "cube", "transposition", "classical"],
+    summary: "Delastelle's 3-coordinate fractionating cipher operating over a 3x3x3 27-symbol cube.",
+  },
+  {
+    id: "bacon",
+    label: "Bacon's cipher",
+    kind: "bacon",
+    category: "Steganographic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["bacon", "baconian", "francis-bacon", "steganography", "binary", "classical"],
+    summary: "Sir Francis Bacon's 5-bit steganographic cipher encoding letters into A/B binary sequences.",
+  },
+  {
+    id: "railfence",
+    label: "Rail fence cipher",
+    kind: "railfence",
+    category: "Transposition",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["railfence", "zigzag", "transposition", "geometric", "scytale", "classical"],
+    summary: "Geometric zig-zag transposition cipher writing letters along consecutive rails.",
   },
 ];
 

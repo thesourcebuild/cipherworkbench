@@ -5,6 +5,19 @@ import {
   isCborMap,
   isCborTagged,
   type CborValue,
+  base85Encode,
+  base85Decode,
+  base91Encode,
+  base91Decode,
+  base45Encode,
+  base45Decode,
+  proquintsEncode,
+  proquintsDecode,
+  punycodeEncode,
+  punycodeDecode,
+  bencodeEncode,
+  bencodeDecode,
+  type Base85Variant,
 } from "@ocs/algos";
 import {
   base32,
@@ -243,6 +256,25 @@ export function encodeToText(bytes: Uint8Array, settings: EncodeSettings): strin
       return base58Coder(settings.variant).encode(bytes);
     case "base64":
       return base64Coder(settings.variant, settings.padding).encode(bytes);
+    case "base85":
+      return base85Encode(bytes, settings.variant as Base85Variant);
+    case "base91":
+      return base91Encode(bytes);
+    case "base45":
+      return base45Encode(bytes);
+    case "proquints":
+      return proquintsEncode(bytes);
+    case "punycode":
+      return punycodeEncode(new TextDecoder("utf-8").decode(bytes));
+    case "bencode": {
+      const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes).trim();
+      try {
+        const parsed = JSON.parse(text);
+        return new TextDecoder("utf-8").decode(bencodeEncode(parsed));
+      } catch {
+        return new TextDecoder("utf-8").decode(bencodeEncode(bytes));
+      }
+    }
     case "cbor": {
       // The input is JSON text here rather than arbitrary bytes: CBOR encodes a *structure*, and
       // JSON is how someone types one. `decodeCbor`'s counterpart on the way back out.
@@ -305,6 +337,27 @@ export function decodeFromText(input: string, settings: EncodeSettings): DecodeR
         notes: [],
       };
     }
+    case "base85":
+      return { bytes: base85Decode(input, settings.variant as Base85Variant), notes: [] };
+    case "base91":
+      return { bytes: base91Decode(input), notes: [] };
+    case "base45":
+      return { bytes: base45Decode(input), notes: [] };
+    case "proquints":
+      return { bytes: proquintsDecode(input), notes: [] };
+    case "punycode":
+      return { bytes: new TextEncoder().encode(punycodeDecode(input)), notes: [] };
+    case "bencode": {
+      try {
+        const decoded = bencodeDecode(new TextEncoder().encode(input));
+        return {
+          text: JSON.stringify(decoded, null, settings.jsonIndent === "indented" ? 2 : undefined),
+          notes: [],
+        };
+      } catch (err) {
+        throw new Error(`Bencode decode failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     case "cbor": {
       let bytes: Uint8Array;
       try {
@@ -336,3 +389,4 @@ export function decodeFromText(input: string, settings: EncodeSettings): DecodeR
     }
   }
 }
+
