@@ -102,6 +102,9 @@ export function decodeBase32(text: string): BytesResult {
 
 // ── input dispatch ──────────────────────────────────────────────────────────
 
+export const MAX_TEXT_INPUT_BYTES = 50 * 1024 * 1024; // 50 MiB
+export const MAX_TEXT_INPUT_CHARS = 50_000_000;
+
 /**
  * The single entry point every tool's input goes through. `file` is absent on
  * purpose: file bytes never round-trip through a string, they come straight off
@@ -113,18 +116,31 @@ export function decodeInput(
   mode: Exclude<ByteSourceMode, "file">,
   textEncoding: TextEncoding,
 ): BytesResult {
+  if (text.length > MAX_TEXT_INPUT_CHARS) {
+    return fail("Text input exceeds the 50 MB safety limit. Please use the File tab for large inputs.");
+  }
+  let res: BytesResult;
   switch (mode) {
     case "text":
-      return encodeText(text, textEncoding);
+      res = encodeText(text, textEncoding);
+      break;
     case "hex":
-      return decodeHex(text);
+      res = decodeHex(text);
+      break;
     case "hex-lenient":
-      return decodeHexLenient(text);
+      res = decodeHexLenient(text);
+      break;
     case "base64":
-      return decodeBase64(text);
+      res = decodeBase64(text);
+      break;
     case "base64url":
-      return decodeBase64Url(text);
+      res = decodeBase64Url(text);
+      break;
   }
+  if (res.ok && res.bytes.length > MAX_TEXT_INPUT_BYTES) {
+    return fail("Decoded input exceeds the 50 MB safety limit. Please use the File tab for large inputs.");
+  }
+  return res;
 }
 
 /**

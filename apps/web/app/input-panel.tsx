@@ -5,7 +5,8 @@ import type { ByteSourceMode, TextEncoding } from "@ocs/contracts";
 import { BYTE_SOURCE_MODE_LABEL, ENCODING_GROUP_LABEL, encodingsByGroup } from "@ocs/contracts";
 import { Button, ClearButton, CopyIconButton, Panel, Toggle, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
-import { describeInputSize, formatBytes, isInputBlank, type InputState } from "./input-state";
+import { MAX_TEXT_INPUT_CHARS } from "@ocs/engine";
+import { describeInputSize, formatBytes, formatBytesShort, isInputBlank, type InputState } from "./input-state";
 import { INPUT_DEBOUNCE_LABEL } from "./use-debounce";
 
 const MODES: readonly ByteSourceMode[] = [
@@ -345,6 +346,7 @@ export function InputPanel({
                 autoCorrect="off"
                 autoCapitalize="off"
                 rows={10}
+                maxLength={MAX_TEXT_INPUT_CHARS}
                 placeholder={PLACEHOLDERS[input.mode]}
                 className={cn(
                   "w-full resize-y rounded-md border px-3 py-2 font-mono text-xs leading-relaxed",
@@ -356,6 +358,24 @@ export function InputPanel({
             )}
 
             {problem && <p className="text-[11px] text-(--color-severity-error)">{problem}</p>}
+
+            {input.mode !== "file" && byteLength !== undefined && byteLength > 5 * 1024 * 1024 && !problem && (
+              <div className="flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50/70 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+                <span>
+                  Large text input ({formatBytesShort(byteLength)}). For maximum performance and background streaming, consider using the File tab.
+                </span>
+                {supportsFile && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setMode("file")}
+                    className="h-6 text-[10px] shrink-0"
+                  >
+                    Switch to File
+                  </Button>
+                )}
+              </div>
+            )}
           </>
         )}
 
