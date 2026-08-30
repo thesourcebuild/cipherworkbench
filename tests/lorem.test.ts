@@ -19,6 +19,22 @@ import {
 import { hashToolDefinition, prepareHashAlgorithm } from "@ocs/hash/definition";
 import { HASH_ALGORITHMS } from "@ocs/hash";
 import { crcToolDefinition } from "@ocs/crc/definition";
+import {
+  CIPHER_MANIFESTS,
+  requireCipherTool,
+  OPTION_DIRECTION as CIPHER_DIR,
+  OPTION_KEY as CIPHER_KEY,
+  OPTION_NONCE as CIPHER_NONCE,
+  OPTION_PARAM_SET as CIPHER_PARAM_SET,
+} from "@ocs/cipher";
+import {
+  acceptedNonceLengths,
+  cipherAcceptedByteLengths,
+  cipherToolDefinition,
+  modeForSpec,
+} from "@ocs/cipher/definition";
+import { ENCODING_MANIFESTS, OPTION_DIRECTION as ENCODING_DIR } from "@ocs/encoding";
+import { encodingToolDefinition } from "@ocs/encoding/definition";
 import { encodeHex, runStream } from "@ocs/engine";
 import { LOREM } from "../apps/web/app/test-inputs";
 // Reached by path, like `algos-crc.test.ts` does: the bit-at-a-time reference is deliberately not
@@ -448,4 +464,98 @@ describe("ciphers over 3,832 bytes", () => {
       ).toBeNull();
     }
   });
+});
+
+describe("every cipher tool in CIPHER_MANIFESTS over 3,832 bytes (Lorem Ipsum)", () => {
+  for (const manifest of CIPHER_MANIFESTS) {
+    it(`${manifest.label} (${manifest.id}) encrypts and decrypts the multi-paragraph Lorem Ipsum passage`, async () => {
+      const def = cipherToolDefinition(manifest.id);
+      const tool = requireCipherTool(manifest.id);
+      const baseSpec = def.createSpec();
+
+      const keyLens = cipherAcceptedByteLengths(baseSpec, CIPHER_KEY);
+      const kLen =
+        keyLens && keyLens.length > 0
+          ? keyLens[keyLens.length - 1]!
+          : (tool.block?.keyRange?.max ?? 32);
+
+      const nonceLens = acceptedNonceLengths(
+        manifest.id,
+        modeForSpec(baseSpec),
+        baseSpec.options[CIPHER_PARAM_SET] as string | undefined,
+      );
+      const nLen = nonceLens && nonceLens.length > 0 ? nonceLens[0]! : 0;
+
+      const keyBytes = Uint8Array.from({ length: kLen }, (_, i) => (i * 37 + 11) & 0xff);
+      const nonceBytes = Uint8Array.from({ length: nLen }, (_, i) => (i * 17 + 5) & 0xff);
+
+      const keyHex = [...keyBytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+      const nonceHex = [...nonceBytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+      const isFernet = manifest.id === "fernet";
+      const fernetKey = "Wghwi-lJZNNXLSfgDWw2oTpkc2bexPuioh-bgXlED9c=";
+      const encSpec = {
+        ...baseSpec,
+        options: {
+          ...baseSpec.options,
+          [CIPHER_KEY]: isFernet ? fernetKey : keyHex,
+          keyEncoding: isFernet ? "base64" : "hex",
+          ...(nLen > 0 ? { [CIPHER_NONCE]: nonceHex, nonceEncoding: "hex" } : {}),
+          [CIPHER_DIR]: "encrypt",
+        },
+      };
+
+      const encResult = await def.compute(encSpec, bytes);
+      expect(encResult.error, `Encrypt error in ${manifest.id}: ${encResult.error}`).toBeUndefined();
+      expect(encResult.bytes, `Missing encrypt bytes in ${manifest.id}`).toBeDefined();
+
+      const decSpec = {
+        ...encSpec,
+        options: {
+          ...encSpec.options,
+          [CIPHER_DIR]: "decrypt",
+        },
+      };
+
+      const decResult = await def.compute(decSpec, encResult.bytes!);
+      expect(decResult.error, `Decrypt error in ${manifest.id}: ${decResult.error}`).toBeUndefined();
+      expect(decResult.bytes, `Missing decrypt bytes in ${manifest.id}`).toBeDefined();
+      expect(encodeHex(decResult.bytes!), `${manifest.id} round trip`).toBe(encodeHex(bytes));
+    });
+  }
+});
+
+describe("every standard encoding tool in ENCODING_MANIFESTS over 3,832 bytes (Lorem Ipsum)", () => {
+  const NON_STRUCTURED = ENCODING_MANIFESTS.filter((m) => m.id !== "cbor" && m.id !== "bencode");
+  for (const manifest of NON_STRUCTURED) {
+    it(`${manifest.label} (${manifest.id}) encodes and decodes the multi-paragraph Lorem Ipsum passage`, async () => {
+      const def = encodingToolDefinition(manifest.id);
+      const baseSpec = def.createSpec();
+
+      const encSpec = {
+        ...baseSpec,
+        options: {
+          ...baseSpec.options,
+          [ENCODING_DIR]: "encode",
+        },
+      };
+
+      const encResult = await def.compute(encSpec, bytes);
+      expect(encResult.error, `Encode error in ${manifest.id}: ${encResult.error}`).toBeUndefined();
+      expect(encResult.text, `Missing encode text in ${manifest.id}`).toBeTruthy();
+
+      const decSpec = {
+        ...encSpec,
+        options: {
+          ...encSpec.options,
+          [ENCODING_DIR]: "decode",
+        },
+      };
+
+      const decResult = await def.compute(decSpec, new TextEncoder().encode(encResult.text!));
+      expect(decResult.error, `Decode error in ${manifest.id}: ${decResult.error}`).toBeUndefined();
+      expect(decResult.bytes, `Missing decode bytes in ${manifest.id}`).toBeDefined();
+      expect(encodeHex(decResult.bytes!), `${manifest.id} round trip`).toBe(encodeHex(bytes));
+    });
+  }
 });

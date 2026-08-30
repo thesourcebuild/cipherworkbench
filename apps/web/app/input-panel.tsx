@@ -347,7 +347,7 @@ export function InputPanel({
                 rows={10}
                 placeholder={PLACEHOLDERS[input.mode]}
                 className={cn(
-                  "w-full resize-y rounded-md border px-3 py-2 font-mono text-xs",
+                  "w-full resize-y rounded-md border px-3 py-2 font-mono text-xs leading-relaxed",
                   "border-slate-300 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100",
                   "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600",
                   problem && "border-(--color-severity-error)",

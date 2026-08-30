@@ -8,12 +8,16 @@ export const OPTION_DIRECTION = "direction";
 export const OPTION_SHIFT = "shift";
 export const OPTION_LETTER_CASE = "letterCase";
 export const OPTION_SHOW_ALL = "showAll";
+export const OPTION_DIGITS = "digits";
 
 export const DIRECTIONS = ["encrypt", "decrypt"] as const;
 export type Direction = (typeof DIRECTIONS)[number];
 
 export const LETTER_CASES = ["preserve", "upper", "lower"] as const;
 export type LetterCase = (typeof LETTER_CASES)[number];
+
+export const DIGIT_HANDLINGS = ["preserve", "german", "english"] as const;
+export type DigitHandling = (typeof DIGIT_HANDLINGS)[number];
 
 /**
  * Three, and it is the classical one.
@@ -35,6 +39,10 @@ export function readDirection(options: OptionValues): Direction {
 
 export function readLetterCase(options: OptionValues): LetterCase {
   return optEnumOr(options, OPTION_LETTER_CASE, LETTER_CASES, "preserve");
+}
+
+export function readDigitHandling(options: OptionValues): DigitHandling {
+  return optEnumOr(options, OPTION_DIGITS, DIGIT_HANDLINGS, "preserve");
 }
 
 /**

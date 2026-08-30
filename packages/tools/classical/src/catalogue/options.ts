@@ -3,6 +3,7 @@ import {
   DEFAULT_SHIFT,
   LETTER_CASES,
   OPTION_DIRECTION,
+  OPTION_DIGITS,
   OPTION_LETTER_CASE,
   OPTION_SHIFT,
   OPTION_SHOW_ALL,
@@ -80,6 +81,22 @@ const SHOW_ALL: Def = {
   order: 20,
 };
 
+const DIGITS: Def = {
+  id: OPTION_DIGITS,
+  label: "Digit handling",
+  group: "cipher",
+  kind: "enum",
+  choices: [
+    { value: "preserve", label: "Preserve (Pass through)", summary: "Leave digits untouched" },
+    { value: "german", label: "German (1=EINS, 2=ZWEI...)", summary: "Historical German Wehrmacht standard" },
+    { value: "english", label: "English (1=ONE, 2=TWO...)", summary: "Convert digits to English words" },
+  ],
+  summary: "How to handle digits 0-9.",
+  detail:
+    "The physical Enigma machine had only 26 letter keys (A-Z) and no number keys. German military operators spelled numbers out as German words (1=EINS, 2=ZWEI, etc.) before typing.",
+  order: 20,
+};
+
 /**
  * A throwing `Record`, not a chain ending in a default.
  *
@@ -92,6 +109,7 @@ const BY_ID: Record<string, Def> = {
   [OPTION_SHIFT]: SHIFT,
   [OPTION_LETTER_CASE]: LETTER_CASE,
   [OPTION_SHOW_ALL]: SHOW_ALL,
+  [OPTION_DIGITS]: DIGITS,
 };
 
 const CACHE = new Map<string, OptionCatalogue<ClassicalOptionGroup>>();

@@ -32,6 +32,7 @@ import type { ToolResult, ToolResultField } from "@ocs/engine";
 import { requireClassicalTool } from "./catalogue/tool-meta";
 import {
   OPTION_SHOW_ALL,
+  readDigitHandling,
   readDirection,
   readLetterCase,
   readShift,
@@ -73,7 +74,8 @@ export async function computeClassical(
         return { text: res };
       }
       case "enigma": {
-        const res = enigmaCrypt(msg);
+        const digits = readDigitHandling(spec.options);
+        const res = enigmaCrypt(msg, { digits });
         return { text: res };
       }
       case "vigenere": {

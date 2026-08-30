@@ -37,12 +37,42 @@ export const ENIGMA_REFLECTORS: Record<string, string> = {
   "UKW-C-Thin": "RDOBJNTKVEHMLFCWZAXGYQSUIP",
 };
 
+export const ENIGMA_DIGIT_HANDLING = ["preserve", "german", "english"] as const;
+export type EnigmaDigitHandling = (typeof ENIGMA_DIGIT_HANDLING)[number];
+
+export const GERMAN_ENIGMA_DIGITS: Readonly<Record<string, string>> = {
+  "0": "NULL",
+  "1": "EINS",
+  "2": "ZWEI",
+  "3": "DREI",
+  "4": "VIER",
+  "5": "FUENF",
+  "6": "SECHS",
+  "7": "SIEBEN",
+  "8": "ACHT",
+  "9": "NEUN",
+};
+
+export const ENGLISH_ENIGMA_DIGITS: Readonly<Record<string, string>> = {
+  "0": "ZERO",
+  "1": "ONE",
+  "2": "TWO",
+  "3": "THREE",
+  "4": "FOUR",
+  "5": "FIVE",
+  "6": "SIX",
+  "7": "SEVEN",
+  "8": "EIGHT",
+  "9": "NINE",
+};
+
 export interface EnigmaConfig {
   rotors?: string[]; // e.g. ["I", "II", "III"] or ["Beta", "I", "II", "III"]
   reflector?: string; // e.g. "UKW-B"
   positions?: string; // e.g. "AAA" or "AAAA"
   ringSettings?: number[]; // e.g. [1, 1, 1]
   plugboard?: string; // e.g. "AV BS CG DL FU HZ IN KM OW RX"
+  digits?: EnigmaDigitHandling; // "preserve" | "german" | "english"
 }
 
 export class EnigmaMachine {
@@ -51,8 +81,10 @@ export class EnigmaMachine {
   private positions: number[];
   private ringSettings: number[];
   private plugboardMap: number[];
+  private digitHandling: EnigmaDigitHandling;
 
   constructor(config: EnigmaConfig = {}) {
+    this.digitHandling = config.digits ?? "preserve";
     const rotorNames = config.rotors ?? ["I", "II", "III"];
     this.rotorConfigs = rotorNames.map((name) => {
       const r = ENIGMA_ROTORS[name];
@@ -173,9 +205,16 @@ export class EnigmaMachine {
   }
 
   public process(text: string): string {
+    let input = text;
+    if (this.digitHandling === "german") {
+      input = input.replace(/[0-9]/g, (d) => GERMAN_ENIGMA_DIGITS[d] ?? d);
+    } else if (this.digitHandling === "english") {
+      input = input.replace(/[0-9]/g, (d) => ENGLISH_ENIGMA_DIGITS[d] ?? d);
+    }
+
     let result = "";
-    for (let i = 0; i < text.length; i++) {
-      result += this.processChar(text[i]!);
+    for (let i = 0; i < input.length; i++) {
+      result += this.processChar(input[i]!);
     }
     return result;
   }

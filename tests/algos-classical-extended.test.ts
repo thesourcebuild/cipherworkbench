@@ -10,6 +10,7 @@ import {
   fourSquareDecrypt,
   chaoEncrypt,
   chaoDecrypt,
+  enigmaCrypt,
 } from "@ocs/algos";
 
 describe("Advanced Classical Ciphers", () => {
@@ -65,6 +66,34 @@ describe("Advanced Classical Ciphers", () => {
       const ct = chaoEncrypt(plaintext);
       const pt = chaoDecrypt(ct);
       expect(pt).toBe(plaintext);
+    });
+  });
+
+  describe("Enigma Machine (M3/M4)", () => {
+    it("preserves digits when digits option is preserve", () => {
+      const ct = enigmaCrypt("123456789", { digits: "preserve" });
+      expect(ct).toBe("123456789");
+    });
+
+    it("expands digits to German words (1=EINS, 2=ZWEI, 3=DREI) and encrypts them", () => {
+      const rawGerman = enigmaCrypt("EINSZWEIDREI", { rotors: ["I", "II", "III"], positions: "AAA" });
+      const digitGerman = enigmaCrypt("123", { rotors: ["I", "II", "III"], positions: "AAA", digits: "german" });
+      expect(digitGerman).toBe(rawGerman);
+      expect(digitGerman).not.toBe("123");
+    });
+
+    it("expands digits to English words (1=ONE, 2=TWO, 3=THREE) and encrypts them", () => {
+      const rawEnglish = enigmaCrypt("ONETWOTHREE", { rotors: ["I", "II", "III"], positions: "AAA" });
+      const digitEnglish = enigmaCrypt("123", { rotors: ["I", "II", "III"], positions: "AAA", digits: "english" });
+      expect(digitEnglish).toBe(rawEnglish);
+      expect(digitEnglish).not.toBe("123");
+    });
+
+    it("round-trips letter text under reciprocal reflector settings", () => {
+      const msg = "HELLOWORLD";
+      const ct = enigmaCrypt(msg, { rotors: ["I", "II", "III"], positions: "AAA" });
+      const pt = enigmaCrypt(ct, { rotors: ["I", "II", "III"], positions: "AAA" });
+      expect(pt).toBe(msg);
     });
   });
 });

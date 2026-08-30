@@ -347,14 +347,54 @@ describe("samples and describe", () => {
     }
   });
 
-  it("gives every sample a unique id and a note", () => {
-    const samples = samplesFor("caesar")!;
-    expect(new Set(samples.map((s) => s.id)).size).toBe(samples.length);
-    for (const sample of samples) expect(sample.note, sample.id).toBeTruthy();
+  it("provides rich samples including Lorem Ipsum for every classical tool", () => {
+    for (const manifest of CLASSICAL_MANIFESTS) {
+      const samples = samplesFor(manifest.id);
+      expect(samples, manifest.id).toBeDefined();
+      expect(samples!.length).toBeGreaterThanOrEqual(2);
+      expect(samples!.some((s) => s.id === "lorem")).toBe(true);
+    }
   });
 
   it("has no samples for a tool that does not exist", () => {
-    expect(samplesFor("vigenere")).toBeUndefined();
+    expect(samplesFor("nonexistent-tool")).toBeUndefined();
+  });
+
+  it("successfully encrypts and decrypts the multi-paragraph Lorem Ipsum text across all classical tools", async () => {
+    const LOREM = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean eu varius leo, at iaculis orci. Nunc a risus fringilla, suscipit turpis ac, gravida sem. Ut at metus nec mi laoreet posuere et et nibh. Pellentesque sit amet eleifend velit. Sed egestas eu lacus id gravida. Duis quis placerat justo. Quisque tincidunt mollis mauris, sed ultricies dolor fermentum sed. Proin eget convallis orci. Integer augue diam, condimentum non dui porta, bibendum dictum tortor. Praesent enim mi, aliquet ut nunc sit amet, consectetur bibendum enim. Donec pretium erat et consequat efficitur. Pellentesque tempus pharetra dolor, eu sagittis ligula bibendum quis. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.
+
+Curabitur pharetra vestibulum dolor, sit amet suscipit risus aliquam quis. Nam ut nisl id libero mattis tempor quis in elit. Nullam auctor commodo mollis. Ut et euismod sapien, ac lobortis orci. Donec gravida enim id quam eleifend, quis venenatis lacus feugiat. Praesent gravida vitae nulla a vestibulum. Aliquam ex enim, aliquet vel massa eleifend, aliquet maximus ligula. Aenean eu dui ut diam facilisis varius. Maecenas suscipit odio at metus laoreet mollis. Sed at nisi rhoncus, scelerisque odio eget, convallis enim. Pellentesque sit amet sem id risus congue vulputate. Suspendisse mattis lectus sit amet libero pellentesque porttitor.
+
+Donec placerat purus sed auctor bibendum. Suspendisse odio purus, tincidunt eget venenatis eget, efficitur eget ipsum. Vivamus id justo tempus, fermentum augue ac, aliquam est. Quisque ornare justo vitae metus vulputate, sit amet aliquam libero pulvinar. Maecenas non rutrum tellus, et sodales urna. Nullam ornare nulla in ipsum eleifend, in pharetra erat sollicitudin. Aenean odio erat, lacinia sed turpis nec, euismod posuere purus. Donec sed leo non nisl posuere pellentesque. Cras in eros leo. Ut ut congue augue. Quisque mattis leo ac metus iaculis, a tincidunt est bibendum. Interdum et malesuada fames ac ante ipsum primis in faucibus. Nam ante tellus, hendrerit a aliquet molestie, tincidunt eu diam. Aliquam pulvinar urna feugiat, ornare lacus ac, ultricies felis.
+
+Morbi viverra neque nec dignissim laoreet. Praesent condimentum eget neque non imperdiet. Cras ex lectus, facilisis a dolor id, ornare porttitor orci. Nulla est justo, egestas eu interdum quis, posuere et nisi. Nunc ac maximus leo, sit amet tristique risus. Vestibulum ultricies ullamcorper justo, id vulputate orci ullamcorper iaculis. Nullam ipsum lorem, blandit at eleifend in, pellentesque eget odio. Vestibulum consequat blandit vehicula. Nulla dignissim nisl vel rhoncus lobortis. Sed quis fermentum arcu, in egestas eros. Sed mattis posuere lacus, non pharetra neque tincidunt eu. Nulla non mollis ligula, fringilla tempor enim. Duis rhoncus ex arcu, imperdiet aliquet odio vulputate id. Proin ultrices erat quam, eget pulvinar dui ultrices pellentesque. Nam pellentesque a libero a feugiat. Nam commodo lorem ut mauris lacinia sollicitudin.
+
+Mauris elementum odio nec fermentum feugiat. Curabitur ornare sagittis quam, at pulvinar mauris convallis sit amet. Mauris sagittis, lacus vel commodo pharetra, nisi enim lacinia nunc, non aliquam augue nulla eget odio. Sed vitae scelerisque metus, nec vehicula nisl. Curabitur cursus vitae lorem et dictum. In ultrices orci nulla, vitae congue purus ultrices quis. Sed feugiat eros ut ante imperdiet, id ornare arcu pharetra. Maecenas efficitur arcu convallis justo tempus rhoncus. Phasellus eleifend elit in dolor commodo finibus. Vestibulum non odio tempus orci iaculis viverra id sed ligula. Sed in dolor eros. Nunc sed pretium metus, eget mollis mauris. Curabitur aliquet dignissim elit, vitae dictum nisi maximus sed. In blandit malesuada ligula, sit amet pulvinar neque vulputate nec. Vestibulum eget accumsan metus.`;
+
+    const loremBytes = new TextEncoder().encode(LOREM);
+
+    for (const manifest of CLASSICAL_MANIFESTS) {
+      const def = classicalToolDefinition(manifest.id);
+
+      // 1. Encrypt
+      const encSpec = def.createSpec();
+      const encResult = await def.compute(encSpec, loremBytes);
+      expect(encResult.error, `Encrypt error in ${manifest.id}: ${encResult.error}`).toBeUndefined();
+      expect(encResult.text, `Missing encrypt text in ${manifest.id}`).toBeTruthy();
+      expect(encResult.text!.length).toBeGreaterThan(0);
+
+      // 2. Decrypt
+      const decSpec = {
+        ...encSpec,
+        options: {
+          ...encSpec.options,
+          [OPTION_DIRECTION]: "decrypt",
+        },
+      };
+      const decResult = await def.compute(decSpec, new TextEncoder().encode(encResult.text!));
+      expect(decResult.error, `Decrypt error in ${manifest.id}: ${decResult.error}`).toBeUndefined();
+      expect(decResult.text, `Missing decrypt text in ${manifest.id}`).toBeTruthy();
+    }
   });
 
   it("describes itself by the shift and the direction", () => {

@@ -2,6 +2,7 @@ import type { OptionValue } from "@ocs/contracts/options";
 import {
   DEFAULT_SHIFT,
   OPTION_DIRECTION,
+  OPTION_DIGITS,
   OPTION_LETTER_CASE,
   OPTION_SHIFT,
   OPTION_SHOW_ALL,
@@ -144,9 +145,10 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     label: "Enigma Machine (M3/M4)",
     kind: "enigma",
     category: "Rotor Machine",
-    exposes: [OPTION_DIRECTION],
+    exposes: [OPTION_DIRECTION, OPTION_DIGITS],
     defaults: {
       [OPTION_DIRECTION]: "encrypt",
+      [OPTION_DIGITS]: "preserve",
     },
     tags: ["enigma", "enigma-m3", "enigma-m4", "wehrmacht", "kriegsmarine", "rotor", "turing", "bletchley", "classical"],
     summary: "WWII German electromechanical cipher with interchangeable rotors, reflector, plugboard, and double-stepping.",

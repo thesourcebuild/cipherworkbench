@@ -69,12 +69,8 @@ export function MonoBlock({
          * `overflow` set, which is why the two go together, and a draggable single-line digest would be
          * a handle that does nothing.
          */
-        "max-h-96 overflow-auto",
-        multiline
-          ? "whitespace-pre resize-y"
-          : // `break-all` rather than `break-words`: a digest is one unbroken token, so
-            // word-boundary wrapping would push the whole thing onto its own overflowing line.
-            "break-all whitespace-pre-wrap",
+        "max-h-52 overflow-auto break-words whitespace-pre-wrap [overflow-wrap:anywhere]",
+        multiline && "resize-y",
         TONES[tone],
         placeholder && "text-slate-400 dark:text-slate-600",
         className,
