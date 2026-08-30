@@ -12,7 +12,8 @@
 #   scripts/package/sync_version.sh --check      fail if anything disagrees; change nothing
 
 set -euo pipefail
-. "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
+. "$here/../lib/common.sh"
 
 set_to=""
 check=0

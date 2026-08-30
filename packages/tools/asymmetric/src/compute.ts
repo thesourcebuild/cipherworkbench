@@ -17,7 +17,6 @@ import {
   importRsaPublicFromSpki,
   rsaDecrypt,
   rsaEncrypt,
-  mlKemFor,
   pqKemFor,
   pqSignerFor,
   rsaModulusBits,

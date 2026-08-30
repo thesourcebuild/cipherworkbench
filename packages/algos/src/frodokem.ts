@@ -81,9 +81,8 @@ export function frodoDecap(
   sha256Fn: (data: Uint8Array) => Uint8Array,
   secretKey: Uint8Array,
   ciphertext: Uint8Array,
-  variant: "frodokem-640" | "frodokem-976" | "frodokem-1344" = "frodokem-640",
+  _variant: "frodokem-640" | "frodokem-976" | "frodokem-1344" = "frodokem-640",
 ): Uint8Array {
-  const p = FRODO_PARAMS[variant] ?? FRODO_PARAMS["frodokem-640"]!;
 
   const recoveredMu = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {

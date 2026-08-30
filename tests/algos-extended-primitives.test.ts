@@ -56,18 +56,8 @@ import {
   sivDecrypt,
   blake3Mac,
   blake3DeriveKey,
-  SECP256K1_ORDER,
 } from "@ocs/algos";
-import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-
-function bytesToBigInt(b: Uint8Array): bigint {
-  let res = 0n;
-  for (let i = 0; i < b.length; i++) {
-    res = (res << 8n) | BigInt(b[i]!);
-  }
-  return res;
-}
 
 const ascii = (s: string) => new TextEncoder().encode(s);
 

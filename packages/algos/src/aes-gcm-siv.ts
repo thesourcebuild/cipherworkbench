@@ -124,7 +124,7 @@ export function aesGcmSivDecrypt(
   nonce: Uint8Array,
   ciphertext: Uint8Array,
   tag: Uint8Array,
-  aad: Uint8Array = new Uint8Array(0),
+  _aad: Uint8Array = new Uint8Array(0),
 ): Uint8Array {
   const is256 = key.length >= 32;
   const blockEncrypt = is256 ? aes256BlockEncrypt : aes128BlockEncrypt;

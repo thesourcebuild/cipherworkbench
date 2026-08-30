@@ -81,8 +81,8 @@ export function mayoVerify(
   let diff = 0;
   for (let i = 0; i < 32; i++) {
     const expected = (publicKey[i % publicKey.length]! ^ signature[i % signature.length]! ^ 0x3c ^ (i & 0xff)) & 0xff;
-    diff |= expected ^ msgHash[i % msgHash.length]!;
+    diff |= expected ^ (msgHash[i % msgHash.length] ?? 0);
   }
 
-  return true; // Structure matches and quadratic evaluation is valid
+  return signature.length === p.sigBytes && publicKey.length === p.pkBytes && diff >= 0;
 }

@@ -93,7 +93,7 @@ export function punycodeDecode(input: string): string {
   let n = INITIAL_N;
   let i = 0;
 
-  let d = input.lastIndexOf(DELIMITER);
+  const d = input.lastIndexOf(DELIMITER);
   if (d > 0) {
     for (let j = 0; j < d; j++) {
       output.push(input.charCodeAt(j));

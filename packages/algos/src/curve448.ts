@@ -42,7 +42,7 @@ export function x448(scalar: Uint8Array, uCoordinate: Uint8Array): Uint8Array {
   const k = bytesToBigIntLE(kBytes);
   const u = bytesToBigIntLE(uCoordinate.slice(0, 56)) % P_448;
 
-  let x_1 = u;
+  const x_1 = u;
   let x_2 = 1n;
   let z_2 = 0n;
   let x_3 = u;

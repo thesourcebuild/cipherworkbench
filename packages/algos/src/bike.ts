@@ -86,9 +86,8 @@ export function bikeDecap(
   sha256Fn: (data: Uint8Array) => Uint8Array,
   secretKey: Uint8Array,
   ciphertext: Uint8Array,
-  variant: "bike-l1" | "bike-l3" | "bike-l5" = "bike-l1",
+  _variant: "bike-l1" | "bike-l3" | "bike-l5" = "bike-l1",
 ): Uint8Array {
-  const p = BIKE_PARAMS[variant] ?? BIKE_PARAMS["bike-l1"]!;
 
   const recoveredSeed = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {
