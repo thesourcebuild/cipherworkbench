@@ -204,7 +204,7 @@ export function VariantsPanel({
               */}
               <tr className="sticky top-0 bg-white dark:bg-slate-900">
                 <th className={HEAD}>Model</th>
-                <th className={cn(HEAD, RESULT_TINT, "w-1/3")}>Result</th>
+                <th className={cn(HEAD, RESULT_TINT, "whitespace-nowrap")}>Result</th>
                 {columns.map((column) => (
                   <th key={column} className={HEAD}>
                     {column}
@@ -259,7 +259,7 @@ export function VariantsPanel({
                   </td>
                   <td
                     data-ocs-variant-value={row.id}
-                    className={cn("py-1.5 pr-3", RESULT_TINT)}
+                    className={cn("py-1.5 pr-3 whitespace-nowrap", RESULT_TINT)}
                   >
                     {/*
                       A bar per row while the pass runs, and every one of them is at the same
@@ -273,7 +273,7 @@ export function VariantsPanel({
                     ) : (
                       <span
                         className={cn(
-                          "font-mono font-medium break-all text-slate-900 dark:text-slate-100",
+                          "font-mono font-medium whitespace-nowrap text-slate-900 dark:text-slate-100",
                           stale && "opacity-50",
                         )}
                       >
