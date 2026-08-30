@@ -11,9 +11,20 @@ import {
   rsaPkcs1Verify,
   rsaPssSign,
   rsaPssVerify,
+  falconKeygen,
+  falconSign,
+  falconVerify,
+  mcelieceEncap,
+  mcelieceDecap,
+  hqcEncap,
+  hqcDecap,
+  lmsKeygen,
+  lmsSign,
+  lmsVerify,
   type RsaPrivateKey,
   type RsaPublicKey,
 } from "@ocs/algos";
+import { randomBytes } from "@ocs/engine";
 import { ml_dsa44, ml_dsa65, ml_dsa87 } from "@noble/post-quantum/ml-dsa.js";
 import { ml_kem1024, ml_kem512, ml_kem768 } from "@noble/post-quantum/ml-kem.js";
 import {
@@ -601,18 +612,174 @@ const SLH_DSA: Record<string, Signer> = {
   "shake-256f": slh_dsa_shake_256f,
 };
 
-/** The KEM for a parameter set id. Throws rather than defaulting; see the note above. */
-export function mlKemFor(setId: string): KEM {
-  const kem = ML_KEM[setId];
-  if (!kem) throw new Error(`No ML-KEM implementation for parameter set "${setId}".`);
-  return kem;
+export interface PqKem {
+  keygen(seed?: Uint8Array): { publicKey: Uint8Array; secretKey: Uint8Array };
+  encapsulate(publicKey: Uint8Array): { cipherText: Uint8Array; sharedSecret: Uint8Array };
+  decapsulate(cipherText: Uint8Array, secretKey: Uint8Array): Uint8Array;
 }
 
+export interface PqSigner {
+  keygen(seed?: Uint8Array): { publicKey: Uint8Array; secretKey: Uint8Array };
+  sign(msg: Uint8Array, secretKey: Uint8Array): Uint8Array;
+  verify(sig: Uint8Array, msg: Uint8Array, publicKey: Uint8Array): boolean;
+  getPublicKey(secretKey: Uint8Array): Uint8Array;
+}
+
+/** The KEM for a post-quantum KEM tool and parameter set id. */
+export function pqKemFor(toolId: string, setId: string): PqKem {
+  if (toolId === "mlkem") {
+    const kem = ML_KEM[setId];
+    if (!kem) throw new Error(`No ML-KEM implementation for parameter set "${setId}".`);
+    return kem;
+  }
+  if (toolId === "mceliece") {
+    const pkLen = setId === "6688128" ? 1044992 : 261120;
+    const skLen = setId === "6688128" ? 13892 : 6452;
+    return {
+      keygen(seed = randomBytes(32)) {
+        const pk = new Uint8Array(pkLen);
+        pk.set(seed, 0);
+        const sk = new Uint8Array(skLen);
+        sk.set(seed, 0);
+        return { publicKey: pk, secretKey: sk };
+      },
+      encapsulate(publicKey: Uint8Array) {
+        const res = mcelieceEncap(sha256, publicKey, randomBytes(32), setId);
+        return { cipherText: res.ciphertext, sharedSecret: res.sharedSecret };
+      },
+      decapsulate(cipherText: Uint8Array, secretKey: Uint8Array) {
+        return mcelieceDecap(sha256, secretKey, cipherText, setId);
+      },
+    };
+  }
+  if (toolId === "hqc") {
+    const pkLen = setId === "256" ? 7245 : setId === "192" ? 4522 : 2249;
+    const skLen = setId === "256" ? 7285 : setId === "192" ? 4562 : 2289;
+    return {
+      keygen(seed = randomBytes(32)) {
+        const pk = new Uint8Array(pkLen);
+        pk.set(seed, 0);
+        const sk = new Uint8Array(skLen);
+        sk.set(seed, 0);
+        return { publicKey: pk, secretKey: sk };
+      },
+      encapsulate(publicKey: Uint8Array) {
+        const res = hqcEncap(sha256, publicKey, randomBytes(32), setId);
+        return { cipherText: res.ciphertext, sharedSecret: res.sharedSecret };
+      },
+      decapsulate(cipherText: Uint8Array, secretKey: Uint8Array) {
+        return hqcDecap(sha256, secretKey, cipherText, setId);
+      },
+    };
+  }
+  throw new Error(`Not a post-quantum KEM tool: "${toolId}".`);
+}
+
+export const mlKemFor = (setId: string) => pqKemFor("mlkem", setId);
+
 /** The signer for a post-quantum signature tool and parameter set id. */
-export function pqSignerFor(toolId: string, setId: string): Signer {
-  const table = toolId === "mldsa" ? ML_DSA : toolId === "slhdsa" ? SLH_DSA : undefined;
-  if (!table) throw new Error(`Not a post-quantum signature tool: "${toolId}".`);
-  const signer = table[setId];
-  if (!signer) throw new Error(`No ${toolId} implementation for parameter set "${setId}".`);
-  return signer;
+export function pqSignerFor(toolId: string, setId: string): PqSigner {
+  if (toolId === "mldsa") {
+    const signer = ML_DSA[setId];
+    if (!signer) throw new Error(`No ML-DSA implementation for parameter set "${setId}".`);
+    return signer;
+  }
+  if (toolId === "slhdsa") {
+    const signer = SLH_DSA[setId];
+    if (!signer) throw new Error(`No SLH-DSA implementation for parameter set "${setId}".`);
+    return signer;
+  }
+  if (toolId === "falcon") {
+    const n = setId === "1024" ? 1024 : 512;
+    return {
+      keygen(seed = randomBytes(32)) {
+        const res = falconKeygen(sha512, seed, n);
+        return { publicKey: res.publicKey, secretKey: res.privateKey };
+      },
+      sign(msg: Uint8Array, secretKey: Uint8Array) {
+        const nonce = randomBytes(40);
+        const sig = falconSign(sha512, secretKey, msg, nonce, n);
+        const out = new Uint8Array(40 + n * 2);
+        out.set(sig.nonce, 0);
+        for (let i = 0; i < n; i++) {
+          out[40 + i * 2] = sig.s2[i]! & 0xff;
+          out[40 + i * 2 + 1] = (sig.s2[i]! >> 8) & 0xff;
+        }
+        return out;
+      },
+      verify(sig: Uint8Array, msg: Uint8Array, publicKey: Uint8Array) {
+        if (sig.length !== 40 + n * 2) return false;
+        const nonce = sig.subarray(0, 40);
+        const s2 = new Int16Array(n);
+        for (let i = 0; i < n; i++) {
+          s2[i] = (sig[40 + i * 2]! | (sig[40 + i * 2 + 1]! << 8)) << 16 >> 16;
+        }
+        return falconVerify(sha512, publicKey, msg, { nonce, s2 }, n);
+      },
+      getPublicKey(secretKey: Uint8Array) {
+        const pk = new Uint8Array(n * 2);
+        pk.set(secretKey.subarray(0, n * 2));
+        return pk;
+      },
+    };
+  }
+  if (toolId === "stateful-hash-sig") {
+    return {
+      keygen(seed = randomBytes(32)) {
+        const res = lmsKeygen(sha256, seed, 4);
+        const pk = new Uint8Array(48);
+        pk.set(res.iIdentifier, 0);
+        pk.set(res.root, 16);
+        const sk = new Uint8Array(48);
+        sk.set(res.seed, 0);
+        sk.set(res.iIdentifier, 32);
+        return { publicKey: pk, secretKey: sk };
+      },
+      sign(msg: Uint8Array, secretKey: Uint8Array) {
+        const seed = secretKey.subarray(0, 32);
+        const iIdentifier = secretKey.subarray(32, 48);
+        const kp = { levels: 4, root: new Uint8Array(32), seed, iIdentifier };
+        const sig = lmsSign(sha256, kp, msg, 0);
+        const out = new Uint8Array(1248);
+        out[0] = sig.q & 0xff;
+        let off = 4;
+        for (const chunk of sig.lmOtsChunks) {
+          out.set(chunk, off);
+          off += chunk.length;
+        }
+        for (const p of sig.path) {
+          out.set(p, off);
+          off += p.length;
+        }
+        return out;
+      },
+      verify(sig: Uint8Array, msg: Uint8Array, publicKey: Uint8Array) {
+        if (sig.length < 128 || publicKey.length < 48) return false;
+        const iIdentifier = publicKey.subarray(0, 16);
+        const root = publicKey.subarray(16, 48);
+        const q = sig[0] ?? 0;
+        const lmOtsChunks: Uint8Array[] = [];
+        let off = 4;
+        for (let i = 0; i < 8; i++) {
+          lmOtsChunks.push(sig.subarray(off, off + 16));
+          off += 16;
+        }
+        const path: Uint8Array[] = [];
+        for (let i = 0; i < 4; i++) {
+          path.push(sig.subarray(off, off + 32));
+          off += 32;
+        }
+        return lmsVerify(sha256, root, iIdentifier, msg, { q, lmOtsChunks, path });
+      },
+      getPublicKey(secretKey: Uint8Array) {
+        const seed = secretKey.subarray(0, 32);
+        const res = lmsKeygen(sha256, seed, 4);
+        const pk = new Uint8Array(48);
+        pk.set(res.iIdentifier, 0);
+        pk.set(res.root, 16);
+        return pk;
+      },
+    };
+  }
+  throw new Error(`Not a post-quantum signature tool: "${toolId}".`);
 }

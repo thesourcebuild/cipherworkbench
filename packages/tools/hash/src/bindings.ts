@@ -178,6 +178,11 @@ const M_HARAKA = lazyModule("haraka", () => import("@ocs/algos/haraka"));
 const M_MEOWHASH = lazyModule("meowhash", () => import("@ocs/algos/meowhash"));
 const M_KOMIHASH = lazyModule("komihash", () => import("@ocs/algos/komihash"));
 const M_NHASH = lazyModule("nhash", () => import("@ocs/algos/nhash"));
+const M_MONOLITH = lazyModule("monolith", () => import("@ocs/algos/monolith"));
+const M_NEPTUNE = lazyModule("neptune", () => import("@ocs/algos/neptune"));
+const M_REINFORCEDCONCRETE = lazyModule("reinforced-concrete", () => import("@ocs/algos/reinforced-concrete"));
+const M_ANEMOI = lazyModule("anemoi", () => import("@ocs/algos/anemoi"));
+const M_GRIFFIN = lazyModule("griffin", () => import("@ocs/algos/griffin"));
 
 // ── the shims, which the binding table reads as though they were imports ───
 
@@ -246,6 +251,11 @@ const haraka512Hash = lazyFn(M_HARAKA, "haraka512Hash");
 const meowHash = lazyFn(M_MEOWHASH, "meowHash");
 const komihash = lazyFn(M_KOMIHASH, "komihash");
 const nhash = lazyFn(M_NHASH, "nhash");
+const monolithHash = lazyFn(M_MONOLITH, "monolithHash");
+const neptuneHash = lazyFn(M_NEPTUNE, "neptuneHash");
+const reinforcedConcreteHash = lazyFn(M_REINFORCEDCONCRETE, "reinforcedConcreteHash");
+const anemoiHash = lazyFn(M_ANEMOI, "anemoiHash");
+const griffinHash = lazyFn(M_GRIFFIN, "griffinHash");
 
 /**
  * The one export here that is a value rather than a function, so it cannot be a `lazyFn` shim: read
@@ -827,6 +837,11 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   meowhash: { create: () => bufferedHasher(meowHash) },
   komihash: { create: () => bufferedHasher(komihash) },
   nhash: { create: () => bufferedHasher(nhash) },
+  monolith: { create: () => bufferedHasher(monolithHash) },
+  neptune: { create: () => bufferedHasher(neptuneHash) },
+  "reinforced-concrete": { create: () => bufferedHasher(reinforcedConcreteHash) },
+  anemoi: { create: () => bufferedHasher(anemoiHash) },
+  griffin: { create: () => bufferedHasher(griffinHash) },
 };
 
 /**
@@ -950,6 +965,11 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   meowhash: M_MEOWHASH,
   komihash: M_KOMIHASH,
   nhash: M_NHASH,
+  monolith: M_MONOLITH,
+  neptune: M_NEPTUNE,
+  "reinforced-concrete": M_REINFORCEDCONCRETE,
+  anemoi: M_ANEMOI,
+  griffin: M_GRIFFIN,
 };
 
 /**

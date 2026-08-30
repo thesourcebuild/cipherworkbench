@@ -106,6 +106,11 @@ describe("TOOL_MANIFESTS", () => {
    */
   const TEXT_VERIFIERS: Readonly<Record<string, string>> = {
     caesar: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    adfgvx: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "vic-cipher": "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "hill-cipher": "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    foursquare: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    chaocipher: "a ciphertext is a value somebody already has, and verifyText compares it as text",
   };
 
   it("offers Verify to a text-output tool only where a value could exist to compare", () => {

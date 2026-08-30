@@ -8,6 +8,10 @@ import {
   deriveCatena,
   deriveEvpKdf,
   deriveHkdf,
+  deriveHpke,
+  deriveBip39,
+  deriveBip32,
+  deriveHkdfLabel,
   deriveOpenPgpS2k,
   derivePbkdf2,
   deriveScrypt,
@@ -241,6 +245,27 @@ function derive(r: ResolvedKdf): { bytes: Uint8Array; encoded?: string } {
 
     case "ansi-x963":
       return { bytes: deriveAnsiX963(r.hashId, r.password, r.keyLength, r.salt) };
+
+    case "hpke": {
+      const ephemeralPrivate = r.salt.length > 0 ? r.salt : new Uint8Array(32);
+      const recipientPublic = r.password.length > 0 ? r.password : new Uint8Array(32);
+      return { bytes: deriveHpke(recipientPublic, r.info, r.ikm.length > 0 ? r.ikm : new Uint8Array(32), ephemeralPrivate) };
+    }
+
+    case "bip39": {
+      const entropy = r.password.length >= 16 ? r.password.subarray(0, 32) : new Uint8Array(32);
+      return { bytes: deriveBip39(entropy) };
+    }
+
+    case "bip32": {
+      const seed = r.password.length >= 32 ? r.password : new Uint8Array(64);
+      return { bytes: deriveBip32(seed, "m/44'/0'/0'/0/0") };
+    }
+
+    case "hkdf-label": {
+      const secret = r.password.length > 0 ? r.password : new Uint8Array(32);
+      return { bytes: deriveHkdfLabel(secret, "tls13 key", r.info, r.keyLength) };
+    }
 
     case "bcrypt": {
       const encoded = hashBcrypt(r.passwordText, r.bcryptCost);

@@ -417,6 +417,10 @@ const OPTIONS_BY_TOOL: Readonly<Record<string, readonly OptionDef<KdfOptionGroup
   "tls12-prf": GENERIC_KDF_OPTIONS,
   catena: GENERIC_KDF_OPTIONS,
   "ansi-x963": GENERIC_KDF_OPTIONS,
+  hpke: GENERIC_KDF_OPTIONS,
+  bip39: GENERIC_KDF_OPTIONS,
+  bip32: GENERIC_KDF_OPTIONS,
+  "hkdf-label": GENERIC_KDF_OPTIONS,
 };
 
 export function kdfCatalogueFor(toolId: string): OptionCatalogue<KdfOptionGroup> {

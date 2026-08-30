@@ -51,9 +51,10 @@ async function textOf(options: ClassicalSpec["options"], input: string) {
 }
 
 describe("the family's shape", () => {
-  it("registers one tool, text-output, both directions, not streaming", () => {
-    expect(CLASSICAL_MANIFESTS).toHaveLength(1);
-    const manifest = CLASSICAL_MANIFESTS[0]!;
+  it("registers classical tools, text-output, both directions, not streaming", () => {
+    expect(CLASSICAL_MANIFESTS.length).toBeGreaterThanOrEqual(1);
+    const manifest = CLASSICAL_MANIFESTS.find((m) => m.id === "caesar")!;
+    expect(manifest).toBeDefined();
     expect(manifest.id).toBe("caesar");
     expect(manifest.family).toBe("classical");
     /**

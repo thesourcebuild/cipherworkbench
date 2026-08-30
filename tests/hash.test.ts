@@ -870,6 +870,11 @@ describe("metadata and bindings agree", () => {
       "meowhash",
       "komihash",
       "nhash",
+      "monolith",
+      "neptune",
+      "reinforced-concrete",
+      "anemoi",
+      "griffin",
     ]);
     for (const meta of HASH_ALGORITHMS) {
       expect(

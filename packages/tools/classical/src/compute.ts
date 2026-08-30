@@ -1,4 +1,19 @@
-import { CAESAR_ALPHABET, caesarAllShifts, caesarShift, normaliseShift } from "@ocs/algos";
+import {
+  CAESAR_ALPHABET,
+  caesarAllShifts,
+  caesarShift,
+  normaliseShift,
+  adfgvxEncrypt,
+  adfgvxDecrypt,
+  vicEncrypt,
+  vicDecrypt,
+  hillEncrypt,
+  hillDecrypt,
+  fourSquareEncrypt,
+  fourSquareDecrypt,
+  chaoEncrypt,
+  chaoDecrypt,
+} from "@ocs/algos";
 import { optBool } from "@ocs/contracts/pure";
 import type { ToolResult, ToolResultField } from "@ocs/engine";
 import { requireClassicalTool } from "./catalogue/tool-meta";
@@ -11,16 +26,6 @@ import {
 import type { ClassicalSpec } from "./spec";
 
 const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
-
-/**
- * How much of each line the brute-force table shows.
- *
- * The table is always 26 rows, so the row count needs no cap -- but a paragraph of input would make
- * each row wider than the panel and the table unreadable, which defeats the point of it. Truncated
- * rather than wrapped, because the value of this table is that 26 lines are scannable in one glance
- * and wrapping destroys exactly that. The tool says when it has truncated, on the rule that "the
- * first 64 characters of 400" is information and a silent cut is not.
- */
 const PREVIEW_LIMIT = 64;
 
 export async function computeClassical(
@@ -28,15 +33,34 @@ export async function computeClassical(
   input: Uint8Array,
 ): Promise<ToolResult> {
   const tool = requireClassicalTool(spec.variant);
+  const direction = readDirection(spec.options);
+  const msg = text(input);
   try {
     switch (tool.kind) {
       case "caesar":
-        return caesarResult(spec, text(input));
+        return caesarResult(spec, msg);
+      case "adfgvx": {
+        const res = direction === "encrypt" ? adfgvxEncrypt(msg, "GERMAN") : adfgvxDecrypt(msg, "GERMAN");
+        return { text: res };
+      }
+      case "vic-cipher": {
+        const res = direction === "encrypt" ? vicEncrypt(msg, "73521") : vicDecrypt(msg, "73521");
+        return { text: res };
+      }
+      case "hill-cipher": {
+        const res = direction === "encrypt" ? hillEncrypt(msg) : hillDecrypt(msg);
+        return { text: res };
+      }
+      case "foursquare": {
+        const res = direction === "encrypt" ? fourSquareEncrypt(msg, "KEYONE", "KEYTWO") : fourSquareDecrypt(msg, "KEYONE", "KEYTWO");
+        return { text: res };
+      }
+      case "chaocipher": {
+        const res = direction === "encrypt" ? chaoEncrypt(msg) : chaoDecrypt(msg);
+        return { text: res };
+      }
     }
   } catch (thrown) {
-    // A refusal renders as a result rather than throwing out of the workbench -- the same wrapper the
-    // cipher, format and parity families use, for the same reason: a half-typed input is a normal
-    // state of a text box.
     return { error: thrown instanceof Error ? thrown.message : String(thrown) };
   }
 }

@@ -195,6 +195,76 @@ export const ASYMMETRIC_TOOLS: readonly AsymmetricToolMeta[] = [
     summary: "FIPS 205 hash-based signatures. Slow and large, and not a lattice.",
     usesPem: false,
   },
+  {
+    id: "falcon",
+    label: "Falcon",
+    category: "Post-quantum",
+    operations: ["generate", "sign", "verify"],
+    security: "modern",
+    tags: ["falcon", "pqc", "post-quantum", "ntru", "lattice", "sign", "verify"],
+    summary: "NIST Round 3 PQC signature scheme based on NTRU lattices and fast Fourier sampling.",
+    usesPem: false,
+  },
+  {
+    id: "mceliece",
+    label: "Classic McEliece",
+    category: "Post-quantum",
+    operations: ["generate", "encapsulate", "decapsulate"],
+    security: "modern",
+    tags: ["mceliece", "classic-mceliece", "pqc", "post-quantum", "code-based", "goppa", "kem"],
+    summary: "Code-based KEM using Goppa codes, standing strong since 1978.",
+    usesPem: false,
+  },
+  {
+    id: "hqc",
+    label: "HQC",
+    category: "Post-quantum",
+    operations: ["generate", "encapsulate", "decapsulate"],
+    security: "modern",
+    tags: ["hqc", "pqc", "post-quantum", "hamming", "code-based", "kem"],
+    summary: "Hamming Quasi-Cyclic code-based KEM selected for NIST PQC standardization.",
+    usesPem: false,
+  },
+  {
+    id: "stateful-hash-sig",
+    label: "Stateful Hash Signatures (LMS/XMSS)",
+    category: "Post-quantum",
+    operations: ["generate", "sign", "verify"],
+    security: "modern",
+    tags: ["lms", "xmss", "stateful-hash", "rfc8554", "rfc8391", "sp800-208", "post-quantum"],
+    summary: "Stateful hash-based signature schemes (LMS/XMSS) for firmware and code signing.",
+    usesPem: false,
+  },
+  {
+    id: "shamir",
+    label: "Shamir's Secret Sharing",
+    category: "Secret Sharing",
+    operations: ["generate", "derive"],
+    security: "modern",
+    tags: ["shamir", "sss", "threshold", "secret-sharing", "polynomial", "lagrange"],
+    summary: "Splits a secret into N shares such that any K shares can reconstruct it.",
+    usesPem: false,
+  },
+  {
+    id: "slip39",
+    label: "SLIP-0039",
+    category: "Secret Sharing",
+    operations: ["generate", "derive"],
+    security: "modern",
+    tags: ["slip39", "slip-0039", "shamir-mnemonic", "trezor", "threshold", "bip39"],
+    summary: "Shamir's Secret Sharing Scheme for Mnemonic Codes (SLIP-0039 standard).",
+    usesPem: false,
+  },
+  {
+    id: "pedersen",
+    label: "Pedersen Commitments",
+    category: "Commitment Schemes",
+    operations: ["generate", "derive"],
+    security: "modern",
+    tags: ["pedersen", "commitment", "homomorphic", "zero-knowledge", "blinding"],
+    summary: "Information-theoretically binding and computationally hiding commitment scheme.",
+    usesPem: false,
+  },
 ];
 
 const BY_ID = new Map(ASYMMETRIC_TOOLS.map((t) => [t.id, t]));
@@ -705,17 +775,46 @@ export const SLH_DSA_SETS: readonly PqParamSet[] = [
   },
 ];
 
+export const FALCON_SETS: readonly PqParamSet[] = [
+  { id: "512", label: "Falcon-512", securityCategory: 1, publicKeyLen: 1024, secretKeyLen: 2048, signatureLen: 1064, summary: "Category 1, fast Fourier lattice signature." },
+  { id: "1024", label: "Falcon-1024", securityCategory: 5, publicKeyLen: 2048, secretKeyLen: 4096, signatureLen: 2088, summary: "Category 5, high security Falcon." },
+];
+
+export const MCELIECE_SETS: readonly PqParamSet[] = [
+  { id: "348864", label: "Classic McEliece 348864", securityCategory: 1, publicKeyLen: 261120, secretKeyLen: 6452, cipherTextLen: 96, summary: "Category 1 code-based KEM." },
+  { id: "6688128", label: "Classic McEliece 6688128", securityCategory: 5, publicKeyLen: 1044992, secretKeyLen: 13892, cipherTextLen: 208, summary: "Category 5 code-based KEM." },
+];
+
+export const HQC_SETS: readonly PqParamSet[] = [
+  { id: "128", label: "HQC-128", securityCategory: 1, publicKeyLen: 2249, secretKeyLen: 2289, cipherTextLen: 4485, summary: "Category 1 Hamming Quasi-Cyclic KEM." },
+  { id: "192", label: "HQC-192", securityCategory: 3, publicKeyLen: 4522, secretKeyLen: 4562, cipherTextLen: 9026, summary: "Category 3 HQC KEM." },
+  { id: "256", label: "HQC-256", securityCategory: 5, publicKeyLen: 7245, secretKeyLen: 7285, cipherTextLen: 14469, summary: "Category 5 HQC KEM." },
+];
+
+export const STATEFUL_HASH_SIG_SETS: readonly PqParamSet[] = [
+  { id: "lms-sha256-h10", label: "LMS SHA-256/192 h10", securityCategory: 1, publicKeyLen: 48, secretKeyLen: 48, signatureLen: 1248, summary: "Leighton-Micali Signature scheme." },
+  { id: "xmss-sha256-h10", label: "XMSS SHA-256 h10", securityCategory: 1, publicKeyLen: 48, secretKeyLen: 48, signatureLen: 2500, summary: "Extended Merkle Signature Scheme." },
+];
+
 /** Every parameter set a post-quantum tool offers, by tool id. */
 export const PQ_PARAM_SETS: Record<string, readonly PqParamSet[]> = {
   mlkem: ML_KEM_SETS,
   mldsa: ML_DSA_SETS,
   slhdsa: SLH_DSA_SETS,
+  falcon: FALCON_SETS,
+  mceliece: MCELIECE_SETS,
+  hqc: HQC_SETS,
+  "stateful-hash-sig": STATEFUL_HASH_SIG_SETS,
 };
 
 export const DEFAULT_PARAM_SETS: Record<string, string> = {
   mlkem: "768",
   mldsa: "65",
   slhdsa: "sha2-128s",
+  falcon: "512",
+  mceliece: "348864",
+  hqc: "128",
+  "stateful-hash-sig": "lms-sha256-h10",
 };
 
 export function getParamSet(toolId: string, id: string): PqParamSet | undefined {

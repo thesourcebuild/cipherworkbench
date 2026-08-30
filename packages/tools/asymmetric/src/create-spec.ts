@@ -39,7 +39,7 @@ export function createSpec(options?: { variant?: string }): AsymmetricSpec {
     values[OPTION_HASH] = DEFAULT_RSA_HASH;
     values[OPTION_SIGNATURE_FORMAT] = DEFAULT_SIGNATURE_FORMAT;
   }
-  if (variant === "ecdh") {
+  if (variant === "ecdh" || variant === "shamir" || variant === "slip39" || variant === "pedersen") {
     values[OPTION_CURVE] = DEFAULT_ECDH_CURVE;
   }
   // The parameter set has to be in the default spec: every length the form checks comes from it.

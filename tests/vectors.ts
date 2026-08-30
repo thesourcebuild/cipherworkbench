@@ -1856,4 +1856,9 @@ export const NO_PUBLISHED_VECTOR: readonly string[] = [
   "meowhash",
   "komihash",
   "nhash",
+  "monolith",
+  "neptune",
+  "reinforced-concrete",
+  "anemoi",
+  "griffin",
 ];

@@ -439,7 +439,7 @@ function pqLengths(toolId: string, pick: (set: PqParamSet) => number | undefined
  */
 function pqOptions(toolId: string): readonly Def[] {
   const tool = requireAsymmetricTool(toolId);
-  const isKem = toolId === "mlkem";
+  const isKem = toolId === "mlkem" || toolId === "mceliece" || toolId === "hqc";
 
   return [
     operationOption(tool.operations),
@@ -493,6 +493,13 @@ export function asymmetricCatalogueFor(toolId: string): OptionCatalogue<Asymmetr
       mlkem: pqOptions("mlkem"),
       mldsa: pqOptions("mldsa"),
       slhdsa: pqOptions("slhdsa"),
+      falcon: pqOptions("falcon"),
+      mceliece: pqOptions("mceliece"),
+      hqc: pqOptions("hqc"),
+      "stateful-hash-sig": pqOptions("stateful-hash-sig"),
+      shamir: ECDH_OPTIONS,
+      slip39: ECDH_OPTIONS,
+      pedersen: ECDH_OPTIONS,
     };
     const options = byTool[toolId];
     if (!options) {

@@ -26,5 +26,11 @@ export function describeSpec(spec: ClassicalSpec): string {
       const forward = normaliseShift(-shift);
       return `Moves each letter back ${shift} place${shift === 1 ? "" : "s"} -- forward ${forward} mod ${CAESAR_ALPHABET}${casing}.`;
     }
+    case "adfgvx":
+    case "vic-cipher":
+    case "hill-cipher":
+    case "foursquare":
+    case "chaocipher":
+      return tool.summary;
   }
 }

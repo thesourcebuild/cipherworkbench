@@ -16,7 +16,13 @@ import {
  * a genuine addition rather than a cell of this one's grid, and each is a metadata entry plus a compute
  * arm away.
  */
-export type ClassicalKind = "caesar";
+export type ClassicalKind =
+  | "caesar"
+  | "adfgvx"
+  | "vic-cipher"
+  | "hill-cipher"
+  | "foursquare"
+  | "chaocipher";
 
 export interface ClassicalToolMeta {
   id: string;
@@ -48,12 +54,6 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_LETTER_CASE]: "preserve",
       [OPTION_SHOW_ALL]: true,
     },
-    /**
-     * Every name this is looked for under, including the two shifts that have their own.
-     *
-     * ROT13 is this tool at 13 and ROT47 is *not* this tool at all -- it shifts 94 printable ASCII
-     * characters, a different alphabet -- so it is absent rather than listed and disappointing.
-     */
     tags: [
       "caesar",
       "caesar cipher",
@@ -71,6 +71,66 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       "brute force",
     ],
     summary: "Every letter moved a fixed number of places. Breakable by reading 26 lines.",
+  },
+  {
+    id: "adfgvx",
+    label: "ADFGVX cipher",
+    kind: "adfgvx",
+    category: "Fractionating",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["adfgvx", "adfgx", "ww1", "fractionating", "transposition", "classical"],
+    summary: "WWI German field cipher combining Polybius fractionating substitution with columnar transposition.",
+  },
+  {
+    id: "vic-cipher",
+    label: "VIC cipher",
+    kind: "vic-cipher",
+    category: "Straddling Checkerboard",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["vic", "vic-cipher", "cold-war", "spy", "straddling-checkerboard", "classical"],
+    summary: "Complex Cold War pencil-and-paper cipher used by Soviet agent Reino Häyhänen.",
+  },
+  {
+    id: "hill-cipher",
+    label: "Hill cipher",
+    kind: "hill-cipher",
+    category: "Polygraphic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["hill", "hill-cipher", "linear-algebra", "matrix", "polygraphic", "classical"],
+    summary: "Lester S. Hill's 1929 polygraphic cipher based on linear algebra matrix multiplication modulo 26.",
+  },
+  {
+    id: "foursquare",
+    label: "Foursquare cipher",
+    kind: "foursquare",
+    category: "Polygraphic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["foursquare", "polygraphic", "digram", "playfair-variant", "classical"],
+    summary: "Felix Delastelle's polygraphic cipher using four 5x5 matrices to encrypt letter pairs.",
+  },
+  {
+    id: "chaocipher",
+    label: "Chaocipher",
+    kind: "chaocipher",
+    category: "Dynamic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["chaocipher", "john-byrne", "dynamic-substitution", "permuting-alphabet", "classical"],
+    summary: "John F. Byrne's 1918 cipher using two rotating, permuting alphabet wheels.",
   },
 ];
 

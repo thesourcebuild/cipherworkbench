@@ -16,11 +16,60 @@ import {
   sshKdf,
   tls12Prf,
   yescryptKdf,
+  hpkeSeal,
+  entropyToMnemonic,
+  mnemonicToSeed,
+  createMasterFromSeed,
+  derivePath,
+  hkdfExpandLabel,
 } from "@ocs/algos";
 import { hmac } from "@noble/hashes/hmac.js";
 
 function toNobleBytes(b: Uint8Array): Uint8Array<ArrayBuffer> {
   return b as unknown as Uint8Array<ArrayBuffer>;
+}
+
+export function deriveHpke(
+  recipientPublicKey: Uint8Array,
+  info: Uint8Array,
+  plaintext: Uint8Array,
+  ephemeralPrivate: Uint8Array,
+): Uint8Array {
+  const hash = requireHash("sha256");
+  const seal = hpkeSeal((d) => hash(toNobleBytes(d)), recipientPublicKey, info, plaintext, ephemeralPrivate);
+  return seal.ciphertext;
+}
+
+export function deriveBip39(
+  entropyOrMnemonic: Uint8Array | string,
+  passphrase: string = "",
+): Uint8Array {
+  if (typeof entropyOrMnemonic === "string") {
+    return mnemonicToSeed(entropyOrMnemonic, passphrase, (p, s, c, len) => pbkdf2(sha512, toNobleBytes(p), toNobleBytes(s), { c, dkLen: len }));
+  }
+  const mnemonic = entropyToMnemonic(entropyOrMnemonic, (d) => sha256(toNobleBytes(d)));
+  return mnemonicToSeed(mnemonic, passphrase, (p, s, c, len) => pbkdf2(sha512, toNobleBytes(p), toNobleBytes(s), { c, dkLen: len }));
+}
+
+export function deriveBip32(
+  seed: Uint8Array,
+  path: string = "m/0",
+): Uint8Array {
+  const hmacFn = (k: Uint8Array, d: Uint8Array) => hmac(sha512, toNobleBytes(k), toNobleBytes(d));
+  const master = createMasterFromSeed(seed, hmacFn);
+  const derived = derivePath(master, path, hmacFn);
+  return derived.key;
+}
+
+export function deriveHkdfLabel(
+  secret: Uint8Array,
+  label: string = "key",
+  context: Uint8Array = new Uint8Array(0),
+  length: number = 32,
+): Uint8Array {
+  const hkdfExpandFn = (sec: Uint8Array, info: Uint8Array, len: number) =>
+    hkdf(sha256, toNobleBytes(sec), toNobleBytes(new Uint8Array(0)), toNobleBytes(info), len);
+  return hkdfExpandLabel(hkdfExpandFn, secret, label, context, length);
 }
 
 export function deriveBalloon(

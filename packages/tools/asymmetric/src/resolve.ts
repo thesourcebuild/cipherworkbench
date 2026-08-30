@@ -96,8 +96,8 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
   const catalogue = asymmetricCatalogueFor(spec.variant);
 
   const curve =
-    spec.variant === "ecdsa" || spec.variant === "ecdh"
-      ? getCurve(spec.variant, readCurve(spec.options, spec.variant))
+    spec.variant === "ecdsa" || spec.variant === "ecdh" || spec.variant === "shamir" || spec.variant === "slip39" || spec.variant === "pedersen"
+      ? getCurve(spec.variant === "ecdsa" ? "ecdsa" : "ecdh", readCurve(spec.options, spec.variant))
       : undefined;
 
   const isPq = PQ_PARAM_SETS[spec.variant] !== undefined;
@@ -110,7 +110,7 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
   }
 
   // A share link can name a curve this tool does not offer.
-  if ((spec.variant === "ecdsa" || spec.variant === "ecdh") && !curve) {
+  if ((spec.variant === "ecdsa" || spec.variant === "ecdh" || spec.variant === "shamir" || spec.variant === "slip39" || spec.variant === "pedersen") && !curve) {
     return problem("curve", `${tool.label} does not offer that curve.`);
   }
 

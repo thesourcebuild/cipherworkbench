@@ -1134,9 +1134,16 @@ describe("acceptedPublicKeyLengths", () => {
 describe("the post-quantum tools", () => {
   const PQ_TOOLS = ASYMMETRIC_TOOLS.filter((t) => t.category === "Post-quantum");
 
-  it("registers exactly ML-KEM, ML-DSA and SLH-DSA", () => {
-    // Written out so a fourth scheme fails here once and is then covered by every loop below.
-    expect(PQ_TOOLS.map((t) => t.id).sort()).toEqual(["mldsa", "mlkem", "slhdsa"]);
+  it("registers post-quantum schemes including ML-KEM, ML-DSA, SLH-DSA, Falcon, McEliece, HQC, and Stateful Hash Signatures", () => {
+    expect(PQ_TOOLS.map((t) => t.id).sort()).toEqual([
+      "falcon",
+      "hqc",
+      "mceliece",
+      "mldsa",
+      "mlkem",
+      "slhdsa",
+      "stateful-hash-sig",
+    ]);
     // And every one of them declares a parameter set list, which everything else reads from.
     for (const tool of PQ_TOOLS) {
       expect(PQ_PARAM_SETS[tool.id]?.length, tool.id).toBeGreaterThan(0);

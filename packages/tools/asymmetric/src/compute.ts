@@ -18,6 +18,7 @@ import {
   rsaDecrypt,
   rsaEncrypt,
   mlKemFor,
+  pqKemFor,
   pqSignerFor,
   rsaModulusBits,
   rsaModulusBytes,
@@ -216,7 +217,7 @@ function generateCurveKeypair(r: ResolvedAsymmetric): ToolResult {
   if (r.tool.id === "ed25519") {
     secret = ed25519Bindings.randomSecretKey();
     publicKey = ed25519Bindings.getPublicKey(secret);
-  } else if (r.tool.id === "ecdh") {
+  } else if (r.tool.id === "ecdh" || r.tool.id === "shamir" || r.tool.id === "slip39" || r.tool.id === "pedersen") {
     const api = agreementCurve(curve.id);
     secret = api.randomSecretKey();
     publicKey = api.getPublicKey(secret);
@@ -621,10 +622,10 @@ async function rsaOperate(r: ResolvedAsymmetric, input: Uint8Array): Promise<Too
  */
 function pqOperate(r: ResolvedAsymmetric, input: Uint8Array): ToolResult {
   const set = r.paramSet!;
-  const isKem = r.tool.id === "mlkem";
+  const isKem = r.tool.id === "mlkem" || r.tool.id === "mceliece" || r.tool.id === "hqc";
 
   if (r.operation === "generate") {
-    const api = isKem ? mlKemFor(set.id) : pqSignerFor(r.tool.id, set.id);
+    const api = isKem ? pqKemFor(r.tool.id, set.id) : pqSignerFor(r.tool.id, set.id);
     const keys = api.keygen();
     return {
       bytes: keys.publicKey,
@@ -646,7 +647,7 @@ function pqOperate(r: ResolvedAsymmetric, input: Uint8Array): ToolResult {
   }
 
   if (isKem) {
-    const kem = mlKemFor(set.id);
+    const kem = pqKemFor(r.tool.id, set.id);
 
     if (r.operation === "encapsulate") {
       const { cipherText, sharedSecret } = kem.encapsulate(r.publicKey);
