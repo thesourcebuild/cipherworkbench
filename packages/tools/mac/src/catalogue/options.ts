@@ -152,7 +152,7 @@ const KMAC_OPTIONS: readonly OptionDef<MacOptionGroup>[] = [
     kind: "number",
     arg: { placeholder: "32", unit: "bytes", min: 1, max: 1024, step: 1 },
     availableOn: [TAG_KMAC],
-    summary: "How many bytes of tag to produce.",
+    summary: "How many bytes of tag to produce. Changing length changes the full tag (not a truncation).",
     detail:
       "KMAC is built on cSHAKE (NIST SP 800-185), so the requested output bit-length L is encoded directly into the hash input via right_encode(L) before the Keccak permutation runs. Because of this, asking for 16, 32, or 64 bytes produces completely different hash tags from the very first byte onward — it is NOT a prefix truncation or slice of a longer tag. That is the opposite of how truncating an HMAC behaves, and it is deliberate: the length is part of the domain separation so that tags of different lengths cannot be substituted or extended.",
     order: 10,
