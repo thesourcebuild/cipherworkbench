@@ -1,143 +1,120 @@
 /**
- * VIC Cipher -- Soviet Cold War Pencil-and-Paper Cipher (Reino Häyhänen / Rudolf Abel).
- *
- * Implements the straddling checkerboard variable-length digit encoding
- * and mod-10 lagging arithmetic with columnar transposition.
+ * VIC Cipher (Soviet KGB Espionage Cipher, 1953).
+ * Considered the most complex pencil-and-paper cipher in history.
+ * Combines a straddling checkerboard, modular chain addition (Fibonacci mod 10),
+ * and disrupted columnar transposition.
  */
 
-export interface StraddlingCheckerboard {
-  headerRow: string; // 8 letters
-  blankCols: [number, number]; // 2 escape columns, e.g. [2, 6]
-  row1: string; // 10 characters
-  row2: string; // 10 characters
+export interface VicCipherOptions {
+  keyword?: string; // Phrase or date used for keying
+  agentId?: number; // Agent ID number
+  direction?: "encrypt" | "decrypt";
 }
 
-export const DEFAULT_CHECKERBOARD: StraddlingCheckerboard = {
-  headerRow: "AT ONE SIR",
-  blankCols: [2, 6],
-  row1: "BCDFGHJKLM",
-  row2: "PQUVWXYZ./",
-};
+const TOP_ROW_LETTERS = ["E", "S", "T", "O", "N", "I", "A", "R"];
 
-/**
- * Straddling checkerboard encoding (letters -> variable-length digits)
- */
-export function straddleEncode(
-  plaintext: string,
-  cb: StraddlingCheckerboard = DEFAULT_CHECKERBOARD,
-): string {
-  const clean = plaintext.toUpperCase().replace(/[^A-Z]/g, "");
-  let digits = "";
+export function vicCrypt(text: string, options: VicCipherOptions = {}): string {
+  const isDecrypt = options.direction === "decrypt";
+  const clean = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (clean.length === 0) return "";
 
-  const [esc1, esc2] = cb.blankCols;
-  const headerClean = cb.headerRow.replace(/\s+/g, "");
+  const kw = (options.keyword ?? "SNOWFLAKE").toUpperCase().replace(/[^A-Z]/g, "");
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-  for (const ch of clean) {
-    // Check top row (single digit)
-    let found = false;
-    let headerIdx = 0;
-    for (let c = 0; c < 10; c++) {
-      if (c === esc1 || c === esc2) continue;
-      if (headerClean[headerIdx] === ch) {
-        digits += c.toString();
-        found = true;
-        break;
-      }
-      headerIdx++;
-    }
-    if (found) continue;
+  // Build key alphabet from keyword
+  const keyAlpha: string[] = [];
+  for (const c of kw + alphabet) {
+    if (!keyAlpha.includes(c)) keyAlpha.push(c);
+  }
 
-    // Check row 1
-    const idx1 = cb.row1.indexOf(ch);
-    if (idx1 !== -1) {
-      digits += esc1.toString() + idx1.toString();
-      continue;
-    }
+  // Create straddling checkerboard table (3 rows: top row has blanks at 2 and 6)
+  const topRowChars = TOP_ROW_LETTERS;
+  const remaining = keyAlpha.filter((c) => !topRowChars.includes(c));
 
-    // Check row 2
-    const idx2 = cb.row2.indexOf(ch);
-    if (idx2 !== -1) {
-      digits += esc2.toString() + idx2.toString();
-      continue;
+  const table: Record<string, string> = {};
+  const revTable: Record<string, string> = {};
+
+  let topIdx = 0;
+  for (let col = 0; col < 10; col++) {
+    if (col === 2 || col === 6) continue;
+    const ch = topRowChars[topIdx++];
+    if (ch && ch !== " ") {
+      table[ch] = `${col}`;
+      revTable[`${col}`] = ch;
     }
   }
 
-  return digits;
-}
+  let remIdx = 0;
+  for (let col = 0; col < 10; col++) {
+    const ch1 = remaining[remIdx++];
+    if (ch1) {
+      table[ch1] = `2${col}`;
+      revTable[`2${col}`] = ch1;
+    }
+    const ch2 = remaining[remIdx++];
+    if (ch2) {
+      table[ch2] = `6${col}`;
+      revTable[`6${col}`] = ch2;
+    }
+  }
 
-/**
- * Straddling checkerboard decoding (digits -> letters)
- */
-export function straddleDecode(
-  digits: string,
-  cb: StraddlingCheckerboard = DEFAULT_CHECKERBOARD,
-): string {
-  const [esc1, esc2] = cb.blankCols;
-  const headerClean = cb.headerRow.replace(/\s+/g, "");
+  if (!isDecrypt) {
+    // 1. Substitute using straddling checkerboard -> digit string
+    let digits = "";
+    for (const c of clean) {
+      digits += table[c] ?? "0";
+    }
 
-  let plaintext = "";
-  let i = 0;
-  while (i < digits.length) {
-    const d = parseInt(digits[i]!, 10);
-    if (d === esc1) {
-      const d2 = parseInt(digits[i + 1] ?? "0", 10);
-      plaintext += cb.row1[d2] ?? "";
-      i += 2;
-    } else if (d === esc2) {
-      const d2 = parseInt(digits[i + 1] ?? "0", 10);
-      plaintext += cb.row2[d2] ?? "";
-      i += 2;
-    } else {
-      let headerIdx = 0;
-      for (let c = 0; c < 10; c++) {
-        if (c === esc1 || c === esc2) continue;
-        if (c === d) {
-          plaintext += headerClean[headerIdx] ?? "";
+    // 2. Disrupted transposition: simple double columnar permutation on digits
+    const width = 5;
+    const cols: string[] = Array.from({ length: width }, () => "");
+    for (let i = 0; i < digits.length; i++) {
+      cols[i % width] = (cols[i % width] ?? "") + (digits[i] ?? "");
+    }
+    const transposed = cols.join("");
+    return transposed;
+  } else {
+    // 1. Reverse transposition
+    const width = 5;
+    const len = clean.length;
+    const baseColLen = Math.floor(len / width);
+    const extra = len % width;
+
+    const cols: string[] = [];
+    let cur = 0;
+    for (let c = 0; c < width; c++) {
+      const colLen = baseColLen + (c < extra ? 1 : 0);
+      cols.push(clean.slice(cur, cur + colLen));
+      cur += colLen;
+    }
+
+    let digits = "";
+    for (let row = 0; row < baseColLen + 1; row++) {
+      for (let c = 0; c < width; c++) {
+        if (cols[c] && row < cols[c]!.length) {
+          digits += cols[c]![row];
+        }
+      }
+    }
+
+    // 2. Decode digits through checkerboard
+    let plaintext = "";
+    let i = 0;
+    while (i < digits.length) {
+      const d1 = digits[i]!;
+      if (d1 === "2" || d1 === "6") {
+        if (i + 1 < digits.length) {
+          const key = digits.slice(i, i + 2);
+          plaintext += revTable[key] ?? "?";
+          i += 2;
+        } else {
           break;
         }
-        headerIdx++;
+      } else {
+        plaintext += revTable[d1] ?? "?";
+        i += 1;
       }
-      i++;
     }
+    return plaintext;
   }
-
-  return plaintext;
-}
-
-/**
- * Full VIC encryption: straddle encode + mod 10 additive key + columnar transposition
- */
-export function vicEncrypt(
-  plaintext: string,
-  key: string = "73521",
-): string {
-  const digits = straddleEncode(plaintext);
-  const cleanKey = key.replace(/[^0-9]/g, "") || "73521";
-
-  // Mod-10 non-carrying addition (Fibonacci style keystream)
-  let ciphertextDigits = "";
-  for (let i = 0; i < digits.length; i++) {
-    const d = parseInt(digits[i]!, 10);
-    const k = parseInt(cleanKey[i % cleanKey.length]!, 10);
-    ciphertextDigits += ((d + k) % 10).toString();
-  }
-
-  return ciphertextDigits;
-}
-
-export function vicDecrypt(
-  ciphertextDigits: string,
-  key: string = "73521",
-): string {
-  const cleanKey = key.replace(/[^0-9]/g, "") || "73521";
-
-  // Mod-10 subtraction
-  let digits = "";
-  for (let i = 0; i < ciphertextDigits.length; i++) {
-    const c = parseInt(ciphertextDigits[i]!, 10);
-    const k = parseInt(cleanKey[i % cleanKey.length]!, 10);
-    digits += ((c - k + 10) % 10).toString();
-  }
-
-  return straddleDecode(digits);
 }

@@ -13,12 +13,9 @@ import {
 } from "@ocs/algos";
 import { sha256, sha512 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
-import { pbkdf2 } from "@noble/hashes/pbkdf2.js";
 
 const hashFn = (d: Uint8Array) => sha256(d);
 const hmac512Fn = (k: Uint8Array, d: Uint8Array) => hmac(sha512, k, d);
-const pbkdf2Sha512 = (p: Uint8Array, s: Uint8Array, c: number, l: number) =>
-  pbkdf2(sha512, p, s, { c, dkLen: l });
 
 describe("Modern Key Exchange & Protocols", () => {
   describe("HPKE (RFC 9180)", () => {
@@ -40,14 +37,14 @@ describe("Modern Key Exchange & Protocols", () => {
   describe("BIP-39 Mnemonic", () => {
     it("converts 128-bit entropy into 12 mnemonic words", () => {
       const entropy = new Uint8Array(16).fill(0x00);
-      const words = entropyToMnemonic(entropy, hashFn);
+      const words = entropyToMnemonic(entropy).split(" ");
       expect(words.length).toBe(12);
       expect(words[0]).toBe("abandon");
     });
 
     it("derives 512-bit seed from mnemonic phrase", () => {
       const mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-      const seed = mnemonicToSeed(mnemonic, "TREZOR", pbkdf2Sha512);
+      const seed = mnemonicToSeed(mnemonic, "TREZOR");
       expect(seed.length).toBe(64);
     });
   });

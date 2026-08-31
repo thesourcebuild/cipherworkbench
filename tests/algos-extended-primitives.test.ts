@@ -9,8 +9,7 @@ import {
   bifidDecrypt,
   trifidEncrypt,
   trifidDecrypt,
-  baconEncrypt,
-  baconDecrypt,
+  baconCrypt,
   railFenceEncrypt,
   railFenceDecrypt,
   schnorrGetPublicKey,
@@ -110,13 +109,9 @@ describe("Classical & Historical Ciphers", () => {
 
   it("Bacon's cipher encodes and decodes 5-bit sequences", () => {
     const text = "CIPHER";
-    const encTraditional = baconEncrypt(text, { variant: "traditional" });
-    expect(encTraditional).toBe("AAABA ABAAA ABBBA AABBB AABAA BAAAA");
-    expect(baconDecrypt(encTraditional, { variant: "traditional" })).toBe(text);
-
-    const encFull = baconEncrypt(text, { variant: "full" });
-    expect(encFull).toBe("AAABA ABAAA ABBBB AABBB AABAA BAAAB");
-    expect(baconDecrypt(encFull, { variant: "full" })).toBe(text);
+    const enc = baconCrypt(text, { direction: "encrypt" });
+    expect(enc).toBe("AAABA ABAAA ABBBA AABBB AABAA BAAAA");
+    expect(baconCrypt(enc, { direction: "decrypt" })).toBe(text);
   });
 
   it("Rail fence cipher zigzag transposes and reconstructs", () => {

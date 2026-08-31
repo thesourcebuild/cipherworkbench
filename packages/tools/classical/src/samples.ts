@@ -361,6 +361,48 @@ const SAMPLES_BY_TOOL: Record<string, readonly ToolSample[]> = {
       text: LOREM_IPSUM,
     },
   ],
+  typex: [
+    {
+      id: "tactical",
+      label: "TYPEX TRANSMISSION",
+      note: "British 5-rotor machine with stationary stator.",
+      text: "CONVOY ARRIVING AT SECTOR NINE",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  sigaba: [
+    {
+      id: "command",
+      label: "FLEET COMMAND",
+      note: "US 15-rotor machine with cipher, control, and index banks.",
+      text: "PROCEED TO DESIGNATED COORDINATES IMMEDIATELY",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  bazeries: [
+    {
+      id: "cylinder",
+      label: "M-94 CYLINDER",
+      note: "25 rotatable letter discs on a central spindle.",
+      text: "ALL UNITS REPORT READINESS AT DAWN",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
 };
 
 export function samplesFor(toolId: string): readonly ToolSample[] | undefined {

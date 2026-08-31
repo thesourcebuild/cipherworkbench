@@ -2687,6 +2687,26 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     shape: { keyLengths: [32], nonceLengths: [] },
   },
   {
+    id: "a5-1",
+    label: "A5/1 (GSM Stream Cipher)",
+    category: "Stream",
+    aead: false,
+    security: "legacy",
+    tags: ["a51", "a5-1", "a5", "gsm", "cellular", "2g", "stream", "lfsr", "majority", "encrypt", "decrypt"],
+    summary: "GSM 2G mobile communications stream cipher based on 3 clock-controlled LFSRs with majority rule.",
+    shape: { keyLengths: [8], nonceLengths: [3] },
+  },
+  {
+    id: "rc4-drop",
+    label: "RC4-drop[N]",
+    category: "Stream",
+    aead: false,
+    security: "legacy",
+    tags: ["rc4-drop", "rc4", "arcfour", "stream", "drop768", "drop1024", "drop3072", "fms", "encrypt", "decrypt"],
+    summary: "RC4 stream cipher discarding initial keystream bytes to eliminate Fluhrer-Mantin-Shamir initial state bias.",
+    shape: { keyLengths: [5, 16, 32], nonceLengths: [] },
+  },
+  {
     /**
      * SOSEMANUK, eSTREAM's fourth software-profile winner -- and, with HC-128, HC-256 and Rabbit
      * already here, the one that completed the set.

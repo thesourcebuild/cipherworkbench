@@ -1,84 +1,73 @@
 /**
- * Chaocipher -- Dynamic Two-Rotor Permutation Cipher (John F. Byrne, 1918).
- *
- * Simulates the mechanical action of two revolving alphabetic wheels (Left and Right)
- * with dynamic permutation after each enciphered character.
+ * Chaocipher (J.F. Byrne, 1953).
+ * A dynamic substitution cipher using two interacting rotating alphabet wheels
+ * that mutate after every letter enciphered/deciphered.
  */
 
-export const DEFAULT_CHAOCIPHER_LEFT = "HXUCZVAMDSLKPEJRIGTWFOBNYQ";
-export const DEFAULT_CHAOCIPHER_RIGHT = "PTLNBQDEOYSFAVZKGJRIHWXUMC";
+const DEFAULT_LEFT = "HXUCZVAMDSLKPEFJRIGTWOBNYQ";
+const DEFAULT_RIGHT = "PTLNBQDEOYSFAVZKGJRIHWXUMC";
 
-export function permuteLeftDisk(disk: string[], index: number): void {
-  // Rotate disk so index letter is at zenith (position 0)
-  const rotated = disk.slice(index).concat(disk.slice(0, index));
-  // Extract letter at position 1 and insert at nadir (position 13)
-  const extracted = rotated.splice(1, 1)[0]!;
-  rotated.splice(13, 0, extracted);
-  for (let i = 0; i < 26; i++) {
-    disk[i] = rotated[i]!;
-  }
+export interface ChaocipherOptions {
+  leftAlphabet?: string;
+  rightAlphabet?: string;
+  direction?: "encrypt" | "decrypt";
 }
 
-export function permuteRightDisk(disk: string[], index: number): void {
-  // Rotate disk so index letter is at zenith + 1 (position 1)
-  const rotateAmount = (index + 1) % 26;
-  const rotated = disk.slice(rotateAmount).concat(disk.slice(0, rotateAmount));
-  // Extract letter at position 2 and insert at nadir (position 13)
-  const extracted = rotated.splice(2, 1)[0]!;
-  rotated.splice(13, 0, extracted);
-  for (let i = 0; i < 26; i++) {
-    disk[i] = rotated[i]!;
+export function chaocipherCrypt(text: string, options: ChaocipherOptions = {}): string {
+  let left = (options.leftAlphabet ?? DEFAULT_LEFT).toUpperCase();
+  let right = (options.rightAlphabet ?? DEFAULT_RIGHT).toUpperCase();
+  const isDecrypt = options.direction === "decrypt";
+
+  const clean = text.toUpperCase();
+  let result = "";
+
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i]!;
+    if (isDecrypt) {
+      const idx = left.indexOf(ch);
+      if (idx === -1) {
+        result += ch;
+        continue;
+      }
+      const plainChar = right[idx]!;
+      result += plainChar;
+
+      // Permute alphabets
+      left = permuteLeft(left, idx);
+      right = permuteRight(right, idx);
+    } else {
+      const idx = right.indexOf(ch);
+      if (idx === -1) {
+        result += ch;
+        continue;
+      }
+      const cipherChar = left[idx]!;
+      result += cipherChar;
+
+      // Permute alphabets
+      left = permuteLeft(left, idx);
+      right = permuteRight(right, idx);
+    }
   }
+
+  return result;
 }
 
-export function chaoEncrypt(
-  plaintext: string,
-  leftAlphabet: string = DEFAULT_CHAOCIPHER_LEFT,
-  rightAlphabet: string = DEFAULT_CHAOCIPHER_RIGHT,
-): string {
-  const left = leftAlphabet.toUpperCase().split("");
-  const right = rightAlphabet.toUpperCase().split("");
-  const clean = plaintext.toUpperCase().replace(/[^A-Z]/g, "");
-
-  let ciphertext = "";
-  for (const ch of clean) {
-    const rIdx = right.indexOf(ch);
-    if (rIdx === -1) continue;
-
-    // Encipher: right letter maps directly across to left letter
-    const cipherChar = left[rIdx]!;
-    ciphertext += cipherChar;
-
-    // Permute wheels
-    permuteLeftDisk(left, rIdx);
-    permuteRightDisk(right, rIdx);
-  }
-
-  return ciphertext;
+function permuteLeft(wheel: string, pos: number): string {
+  // Rotate so pos is at zenith (index 0)
+  const rotated = wheel.slice(pos) + wheel.slice(0, pos);
+  // Extract index 1, insert at index 13
+  const ch = rotated[1]!;
+  const rest = rotated.slice(0, 1) + rotated.slice(2, 14) + ch + rotated.slice(14);
+  return rest;
 }
 
-export function chaoDecrypt(
-  ciphertext: string,
-  leftAlphabet: string = DEFAULT_CHAOCIPHER_LEFT,
-  rightAlphabet: string = DEFAULT_CHAOCIPHER_RIGHT,
-): string {
-  const left = leftAlphabet.toUpperCase().split("");
-  const right = rightAlphabet.toUpperCase().split("");
-  const clean = ciphertext.toUpperCase().replace(/[^A-Z]/g, "");
-
-  let plaintext = "";
-  for (const ch of clean) {
-    const lIdx = left.indexOf(ch);
-    if (lIdx === -1) continue;
-
-    // Decipher: left letter maps directly across to right letter
-    const plainChar = right[lIdx]!;
-    plaintext += plainChar;
-
-    // Permute wheels
-    permuteLeftDisk(left, lIdx);
-    permuteRightDisk(right, lIdx);
-  }
-
-  return plaintext;
+function permuteRight(wheel: string, pos: number): string {
+  // Rotate so pos + 1 is at zenith (index 0)
+  const shift = (pos + 1) % 26;
+  const rotated = wheel.slice(shift) + wheel.slice(0, shift);
+  // Extract index 2, insert at index 13
+  const ch = rotated[2]!;
+  const rest = rotated.slice(0, 2) + rotated.slice(3, 14) + ch + rotated.slice(14);
+  return rest;
 }

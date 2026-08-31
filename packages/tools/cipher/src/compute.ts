@@ -172,6 +172,8 @@ function operationFor(r: ResolvedCipher): CipherOperation {
     case "sosemanuk":
     case "snow3g":
     case "snow-v":
+    case "a5-1":
+    case "rc4-drop":
     case "isaac":
     case "pcg64":
     case "xoshiro256":

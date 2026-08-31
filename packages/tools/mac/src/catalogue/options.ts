@@ -32,18 +32,10 @@ import type { MacOptionGroup } from "./groups";
  *
  * So does the **default encoding**, and it is not a stylistic choice. The key is bytes, and the
  * field holds text, so something has to say how one becomes the other; whatever this declares is
- * what the form's selector starts on and what `decodeBytesOption` falls back to. HMAC gets `utf-8`
- * because an HMAC key in practice is a typed string — a shared secret out of a config file, an API
- * token — and because that is what the reference this app is measured against does: with the key
- * `1234` and the message `123456789`, reading the key as text gives
- * `1a317d78de6906810199224081c464ef1673ca4c19e30f5d61b4e048748dfb48` and reading it as the two
- * bytes `0x12 0x34` gives `208e58cc…`. Both are correct HMACs of different keys, which is exactly
- * why the default matters: nothing about the output says which one you got.
- *
- * The other three keep `hex`, and for a reason rather than by omission. Poly1305 takes exactly 32
- * bytes and CMAC one of AES's three sizes, so a typed passphrase is almost always the wrong length
- * and would be refused rather than silently misread; KMAC's published vectors in NIST SP 800-185
- * are byte strings, and anyone using it is working from that document.
+ * what the form's selector starts on and what `decodeBytesOption` falls back to. MAC keys get `utf-8`
+ * by default because a key in practice is a typed string — a shared secret out of a config file, an API
+ * token, or passphrase — and because that is what users expect when typing text into the field.
+ * The selector beside the field switches to hex, Base64 or Latin-1 for a key that is raw bytes.
  *
  * Changing this default is safe in a way it would not be for a non-secret option: keys are never
  * written to a share link or to saved state, so there is no stored value whose meaning could shift
@@ -52,7 +44,7 @@ import type { MacOptionGroup } from "./groups";
 function keyOption(
   bytesLength: OptionDef["bytesLength"],
   detail: string,
-  defaultBytesEncoding: OptionDef["defaultBytesEncoding"] = "hex",
+  defaultBytesEncoding: OptionDef["defaultBytesEncoding"] = "utf-8",
 ): OptionDef<MacOptionGroup> {
   return {
     id: OPTION_KEY,
@@ -231,7 +223,6 @@ const SKEIN_MAC_OPTIONS: readonly OptionDef<MacOptionGroup>[] = [
   keyOption(
     { min: 1, max: 4096, generate: 32 },
     "Any length, and unlike HMAC there is no block-size ceiling: UBI absorbs a long key in blocks rather than hashing it down first, so 200 bytes of key really is 200 bytes of key. Aim for at least the state size.",
-    "hex",
   ),
   {
     id: OPTION_SKEIN_STATE,
@@ -240,7 +231,7 @@ const SKEIN_MAC_OPTIONS: readonly OptionDef<MacOptionGroup>[] = [
     kind: "enum",
     choices: [
       { value: "32", label: "Skein-256", summary: "256-bit state, 72 rounds" },
-      { value: "64", label: "Skein-512", summary: "512-bit state \u2014 the authors' choice" },
+      { value: "64", label: "Skein-512", summary: "512-bit state — the authors' choice" },
       { value: "128", label: "Skein-1024", summary: "1024-bit state, 80 rounds" },
     ],
     availableOn: [TAG_SKEIN_MAC],
@@ -258,7 +249,7 @@ const SKEIN_MAC_OPTIONS: readonly OptionDef<MacOptionGroup>[] = [
     availableOn: [TAG_SKEIN_MAC],
     summary: "How many bytes of tag to produce.",
     detail:
-      "Skein binds the output length into its configuration block, so a 32-byte tag is not the first half of a 64-byte one \u2014 they are different functions. That is the same behaviour as KMAC and the opposite of truncating an HMAC. The default matches the state size.",
+      "Skein binds the output length into its configuration block, so a 32-byte tag is not the first half of a 64-byte one — they are different functions. That is the same behaviour as KMAC and the opposite of truncating an HMAC. The default matches the state size.",
     order: 10,
   },
 ];
@@ -267,8 +258,7 @@ const SKEIN_MAC_OPTIONS: readonly OptionDef<MacOptionGroup>[] = [
 const ASCON_MAC_OPTIONS: readonly OptionDef<MacOptionGroup>[] = [
   keyOption(
     { exact: [16], generate: 16 },
-    "Exactly 16 bytes. Ascon's security claim is 128-bit across the board \u2014 key and tag are both that width.",
-    "hex",
+    "Exactly 16 bytes. Ascon's security claim is 128-bit across the board — key and tag are both that width.",
   ),
 ];
 
@@ -278,7 +268,6 @@ function asconPrfOptions(max: number, defaultLen: number): readonly OptionDef<Ma
     keyOption(
       { exact: [16], generate: 16 },
       "Exactly 16 bytes, as with Ascon-MAC.",
-      "hex",
     ),
     {
       id: OPTION_OUTPUT_LENGTH,
@@ -291,7 +280,7 @@ function asconPrfOptions(max: number, defaultLen: number): readonly OptionDef<Ma
       detail:
         max === 16
           ? "At most 16 bytes: PRFShort squeezes from the two state words the key was XORed back over, and there is no second permutation to produce more."
-          : "The length is not bound into the computation, so 16 bytes is genuinely the first 16 of a 64-byte request \u2014 unlike KMAC and Skein, where the length changes the function. That makes Ascon-PRF usable as a keyed stream for deriving several independent values from one key.",
+          : "The length is not bound into the computation, so 16 bytes is genuinely the first 16 of a 64-byte request — unlike KMAC and Skein, where the length changes the function. That makes Ascon-PRF usable as a keyed stream for deriving several independent values from one key.",
       order: 10,
     },
   ];
@@ -317,6 +306,14 @@ export function macCatalogueFor(toolId: string): OptionCatalogue<MacOptionGroup>
       poly1305: POLY1305_OPTIONS,
       cmac: CMAC_OPTIONS,
       siphash: SIPHASH_OPTIONS,
+      siphash13: SIPHASH_OPTIONS,
+      siphash48: SIPHASH_OPTIONS,
+      halfsiphash: [
+        keyOption(
+          { exact: [8], generate: 8 },
+          "Exactly 8 bytes (64-bit key for HalfSipHash).",
+        ),
+      ],
       highwayhash: HIGHWAY_OPTIONS,
       skeinmac: SKEIN_MAC_OPTIONS,
       asconmac: ASCON_MAC_OPTIONS,
@@ -326,21 +323,18 @@ export function macCatalogueFor(toolId: string): OptionCatalogue<MacOptionGroup>
         keyOption(
           { exact: [16], generate: 16 },
           "Exactly 16 bytes (128-bit key).",
-          "hex",
         ),
       ],
       pelican: [
         keyOption(
           { exact: [16], generate: 16 },
           "Exactly 16 bytes (128-bit AES key).",
-          "hex",
         ),
       ],
       "poly1305-aes": [
         keyOption(
           { exact: [32], generate: 32 },
           "Exactly 32 bytes (16-byte Poly1305 evaluation key r + 16-byte AES key k).",
-          "hex",
         ),
       ],
     };

@@ -185,7 +185,7 @@ export const RULES: readonly LintRule<MacSpec>[] = [
       const encoding =
         optString(spec.options, encodingId) ??
         catalogue.get(OPTION_KEY)?.defaultBytesEncoding ??
-        "hex";
+        "utf-8";
       if (encoding !== "utf-8") return [];
       if (key.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(key)) return [];
 
@@ -196,7 +196,7 @@ export const RULES: readonly LintRule<MacSpec>[] = [
           code: "M007",
           level: "info",
           message: `This key is being read as text — ${asText} bytes, not ${asHex}.`,
-          detail: `Every character of "${key}" is a hex digit, so it could equally be ${asHex} raw bytes. Both are valid keys and the tag looks the same either way, which is why this is worth stating rather than guessing at: a value that will not match another tool is very often this and nothing else. Text is the default because an HMAC key is usually a typed secret; switch the encoding beside the field if these are bytes you copied from somewhere.`,
+          detail: `Every character of "${key}" is a hex digit, so it could equally be ${asHex} raw bytes. Both are valid keys and the tag looks the same either way, which is why this is worth stating rather than guessing at: a value that will not match another tool is very often this and nothing else. Text is the default because a MAC key is usually a typed secret; switch the encoding beside the field if these are bytes you copied from somewhere.`,
           optionIds: [OPTION_KEY],
           fix: {
             label: "Read the key as hex",

@@ -199,6 +199,36 @@ export const MAC_TOOLS: readonly MacToolMeta[] = [
     summary: "D. J. Bernstein's original 2005 Poly1305-AES authentication construction.",
     streaming: false,
   },
+  {
+    id: "siphash13",
+    label: "SipHash-1-3",
+    category: "One-time",
+    outputLen: 8,
+    security: "not-a-mac",
+    tags: ["siphash", "siphash-1-3", "prf", "hash flooding", "hash table", "speed"],
+    summary: "High-throughput 1-round compression, 3-round finalization SipHash PRF variant.",
+    streaming: false,
+  },
+  {
+    id: "siphash48",
+    label: "SipHash-4-8",
+    category: "One-time",
+    outputLen: 8,
+    security: "not-a-mac",
+    tags: ["siphash", "siphash-4-8", "prf", "hash flooding", "high-security", "conservative"],
+    summary: "Ultra-conservative 4-round compression, 8-round finalization SipHash PRF variant.",
+    streaming: false,
+  },
+  {
+    id: "halfsiphash",
+    label: "HalfSipHash-2-4",
+    category: "One-time",
+    outputLen: 4,
+    security: "not-a-mac",
+    tags: ["halfsiphash", "32-bit", "embedded", "microcontroller", "prf", "hash flooding"],
+    summary: "32-bit architecture HalfSipHash variant with 8-byte key and 4-byte output for microcontrollers.",
+    streaming: false,
+  },
 ];
 
 const BY_ID = new Map(MAC_TOOLS.map((t) => [t.id, t]));

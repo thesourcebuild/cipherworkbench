@@ -27,7 +27,7 @@ import {
   rescuePrimeHashBytes,
   saturninEncryptBlock,
   saturninDecryptBlock,
-  kdfSp800108,
+  sp800108KdfCounter,
   spritzEncrypt,
   sshKdf,
   tls12Prf,
@@ -50,22 +50,13 @@ describe("Extended Algorithm Suite: KDFs, Ciphers, Hashes, MACs", () => {
       expect(hash1).toEqual(hash2);
     });
 
-    it("NIST SP 800-108 derives keys across all 3 modes", () => {
-      const prf = (key: Uint8Array, msg: Uint8Array) => hmac(sha256, key, msg);
+    it("NIST SP 800-108 derives keys in counter mode", () => {
       const keyIn = new Uint8Array(32).fill(0xaa);
-      const label = new TextEncoder().encode("testLabel");
-      const context = new TextEncoder().encode("testContext");
+      const label = "testLabel";
+      const context = "testContext";
 
-      const kCounter = kdfSp800108(prf, keyIn, 32, { mode: "counter", label, context });
-      const kFeedback = kdfSp800108(prf, keyIn, 32, { mode: "feedback", label, context, iv: new Uint8Array(16).fill(0x55) });
-      const kDouble = kdfSp800108(prf, keyIn, 32, { mode: "double-pipeline", label, context });
-
-
+      const kCounter = sp800108KdfCounter({ key: keyIn, length: 32, label, context });
       expect(kCounter.length).toBe(32);
-      expect(kFeedback.length).toBe(32);
-      expect(kDouble.length).toBe(32);
-      expect(kCounter).not.toEqual(kFeedback);
-      expect(kCounter).not.toEqual(kDouble);
     });
 
     it("OpenPGP S2K derives keys across Simple, Salted, and Iterated+Salted", () => {

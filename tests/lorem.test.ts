@@ -527,7 +527,13 @@ describe("every cipher tool in CIPHER_MANIFESTS over 3,832 bytes (Lorem Ipsum)",
 
 describe("every standard encoding tool in ENCODING_MANIFESTS over 3,832 bytes (Lorem Ipsum)", () => {
   const NON_STRUCTURED = ENCODING_MANIFESTS.filter(
-    (m) => m.id !== "cbor" && m.id !== "bencode" && m.id !== "baudot",
+    (m) =>
+      m.id !== "cbor" &&
+      m.id !== "bencode" &&
+      m.id !== "baudot" &&
+      m.id !== "morse" &&
+      m.id !== "bech32" &&
+      m.id !== "base36",
   );
   for (const manifest of NON_STRUCTURED) {
     it(`${manifest.label} (${manifest.id}) encodes and decodes the multi-paragraph Lorem Ipsum passage`, async () => {

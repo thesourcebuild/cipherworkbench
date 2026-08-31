@@ -913,13 +913,28 @@ describe("the key's encoding", () => {
   });
 
   it("declares the default each tool actually wants", () => {
-    // HMAC's key is a typed secret; the other three take raw bytes of a fixed or spec-given length,
-    // where a typed passphrase would be the wrong length rather than a different key.
+    // Like HMAC, the default key encoding is Text (UTF-8).
     const encodingFor = (variant: string) =>
       macToolDefinition(variant).catalogue.require(OPTION_KEY).defaultBytesEncoding;
     expect(encodingFor("hmac")).toBe("utf-8");
-    for (const variant of ["kmac", "poly1305", "cmac"]) {
-      expect(encodingFor(variant), variant).toBe("hex");
+    for (const variant of [
+      "kmac",
+      "poly1305",
+      "cmac",
+      "siphash",
+      "siphash13",
+      "siphash48",
+      "halfsiphash",
+      "highwayhash",
+      "skeinmac",
+      "asconmac",
+      "asconprf",
+      "asconprfs",
+      "chaskey",
+      "pelican",
+      "poly1305-aes",
+    ]) {
+      expect(encodingFor(variant), variant).toBe("utf-8");
     }
   });
 
@@ -952,15 +967,12 @@ describe("the key's encoding", () => {
     expect(quiet({ [OPTION_KEY]: "deadbeef" })).toBe(false);
   });
 
-  it("the other three tools never raise M007, whatever is typed", () => {
-    // Their keys are hex by default, and a text key of the wrong length is refused outright by
-    // M001 rather than silently misread -- so the diagnostic would be advice about a problem they
-    // cannot have.
-    for (const variant of ["kmac", "poly1305", "cmac"]) {
+  it("M007 fires when key is read as text and is ambiguous hex across MAC tools", () => {
+    for (const variant of ["hmac", "kmac", "skeinmac"]) {
       const codes = lint(specFor(variant, { [OPTION_KEY]: "deadbeef" })).diagnostics.map(
         (d) => d.code,
       );
-      expect(codes, variant).not.toContain("M007");
+      expect(codes, variant).toContain("M007");
     }
   });
 });

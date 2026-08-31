@@ -2,14 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   adfgvxEncrypt,
   adfgvxDecrypt,
-  vicEncrypt,
-  vicDecrypt,
+  vicCrypt,
   hillEncrypt,
   hillDecrypt,
   fourSquareEncrypt,
   fourSquareDecrypt,
-  chaoEncrypt,
-  chaoDecrypt,
+  chaocipherCrypt,
   enigmaCrypt,
   m209Crypt,
   lorenzCrypt,
@@ -45,9 +43,8 @@ describe("Advanced Classical Ciphers", () => {
   describe("VIC Cipher", () => {
     it("encodes with straddling checkerboard and decrypts", () => {
       const plaintext = "STRIKEATNOON";
-      const key = "73521";
-      const ct = vicEncrypt(plaintext, key);
-      const pt = vicDecrypt(ct, key);
+      const ct = vicCrypt(plaintext, { direction: "encrypt" });
+      const pt = vicCrypt(ct, { direction: "decrypt" });
       expect(pt).toBe(plaintext);
     });
   });
@@ -73,8 +70,8 @@ describe("Advanced Classical Ciphers", () => {
   describe("Chaocipher", () => {
     it("encrypts and decrypts through dynamic dual-rotor permutation", () => {
       const plaintext = "WELLDONEISBETTERTHANWELLSAID";
-      const ct = chaoEncrypt(plaintext);
-      const pt = chaoDecrypt(ct);
+      const ct = chaocipherCrypt(plaintext, { direction: "encrypt" });
+      const pt = chaocipherCrypt(ct, { direction: "decrypt" });
       expect(pt).toBe(plaintext);
     });
   });

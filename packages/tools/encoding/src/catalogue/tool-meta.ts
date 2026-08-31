@@ -32,7 +32,14 @@ export type EncodingKind =
   | "bubble-babble"
   | "baudot"
   | "pgp-words"
-  | "gray-code";
+  | "gray-code"
+  | "base62"
+  | "base36"
+  | "bech32"
+  | "base58check"
+  | "quoted-printable"
+  | "uuencode"
+  | "morse";
 
 export interface EncodingToolMeta {
   id: string;
@@ -274,6 +281,97 @@ export const ENCODING_TOOLS: readonly EncodingToolMeta[] = [
     summary: "Reflected binary Gray code where adjacent integer representations differ by exactly one bit.",
     expansion: "8-bit reflected binary Gray code bitstrings",
     check: "01101100 01010111 01011010 01011010 01011000",
+  },
+  {
+    id: "base62",
+    label: "Base62",
+    kind: "base62",
+    category: "Base-N",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["base62", "alphanumeric", "url-shortener", "token", "radix-62", "encoding"],
+    summary: "Pure alphanumeric 62-character base [0-9A-Za-z] without symbols or punctuation.",
+    expansion: "alphanumeric string",
+    check: "5TP3P3v",
+  },
+  {
+    id: "base36",
+    label: "Base36",
+    kind: "base36",
+    category: "Base-N",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["base36", "alphanumeric", "case-insensitive", "compact-id", "encoding"],
+    summary: "Case-insensitive 36-character alphanumeric base [0-9A-Z] for compact identifiers.",
+    expansion: "alphanumeric string",
+    check: "3YUD78MN",
+  },
+  {
+    id: "bech32",
+    label: "Bech32 & Bech32m",
+    kind: "bech32",
+    category: "Cryptocurrency",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["bech32", "bech32m", "bip173", "bip350", "segwit", "taproot", "bitcoin", "encoding"],
+    summary: "BIP-173 / BIP-350 checksummed Base32 format with BCH error-detecting polynomial codes.",
+    expansion: "checksummed base32 with HRP",
+    check: "hello1fpjkcmr0vtmtgr",
+  },
+  {
+    id: "base58check",
+    label: "Base58Check",
+    kind: "base58check",
+    category: "Cryptocurrency",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["base58check", "bitcoin", "p2pkh", "p2sh", "wif", "sha256d", "encoding"],
+    summary: "Bitcoin Base58 encoding with version byte prefix and 4-byte double SHA-256 checksum.",
+    expansion: "Base58 + 4-byte checksum",
+    check: "1vSxRbq6DSYXc",
+  },
+  {
+    id: "quoted-printable",
+    label: "Quoted-Printable (MIME)",
+    kind: "quoted-printable",
+    category: "Specialized encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["quoted-printable", "mime", "rfc2045", "email", "ascii", "encoding"],
+    summary: "MIME RFC 2045 email encoding converting 8-bit bytes to printable 7-bit ASCII with =XX escape sequences.",
+    expansion: "=XX escapes for non-ASCII bytes",
+    check: "Hello",
+  },
+  {
+    id: "uuencode",
+    label: "UUEncode (Unix-to-Unix)",
+    kind: "uuencode",
+    category: "Historic encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["uuencode", "uudecode", "unix", "usenet", "email", "encoding"],
+    summary: "Historical Unix-to-Unix 6-bit binary-to-text transmission encoding with ASCII 32 offset.",
+    expansion: "4 characters per 3 bytes + line framing",
+    check: "begin 644 file.txt\n%2&5L;&\\`\n`\nend\n",
+  },
+  {
+    id: "morse",
+    label: "Morse Code",
+    kind: "morse",
+    category: "Historic encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["morse", "morse-code", "telegraph", "dots", "dashes", "cw", "encoding"],
+    summary: "International Morse Code mapping characters to sequences of dots (.) and dashes (-).",
+    expansion: "dot-dash notation",
+    check: ".... . .-.. .-.. ---",
   },
 ];
 

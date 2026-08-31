@@ -130,7 +130,7 @@ export const OPTIONS: readonly OptionDef<HashOptionGroup>[] = [
     // accepted here and the specific limit is enforced where the message can name the algorithm --
     // the same pattern AES's per-mode nonce length uses.
     bytesLength: { min: 0, max: 64, generate: 32 },
-    defaultBytesEncoding: "hex",
+    defaultBytesEncoding: "utf-8",
     secret: true,
     availableOn: [TAG_BLAKE_KEY],
     summary: "Turns the hash into a MAC. Never included in a share link.",

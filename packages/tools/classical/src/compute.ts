@@ -5,14 +5,12 @@ import {
   normaliseShift,
   adfgvxEncrypt,
   adfgvxDecrypt,
-  vicEncrypt,
-  vicDecrypt,
+  vicCrypt,
   hillEncrypt,
   hillDecrypt,
   fourSquareEncrypt,
   fourSquareDecrypt,
-  chaoEncrypt,
-  chaoDecrypt,
+  chaocipherCrypt,
   enigmaCrypt,
   vigenereEncrypt,
   vigenereDecrypt,
@@ -22,8 +20,7 @@ import {
   bifidDecrypt,
   trifidEncrypt,
   trifidDecrypt,
-  baconEncrypt,
-  baconDecrypt,
+  baconCrypt,
   railFenceEncrypt,
   railFenceDecrypt,
   m209Crypt,
@@ -36,6 +33,9 @@ import {
   nihilistDecrypt,
   straddlingCheckerboardEncrypt,
   straddlingCheckerboardDecrypt,
+  typexCrypt,
+  sigabaCrypt,
+  bazeriesCrypt,
 } from "@ocs/algos";
 import { optBool } from "@ocs/contracts/pure";
 import type { ToolResult, ToolResultField } from "@ocs/engine";
@@ -68,7 +68,7 @@ export async function computeClassical(
         return { text: res };
       }
       case "vic-cipher": {
-        const res = direction === "encrypt" ? vicEncrypt(msg, "73521") : vicDecrypt(msg, "73521");
+        const res = vicCrypt(msg, { direction });
         return { text: res };
       }
       case "hill-cipher": {
@@ -80,7 +80,7 @@ export async function computeClassical(
         return { text: res };
       }
       case "chaocipher": {
-        const res = direction === "encrypt" ? chaoEncrypt(msg) : chaoDecrypt(msg);
+        const res = chaocipherCrypt(msg, { direction });
         return { text: res };
       }
       case "enigma": {
@@ -105,7 +105,7 @@ export async function computeClassical(
         return { text: res };
       }
       case "bacon": {
-        const res = direction === "encrypt" ? baconEncrypt(msg) : baconDecrypt(msg);
+        const res = baconCrypt(msg, { direction });
         return { text: res };
       }
       case "railfence": {
@@ -134,6 +134,18 @@ export async function computeClassical(
       }
       case "straddling-checkerboard": {
         const res = direction === "encrypt" ? straddlingCheckerboardEncrypt(msg, { keyword: "CIPHER" }) : straddlingCheckerboardDecrypt(msg, { keyword: "CIPHER" });
+        return { text: res };
+      }
+      case "typex": {
+        const res = typexCrypt(msg, { direction });
+        return { text: res };
+      }
+      case "sigaba": {
+        const res = sigabaCrypt(msg, { direction });
+        return { text: res };
+      }
+      case "bazeries": {
+        const res = bazeriesCrypt(msg, { direction });
         return { text: res };
       }
     }

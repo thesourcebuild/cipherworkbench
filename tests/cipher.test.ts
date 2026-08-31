@@ -3903,6 +3903,7 @@ describe("the ten stream ciphers and Kalyna", () => {
      * own or a key range, so each keeps a hand-written catalogue. See the note on `CipherToolMeta.shape`.
      */
     expect(STREAM_TOOLS.map((t) => t.id).sort()).toEqual([
+      "a5-1",
       "adiantum",
       "crypto1",
       "dect-dsc",
@@ -3915,6 +3916,7 @@ describe("the ten stream ciphers and Kalyna", () => {
       "isaac",
       "pcg64",
       "rabbit",
+      "rc4-drop",
       "snow-v",
       "snow3g",
       "sosemanuk",
@@ -4103,7 +4105,7 @@ describe("the ten stream ciphers and Kalyna", () => {
      * Trivium adds the only one with three nonce widths, all of them published rather than padded.
      * SOSEMANUK adds the only one with three *key* widths, which are Serpent's, since its schedule is.
      */
-    expect(new Set(shapes.map((s) => `${String(s.key)}/${String(s.nonce)}`)).size).toBe(17);
+    expect(new Set(shapes.map((s) => `${String(s.key)}/${String(s.nonce)}`)).size).toBe(19);
   });
 
   /** No stream tool gets a mode, an AAD field or any of the per-cipher block controls. */

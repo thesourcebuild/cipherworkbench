@@ -9,6 +9,9 @@ import {
   computePoly1305,
   computePoly1305Aes,
   computeSiphash,
+  computeSiphash13,
+  computeSiphash48,
+  computeHalfSiphash,
   createAsconMacStream,
   createAsconPrfStream,
   createHighwayStream,
@@ -126,6 +129,15 @@ export async function computeMac(spec: MacSpec, input: Uint8Array): Promise<Tool
         break;
       case "siphash":
         tag = computeSiphash(r.key, input);
+        break;
+      case "siphash13":
+        tag = computeSiphash13(r.key, input);
+        break;
+      case "siphash48":
+        tag = computeSiphash48(r.key, input);
+        break;
+      case "halfsiphash":
+        tag = computeHalfSiphash(r.key, input);
         break;
       case "highwayhash": {
         const hasher = createHighwayStream(r.key, r.outputLen);

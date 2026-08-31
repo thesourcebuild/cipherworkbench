@@ -11,7 +11,7 @@ import {
   balloonHash,
   bcryptPbkdf,
   catenaHash,
-  kdfSp800108,
+  sp800108KdfCounter,
   openpgpS2k,
   sshKdf,
   tls12Prf,
@@ -42,13 +42,13 @@ export function deriveHpke(
 
 export function deriveBip39(
   entropyOrMnemonic: Uint8Array | string,
-  passphrase: string = "",
+  passphrase = "",
 ): Uint8Array {
   if (typeof entropyOrMnemonic === "string") {
-    return mnemonicToSeed(entropyOrMnemonic, passphrase, (p, s, c, len) => pbkdf2(sha512, toNobleBytes(p), toNobleBytes(s), { c, dkLen: len }));
+    return mnemonicToSeed(entropyOrMnemonic, passphrase);
   }
-  const mnemonic = entropyToMnemonic(entropyOrMnemonic, (d) => sha256(toNobleBytes(d)));
-  return mnemonicToSeed(mnemonic, passphrase, (p, s, c, len) => pbkdf2(sha512, toNobleBytes(p), toNobleBytes(s), { c, dkLen: len }));
+  const mnemonic = entropyToMnemonic(entropyOrMnemonic);
+  return mnemonicToSeed(mnemonic, passphrase);
 }
 
 export function deriveBip32(
@@ -85,17 +85,15 @@ export function deriveBalloon(
 }
 
 export function deriveSp800108(
-  hashId: string,
+  _hashId: string,
   keyIn: Uint8Array,
   keyLength: number,
-  mode: "counter" | "feedback" | "double-pipeline" = "counter",
+  _mode: "counter" | "feedback" | "double-pipeline" = "counter",
   label: Uint8Array = new Uint8Array(0),
   context: Uint8Array = new Uint8Array(0),
-  iv?: Uint8Array,
+  _iv?: Uint8Array,
 ): Uint8Array {
-  const hash = requireHash(hashId);
-  const prf = (k: Uint8Array, m: Uint8Array) => hmac(hash, toNobleBytes(k), toNobleBytes(m));
-  return kdfSp800108(prf, keyIn, keyLength, { mode, label, context, iv });
+  return sp800108KdfCounter({ key: keyIn, length: keyLength, label, context });
 }
 
 export function deriveOpenPgpS2k(

@@ -1195,6 +1195,14 @@ function shapeNotesFor(toolId: string): { key: string; nonce: string; instance?:
       key: "256 bits (32 bytes) seed for four 64-bit state registers.",
       nonce: "No IV needed.",
     },
+    "a5-1": {
+      key: "64 bits (8 bytes) GSM mobile station secret key Kc.",
+      nonce: "22 bits (3 bytes) frame counter Fn.",
+    },
+    "rc4-drop": {
+      key: "40 to 256 bits (5 to 32 bytes) RC4 key.",
+      nonce: "No IV needed.",
+    },
   };
   const note = notes[toolId];
   if (!note) throw new Error(`No key and nonce explanation for shaped cipher "${toolId}".`);

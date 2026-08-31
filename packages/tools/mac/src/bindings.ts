@@ -27,6 +27,9 @@ import {
   createWhirlpool,
   createHighwayHash,
   siphash24,
+  siphash13,
+  siphash48,
+  halfSipHash24,
   chaskeyMac,
   pelicanMac,
   poly1305AesMac,
@@ -302,6 +305,18 @@ export function createKmacStream(
  */
 export function computeSiphash(key: Uint8Array, message: Uint8Array): Uint8Array {
   return siphash24(key, message);
+}
+
+export function computeSiphash13(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return siphash13(key, message);
+}
+
+export function computeSiphash48(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return siphash48(key, message);
+}
+
+export function computeHalfSiphash(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return halfSipHash24(key, message);
 }
 
 /** Note the argument order: message first, key second. */

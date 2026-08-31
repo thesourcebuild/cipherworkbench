@@ -26,6 +26,20 @@ import {
   decodePgpWords,
   encodeGrayBytes,
   decodeGrayBytes,
+  encodeBase62,
+  decodeBase62,
+  encodeBase36,
+  decodeBase36,
+  encodeBech32,
+  decodeBech32,
+  encodeBase58Check,
+  decodeBase58Check,
+  encodeQuotedPrintable,
+  decodeQuotedPrintable,
+  encodeUU,
+  decodeUU,
+  encodeMorse,
+  decodeMorse,
 } from "@ocs/algos";
 import {
   base32,
@@ -293,6 +307,20 @@ export function encodeToText(bytes: Uint8Array, settings: EncodeSettings): strin
       return Array.from(encodeGrayBytes(bytes))
         .map((b) => b.toString(2).padStart(8, "0"))
         .join(" ");
+    case "base62":
+      return encodeBase62(bytes);
+    case "base36":
+      return encodeBase36(bytes);
+    case "bech32":
+      return encodeBech32("hello", bytes);
+    case "base58check":
+      return encodeBase58Check(bytes, 0x00);
+    case "quoted-printable":
+      return encodeQuotedPrintable(bytes);
+    case "uuencode":
+      return encodeUU(bytes);
+    case "morse":
+      return encodeMorse(new TextDecoder("utf-8").decode(bytes));
     case "cbor": {
       // The input is JSON text here rather than arbitrary bytes: CBOR encodes a *structure*, and
       // JSON is how someone types one. `decodeCbor`'s counterpart on the way back out.
@@ -397,6 +425,24 @@ export function decodeFromText(input: string, settings: EncodeSettings): DecodeR
       }
       return { bytes: decodeGrayBytes(new Uint8Array(rawBytes)), notes: [] };
     }
+    case "base62":
+      return { bytes: decodeBase62(input), notes: [] };
+    case "base36":
+      return { bytes: decodeBase36(input), notes: [] };
+    case "bech32": {
+      const decoded = decodeBech32(input);
+      return { bytes: decoded.data, notes: [] };
+    }
+    case "base58check": {
+      const decoded = decodeBase58Check(input);
+      return { bytes: decoded.payload, notes: [] };
+    }
+    case "quoted-printable":
+      return { bytes: decodeQuotedPrintable(input), notes: [] };
+    case "uuencode":
+      return { bytes: decodeUU(input), notes: [] };
+    case "morse":
+      return { bytes: new TextEncoder().encode(decodeMorse(input)), notes: [] };
     case "cbor": {
       let bytes: Uint8Array;
       try {

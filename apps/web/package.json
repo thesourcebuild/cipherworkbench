@@ -1,6 +1,6 @@
 {
   "name": "@ocs/web",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "private": true,
   "//scripts": "--webpack is not inertia. Next 16 defaults to Turbopack, and Turbopack does not bundle `new Worker(new URL('./compute.worker.ts', import.meta.url))` under `output: \"export\"` \u2014 it emits the raw .ts as a static asset under _next/static/media, which the browser cannot parse. The worker then fails to start, file-compute.ts silently falls back to the main thread, and hashing a large file locks the UI. Webpack compiles it into a real chunk. Both dev and build use it so the two behave identically; re-test the emitted chunk before switching back.",
   "scripts": {

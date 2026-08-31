@@ -36,7 +36,10 @@ export type ClassicalKind =
   | "solitaire"
   | "adfgx"
   | "nihilist"
-  | "straddling-checkerboard";
+  | "straddling-checkerboard"
+  | "typex"
+  | "sigaba"
+  | "bazeries";
 
 export interface ClassicalToolMeta {
   id: string;
@@ -302,6 +305,42 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     },
     tags: ["straddling-checkerboard", "vic", "espionage", "soviet", "digits", "compression", "classical"],
     summary: "Espionage digits-to-letters substitution matrix creating variable-length digit sequences without delimiters.",
+  },
+  {
+    id: "typex",
+    label: "Typex machine",
+    kind: "typex",
+    category: "Rotor Machine",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["typex", "british", "enigma-variant", "rotor", "bletchley", "stator", "wwii", "classical"],
+    summary: "British WWII 5-rotor cipher machine based on Enigma with a stationary reversing stator.",
+  },
+  {
+    id: "sigaba",
+    label: "SIGABA machine (ECM Mark II)",
+    kind: "sigaba",
+    category: "Rotor Machine",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["sigaba", "ecm", "mark-ii", "csp-889", "15-rotor", "us-army", "us-navy", "wwii", "classical"],
+    summary: "High-security US WWII 15-rotor machine with 3 banks of 5 rotors: cipher, control, and index.",
+  },
+  {
+    id: "bazeries",
+    label: "Bazeries cylinder (M-94)",
+    kind: "bazeries",
+    category: "Cylinder Cipher",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["bazeries", "m94", "m-94", "jefferson", "cylinder", "wheel-cipher", "army", "classical"],
+    summary: "Historical 25-disc cylinder cipher invented by Thomas Jefferson and Etienne Bazeries.",
   },
 ];
 

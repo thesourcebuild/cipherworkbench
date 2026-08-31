@@ -85,6 +85,8 @@ import {
   rabbitCrypt,
   snow3gCrypt,
   snowVCrypt,
+  a51Encrypt,
+  rc4DropCrypt,
   isaacCrypt,
   pcg64Crypt,
   xoshiro256Crypt,
@@ -783,6 +785,13 @@ export function streamCipherOperation(
     sosemanuk: (data) => sosemanukCrypt(key, nonce, data),
     snow3g: (data) => snow3gCrypt(key, nonce, data),
     "snow-v": (data) => snowVCrypt(key, nonce, data),
+    "a5-1": (data) =>
+      a51Encrypt(
+        key,
+        (nonce[0] ?? 0) | ((nonce[1] ?? 0) << 8) | ((nonce[2] ?? 0) << 16),
+        data,
+      ),
+    "rc4-drop": (data) => rc4DropCrypt(key, 768, data),
     isaac: (data) => isaacCrypt(key, data),
     pcg64: (data) => pcg64Crypt(key, data),
     xoshiro256: (data) => xoshiro256Crypt(key, data),
