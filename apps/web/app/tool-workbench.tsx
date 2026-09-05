@@ -124,31 +124,39 @@ export function ToolWorkbench({
    * Runs once per tool -- this component is keyed on `toolId` and remounts -- so `input` is read
    * without being a dependency.
    */
+  const effectiveReadsInput = useMemo(() => {
+    if (!tool) return true;
+    if (spec && tool.readsInputForSpec) {
+      return tool.readsInputForSpec(spec);
+    }
+    return tool.readsInput;
+  }, [tool, spec]);
+
+  const tag = useMemo(() => (tool && spec ? tool.variantTag?.(spec) : undefined), [tool, spec]);
+
+  const hasInputMaterial = useMemo(() => {
+    if (!tool) return false;
+    return visibleOptionGroups(tool.catalogue, tool.groups, tag, "input").length > 0;
+  }, [tool, tag]);
+
   useEffect(() => {
-    if (!tool || !inputIsSeeded || !tool.readsInput) return;
+    if (!tool || !inputIsSeeded || !effectiveReadsInput) return;
     const sample = tool.samples?.[0];
     const text = sample ? sample.text : CHECK_STRING;
     if (input.mode === "text" && input.text === text) return;
     onSeedInput({ ...input, mode: "text", file: undefined, text });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tool]);
+  }, [tool, effectiveReadsInput]);
 
   /**
    * A generator: reads no input and takes no material either, so the whole interaction is the button.
    *
-   * `uuid` and `password` today. Deliberately *not* the KDFs or TupleHash, which also read no box but
+   * `uuid` and `password` today, and asymmetric tools when generating a keypair.
+   * Deliberately *not* the KDFs or TupleHash, which also read no box but
    * take their message from fields -- they have something to be expensive over and a real reason to
    * respect the auto-update switch, so they keep it.
-   *
-   * Derived from the tool alone rather than from `hasInputMaterial` below, for two reasons. It has to
-   * be known before the hooks run, since it decides what to pass one of them; and it should not be
-   * tag-dependent -- whether a tool *is* a generator is a fact about the tool, not something that
-   * should flicker as a variant tag changes which fields are visible.
    */
-  const generates =
-    tool !== undefined &&
-    !tool.readsInput &&
-    !Object.values(tool.groups).some((group) => group.placement === "input");
+  const generates = Boolean(tool && !effectiveReadsInput && !hasInputMaterial);
 
   /**
    * Auto-update is forced on for a generator, and its switch is not shown.
@@ -230,7 +238,6 @@ export function ToolWorkbench({
 
   if (!tool || !spec || !lintResult) return <WorkbenchSkeleton />;
 
-  const tag = tool.variantTag?.(spec);
   /**
    * How many bytes a Generate button should produce, asked per option.
    *
@@ -246,18 +253,6 @@ export function ToolWorkbench({
    * spec, which a once-per-tool catalogue cannot say. Both the hint and the validity check read it.
    */
   const acceptedByteLengths = (optionId: string) => tool.acceptedByteLengths?.(spec, optionId);
-
-  /**
-   * The catalogue splits in two, and the split decides the layout.
-   *
-   * Keys, IVs, nonces, salts and signatures — every group a family marked `material` — go beside
-   * the message, because that is what they are: things handed to the tool for this one computation.
-   * Everything else is a decision made once and goes in the rail. Both lists are checked for
-   * emptiness rather than assumed: a hash has no material at all, and Poly1305 has nothing *but*
-   * material, so each container has to be able to not exist.
-   */
-  const hasInputMaterial =
-    visibleOptionGroups(tool.catalogue, tool.groups, tag, "input").length > 0;
   const hasSettings =
     visibleOptionGroups(tool.catalogue, tool.groups, tag, "settings").length > 0;
   /**
@@ -288,7 +283,7 @@ export function ToolWorkbench({
      * and since the Test input menu moved in here, a tool with neither settings nor info but which
      * reads input still needs the tab to exist, or the menu would have nowhere to live.
      */
-    ...(hasSettings || info.length > 0 || tool.readsInput
+    ...(hasSettings || info.length > 0 || effectiveReadsInput
       ? [
           {
             id: "settings",
@@ -312,7 +307,7 @@ export function ToolWorkbench({
                   fold on a short window, which is the wrong place for the thing you want first.
                 */}
                 {/* Absent for a generator: there is no box to load anything into. */}
-                {tool.readsInput && (
+                {effectiveReadsInput && (
                   <Panel
                     title="Test input"
                     description="Load a known string into the box."
@@ -412,11 +407,11 @@ export function ToolWorkbench({
         <InputPanel
           input={input}
           onChange={onInputChange}
-          readsInput={tool.readsInput}
+          readsInput={effectiveReadsInput}
           // Passed rather than inferred from `!readsInput && !material`, so there is one answer to
           // "is this a generator" and it is the one the compute hook was given.
           generates={generates}
-          supportsFile={tool.supportsFile}
+          supportsFile={effectiveReadsInput && tool.supportsFile}
           buffersWholeFile={tool.supportsFile && !tool.streaming}
           byteLength={state.inputByteLength}
           /**

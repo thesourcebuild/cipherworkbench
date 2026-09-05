@@ -405,9 +405,10 @@ export function defaultCurveFor(toolId: string): string {
   return toolId === "ecdh" ? DEFAULT_ECDH_CURVE : DEFAULT_ECDSA_CURVE;
 }
 
-/** RSA modulus sizes offered. 1024 is absent because it is broken, not merely weak. */
-export const RSA_MODULUS_SIZES = [2048, 3072, 4096] as const;
+/** RSA modulus sizes offered: 512 and 1024 (legacy/educational), 2048 (standard), 3072, 4096. */
+export const RSA_MODULUS_SIZES = [512, 1024, 2048, 3072, 4096] as const;
 export const DEFAULT_RSA_MODULUS = 2048;
+
 
 /**
  * Hashes RSA can be parameterised with — every one OpenSSL will sign with, which is more

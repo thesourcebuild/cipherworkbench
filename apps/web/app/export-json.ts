@@ -253,3 +253,16 @@ export function downloadJsonFile(filename: string, data: object): void {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+export function downloadTextFile(filename: string, content: string, mimeType = "text/plain"): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+

@@ -230,7 +230,8 @@ export function useCompute(
      * being rendered. They worked before only because the box happened to hold the check string,
      * which they then ignored. Same for the KDFs, whose password is an option.
      */
-    if (tool.readsInput && isInputBlank(input) && input.text === "") {
+    const readsInput = tool.readsInputForSpec ? tool.readsInputForSpec(spec) : tool.readsInput;
+    if (readsInput && isInputBlank(input) && input.text === "") {
       debounce.cancel();
       setState({ status: "blank" });
       return;
@@ -370,12 +371,16 @@ export function useCompute(
   // `loading` is a pending table fetch, which is not a bad input and must not be reported as one.
   const inputProblem = decoded && !decoded.ok && !decoded.loading ? decoded.error : undefined;
 
+  const readsInput =
+    tool && spec && tool.readsInputForSpec ? tool.readsInputForSpec(spec) : tool?.readsInput;
+
   return {
     state: state.inputByteLength === inputByteLength ? state : { ...state, inputByteLength },
     recompute,
     // "There is something to compute over" -- which for a generator is always true, since what it
     // computes over is the spec. Without this the Compute button is permanently disabled on `uuid`.
-    canRecompute: Boolean(tool && spec && (!tool.readsInput || !isInputBlank(input))),
+    canRecompute: Boolean(tool && spec && (!readsInput || !isInputBlank(input))),
     inputProblem,
   };
 }
+

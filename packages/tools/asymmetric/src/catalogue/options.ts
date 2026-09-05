@@ -157,16 +157,21 @@ const MODULUS_OPTION: Def = {
     value: String(bits),
     label: `${bits} bits`,
     summary:
-      bits === 2048
-        ? "The current floor. Fast."
-        : bits === 3072
-          ? "Roughly a 128-bit security level"
-          : "Slow to generate, slow to use",
+      bits === 512
+        ? "Legacy / academic only — trivially broken"
+        : bits === 1024
+          ? "Legacy — factorable by modern standards"
+          : bits === 2048
+            ? "The current floor. Fast."
+            : bits === 3072
+              ? "Roughly a 128-bit security level"
+              : "Slow to generate, slow to use",
+    insecure: bits < 2048 ? true : undefined,
   })),
   availableOn: ["generate"],
   summary: "Bigger is slower, in every operation, forever.",
   detail:
-    "1024 bits is not offered because it is within reach of a well-funded attacker, not merely weak. 2048 is the accepted minimum and is fine for most things; 3072 is what NIST asks for beyond 2030. The cost is not only generation -- every signature and every decryption with a 4096-bit key is roughly eight times the work of a 2048-bit one, and the signatures are twice the size. An elliptic curve gives a higher security level than any of these with 32-byte keys.",
+    "512 and 1024 bits are legacy sizes vulnerable to modern factorization, provided for legacy and educational analysis. 2048 is the accepted industry minimum and is fine for most things; 3072 is what NIST asks for beyond 2030.",
   order: 10,
 };
 
@@ -304,9 +309,9 @@ const RSA_OPTIONS: readonly Def[] = [
   pemPrivateKeyOption(["sign", "decrypt"]),
   pemPublicKeyOption(["verify", "encrypt"]),
   signatureOption(
-    // 256 bytes at 2048 bits, 384 at 3072, 512 at 4096. Always exactly the modulus size.
-    { exact: [256, 384, 512] },
-    "An RSA signature is exactly as long as the modulus: 256 bytes for a 2048-bit key, 384 for 3072, 512 for 4096. Anything else is not a signature from a key of these sizes, whatever else it might be.",
+    // 64 bytes at 512 bits, 128 at 1024, 256 at 2048, 384 at 3072, 512 at 4096. Always exactly the modulus size.
+    { exact: [64, 128, 256, 384, 512] },
+    "An RSA signature is exactly as long as the modulus: 64 bytes for a 512-bit key, 128 for 1024, 256 for 2048, 384 for 3072, 512 for 4096. Anything else is not a signature from a key of these sizes, whatever else it might be.",
   ),
   OAEP_LABEL_OPTION,
 ];

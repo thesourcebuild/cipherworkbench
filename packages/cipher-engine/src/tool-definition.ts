@@ -498,4 +498,15 @@ export interface ToolDefinition<TSpec extends ToolSpecBase> extends ToolManifest
    * addons arrived. Most families still return one string.
    */
   variantTag?(spec: TSpec): string | readonly string[] | undefined;
+  /**
+   * Whether this tool reads an input for *this* spec, overriding the static `ToolManifest.readsInput`.
+   *
+   * Most tools either always read input (like SHA-256 or AES) or never read input (like UUID).
+   * Asymmetric tools offer multiple operations: `sign` and `encrypt` read input, while `generate`
+   * reads no message input. When this returns false and the tool has no input material, the workbench
+   * drops the input box and auto-update switch and renders the tool as a generator with a single
+   * "Generate" action button.
+   */
+  readsInputForSpec?(spec: TSpec): boolean;
 }
+

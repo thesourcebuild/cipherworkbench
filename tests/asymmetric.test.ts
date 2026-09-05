@@ -562,6 +562,52 @@ describe("RSA — key generation", () => {
     });
     expect(generated.fields!.find((f) => f.label === "Public exponent")?.value).toBe("65537");
   });
+
+  it("supports generating 512-bit and 1024-bit legacy keypairs and signing/verifying with them", async () => {
+    for (const bits of [512, 1024] as const) {
+      const generated = await run("rsa", {
+        [OPTION_OPERATION]: "generate",
+        [OPTION_MODULUS_LENGTH]: String(bits),
+      });
+      expect(generated.text).toContain("-----BEGIN PRIVATE KEY-----");
+      expect(generated.text).toContain("-----BEGIN PUBLIC KEY-----");
+      expect(generated.fields!.find((f) => f.label === "Key size")?.value).toBe(`${bits} bits`);
+
+      const privPem = generated.fields!.find((f) => f.label === "Private key (PKCS#8 PEM)")!.value;
+      const pubPem = generated.fields!.find((f) => f.label === "Public key (SPKI PEM)")!.value;
+
+      const priv = decodePem(privPem);
+      const pub = decodePem(pubPem);
+      expect(priv.ok, `${bits}-bit private PEM`).toBe(true);
+      expect(pub.ok, `${bits}-bit public PEM`).toBe(true);
+
+      const signed = await run(
+        "rsa",
+        {
+          [OPTION_OPERATION]: "sign",
+          [OPTION_SCHEME]: "pkcs1v15",
+          [OPTION_HASH]: "SHA-256",
+          [OPTION_PRIVATE_KEY]: privPem,
+        },
+        ascii("legacy test"),
+      );
+      expect(signed.bytes!.length).toBe(bits / 8);
+
+      const verified = await run(
+        "rsa",
+        {
+          [OPTION_OPERATION]: "verify",
+          [OPTION_SCHEME]: "pkcs1v15",
+          [OPTION_HASH]: "SHA-256",
+          [OPTION_PUBLIC_KEY]: pubPem,
+          [OPTION_SIGNATURE]: encodeHex(signed.bytes!),
+          signatureEncoding: "hex",
+        },
+        ascii("legacy test"),
+      );
+      expect(verified.text).toBe("MATCH");
+    }
+  });
 });
 
 describe("RSA — signatures", () => {
@@ -1051,7 +1097,21 @@ describe("catalogue integrity", () => {
         expect(definition.variantTag!(spec)).toBe(operation);
       }
     });
+
+    it(`${tool.id} declares readsInputForSpec false only for keypair generation`, () => {
+      const definition = asymmetricToolDefinition(tool.id);
+      expect(definition.readsInputForSpec).toBeDefined();
+      for (const operation of tool.operations) {
+        const spec = specFor(tool.id, { [OPTION_OPERATION]: operation });
+        if (operation === "generate") {
+          expect(definition.readsInputForSpec!(spec)).toBe(false);
+        } else {
+          expect(definition.readsInputForSpec!(spec)).toBe(true);
+        }
+      }
+    });
   }
+
 
   it("every multiline option is a text or password kind", () => {
     for (const tool of ASYMMETRIC_TOOLS) {

@@ -38,8 +38,15 @@ export function asymmetricToolDefinition(toolId: string): ToolDefinition<Asymmet
      * mattered.
      */
     variantTag: (spec) => readOperation(spec.options, meta.operations),
+    /**
+     * Key generation reads no message input. Marking it false lets the workbench drop the
+     * input text box, source selector, encoding selector, and auto-update toggle, presenting
+     * a clean generator card with a "Generate" action button.
+     */
+    readsInputForSpec: (spec) => readOperation(spec.options, meta.operations) !== "generate",
   };
 }
+
 
 export { ASYMMETRIC_TOOL_IDS };
 

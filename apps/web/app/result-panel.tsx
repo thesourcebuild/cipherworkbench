@@ -8,6 +8,7 @@ import { Button, CopyButton, MonoBlock, Panel, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
 import { buildExportPayload, downloadJsonFile } from "./export-json";
 import { FieldTable } from "./field-table";
+import { KeypairResultView } from "./keypair-result-view";
 import type { InputState } from "./input-state";
 import type { ComputeState } from "./use-compute";
 
@@ -80,6 +81,9 @@ export function ResultPanel({
    */
   const [hexPrefix, setHexPrefix] = useState<HexPrefix>("");
 
+  const isKeygen =
+    manifest?.family === "asymmetric" && spec?.options?.operation === "generate";
+
   const primary = useMemo(
     () => renderPrimary(state.result, outputEncoding, hexPrefix),
     [state.result, outputEncoding, hexPrefix],
@@ -128,7 +132,7 @@ export function ResultPanel({
        */
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          {outputEncodings.length > 1 && (
+          {!isKeygen && outputEncodings.length > 1 && (
             <select
               /**
                * A stable hook for the desktop smoke test, matching `data-ocs-result` beside it.
@@ -155,7 +159,7 @@ export function ResultPanel({
             Only for the hex encodings, and only when there is more than one encoding to be in --
             a tool with a single fixed encoding renders no selector at all and this follows it.
           */}
-          {acceptsHexPrefix(outputEncoding) && (
+          {!isKeygen && acceptsHexPrefix(outputEncoding) && (
             <select
               aria-label="Hex prefix"
               value={hexPrefix}
@@ -169,11 +173,13 @@ export function ResultPanel({
               ))}
             </select>
           )}
-          <CopyButton
-            value={() => primary}
-            disabled={primary === ""}
-            writeClipboard={(text) => platform().copyToClipboard(text)}
-          />
+          {!isKeygen && (
+            <CopyButton
+              value={() => primary}
+              disabled={primary === ""}
+              writeClipboard={(text) => platform().copyToClipboard(text)}
+            />
+          )}
           {exportPayload && (
             <Button
               size="sm"
@@ -209,42 +215,28 @@ export function ResultPanel({
           field table, the Table panel -- jumped up and then back down. It is in the Input panel's
           footer now, which is where what it measures lives: see `ProgressReadout`.
         */}
-        <MonoBlock
-          // A stable hook for the desktop smoke test, which needs to read the
-          // computed value out of a packaged build. Keyed on an attribute rather
-          // than a class or element shape so restyling this panel cannot silently
-          // turn the smoke test into a no-op.
-          data-ocs-result=""
-          /**
-           * The status, beside the value, because the two have to be read together.
-           *
-           * During the debounce window the value on screen is the *previous* answer, and a
-           * check that polls for "something that looks like a digest" will happily accept it —
-           * which is exactly what the packaged-app smoke test did the moment the debounce grew
-           * past a keystroke: it read CRC-32("abc") and reported it as CRC-32("123456789").
-           * Publishing the status means a reader can wait for a settled value instead of a
-           * plausible one.
-           */
-          data-ocs-status={state.status}
-          value={primary}
-          // Hex only: grouping Base64 into fours would break its own 4-character
-          // quantum in a way that reads as corruption.
-          groupSize={outputEncoding === "hex" || outputEncoding === "hex-upper" ? 8 : undefined}
-          placeholder={primary === ""}
-          className={cn((stale || pending) && "opacity-50")}
-        />
-
-        {/*
-          The size of the result, directly under it, and **nothing else ever goes in this line**.
-
-          It is the caption for the value above it, so it belongs to the value and not to whatever
-          the panel is currently doing. It was briefly a shared slot that also carried the progress
-          readout, the debounce message and the "press Compute" hint -- which meant the one line
-          someone reads to check they have the right number of bytes was replaced by unrelated text
-          on every keystroke. And it is never empty either: with nothing computed the result is
-          genuinely zero bytes, so it says so rather than blanking and taking its line with it.
-        */}
-        <p className="min-h-4 text-[11px] text-slate-500 dark:text-slate-400">{sizeLine}</p>
+        {isKeygen ? (
+          <KeypairResultView
+            fields={state.result?.fields ?? []}
+            manifest={manifest}
+            spec={spec}
+            status={state.status}
+            stale={stale}
+            pending={pending}
+          />
+        ) : (
+          <>
+            <MonoBlock
+              data-ocs-result=""
+              data-ocs-status={state.status}
+              value={primary}
+              groupSize={outputEncoding === "hex" || outputEncoding === "hex-upper" ? 8 : undefined}
+              placeholder={primary === ""}
+              className={cn((stale || pending) && "opacity-50")}
+            />
+            <p className="min-h-4 text-[11px] text-slate-500 dark:text-slate-400">{sizeLine}</p>
+          </>
+        )}
 
         {stale && (
           <div className="flex flex-wrap items-center gap-2 rounded-r border-l-4 border-l-(--color-severity-warning) bg-amber-50/60 px-3 py-2 dark:bg-amber-950/20">
@@ -277,7 +269,7 @@ export function ResultPanel({
           </p>
         )}
 
-        {state.result?.fields && state.result.fields.length > 0 && (
+        {!isKeygen && state.result?.fields && state.result.fields.length > 0 && (
           <FieldTable fields={state.result.fields} />
         )}
 

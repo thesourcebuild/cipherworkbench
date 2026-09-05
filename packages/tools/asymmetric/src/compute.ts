@@ -185,17 +185,20 @@ async function publicKeyFor(r: ResolvedAsymmetric): Promise<KeyResult & { derive
 /** RSA key generation: four exports of one keypair. */
 async function generateRsa(r: ResolvedAsymmetric): Promise<ToolResult> {
   const key = await generateRsaKeypair(r.modulusBits);
+  const privatePem = encodePem("PRIVATE KEY", key.privatePkcs8);
+  const publicPem = encodePem("PUBLIC KEY", key.publicSpki);
   return {
     bytes: key.publicSpki,
+    text: `${privatePem}\n\n${publicPem}`,
     fields: [
       { label: "Key size", value: `${key.modulusBits} bits` },
       {
         label: "Private key (PKCS#8 PEM)",
-        value: encodePem("PRIVATE KEY", key.privatePkcs8),
+        value: privatePem,
         secret: true,
         hint: KEEP_IT_HINT,
       },
-      { label: "Public key (SPKI PEM)", value: encodePem("PUBLIC KEY", key.publicSpki) },
+      { label: "Public key (SPKI PEM)", value: publicPem },
       { label: "Private key (JWK)", value: formatJwk(key.privateJwk), secret: true },
       { label: "Public key (JWK)", value: formatJwk(key.publicJwk) },
       {
@@ -206,6 +209,7 @@ async function generateRsa(r: ResolvedAsymmetric): Promise<ToolResult> {
     ],
   };
 }
+
 
 /** Curve key generation. The same three lines for all three curve tools, via the bindings. */
 function generateCurveKeypair(r: ResolvedAsymmetric): ToolResult {

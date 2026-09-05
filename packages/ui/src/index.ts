@@ -9,3 +9,4 @@ export { MonoBlock, type MonoBlockProps } from "./mono-block";
 export { SecretField, type SecretFieldProps } from "./secret-field";
 export { StringListEditor, type StringListEditorProps } from "./string-list-editor";
 export { Toggle, type ToggleProps } from "./toggle";
+export { useCopy, type UseCopyOptions, type UseCopyResult } from "./use-copy";

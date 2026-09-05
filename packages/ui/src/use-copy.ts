@@ -21,10 +21,12 @@ export interface UseCopyOptions {
  * things that almost match. An icon-only button needs the same 1.5-second window to swap a glyph
  * that a labelled one needs to swap a word.
  */
-export function useCopy({ value, writeClipboard }: UseCopyOptions): {
+export interface UseCopyResult {
   copied: boolean;
   copy: () => Promise<void>;
-} {
+}
+
+export function useCopy({ value, writeClipboard }: UseCopyOptions): UseCopyResult {
   const [copied, setCopied] = useState(false);
   /**
    * The revert timer, held so it can be replaced and cancelled.
