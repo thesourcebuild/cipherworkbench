@@ -355,6 +355,30 @@ export function macCatalogueFor(toolId: string): OptionCatalogue<MacOptionGroup>
           "Exactly 16 bytes (128-bit key for VMAC).",
         ),
       ],
+      gmac: [
+        keyOption(
+          { exact: [16, 24, 32], generate: 16 },
+          "16, 24, or 32-byte AES key for GMAC.",
+        ),
+      ],
+      umac: [
+        keyOption(
+          { exact: [16], generate: 16 },
+          "Exactly 16 bytes (128-bit AES key for UMAC).",
+        ),
+      ],
+      "cbc-mac": [
+        keyOption(
+          { exact: [8, 16], generate: 8 },
+          "8-byte (DES) or 16-byte (AES) key for CBC-MAC / DAA.",
+        ),
+      ],
+      lightmac: [
+        keyOption(
+          { exact: [16, 32], generate: 16 },
+          "16-byte or 32-byte key (K1 and K2) for LightMAC.",
+        ),
+      ],
     };
     const options = byTool[toolId];
     if (!options) throw new Error(`No option catalogue for MAC tool "${toolId}".`);

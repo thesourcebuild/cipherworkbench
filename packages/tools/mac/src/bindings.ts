@@ -36,6 +36,10 @@ import {
   retailMac,
   pmacAes,
   vmac,
+  gmac,
+  umac,
+  cbcMac,
+  lightMac,
 } from "@ocs/algos";
 import { requireHmacHash } from "./catalogue/tool-meta";
 
@@ -364,5 +368,21 @@ export function computePmac(key: Uint8Array, message: Uint8Array): Uint8Array {
 
 export function computeVmac(key: Uint8Array, message: Uint8Array): Uint8Array {
   return vmac(key, message, { nonce: new Uint8Array(16) });
+}
+
+export function computeGmac(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return gmac(key, message, { nonce: new Uint8Array(12) });
+}
+
+export function computeUmac(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return umac(key, message, { nonce: new Uint8Array(8) });
+}
+
+export function computeCbcMac(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return cbcMac(key, message);
+}
+
+export function computeLightMac(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return lightMac(key, message);
 }
 

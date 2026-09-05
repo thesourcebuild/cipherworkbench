@@ -138,6 +138,8 @@ function operationFor(r: ResolvedCipher): CipherOperation {
     case "mantis":
     case "craft":
     case "midori":
+    case "square":
+    case "multi2":
       return blockCipherOperation(
         r.toolId,
         r.mode!.id,
@@ -181,6 +183,8 @@ function operationFor(r: ResolvedCipher): CipherOperation {
     case "crypto1":
     case "dect-dsc":
     case "gea":
+    case "mickey":
+    case "a5-2":
       return streamCipherOperation(r.toolId, r.key, r.nonce);
     case "adiantum":
     case "hctr2":

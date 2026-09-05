@@ -40,6 +40,17 @@ import {
   portaCipher,
   gronsfeldCipher,
   jeffersonCipher,
+  autokeyEncrypt,
+  autokeyDecrypt,
+  beaufortEncrypt,
+  beaufortDecrypt,
+  columnarTranspositionEncrypt,
+  columnarTranspositionDecrypt,
+  twoSquareCrypt,
+  fractionatedMorseEncrypt,
+  fractionatedMorseDecrypt,
+  scytaleEncrypt,
+  scytaleDecrypt,
 } from "@ocs/algos";
 import { optBool } from "@ocs/contracts/pure";
 import type { ToolResult, ToolResultField } from "@ocs/engine";
@@ -166,6 +177,37 @@ export async function computeClassical(
       }
       case "jefferson": {
         const res = jeffersonCipher(msg, { mode: direction });
+        return { text: res };
+      }
+      case "autokey": {
+        const key = typeof spec.options.key === "string" ? spec.options.key : "QUEENLY";
+        const res = direction === "encrypt" ? autokeyEncrypt(msg, key) : autokeyDecrypt(msg, key);
+        return { text: res };
+      }
+      case "beaufort": {
+        const key = typeof spec.options.key === "string" ? spec.options.key : "FORTIFICATION";
+        const res = direction === "encrypt" ? beaufortEncrypt(msg, key) : beaufortDecrypt(msg, key);
+        return { text: res };
+      }
+      case "columnar": {
+        const key = typeof spec.options.key === "string" ? spec.options.key : "ZEBRAS";
+        const res = direction === "encrypt" ? columnarTranspositionEncrypt(msg, key) : columnarTranspositionDecrypt(msg, key);
+        return { text: res };
+      }
+      case "two-square": {
+        const key1 = typeof spec.options.key1 === "string" ? spec.options.key1 : "EXAMPLE";
+        const key2 = typeof spec.options.key2 === "string" ? spec.options.key2 : "KEYWORD";
+        const res = twoSquareCrypt(msg, key1, key2, direction);
+        return { text: res };
+      }
+      case "fractionated-morse": {
+        const key = typeof spec.options.key === "string" ? spec.options.key : "ROUNDTABLE";
+        const res = direction === "encrypt" ? fractionatedMorseEncrypt(msg, key) : fractionatedMorseDecrypt(msg, key);
+        return { text: res };
+      }
+      case "scytale": {
+        const diameter = typeof spec.options.diameter === "number" ? spec.options.diameter : 4;
+        const res = direction === "encrypt" ? scytaleEncrypt(msg, diameter) : scytaleDecrypt(msg, diameter);
         return { text: res };
       }
     }

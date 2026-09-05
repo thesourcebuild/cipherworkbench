@@ -43,7 +43,13 @@ export type ClassicalKind =
   | "alberti"
   | "porta"
   | "gronsfeld"
-  | "jefferson";
+  | "jefferson"
+  | "autokey"
+  | "beaufort"
+  | "columnar"
+  | "two-square"
+  | "fractionated-morse"
+  | "scytale";
 
 export interface ClassicalToolMeta {
   id: string;
@@ -393,6 +399,78 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     },
     tags: ["jefferson", "wheel cipher", "m-94", "m94", "cylinder", "us army", "classical"],
     summary: "Thomas Jefferson's 1795 wheel cipher, standardized as the US Army M-94 25-cylinder cipher.",
+  },
+  {
+    id: "autokey",
+    label: "Autokey cipher",
+    kind: "autokey",
+    category: "Polyalphabetic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["autokey", "vigenere autokey", "polyalphabetic", "blaise de vigenere", "classical"],
+    summary: "Blaise de Vigenère's authentic autokey cipher extending the keystream with the message itself.",
+  },
+  {
+    id: "beaufort",
+    label: "Beaufort cipher",
+    kind: "beaufort",
+    category: "Polyalphabetic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["beaufort", "reciprocal", "polyalphabetic", "francis beaufort", "classical"],
+    summary: "Reciprocal polyalphabetic cipher where encryption and decryption are identical operations.",
+  },
+  {
+    id: "columnar",
+    label: "Columnar transposition",
+    kind: "columnar",
+    category: "Transposition",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["columnar", "transposition", "permutation", "matrix", "classical"],
+    summary: "Military transposition cipher routing text through an alphabetical keyword column matrix.",
+  },
+  {
+    id: "two-square",
+    label: "Two-Square cipher",
+    kind: "two-square",
+    category: "Digraphic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["two-square", "double playfair", "digraphic", "substitution", "classical"],
+    summary: "Double Playfair digraphic substitution cipher operating across two 5x5 keyword grids.",
+  },
+  {
+    id: "fractionated-morse",
+    label: "Fractionated Morse",
+    kind: "fractionated-morse",
+    category: "Fractionating",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["fractionated morse", "morse", "fractionating", "trigrams", "substitution", "classical"],
+    summary: "Fractionating cipher converting text to Morse, grouping into trigrams, and substituting through a keyword.",
+  },
+  {
+    id: "scytale",
+    label: "Scytale cipher",
+    kind: "scytale",
+    category: "Transposition",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["scytale", "cylinder", "spartan", "ancient greece", "transposition", "classical"],
+    summary: "Ancient Spartan transposition cylinder winding parchment around a rod of fixed diameter.",
   },
 ];
 

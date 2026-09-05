@@ -459,6 +459,90 @@ const SAMPLES_BY_TOOL: Record<string, readonly ToolSample[]> = {
       text: LOREM_IPSUM,
     },
   ],
+  autokey: [
+    {
+      id: "vigenere-autokey",
+      label: "AUTOKEY DISPATCH",
+      note: "Blaise de Vigenère autokey with Queenly primer keyword.",
+      text: "MEET AT THE SECRET LOCATION AT DAWN",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  beaufort: [
+    {
+      id: "fortification",
+      label: "BEAUFORT DISPATCH",
+      note: "Reciprocal polyalphabetic cipher by Sir Francis Beaufort.",
+      text: "DEFEND THE EAST WALL OF THE CASTLE",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  columnar: [
+    {
+      id: "zebras",
+      label: "ZEBRAS DISPATCH",
+      note: "Single columnar transposition matrix with Zebras keyword.",
+      text: "WE ARE DISCOVERED FLEE AT ONCE",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  "two-square": [
+    {
+      id: "help-me",
+      label: "DOUBLE PLAYFAIR",
+      note: "Two-Square digraphic substitution across two 5x5 grids.",
+      text: "HELP ME",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  "fractionated-morse": [
+    {
+      id: "roundtable",
+      label: "ROUND TABLE",
+      note: "Morse code fractionated trigrams substituted through keyword.",
+      text: "ROUND TABLE KNIGHT",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  scytale: [
+    {
+      id: "spartan",
+      label: "SPARTAN CYLINDER",
+      note: "Ancient Greek scytale rod transposition vector.",
+      text: "I AM HURT VERY BADLY HELP",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
 };
 
 export function samplesFor(toolId: string): readonly ToolSample[] | undefined {

@@ -86,8 +86,8 @@ const fromHex = (text: string): Uint8Array<ArrayBuffer> =>
   Uint8Array.from(text.match(/../g)!.map((pair) => parseInt(pair, 16)));
 
 describe("the family's shape", () => {
-  it("registers five tools, none streaming", () => {
-    expect(PARITY_MANIFESTS).toHaveLength(5);
+  it("registers seven tools, none streaming", () => {
+    expect(PARITY_MANIFESTS).toHaveLength(7);
     for (const manifest of PARITY_MANIFESTS) {
       expect(manifest.family).toBe("parity");
       expect(manifest.security, manifest.id).toBe("not-a-mac");
@@ -158,8 +158,8 @@ describe("the family's shape", () => {
       const input = meta.checkInput === undefined ? CHECK_INPUT : fromHex(meta.checkInput);
       expect(await hexOf(meta.id, {}, input), meta.id).toBe(meta.check);
     }
-    // Guards the guard: four of the five carry one, and a typo dropping them all would pass silently.
-    expect(PARITY_TOOLS.filter((t) => t.check)).toHaveLength(4);
+    // Guards the guard: six of the seven carry one, and a typo dropping them all would pass silently.
+    expect(PARITY_TOOLS.filter((t) => t.check)).toHaveLength(6);
     expect(PARITY_TOOLS.filter((t) => t.checkInput).map((t) => t.id)).toEqual(["bch"]);
   });
 });

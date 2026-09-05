@@ -131,6 +131,12 @@ describe("TOOL_MANIFESTS", () => {
     porta: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     gronsfeld: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     jefferson: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    autokey: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    beaufort: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    columnar: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "two-square": "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "fractionated-morse": "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    scytale: "a ciphertext is a value somebody already has, and verifyText compares it as text",
   };
 
   it("offers Verify to a text-output tool only where a value could exist to compare", () => {

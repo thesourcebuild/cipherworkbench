@@ -65,5 +65,13 @@ export function describeSpec(spec: ChecksumSpec): string {
       return "Computes the Luhn algorithm Mod 10 check digit with card issuer detection — 1 byte.";
     case "isbn":
       return "Computes the ISBN-10 / ISBN-13 check digit — 1 byte.";
+    case "iban":
+      return "Validates and computes the ISO 13616 International Bank Account Number MOD 97-10 check digits — 1 byte.";
+    case "aba-routing":
+      return "Validates and computes the 9th check digit for Federal Reserve ABA routing transit numbers — 1 byte.";
+    case "cusip-isin":
+      return "Computes the check digit for 9-digit CUSIP or 12-character ISIN securities identifiers — 1 byte.";
+    case "sedol":
+      return "Computes the 7th check digit for London Stock Exchange SEDOL security identifiers — 1 byte.";
   }
 }

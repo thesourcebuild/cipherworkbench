@@ -424,6 +424,11 @@ const OPTIONS_BY_TOOL: Readonly<Record<string, readonly OptionDef<KdfOptionGroup
   md5crypt: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
   sha256crypt: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
   sha512crypt: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
+  "des-crypt": [PASSWORD_OPTION, SALT_OPTION],
+  "bs-crypt": [PASSWORD_OPTION, SALT_OPTION],
+  "ntlm-lm": [PASSWORD_OPTION],
+  "one-step-kdf": GENERIC_KDF_OPTIONS,
+  "wpa-psk": [PASSWORD_OPTION, SALT_OPTION],
 };
 
 export function kdfCatalogueFor(toolId: string): OptionCatalogue<KdfOptionGroup> {

@@ -932,7 +932,7 @@ describe("catalogue and manifests", () => {
       KDF_MANIFESTS.filter((m) => m.security === "legacy")
         .map((m) => m.id)
         .sort(),
-    ).toEqual(["bcrypt", "md5crypt", "openpgp-s2k", "pbkdf2"]);
+    ).toEqual(["bcrypt", "bs-crypt", "md5crypt", "openpgp-s2k", "pbkdf2", "wpa-psk"]);
   });
 });
 

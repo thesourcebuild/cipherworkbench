@@ -37,11 +37,12 @@ import {
   OPTION_SCOPE,
   OPTION_SPACED,
   OPTION_STOP_BITS,
+  OPTION_HADAMARD_ORDER,
   type ParityDefaults,
 } from "../pure";
 
 /** Which computation a tool performs. The compute path switches on exactly this. */
-export type ParityKind = "parity" | "uart" | "hamming" | "reedsolomon" | "bch";
+export type ParityKind = "parity" | "uart" | "hamming" | "reedsolomon" | "bch" | "golay" | "hadamard";
 
 export interface ParityToolMeta {
   id: string;
@@ -284,6 +285,51 @@ export const PARITY_TOOLS: readonly ParityToolMeta[] = [
      */
     checkInput: "000102030405060708",
     check: "541251255e7c5b4b45f940ce4f974aa077c4",
+  },
+  {
+    id: "golay",
+    label: "Golay G_24",
+    kind: "golay",
+    category: "Error correction",
+    exposes: [OPTION_DIRECTION],
+    defaults: { [OPTION_DIRECTION]: "apply" },
+    usesInput: true,
+    bidirectional: true,
+    tags: [
+      "golay",
+      "golay g24",
+      "extended binary golay",
+      "ecc",
+      "error correction",
+      "voyager",
+      "rate 1/2",
+      "finite geometry",
+      "mathieu group",
+    ],
+    summary: "NASA Voyager deep space [24,12,8] code: corrects up to 3 bit errors per 24-bit word.",
+    check: "31383f233fef343ea55366e6373a49839107",
+  },
+  {
+    id: "hadamard",
+    label: "Walsh-Hadamard",
+    kind: "hadamard",
+    category: "Error correction",
+    exposes: [OPTION_DIRECTION, OPTION_HADAMARD_ORDER],
+    defaults: { [OPTION_DIRECTION]: "apply", [OPTION_HADAMARD_ORDER]: "16" },
+    usesInput: true,
+    bidirectional: true,
+    tags: [
+      "hadamard",
+      "walsh-hadamard",
+      "mariner 9",
+      "fwht",
+      "sylvester matrix",
+      "ecc",
+      "error correction",
+      "maximum likelihood",
+    ],
+    summary: "Mariner 9 deep space code: decoded by Fast Walsh-Hadamard Transform (FWHT).",
+    check: "3c3c0f0faa5566663c3c5aa55555a5a53c3cff0099669999ffff3cc300ff",
   },
 ];
 

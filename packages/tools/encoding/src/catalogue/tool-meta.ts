@@ -39,7 +39,10 @@ export type EncodingKind =
   | "base58check"
   | "quoted-printable"
   | "uuencode"
-  | "morse";
+  | "morse"
+  | "openpgp-armor"
+  | "gsm0338"
+  | "binhex";
 
 export interface EncodingToolMeta {
   id: string;
@@ -372,6 +375,45 @@ export const ENCODING_TOOLS: readonly EncodingToolMeta[] = [
     summary: "International Morse Code mapping characters to sequences of dots (.) and dashes (-).",
     expansion: "dot-dash notation",
     check: ".... . .-.. .-.. ---",
+  },
+  {
+    id: "openpgp-armor",
+    label: "OpenPGP ASCII Armor",
+    kind: "openpgp-armor",
+    category: "Specialized encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["openpgp", "pgp", "armor", "radix-64", "crc24", "rfc4880", "encoding"],
+    summary: "RFC 4880 OpenPGP Radix-64 framing with 24-bit CRC armor checksum.",
+    expansion: "4 characters per 3 bytes + CRC-24 framing",
+    check: "-----BEGIN PGP MESSAGE-----\nVersion: CipherWorkbench 0.8.0\n\nSGVsbG8=\n=EHJM\n-----END PGP MESSAGE-----",
+  },
+  {
+    id: "gsm0338",
+    label: "GSM 03.38 (7-bit SMS)",
+    kind: "gsm0338",
+    category: "Specialized encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["gsm", "gsm0338", "sms", "septets", "cellular", "pdu", "encoding"],
+    summary: "Cellular SMS 7-bit default alphabet packed into 8-bit octet PDU stream.",
+    expansion: "7 bits per character packed into 8-bit octets",
+    check: "c8329bfd06",
+  },
+  {
+    id: "binhex",
+    label: "BinHex 4.0",
+    kind: "binhex",
+    category: "Historic encodings",
+    exposes: [],
+    defaults: {},
+    variants: [],
+    tags: ["binhex", "macintosh", "rle", "hqx", "classic", "apple", "encoding"],
+    summary: "Classic Macintosh BinHex 4.0 run-length compression with 6-bit ASCII encoding.",
+    expansion: "Run-length compressed 6-bit ASCII",
+    check: "(This file must be converted with BinHex 4.0)\n\n:\"'4KG'%!9%9B9(4dH(3!N!8&!*!%T[p)C@aXEm[@!!!:",
   },
 ];
 

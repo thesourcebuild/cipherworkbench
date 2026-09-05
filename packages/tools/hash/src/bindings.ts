@@ -186,8 +186,16 @@ const M_GRIFFIN = lazyModule("griffin", () => import("@ocs/algos/griffin"));
 const M_POSEIDON2 = lazyModule("poseidon2", () => import("@ocs/algos/poseidon2"));
 const M_MIMC = lazyModule("mimc", () => import("@ocs/algos/mimc"));
 const M_TIP5 = lazyModule("tip5", () => import("@ocs/algos/tip5"));
+const M_PEARSON = lazyModule("pearson", () => import("@ocs/algos/pearson"));
+const M_MURMUR1_2 = lazyModule("murmur1-2", () => import("@ocs/algos/murmur1-2"));
+const M_LOOKUP3 = lazyModule("lookup3", () => import("@ocs/algos/lookup3"));
 
 // ── the shims, which the binding table reads as though they were imports ───
+
+const pearsonHash = lazyFn(M_PEARSON, "pearsonHash");
+const murmurHash1 = lazyFn(M_MURMUR1_2, "murmurHash1");
+const murmurHash2 = lazyFn(M_MURMUR1_2, "murmurHash2");
+const jenkinsLookup3 = lazyFn(M_LOOKUP3, "jenkinsLookup3");
 
 const cityhash = lazyFn(M_CITYHASH, "cityhash");
 const cityhashCrc = lazyFn(M_CITYCRC, "cityhashCrc");
@@ -851,6 +859,25 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   poseidon2: { create: () => bufferedHasher(poseidon2Hash) },
   mimc: { create: () => bufferedHasher(mimcHash) },
   tip5: { create: () => bufferedHasher(tip5Hash) },
+  pearson: { create: () => bufferedHasher((m) => pearsonHash(m)) },
+  murmur1: parameterised(({ seed = 0 }) =>
+    bufferedHasher((m) => {
+      const h = murmurHash1(m, seed >>> 0);
+      return Uint8Array.of((h >>> 24) & 0xff, (h >>> 16) & 0xff, (h >>> 8) & 0xff, h & 0xff);
+    }),
+  ),
+  murmur2: parameterised(({ seed = 0 }) =>
+    bufferedHasher((m) => {
+      const h = murmurHash2(m, seed >>> 0);
+      return Uint8Array.of((h >>> 24) & 0xff, (h >>> 16) & 0xff, (h >>> 8) & 0xff, h & 0xff);
+    }),
+  ),
+  "jenkins-lookup3": parameterised(({ seed = 0 }) =>
+    bufferedHasher((m) => {
+      const h = jenkinsLookup3(m, seed >>> 0);
+      return Uint8Array.of((h >>> 24) & 0xff, (h >>> 16) & 0xff, (h >>> 8) & 0xff, h & 0xff);
+    }),
+  ),
 };
 
 /**
@@ -982,6 +1009,10 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   poseidon2: M_POSEIDON2,
   mimc: M_MIMC,
   tip5: M_TIP5,
+  pearson: M_PEARSON,
+  murmur1: M_MURMUR1_2,
+  murmur2: M_MURMUR1_2,
+  "jenkins-lookup3": M_LOOKUP3,
 };
 
 /**

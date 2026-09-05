@@ -13,6 +13,7 @@ import {
   readPlacement,
   readScope,
   readStopBits,
+  readHadamardOrder,
 } from "../pure";
 import type { ParitySpec } from "../spec";
 
@@ -76,6 +77,17 @@ export function describeSpec(spec: ParitySpec): string {
       return direction === "check"
         ? `Decodes ${code} codewords by nearest match, repairing up to three flipped bits.`
         : `Encodes each byte as a ${code} codeword.`;
+    }
+    case "golay": {
+      return direction === "check"
+        ? "Decodes Extended Binary Golay G_24 codewords, correcting up to 3 bit errors per 24-bit word."
+        : "Encodes data into 24-bit Extended Binary Golay G_24 codewords [24,12,8].";
+    }
+    case "hadamard": {
+      const order = readHadamardOrder(spec.options);
+      return direction === "check"
+        ? `Decodes Walsh-Hadamard order-${order} codewords using Fast Walsh-Hadamard Transform.`
+        : `Encodes data into Walsh-Hadamard order-${order} error-correcting codewords.`;
     }
   }
 }

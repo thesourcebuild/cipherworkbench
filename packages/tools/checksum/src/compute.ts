@@ -13,6 +13,11 @@ import {
   luhnCompute,
   isbn10Compute,
   isbn13Compute,
+  ibanValidate,
+  abaRoutingCheckDigit,
+  cusipCheckDigit,
+  isinCheckDigit,
+  sedolCheckDigit,
   type ChecksumEngine,
 } from "@ocs/algos";
 import type { ToolResult, ToolResultField, ToolStream, ToolVariantTable } from "@ocs/engine";
@@ -125,6 +130,72 @@ function engineFor(spec: ChecksumSpec, meta: ChecksumToolMeta): ChecksumEngine {
             return c === "X" ? 10 : parseInt(c, 10) || 0;
           }
           return 0;
+        },
+        digestBytes() {
+          return new Uint8Array([this.digest() & 0xff]);
+        },
+      };
+    }
+    case "iban": {
+      let text = "";
+      return {
+        update(chunk) {
+          text += new TextDecoder().decode(chunk);
+        },
+        digest() {
+          const clean = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (clean.length === 0) return 0;
+          const res = ibanValidate(clean);
+          return parseInt(res.checkDigits || res.expectedCheckDigits || "0", 10) || 0;
+        },
+        digestBytes() {
+          return new Uint8Array([this.digest() & 0xff]);
+        },
+      };
+    }
+    case "aba-routing": {
+      let text = "";
+      return {
+        update(chunk) {
+          text += new TextDecoder().decode(chunk);
+        },
+        digest() {
+          const digits = text.replace(/\D/g, "");
+          if (digits.length === 0) return 0;
+          return abaRoutingCheckDigit(digits);
+        },
+        digestBytes() {
+          return new Uint8Array([this.digest() & 0xff]);
+        },
+      };
+    }
+    case "cusip-isin": {
+      let text = "";
+      return {
+        update(chunk) {
+          text += new TextDecoder().decode(chunk);
+        },
+        digest() {
+          const clean = text.toUpperCase().replace(/[^A-Z0-9*@#]/g, "");
+          if (clean.length === 0) return 0;
+          if (clean.length >= 11) return isinCheckDigit(clean);
+          return cusipCheckDigit(clean);
+        },
+        digestBytes() {
+          return new Uint8Array([this.digest() & 0xff]);
+        },
+      };
+    }
+    case "sedol": {
+      let text = "";
+      return {
+        update(chunk) {
+          text += new TextDecoder().decode(chunk);
+        },
+        digest() {
+          const clean = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (clean.length === 0) return 0;
+          return sedolCheckDigit(clean);
         },
         digestBytes() {
           return new Uint8Array([this.digest() & 0xff]);

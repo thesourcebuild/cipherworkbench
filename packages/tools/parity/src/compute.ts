@@ -24,6 +24,11 @@ import {
   uartDecode,
   uartFrame,
   uartFrameBits,
+  golayEncode,
+  golayDecode,
+  golayDecodeWord,
+  hadamardEncode,
+  hadamardDecode,
   type ParityMode,
   type UartConfig,
 } from "@ocs/algos";
@@ -45,6 +50,7 @@ import {
   readRsProfile,
   readSpaced,
   readStopBits,
+  readHadamardOrder,
 } from "./pure";
 import type { ParitySpec } from "./spec";
 
@@ -64,6 +70,10 @@ export async function computeParity(spec: ParitySpec, input: Uint8Array): Promis
         return reedSolomonResult(spec, input);
       case "bch":
         return bchResult(spec, input);
+      case "golay":
+        return golayResult(spec, input);
+      case "hadamard":
+        return hadamardResult(spec, input);
     }
   } catch (thrown) {
     // A refusal the resolver cannot see -- an impossible placement, a bit string that is not one --
@@ -964,6 +974,119 @@ function bchResult(spec: ParitySpec, input: Uint8Array): ToolResult {
   };
 }
 
+function golayResult(spec: ParitySpec, input: Uint8Array): ToolResult {
+  if (input.length === 0) return { error: "Nothing to encode — the input is empty." };
+  const direction = readDirection(spec.options);
+  if (direction === "apply") {
+    const encoded = golayEncode(input);
+    const numWords = encoded.length / 3;
+    return {
+      bytes: encoded,
+      fields: [
+        { label: "Code", value: "Extended Binary Golay Code G_24 [24, 12, 8]" },
+        { label: "Codewords", value: `${numWords} codewords (24 bits / 3 bytes each)` },
+        { label: "Rate", value: "1/2 (100% parity expansion overhead)" },
+        {
+          label: "Guarantee",
+          value: "Corrects up to 3 bit errors, detects 4 errors in every 24-bit block.",
+        },
+      ],
+    };
+  }
+
+  if (input.length % 3 !== 0) {
+    return {
+      error:
+        `Golay G_24 codewords are 24 bits (3 bytes) each, so the input has to be a multiple of 3 bytes. ` +
+        `This one is ${input.length}.`,
+    };
+  }
+
+  const numWords = input.length / 3;
+  let correctedTotal = 0;
+  let uncorrectableCount = 0;
+  for (let i = 0; i < numWords; i++) {
+    const w = (input[i * 3]! << 16) | (input[i * 3 + 1]! << 8) | input[i * 3 + 2]!;
+    const decoded = golayDecodeWord(w);
+    if (!decoded.valid) {
+      uncorrectableCount++;
+    } else if (decoded.correctedErrors > 0) {
+      correctedTotal += decoded.correctedErrors;
+    }
+  }
+
+  const decoded = golayDecode(input);
+  return {
+    bytes: decoded,
+    fields: [
+      { label: "Code", value: "Extended Binary Golay Code G_24 [24, 12, 8]" },
+      { label: "Codewords read", value: String(numWords) },
+      {
+        label: "Corrected errors",
+        value: correctedTotal === 0 ? "None — all codewords were clean" : `${correctedTotal} bit error(s) repaired`,
+      },
+      ...(uncorrectableCount > 0
+        ? [
+            {
+              label: "Uncorrectable",
+              value: `${uncorrectableCount} codeword(s) had >3 bit errors and could not be guaranteed`,
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
+function hadamardResult(spec: ParitySpec, input: Uint8Array): ToolResult {
+  if (input.length === 0) return { error: "Nothing to encode — the input is empty." };
+  const order = readHadamardOrder(spec.options);
+  const m = Math.log2(order);
+  const k = m + 1;
+  const d = order / 2;
+  const maxErrors = Math.floor((d - 1) / 2);
+  const direction = readDirection(spec.options);
+
+  if (direction === "apply") {
+    const encoded = hadamardEncode(input, order);
+    const numCodewords = Math.ceil((input.length * 8) / k);
+    return {
+      bytes: encoded,
+      fields: [
+        { label: "Code", value: `Walsh-Hadamard [${order}, ${k}, ${d}]` },
+        { label: "Codewords", value: `${numCodewords} codewords (${order} bits each)` },
+        { label: "Payload", value: `${k} data bits per ${order}-bit codeword` },
+        {
+          label: "Guarantee",
+          value: `Corrects up to ${maxErrors} bit error(s) per codeword via Fast Walsh-Hadamard Transform.`,
+        },
+      ],
+    };
+  }
+
+  const bytesPerCodeword = order / 8;
+  if (bytesPerCodeword >= 1 && input.length % bytesPerCodeword !== 0) {
+    return {
+      error:
+        `Walsh-Hadamard order-${order} codewords are ${order} bits (${bytesPerCodeword} bytes) each, ` +
+        `so the input must be a multiple of ${bytesPerCodeword} bytes. This one is ${input.length}.`,
+    };
+  }
+
+  const decoded = hadamardDecode(input, order);
+  const numCodewords = Math.floor((input.length * 8) / order);
+  return {
+    bytes: decoded,
+    fields: [
+      { label: "Code", value: `Walsh-Hadamard [${order}, ${k}, ${d}]` },
+      { label: "Codewords read", value: String(numCodewords) },
+      {
+        label: "Decoding",
+        value: "Fast Walsh-Hadamard Transform (FWHT) maximum-likelihood correlation",
+      },
+    ],
+  };
+}
+
 /** Hex with a space between bytes, which is how a parity block is read. */
 function encodeHexSpaced(bytes: Uint8Array): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join(" ");
@@ -1108,6 +1231,27 @@ export function parityInfo(spec: ParitySpec): ToolResultField[] {
           value: "Nearest codeword, over all of them",
           hint: `There are only ${1 << meta.k} codewords, so this is maximum-likelihood decoding rather than bounded-distance: it finds the closest whatever the distance, and reports a tie rather than guessing.`,
         },
+      ];
+    }
+    case "golay": {
+      return [
+        { label: "Code", value: "Extended Binary Golay Code G_24 [24, 12, 8]" },
+        { label: "Rate", value: "12 data bits in 24 codeword bits (rate 1/2)" },
+        { label: "Minimum distance", value: "8", hint: "Corrects up to 3 bit errors, detects 4." },
+        { label: "Space heritage", value: "Used on NASA Voyager 1 and 2 Jupiter flyby imaging (1979-1981)." },
+      ];
+    }
+    case "hadamard": {
+      const order = readHadamardOrder(spec.options);
+      const m = Math.log2(order);
+      const k = m + 1;
+      const d = order / 2;
+      return [
+        { label: "Code", value: `Walsh-Hadamard [${order}, ${k}, ${d}]` },
+        { label: "Carries", value: `${k} data bits per ${order}-bit codeword` },
+        { label: "Minimum distance", value: String(d), hint: `Corrects up to ${Math.floor((d - 1) / 2)} bit errors.` },
+        { label: "Decoding", value: "Fast Walsh-Hadamard Transform (FWHT) maximum-likelihood correlation" },
+        { label: "Space heritage", value: "Used on NASA Mariner 9 Mars mission (1971) [32, 6, 16] code." },
       ];
     }
   }

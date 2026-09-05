@@ -15,6 +15,10 @@ import {
   computeRetailMac,
   computePmac,
   computeVmac,
+  computeGmac,
+  computeUmac,
+  computeCbcMac,
+  computeLightMac,
   createAsconMacStream,
   createAsconPrfStream,
   createHighwayStream,
@@ -186,6 +190,18 @@ export async function computeMac(spec: MacSpec, input: Uint8Array): Promise<Tool
         break;
       case "vmac":
         tag = computeVmac(r.key, input);
+        break;
+      case "gmac":
+        tag = computeGmac(r.key, input);
+        break;
+      case "umac":
+        tag = computeUmac(r.key, input);
+        break;
+      case "cbc-mac":
+        tag = computeCbcMac(r.key, input);
+        break;
+      case "lightmac":
+        tag = computeLightMac(r.key, input);
         break;
       default:
         return { error: `No compute path for MAC tool: ${r.toolId}` };

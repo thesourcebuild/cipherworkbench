@@ -190,7 +190,7 @@ describe("round trips", () => {
   ];
 
   for (const tool of ENCODING_TOOLS.filter(
-    (t) => !["cbor", "bencode", "punycode", "proquints", "baudot", "morse", "bech32"].includes(t.kind),
+    (t) => !["cbor", "bencode", "punycode", "proquints", "baudot", "morse", "bech32", "gsm0338"].includes(t.kind),
   )) {
     for (const variant of tool.variants.length > 0 ? tool.variants : [undefined]) {
       for (const padding of ["padded", "unpadded"] as const) {

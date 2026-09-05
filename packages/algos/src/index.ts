@@ -273,3 +273,48 @@ export * from "./crypt3";
 export * from "./paillier";
 export * from "./ntru";
 export * from "./sqisign";
+// Financial Identifiers & Checksums
+export * from "./iban";
+export * from "./aba-routing";
+export * from "./isin-cusip-sedol";
+
+// Classical Ciphers
+export * from "./autokey";
+export * from "./beaufort";
+export * from "./columnar";
+export * from "./two-square";
+export * from "./fractionated-morse";
+export * from "./scytale";
+
+// Message Authentication Codes (MACs)
+export * from "./gmac";
+export * from "./umac";
+export * from "./cbcmac";
+export * from "./lightmac";
+
+// Password Hashes & KDFs
+export * from "./descrypt";
+export * from "./bsd-crypt";
+export * from "./lm-ntlm";
+export * from "./one-step-kdf";
+export * from "./wpa-psk";
+
+// Fast & Specialized Hashes
+export * from "./pearson";
+export * from "./murmur1-2";
+export * from "./lookup3";
+
+// Specialized Encodings
+export * from "./openpgp-armor";
+export * from "./gsm0338";
+export * from "./binhex";
+
+// Block & Stream Ciphers
+export * from "./mickey";
+export * from "./a5-2";
+export * from "./square";
+export * from "./multi2";
+
+// Error-Correcting Codes (ECC)
+export * from "./golay";
+export * from "./hadamard";

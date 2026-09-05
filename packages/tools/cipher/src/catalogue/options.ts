@@ -1203,6 +1203,14 @@ function shapeNotesFor(toolId: string): { key: string; nonce: string; instance?:
       key: "40 to 256 bits (5 to 32 bytes) RC4 key.",
       nonce: "No IV needed.",
     },
+    mickey: {
+      key: "80 bits (10 bytes) secret key for MICKEY 2.0.",
+      nonce: "0 to 80 bits (up to 10 bytes) initialization vector.",
+    },
+    "a5-2": {
+      key: "64 bits (8 bytes) GSM mobile station secret key Kc.",
+      nonce: "22 bits (3 or 4 bytes) frame counter Fn.",
+    },
   };
   const note = notes[toolId];
   if (!note) throw new Error(`No key and nonce explanation for shaped cipher "${toolId}".`);
@@ -1462,6 +1470,10 @@ function keyNoteFor(toolId: string): string {
       "Exactly 128 bits (16 bytes). Consumed as 64-bit halves K0 and K1 with periodic tweakey cycling.",
     midori:
       "Exactly 128 bits (16 bytes). Consumed as two 64-bit halves K0 and K1 for ultra-low energy encryption.",
+    square:
+      "Exactly 128 bits (16 bytes). Expanded into nine 128-bit round keys for the 8-round Substitution-Permutation Network.",
+    multi2:
+      "Exactly 256 or 320 bits (32 or 40 bytes). System key for 32-round Feistel scrambling in MPEG-2 transport streams.",
   };
   const note = notes[toolId];
   if (!note)

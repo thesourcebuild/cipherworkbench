@@ -855,8 +855,8 @@ describe("createSpec", () => {
   });
 
   it("rejects an unknown variant", () => {
-    expect(() => createSpec({ variant: "gmac" })).toThrow(/Unknown MAC tool/);
-    expect(() => requireMacTool("gmac")).toThrow(/gmac/);
+    expect(() => createSpec({ variant: "not-a-mac" })).toThrow(/Unknown MAC tool/);
+    expect(() => requireMacTool("not-a-mac")).toThrow(/not-a-mac/);
   });
 
   it("falls back to SHA-256 when a share link names a hash this tool does not offer", () => {

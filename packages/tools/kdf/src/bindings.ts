@@ -43,7 +43,18 @@ export function bcryptCostOf(stored: string): number | undefined {
   }
 }
 
-export { md5Crypt, sha256Crypt, sha512Crypt, cryptVerify } from "@ocs/algos";
+export {
+  md5Crypt,
+  sha256Crypt,
+  sha512Crypt,
+  cryptVerify,
+  unixDesCrypt,
+  bsdExtendedCrypt,
+  lmHash,
+  ntlmHash,
+  oneStepKdf,
+  wpaPsk,
+} from "@ocs/algos";
 
 /**
  * The derivations, re-exported so this module stays the KDF family's single binding entry point.

@@ -431,6 +431,10 @@ describe("lint rules", () => {
         "damm",
         "luhn",
         "isbn",
+        "iban",
+        "aba-routing",
+        "cusip-isin",
+        "sedol",
       ].includes(tool.kind);
       expect(codes.includes("S002"), tool.id).toBe(!positionSensitive);
     }

@@ -878,6 +878,10 @@ describe("metadata and bindings agree", () => {
       "poseidon2",
       "mimc",
       "tip5",
+      "pearson",
+      "murmur1",
+      "murmur2",
+      "jenkins-lookup3",
     ]);
     for (const meta of HASH_ALGORITHMS) {
       expect(
@@ -1205,13 +1209,16 @@ describe("catalogue", () => {
     }
   });
 
-  it("gives a 32-bit seed to exactly the xxHash family and the two MetroHashes", () => {
+  it("gives a 32-bit seed to exactly the xxHash family, MetroHashes, Murmur1/2, and Jenkins Lookup3", () => {
     // Pinned rather than derived: `seeded` surfaces a control, and an algorithm gaining one by
     // accident is the sort of change that should have to be written down here.
     const seeded = HASH_ALGORITHMS.filter((a) => a.seeded).map((a) => a.id);
     expect(seeded.sort()).toEqual([
+      "jenkins-lookup3",
       "metrohash",
       "metrohash128crc",
+      "murmur1",
+      "murmur2",
       "xxh128",
       "xxh3",
       "xxh32",

@@ -40,6 +40,12 @@ import {
   decodeUU,
   encodeMorse,
   decodeMorse,
+  openPgpArmorEncode,
+  openPgpArmorDecode,
+  gsm0338Pack,
+  gsm0338Unpack,
+  binhexEncode,
+  binhexDecode,
 } from "@ocs/algos";
 import {
   base32,
@@ -321,6 +327,14 @@ export function encodeToText(bytes: Uint8Array, settings: EncodeSettings): strin
       return encodeUU(bytes);
     case "morse":
       return encodeMorse(new TextDecoder("utf-8").decode(bytes));
+    case "openpgp-armor":
+      return openPgpArmorEncode(bytes);
+    case "gsm0338":
+      return Array.from(gsm0338Pack(new TextDecoder("utf-8").decode(bytes)))
+        .map((b: number) => b.toString(16).padStart(2, "0"))
+        .join("");
+    case "binhex":
+      return binhexEncode(bytes);
     case "cbor": {
       // The input is JSON text here rather than arbitrary bytes: CBOR encodes a *structure*, and
       // JSON is how someone types one. `decodeCbor`'s counterpart on the way back out.
@@ -443,6 +457,18 @@ export function decodeFromText(input: string, settings: EncodeSettings): DecodeR
       return { bytes: decodeUU(input), notes: [] };
     case "morse":
       return { bytes: new TextEncoder().encode(decodeMorse(input)), notes: [] };
+    case "openpgp-armor":
+      return { bytes: openPgpArmorDecode(input), notes: [] };
+    case "gsm0338": {
+      const clean = input.replace(/[^0-9A-Fa-f]/g, "");
+      const octets = new Uint8Array(clean.length / 2);
+      for (let i = 0; i < octets.length; i++) {
+        octets[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+      }
+      return { bytes: new TextEncoder().encode(gsm0338Unpack(octets)), notes: [] };
+    }
+    case "binhex":
+      return { bytes: binhexDecode(input), notes: [] };
     case "cbor": {
       let bytes: Uint8Array;
       try {

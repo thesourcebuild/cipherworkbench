@@ -25,6 +25,7 @@ export const OPTION_HAMMING_CODE = "hammingCode";
 export const OPTION_RS_PROFILE = "rsProfile";
 export const OPTION_RS_ECC = "rsEcc";
 export const OPTION_BCH_PROFILE = "bchProfile";
+export const OPTION_HADAMARD_ORDER = "hadamardOrder";
 
 /**
  * Apply or check, encode or decode -- one axis under two sets of words.
@@ -185,4 +186,12 @@ export type BchProfileId = (typeof BCH_PROFILE_IDS)[number];
 
 export function readBchProfile(options: OptionValues): BchProfileId {
   return optEnumOr(options, OPTION_BCH_PROFILE, BCH_PROFILE_IDS, "qr-format");
+}
+
+export const HADAMARD_ORDERS = ["16", "32", "64"] as const;
+export type HadamardOrderId = (typeof HADAMARD_ORDERS)[number];
+
+export function readHadamardOrder(options: OptionValues): number {
+  const id = optEnumOr(options, OPTION_HADAMARD_ORDER, HADAMARD_ORDERS, "16");
+  return parseInt(id, 10);
 }

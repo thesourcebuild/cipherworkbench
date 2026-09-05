@@ -25,6 +25,12 @@ import {
   sha256Crypt,
   sha512Crypt,
   cryptVerify,
+  unixDesCrypt,
+  bsdExtendedCrypt,
+  lmHash,
+  ntlmHash,
+  oneStepKdf,
+  wpaPsk,
 } from "./bindings";
 import { formatPhc, parsePhc, phcNumber, type PhcString } from "./phc";
 import { OPENSSH_DEFAULT_ROUNDS } from "./pure";
@@ -298,6 +304,37 @@ function derive(r: ResolvedKdf): { bytes: Uint8Array; encoded?: string } {
       const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "12345678";
       const encoded = sha512Crypt(r.passwordText, saltStr, r.rounds || 5000);
       return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
+    case "des-crypt": {
+      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "AB";
+      const encoded = unixDesCrypt(r.passwordText, saltStr);
+      return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
+    case "bs-crypt": {
+      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "ABCD";
+      const encoded = bsdExtendedCrypt(r.passwordText, saltStr, 1000);
+      return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
+    case "ntlm-lm": {
+      const lm = lmHash(r.passwordText);
+      const ntlm = ntlmHash(r.passwordText);
+      const encoded = `LM: ${lm}\nNTLM: ${ntlm}`;
+      return { bytes: new TextEncoder().encode(ntlm), encoded };
+    }
+
+    case "one-step-kdf": {
+      const secret = r.password.length > 0 ? r.password : new Uint8Array(32);
+      const derived = oneStepKdf(secret, r.keyLength, { otherInfo: r.salt });
+      return { bytes: derived };
+    }
+
+    case "wpa-psk": {
+      const ssid = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "DefaultSSID";
+      const derived = wpaPsk(r.passwordText, ssid);
+      return { bytes: derived };
     }
 
     default:

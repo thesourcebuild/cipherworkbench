@@ -103,6 +103,10 @@ import {
   createThreefish,
   createXtea,
   createXxtea,
+  createSquare,
+  createMulti2,
+  mickeyEncrypt,
+  a52Encrypt,
   ketjeJrOpen,
   morusOpen,
   morusSeal,
@@ -594,6 +598,8 @@ export function blockCipherOperation(
     craft: (k: Uint8Array) => createCraft(k, tweak),
     midori: (k: Uint8Array) => createMidori64(k),
     shacal1: createShacal1,
+    square: createSquare,
+    multi2: createMulti2,
   };
   const factory = factories[toolId];
   if (!factory) throw new Error(`No block cipher implementation for "${toolId}".`);
@@ -800,6 +806,13 @@ export function streamCipherOperation(
     "dect-dsc": (data) => dectDscCrypt(key, nonce, data),
     dectdsc: (data) => dectDscCrypt(key, nonce, data),
     gea: (data) => geaCrypt(key, nonce, data),
+    mickey: (data) => mickeyEncrypt(key, nonce, data),
+    "a5-2": (data) =>
+      a52Encrypt(
+        key,
+        (nonce[0] ?? 0) | ((nonce[1] ?? 0) << 8) | ((nonce[2] ?? 0) << 16),
+        data,
+      ),
   };
   const run = ciphers[toolId];
   if (!run) throw new Error(`No stream cipher implementation for "${toolId}".`);

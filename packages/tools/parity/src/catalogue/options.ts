@@ -19,6 +19,7 @@ import {
   OPTION_SCOPE,
   OPTION_SPACED,
   OPTION_STOP_BITS,
+  OPTION_HADAMARD_ORDER,
   TAG_APPLY,
   TAG_FRAMED,
   TAG_PER_BYTE,
@@ -310,6 +311,22 @@ const BCH_PROFILE: Def = {
   order: 10,
 };
 
+const HADAMARD_ORDER_OPTION: Def = {
+  id: OPTION_HADAMARD_ORDER,
+  label: "Order",
+  group: "frame",
+  kind: "enum",
+  choices: [
+    { value: "16", label: "Order 16 — [16, 5, 8]", summary: "5 data bits, 16 codeword bits, corrects 3" },
+    { value: "32", label: "Order 32 — [32, 6, 16] (Mariner 9)", summary: "6 data bits, 32 codeword bits, corrects 7" },
+    { value: "64", label: "Order 64 — [64, 7, 32]", summary: "7 data bits, 64 codeword bits, corrects 15" },
+  ],
+  summary: "The Hadamard matrix dimension (codeword length in bits).",
+  detail:
+    "Walsh-Hadamard codes have parameters [2^m, m+1, 2^(m-1)]. Order 16 carries 5 data bits in 16 bits; order 32 (used by Mariner 9 in 1971) carries 6 data bits in 32 bits.",
+  order: 20,
+};
+
 /**
  * One `Record`, and a miss throws.
  *
@@ -332,6 +349,8 @@ const BY_TOOL: Record<string, readonly Def[]> = {
   hamming: [DIRECTION_ECC, HAMMING_CODE],
   reedsolomon: [DIRECTION_ECC, RS_PROFILE, RS_ECC],
   bch: [DIRECTION_ECC, BCH_PROFILE],
+  golay: [DIRECTION_ECC],
+  hadamard: [DIRECTION_ECC, HADAMARD_ORDER_OPTION],
 };
 
 const CACHE = new Map<string, OptionCatalogue<ParityOptionGroup>>();
