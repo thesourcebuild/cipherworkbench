@@ -437,9 +437,25 @@ function pqLengths(toolId: string, pick: (set: PqParamSet) => number | undefined
  * cannot be expressed here. The resolver narrows it and its message can name the set, which a
  * `bytesLength` mismatch could not.
  */
+const PAILLIER_OPTIONS: readonly Def[] = [
+  operationOption(["generate", "encrypt", "decrypt"]),
+  rawPrivateKeyOption(
+    ["decrypt"],
+    { exact: [32, 64, 128, 256, 512, 1024] },
+    "Paillier private key lambda in hex.",
+  ),
+  rawPublicKeyOption(
+    "Public key",
+    ["encrypt"],
+    { exact: [32, 64, 128, 256, 512, 1024] },
+    "Paillier public modulus n in hex.",
+    "The recipient's public modulus n.",
+  ),
+];
+
 function pqOptions(toolId: string): readonly Def[] {
   const tool = requireAsymmetricTool(toolId);
-  const isKem = toolId === "mlkem" || toolId === "mceliece" || toolId === "hqc";
+  const isKem = toolId === "mlkem" || toolId === "mceliece" || toolId === "hqc" || toolId === "ntru";
 
   return [
     operationOption(tool.operations),
@@ -500,6 +516,9 @@ export function asymmetricCatalogueFor(toolId: string): OptionCatalogue<Asymmetr
       shamir: ECDH_OPTIONS,
       slip39: ECDH_OPTIONS,
       pedersen: ECDH_OPTIONS,
+      paillier: PAILLIER_OPTIONS,
+      ntru: pqOptions("ntru"),
+      sqisign: pqOptions("sqisign"),
     };
     const options = byTool[toolId];
     if (!options) {

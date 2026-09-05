@@ -21,6 +21,10 @@ import {
   deriveYescrypt,
   hashBcrypt,
   verifyBcrypt,
+  md5Crypt,
+  sha256Crypt,
+  sha512Crypt,
+  cryptVerify,
 } from "./bindings";
 import { formatPhc, parsePhc, phcNumber, type PhcString } from "./phc";
 import { OPENSSH_DEFAULT_ROUNDS } from "./pure";
@@ -278,6 +282,24 @@ function derive(r: ResolvedKdf): { bytes: Uint8Array; encoded?: string } {
       return { bytes: new TextEncoder().encode(encoded), encoded };
     }
 
+    case "md5crypt": {
+      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "12345678";
+      const encoded = md5Crypt(r.passwordText, saltStr);
+      return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
+    case "sha256crypt": {
+      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "12345678";
+      const encoded = sha256Crypt(r.passwordText, saltStr, r.rounds || 5000);
+      return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
+    case "sha512crypt": {
+      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "12345678";
+      const encoded = sha512Crypt(r.passwordText, saltStr, r.rounds || 5000);
+      return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
     default:
       throw new Error(`No derive path for KDF tool: ${r.toolId}`);
   }
@@ -314,6 +336,19 @@ function verify(r: ResolvedKdf): ToolResult {
         cost === undefined
           ? { label: "Stored hash", value: "Could not read a bcrypt cost from it." }
           : { label: "Cost in stored hash", value: String(cost) },
+      ],
+    };
+  }
+
+  if (r.toolId === "md5crypt" || r.toolId === "sha256crypt" || r.toolId === "sha512crypt") {
+    const matched = cryptVerify(r.passwordText, stored);
+    return {
+      text: matched ? "MATCH" : "NO MATCH",
+      fields: [
+        {
+          label: "Result",
+          value: matched ? "The password matches this hash." : "The password does not match.",
+        },
       ],
     };
   }

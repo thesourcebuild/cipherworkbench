@@ -33,6 +33,9 @@ import {
   chaskeyMac,
   pelicanMac,
   poly1305AesMac,
+  retailMac,
+  pmacAes,
+  vmac,
 } from "@ocs/algos";
 import { requireHmacHash } from "./catalogue/tool-meta";
 
@@ -349,5 +352,17 @@ export function computePoly1305Aes(key: Uint8Array, message: Uint8Array): Uint8A
   const keyK = key.subarray(16, 32);
   const nonce = new Uint8Array(16);
   return poly1305AesMac(keyR, keyK, nonce, message);
+}
+
+export function computeRetailMac(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return retailMac(key, message, { padding: "pad2" });
+}
+
+export function computePmac(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return pmacAes(key, message);
+}
+
+export function computeVmac(key: Uint8Array, message: Uint8Array): Uint8Array {
+  return vmac(key, message, { nonce: new Uint8Array(16) });
 }
 

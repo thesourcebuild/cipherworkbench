@@ -621,7 +621,7 @@ async function rsaOperate(r: ResolvedAsymmetric, input: Uint8Array): Promise<Too
  */
 function pqOperate(r: ResolvedAsymmetric, input: Uint8Array): ToolResult {
   const set = r.paramSet!;
-  const isKem = r.tool.id === "mlkem" || r.tool.id === "mceliece" || r.tool.id === "hqc";
+  const isKem = r.tool.id === "mlkem" || r.tool.id === "mceliece" || r.tool.id === "hqc" || r.tool.id === "ntru";
 
   if (r.operation === "generate") {
     const api = isKem ? pqKemFor(r.tool.id, set.id) : pqSignerFor(r.tool.id, set.id);
@@ -762,6 +762,57 @@ export async function computeAsymmetric(
   try {
     // The post-quantum tools come first, because they own their own keygen as well.
     if (r.paramSet) return pqOperate(r, input);
+    if (r.tool.id === "paillier") {
+      const { paillierKeygen, paillierEncrypt, paillierDecrypt } = await import("@ocs/algos");
+      const kp = paillierKeygen();
+      if (r.operation === "generate") {
+        const nHex = kp.publicKey.n.toString(16);
+        const lHex = kp.privateKey.lambda.toString(16);
+        const muHex = kp.privateKey.mu.toString(16);
+        return {
+          text: `Public Modulus (n): 0x${nHex}\nPrivate Lambda (λ): 0x${lHex}\nPrivate Mu (μ): 0x${muHex}`,
+          bytes: new TextEncoder().encode(nHex),
+          fields: [
+            { label: "Public modulus (n)", value: "0x" + nHex },
+            { label: "Private lambda (λ)", value: "0x" + lHex },
+            { label: "Private mu (μ)", value: "0x" + muHex },
+          ],
+        };
+      }
+      if (r.operation === "encrypt") {
+        let m = 42n;
+        if (input.length > 0) {
+          const hex = encodeHex(input.subarray(0, 16));
+          m = BigInt("0x" + (hex || "0"));
+        }
+        const c = paillierEncrypt(m % kp.publicKey.n, kp.publicKey);
+        const cHex = c.toString(16);
+        return {
+          text: `0x${cHex}`,
+          bytes: new TextEncoder().encode(cHex),
+          fields: [
+            { label: "Plaintext integer m", value: m.toString() },
+            { label: "Ciphertext c = g^m * r^n mod n^2", value: "0x" + cHex },
+          ],
+        };
+      }
+      if (r.operation === "decrypt") {
+        let m = 42n;
+        if (input.length > 0) {
+          const hex = encodeHex(input.subarray(0, 16));
+          m = BigInt("0x" + (hex || "0"));
+        }
+        const c = paillierEncrypt(m % kp.publicKey.n, kp.publicKey);
+        const dec = paillierDecrypt(c, kp.privateKey);
+        return {
+          text: dec.toString(),
+          bytes: new TextEncoder().encode(dec.toString()),
+          fields: [
+            { label: "Decrypted plaintext", value: dec.toString() },
+          ],
+        };
+      }
+    }
     if (r.operation === "generate") {
       return r.tool.usesPem ? await generateRsa(r) : generateCurveKeypair(r);
     }

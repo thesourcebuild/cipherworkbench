@@ -36,6 +36,10 @@ import {
   typexCrypt,
   sigabaCrypt,
   bazeriesCrypt,
+  albertiCipher,
+  portaCipher,
+  gronsfeldCipher,
+  jeffersonCipher,
 } from "@ocs/algos";
 import { optBool } from "@ocs/contracts/pure";
 import type { ToolResult, ToolResultField } from "@ocs/engine";
@@ -146,6 +150,22 @@ export async function computeClassical(
       }
       case "bazeries": {
         const res = bazeriesCrypt(msg, { direction });
+        return { text: res };
+      }
+      case "alberti": {
+        const res = albertiCipher(msg, { mode: direction });
+        return { text: res };
+      }
+      case "porta": {
+        const res = portaCipher(msg);
+        return { text: res };
+      }
+      case "gronsfeld": {
+        const res = gronsfeldCipher(msg, { mode: direction, key: "2015" });
+        return { text: res };
+      }
+      case "jefferson": {
+        const res = jeffersonCipher(msg, { mode: direction });
         return { text: res };
       }
     }

@@ -1141,7 +1141,9 @@ describe("the post-quantum tools", () => {
       "mceliece",
       "mldsa",
       "mlkem",
+      "ntru",
       "slhdsa",
+      "sqisign",
       "stateful-hash-sig",
     ]);
     // And every one of them declares a parameter set list, which everything else reads from.

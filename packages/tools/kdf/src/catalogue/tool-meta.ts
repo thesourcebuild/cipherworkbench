@@ -259,6 +259,36 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     summary: "HKDF-Expand-Label key derivation used in TLS 1.3 and QUIC protocol key schedules.",
     supportsVerify: false,
   },
+  {
+    id: "md5crypt",
+    label: "MD5-Crypt ($1$)",
+    category: "Password hashing",
+    purpose: "password-hashing",
+    security: "legacy",
+    tags: ["md5crypt", "crypt3", "freebsd", "phk", "shadow", "password", "unix"],
+    summary: "Poul-Henning Kamp's MD5-Crypt ($1$) standard Unix shadow password hash.",
+    supportsVerify: true,
+  },
+  {
+    id: "sha256crypt",
+    label: "SHA-256-Crypt ($5$)",
+    category: "Password hashing",
+    purpose: "password-hashing",
+    security: "modern",
+    tags: ["sha256crypt", "crypt3", "glibc", "shadow", "password", "linux"],
+    summary: "Ulrich Drepper's SHA-256-Crypt ($5$) glibc shadow password hash standard.",
+    supportsVerify: true,
+  },
+  {
+    id: "sha512crypt",
+    label: "SHA-512-Crypt ($6$)",
+    category: "Password hashing",
+    purpose: "password-hashing",
+    security: "modern",
+    tags: ["sha512crypt", "crypt3", "glibc", "shadow", "password", "linux"],
+    summary: "Ulrich Drepper's SHA-512-Crypt ($6$) glibc standard Unix/Linux shadow password hash.",
+    supportsVerify: true,
+  },
 ];
 
 const BY_ID = new Map(KDF_TOOLS.map((t) => [t.id, t]));

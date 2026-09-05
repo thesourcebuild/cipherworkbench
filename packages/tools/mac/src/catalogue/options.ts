@@ -337,6 +337,24 @@ export function macCatalogueFor(toolId: string): OptionCatalogue<MacOptionGroup>
           "Exactly 32 bytes (16-byte Poly1305 evaluation key r + 16-byte AES key k).",
         ),
       ],
+      "retail-mac": [
+        keyOption(
+          { exact: [8, 16], generate: 16 },
+          "8-byte (single DES) or 16-byte (double key 3DES) key for ANSI X9.19 Retail MAC.",
+        ),
+      ],
+      pmac: [
+        keyOption(
+          { exact: [16, 24, 32], generate: 16 },
+          "16, 24, or 32-byte AES key.",
+        ),
+      ],
+      vmac: [
+        keyOption(
+          { exact: [16], generate: 16 },
+          "Exactly 16 bytes (128-bit key for VMAC).",
+        ),
+      ],
     };
     const options = byTool[toolId];
     if (!options) throw new Error(`No option catalogue for MAC tool "${toolId}".`);

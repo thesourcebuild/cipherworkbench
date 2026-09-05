@@ -229,6 +229,36 @@ export const MAC_TOOLS: readonly MacToolMeta[] = [
     summary: "32-bit architecture HalfSipHash variant with 8-byte key and 4-byte output for microcontrollers.",
     streaming: false,
   },
+  {
+    id: "retail-mac",
+    label: "Retail MAC (ANSI X9.19)",
+    category: "Banking",
+    outputLen: 8,
+    security: "legacy",
+    tags: ["retail-mac", "ansi x9.19", "iso9797", "des", "3des", "banking", "emv", "atm"],
+    summary: "ANSI X9.19 / ISO/IEC 9797-1 Algorithm 3 Retail MAC for financial ATMs and EMV.",
+    streaming: false,
+  },
+  {
+    id: "pmac",
+    label: "PMAC-AES",
+    category: "Block cipher",
+    outputLen: 16,
+    security: "modern",
+    tags: ["pmac", "pmac-aes", "aes", "mac", "parallel", "rogaway"],
+    summary: "Parallelizable single-key MAC mode based on AES by Phillip Rogaway.",
+    streaming: false,
+  },
+  {
+    id: "vmac",
+    label: "VMAC",
+    category: "Universal",
+    outputLen: 8,
+    security: "modern",
+    tags: ["vmac", "rfc6605", "aes", "universal", "mac", "polynomial"],
+    summary: "High-speed universal polynomial message authentication code (RFC 6605).",
+    streaming: false,
+  },
 ];
 
 const BY_ID = new Map(MAC_TOOLS.map((t) => [t.id, t]));

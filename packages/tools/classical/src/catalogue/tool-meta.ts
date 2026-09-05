@@ -39,7 +39,11 @@ export type ClassicalKind =
   | "straddling-checkerboard"
   | "typex"
   | "sigaba"
-  | "bazeries";
+  | "bazeries"
+  | "alberti"
+  | "porta"
+  | "gronsfeld"
+  | "jefferson";
 
 export interface ClassicalToolMeta {
   id: string;
@@ -341,6 +345,54 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     },
     tags: ["bazeries", "m94", "m-94", "jefferson", "cylinder", "wheel-cipher", "army", "classical"],
     summary: "Historical 25-disc cylinder cipher invented by Thomas Jefferson and Etienne Bazeries.",
+  },
+  {
+    id: "alberti",
+    label: "Alberti cipher disk",
+    kind: "alberti",
+    category: "Polyalphabetic Disk",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["alberti", "cipher disk", "polyalphabetic", "renaissance", "1467", "classical"],
+    summary: "Historic 1467 dual-ring cipher disk by Leon Battista Alberti with rotating index alignments.",
+  },
+  {
+    id: "porta",
+    label: "Porta cipher",
+    kind: "porta",
+    category: "Polyalphabetic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["porta", "polyalphabetic", "reciprocal", "della porta", "1563", "classical"],
+    summary: "1563 reciprocal polyalphabetic cipher by Giambattista della Porta with 13 paired alphabets.",
+  },
+  {
+    id: "gronsfeld",
+    label: "Gronsfeld cipher",
+    kind: "gronsfeld",
+    category: "Polyalphabetic Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["gronsfeld", "numeric key", "vigenere variant", "digits", "classical"],
+    summary: "Polyalphabetic substitution cipher keyed by a decimal digit sequence (0-9).",
+  },
+  {
+    id: "jefferson",
+    label: "Jefferson disk (US M-94)",
+    kind: "jefferson",
+    category: "Cylinder Cipher",
+    exposes: [OPTION_DIRECTION],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+    },
+    tags: ["jefferson", "wheel cipher", "m-94", "m94", "cylinder", "us army", "classical"],
+    summary: "Thomas Jefferson's 1795 wheel cipher, standardized as the US Army M-94 25-cylinder cipher.",
   },
 ];
 

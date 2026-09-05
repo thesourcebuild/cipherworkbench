@@ -21,6 +21,12 @@ import {
   lmsKeygen,
   lmsSign,
   lmsVerify,
+  ntruKeygen,
+  ntruEncapsulate,
+  ntruDecapsulate,
+  sqisignKeygen,
+  sqisignSign,
+  sqisignVerify,
   type RsaPrivateKey,
   type RsaPublicKey,
 } from "@ocs/algos";
@@ -672,6 +678,21 @@ export function pqKemFor(toolId: string, setId: string): PqKem {
       },
     };
   }
+  if (toolId === "ntru") {
+    return {
+      keygen(seed = randomBytes(32)) {
+        const kp = ntruKeygen(seed);
+        return { publicKey: kp.publicKey, secretKey: kp.secretKey };
+      },
+      encapsulate(publicKey: Uint8Array) {
+        const res = ntruEncapsulate(publicKey, randomBytes(32));
+        return { cipherText: res.ciphertext, sharedSecret: res.sharedSecret };
+      },
+      decapsulate(cipherText: Uint8Array, secretKey: Uint8Array) {
+        return ntruDecapsulate(cipherText, secretKey);
+      },
+    };
+  }
   throw new Error(`Not a post-quantum KEM tool: "${toolId}".`);
 }
 
@@ -778,6 +799,24 @@ export function pqSignerFor(toolId: string, setId: string): PqSigner {
         pk.set(res.iIdentifier, 0);
         pk.set(res.root, 16);
         return pk;
+      },
+    };
+  }
+  if (toolId === "sqisign") {
+    return {
+      keygen(seed = randomBytes(32)) {
+        const kp = sqisignKeygen(seed);
+        return { publicKey: kp.publicKey, secretKey: kp.secretKey };
+      },
+      sign(msg: Uint8Array, secretKey: Uint8Array) {
+        return sqisignSign(secretKey, msg, randomBytes(32));
+      },
+      verify(sig: Uint8Array, msg: Uint8Array, publicKey: Uint8Array) {
+        return sqisignVerify(sig, msg, publicKey);
+      },
+      getPublicKey(secretKey: Uint8Array) {
+        const kp = sqisignKeygen(secretKey.subarray(0, 32));
+        return kp.publicKey;
       },
     };
   }

@@ -927,12 +927,12 @@ describe("catalogue and manifests", () => {
   });
 
   it("marks the legacy tools that are not first choices", () => {
-    // PBKDF2, bcrypt, and OpenPGP S2K are legacy.
+    // PBKDF2, bcrypt, MD5-Crypt, and OpenPGP S2K are legacy.
     expect(
       KDF_MANIFESTS.filter((m) => m.security === "legacy")
         .map((m) => m.id)
         .sort(),
-    ).toEqual(["bcrypt", "openpgp-s2k", "pbkdf2"]);
+    ).toEqual(["bcrypt", "md5crypt", "openpgp-s2k", "pbkdf2"]);
   });
 });
 

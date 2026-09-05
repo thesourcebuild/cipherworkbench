@@ -57,5 +57,13 @@ export function describeSpec(spec: ChecksumSpec): string {
       )}-endian 16-bit words — 4 bytes, positional sum first.`;
     case "adler32":
       return "Runs two 16-bit sums modulo 65521, starting from a = 1 — 4 bytes, RFC 1950's Adler-32.";
+    case "verhoeff":
+      return "Computes the Verhoeff dihedral group D5 check digit — 1 byte.";
+    case "damm":
+      return "Computes the Damm quasigroup check digit — 1 byte.";
+    case "luhn":
+      return "Computes the Luhn algorithm Mod 10 check digit with card issuer detection — 1 byte.";
+    case "isbn":
+      return "Computes the ISBN-10 / ISBN-13 check digit — 1 byte.";
   }
 }

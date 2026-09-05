@@ -403,6 +403,62 @@ const SAMPLES_BY_TOOL: Record<string, readonly ToolSample[]> = {
       text: LOREM_IPSUM,
     },
   ],
+  alberti: [
+    {
+      id: "classical",
+      label: "LATIN DISPATCH",
+      note: "Classic Renaissance polyalphabetic encipherment with mobile inner ring.",
+      text: "CIRCULUS CONCENTRICUS ROTATUR",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  porta: [
+    {
+      id: "dispatch",
+      label: "DIPLOMATIC CODE",
+      note: "Reciprocal 13-alphabet cipher by Giambattista della Porta.",
+      text: "SECRETO DIPLOMATICO DI ROMA",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  gronsfeld: [
+    {
+      id: "numeric-key",
+      label: "NUMERIC KEY",
+      note: "Polyalphabetic shift cipher using decimal key digits.",
+      text: "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  jefferson: [
+    {
+      id: "tactical",
+      label: "US M-94 TACTICAL",
+      note: "Jefferson cylinder / US M-94 wheel cipher 25-disc permutation.",
+      text: "TACTICAL RETREAT TO RIVER CROSSING AT DAWN",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
 };
 
 export function samplesFor(toolId: string): readonly ToolSample[] | undefined {

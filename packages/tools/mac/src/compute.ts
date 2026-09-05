@@ -12,6 +12,9 @@ import {
   computeSiphash13,
   computeSiphash48,
   computeHalfSiphash,
+  computeRetailMac,
+  computePmac,
+  computeVmac,
   createAsconMacStream,
   createAsconPrfStream,
   createHighwayStream,
@@ -174,6 +177,15 @@ export async function computeMac(spec: MacSpec, input: Uint8Array): Promise<Tool
         break;
       case "poly1305-aes":
         tag = computePoly1305Aes(r.key, input);
+        break;
+      case "retail-mac":
+        tag = computeRetailMac(r.key, input);
+        break;
+      case "pmac":
+        tag = computePmac(r.key, input);
+        break;
+      case "vmac":
+        tag = computeVmac(r.key, input);
         break;
       default:
         return { error: `No compute path for MAC tool: ${r.toolId}` };

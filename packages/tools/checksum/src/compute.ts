@@ -8,6 +8,11 @@ import {
   createSumCheck,
   createTwosComplementChecksum,
   createXorChecksum,
+  verhoeffCompute,
+  dammCompute,
+  luhnCompute,
+  isbn10Compute,
+  isbn13Compute,
   type ChecksumEngine,
 } from "@ocs/algos";
 import type { ToolResult, ToolResultField, ToolStream, ToolVariantTable } from "@ocs/engine";
@@ -60,6 +65,72 @@ function engineFor(spec: ChecksumSpec, meta: ChecksumToolMeta): ChecksumEngine {
       return createFletcher32(bigEndian);
     case "adler32":
       return createAdler32();
+    case "verhoeff": {
+      let text = "";
+      return {
+        update(chunk) {
+          text += new TextDecoder().decode(chunk);
+        },
+        digest() {
+          const digits = text.replace(/\D/g, "");
+          return digits.length === 0 ? 0 : verhoeffCompute(text);
+        },
+        digestBytes() {
+          return new Uint8Array([this.digest() & 0xff]);
+        },
+      };
+    }
+    case "damm": {
+      let text = "";
+      return {
+        update(chunk) {
+          text += new TextDecoder().decode(chunk);
+        },
+        digest() {
+          const digits = text.replace(/\D/g, "");
+          return digits.length === 0 ? 0 : dammCompute(text);
+        },
+        digestBytes() {
+          return new Uint8Array([this.digest() & 0xff]);
+        },
+      };
+    }
+    case "luhn": {
+      let text = "";
+      return {
+        update(chunk) {
+          text += new TextDecoder().decode(chunk);
+        },
+        digest() {
+          const digits = text.replace(/\D/g, "");
+          return digits.length === 0 ? 0 : luhnCompute(text);
+        },
+        digestBytes() {
+          return new Uint8Array([this.digest() & 0xff]);
+        },
+      };
+    }
+    case "isbn": {
+      let text = "";
+      return {
+        update(chunk) {
+          text += new TextDecoder().decode(chunk);
+        },
+        digest() {
+          const digits = text.replace(/[^0-9X]/gi, "");
+          if (digits.length === 0) return 0;
+          if (digits.length >= 12) return isbn13Compute(digits);
+          if (digits.length === 9) {
+            const c = isbn10Compute(digits);
+            return c === "X" ? 10 : parseInt(c, 10) || 0;
+          }
+          return 0;
+        },
+        digestBytes() {
+          return new Uint8Array([this.digest() & 0xff]);
+        },
+      };
+    }
   }
 }
 
@@ -161,6 +232,34 @@ function resultFields(
     }
     case "bcc":
     case "xor":
+      break;
+    case "verhoeff":
+      fields.push({
+        label: "Check digit",
+        value: String(value),
+        hint: "Verhoeff dihedral D5 check digit (detects 100% of single transposition errors).",
+      });
+      break;
+    case "damm":
+      fields.push({
+        label: "Check digit",
+        value: String(value),
+        hint: "Damm quasigroup check digit (detects all single and adjacent transposition errors).",
+      });
+      break;
+    case "luhn":
+      fields.push({
+        label: "Check digit",
+        value: String(value),
+        hint: "Luhn algorithm (Mod 10) check digit.",
+      });
+      break;
+    case "isbn":
+      fields.push({
+        label: "Check digit",
+        value: value === 10 ? "X" : String(value),
+        hint: "ISBN-10 / ISBN-13 / EAN-13 check digit.",
+      });
       break;
   }
 

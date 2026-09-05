@@ -423,7 +423,15 @@ describe("lint rules", () => {
   it("warns about order-blindness for the sums and not for Fletcher or Adler", () => {
     for (const tool of CHECKSUM_TOOLS) {
       const codes = lint(specFor(tool.id)).diagnostics.map((d) => d.code);
-      const positionSensitive = ["fletcher16", "fletcher32", "adler32"].includes(tool.kind);
+      const positionSensitive = [
+        "fletcher16",
+        "fletcher32",
+        "adler32",
+        "verhoeff",
+        "damm",
+        "luhn",
+        "isbn",
+      ].includes(tool.kind);
       expect(codes.includes("S002"), tool.id).toBe(!positionSensitive);
     }
   });

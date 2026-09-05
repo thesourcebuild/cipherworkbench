@@ -265,6 +265,36 @@ export const ASYMMETRIC_TOOLS: readonly AsymmetricToolMeta[] = [
     summary: "Information-theoretically binding and computationally hiding commitment scheme.",
     usesPem: false,
   },
+  {
+    id: "paillier",
+    label: "Paillier Cryptosystem",
+    category: "Homomorphic",
+    operations: ["generate", "encrypt", "decrypt"],
+    security: "modern",
+    tags: ["paillier", "homomorphic", "additive", "public-key", "privacy", "e-voting"],
+    summary: "Additively homomorphic public key encryption scheme invented by Pascal Paillier.",
+    usesPem: false,
+  },
+  {
+    id: "ntru",
+    label: "NTRUEncrypt (HRSS)",
+    category: "Post-quantum",
+    operations: ["generate", "encapsulate", "decapsulate"],
+    security: "modern",
+    tags: ["ntru", "ntru-hrss", "pqc", "post-quantum", "lattice", "kem"],
+    summary: "NTRU-HRSS-701 lattice-based post-quantum key encapsulation mechanism.",
+    usesPem: false,
+  },
+  {
+    id: "sqisign",
+    label: "SQISign",
+    category: "Post-quantum",
+    operations: ["generate", "sign", "verify"],
+    security: "modern",
+    tags: ["sqisign", "isogeny", "quaternion", "pqc", "post-quantum", "compact-signatures"],
+    summary: "Short Quaternion and Isogeny Signature scheme with ultra-compact public keys and signatures.",
+    usesPem: false,
+  },
 ];
 
 const BY_ID = new Map(ASYMMETRIC_TOOLS.map((t) => [t.id, t]));
@@ -796,6 +826,14 @@ export const STATEFUL_HASH_SIG_SETS: readonly PqParamSet[] = [
   { id: "xmss-sha256-h10", label: "XMSS SHA-256 h10", securityCategory: 1, publicKeyLen: 48, secretKeyLen: 48, signatureLen: 2500, summary: "Extended Merkle Signature Scheme." },
 ];
 
+export const NTRU_SETS: readonly PqParamSet[] = [
+  { id: "hrss701", label: "NTRU-HRSS-701", securityCategory: 3, publicKeyLen: 1138, secretKeyLen: 1450, cipherTextLen: 1138, summary: "Category 3 NTRU-HRSS lattice-based KEM." },
+];
+
+export const SQISIGN_SETS: readonly PqParamSet[] = [
+  { id: "sqisign-lvl1", label: "SQISign Level 1", securityCategory: 1, publicKeyLen: 64, secretKeyLen: 782, signatureLen: 177, summary: "Category 1 ultra-compact isogeny signature." },
+];
+
 /** Every parameter set a post-quantum tool offers, by tool id. */
 export const PQ_PARAM_SETS: Record<string, readonly PqParamSet[]> = {
   mlkem: ML_KEM_SETS,
@@ -805,6 +843,8 @@ export const PQ_PARAM_SETS: Record<string, readonly PqParamSet[]> = {
   mceliece: MCELIECE_SETS,
   hqc: HQC_SETS,
   "stateful-hash-sig": STATEFUL_HASH_SIG_SETS,
+  ntru: NTRU_SETS,
+  sqisign: SQISIGN_SETS,
 };
 
 export const DEFAULT_PARAM_SETS: Record<string, string> = {
@@ -815,6 +855,8 @@ export const DEFAULT_PARAM_SETS: Record<string, string> = {
   mceliece: "348864",
   hqc: "128",
   "stateful-hash-sig": "lms-sha256-h10",
+  ntru: "hrss701",
+  sqisign: "sqisign-lvl1",
 };
 
 export function getParamSet(toolId: string, id: string): PqParamSet | undefined {

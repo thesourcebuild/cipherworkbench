@@ -421,6 +421,9 @@ const OPTIONS_BY_TOOL: Readonly<Record<string, readonly OptionDef<KdfOptionGroup
   bip39: GENERIC_KDF_OPTIONS,
   bip32: GENERIC_KDF_OPTIONS,
   "hkdf-label": GENERIC_KDF_OPTIONS,
+  md5crypt: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
+  sha256crypt: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
+  sha512crypt: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
 };
 
 export function kdfCatalogueFor(toolId: string): OptionCatalogue<KdfOptionGroup> {

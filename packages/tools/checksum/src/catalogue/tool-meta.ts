@@ -19,7 +19,19 @@ import {
 
 /** Which computation a tool performs. The compute path switches on exactly this. */
 export type ChecksumKind =
-  "sum" | "ones" | "twos" | "xor" | "lrc" | "bcc" | "fletcher16" | "fletcher32" | "adler32";
+  | "sum"
+  | "ones"
+  | "twos"
+  | "xor"
+  | "lrc"
+  | "bcc"
+  | "fletcher16"
+  | "fletcher32"
+  | "adler32"
+  | "verhoeff"
+  | "damm"
+  | "luhn"
+  | "isbn";
 
 export interface ChecksumToolMeta {
   id: string;
@@ -197,6 +209,54 @@ export const CHECKSUM_TOOLS: readonly ChecksumToolMeta[] = [
     ],
     summary: "zlib's checksum from RFC 1950 — Fletcher's idea with a prime modulus.",
     check: "0x091E01DE",
+  },
+  {
+    id: "verhoeff",
+    label: "Verhoeff",
+    kind: "verhoeff",
+    category: "Check Digits",
+    width: 8,
+    exposes: [],
+    defaults: {},
+    tags: ["verhoeff", "check digit", "dihedral", "d5", "transposition", "integrity", "aadhaar"],
+    summary: "Verhoeff dihedral group D5 check digit algorithm — detects 100% of single transposition errors.",
+    check: "0x00",
+  },
+  {
+    id: "damm",
+    label: "Damm",
+    kind: "damm",
+    category: "Check Digits",
+    width: 8,
+    exposes: [],
+    defaults: {},
+    tags: ["damm", "check digit", "quasigroup", "anti-symmetric", "transposition", "integrity"],
+    summary: "Damm quasigroup check digit algorithm — detects all single and adjacent transposition errors.",
+    check: "0x04",
+  },
+  {
+    id: "luhn",
+    label: "Luhn / Mod 10",
+    kind: "luhn",
+    category: "Check Digits",
+    width: 8,
+    exposes: [],
+    defaults: {},
+    tags: ["luhn", "mod10", "mod 10", "credit card", "imei", "check digit", "iso7812"],
+    summary: "Luhn algorithm (Mod 10) with card issuer (Visa/Mastercard/Amex) and IMEI detection.",
+    check: "0x07",
+  },
+  {
+    id: "isbn",
+    label: "ISBN / EAN-13",
+    kind: "isbn",
+    category: "Check Digits",
+    width: 8,
+    exposes: [],
+    defaults: {},
+    tags: ["isbn", "isbn10", "isbn13", "ean", "ean13", "book", "barcode", "check digit"],
+    summary: "ISBN-10, ISBN-13, and EAN-13 check digit validator and bidirectional converter.",
+    check: "0x0A",
   },
 ];
 
