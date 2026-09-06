@@ -270,7 +270,7 @@ export function ResultPanel({
         )}
 
         {!isKeygen && state.result?.fields && state.result.fields.length > 0 && (
-          <FieldTable fields={state.result.fields} />
+          <FieldTable fields={state.result.fields} copyable />
         )}
 
         {/*

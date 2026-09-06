@@ -155,11 +155,17 @@ export function Sidebar({
   /**
    * Collapse state for both levels, in one set, keyed `family:<id>` or `cat:<family>/<label>`.
    *
-   * One set rather than two because the two levels never need to be reasoned about separately, and
-   * the category key carries its family: two families are free to declare a category of the same
-   * name, and an unqualified key would collapse both.
+   * All families are collapsed by default except the CRC family.
    */
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    for (const f of families) {
+      if (f !== "crc") {
+        initial.add(`family:${f}`);
+      }
+    }
+    return initial;
+  });
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   // "/" focuses search, as in every other tool with a list this long.
@@ -310,11 +316,38 @@ export function Sidebar({
             aria-label="Filter by family"
             data-ocs-family=""
             value={activeFamily ?? ""}
-            onChange={(event) =>
-              setActiveFamily(
-                event.target.value === "" ? null : (event.target.value as ToolFamily),
-              )
-            }
+            onChange={(event) => {
+              const next = event.target.value === "" ? null : (event.target.value as ToolFamily);
+              setActiveFamily(next);
+              if (next) {
+                setCollapsed((prev) => {
+                  const copy = new Set(prev);
+                  copy.delete(`family:${next}`);
+                  for (const key of copy) {
+                    if (key.startsWith(`cat:${next}/`)) {
+                      copy.delete(key);
+                    }
+                  }
+                  return copy;
+                });
+              } else {
+                // Revert to the last actually selected family and the sub-family of the selected algorithm.
+                const targetFamily = here?.family ?? "crc";
+                const targetCategory = here?.category;
+                const reset = new Set<string>();
+                for (const f of families) {
+                  if (f !== targetFamily) {
+                    reset.add(`family:${f}`);
+                  }
+                }
+                for (const manifest of manifests) {
+                  if (manifest.family === targetFamily && manifest.category !== targetCategory) {
+                    reset.add(`cat:${targetFamily}/${manifest.category}`);
+                  }
+                }
+                setCollapsed(reset);
+              }
+            }}
             className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
           >
             <option value="">All families ({manifests.length})</option>
@@ -335,7 +368,10 @@ export function Sidebar({
         )}
         {groups.map(({ family, count, sections }) => {
           const familyKey = `family:${family}`;
-          const familyOpen = !collapsed.has(familyKey);
+          const familyOpen =
+            (activeFamily !== null && activeFamily === family) ||
+            search.trim() !== "" ||
+            !collapsed.has(familyKey);
           return (
             <div key={family} className="mb-2">
               <button
@@ -372,7 +408,10 @@ export function Sidebar({
                     );
                   }
                   const categoryKey = `cat:${family}/${label}`;
-                  const categoryOpen = !collapsed.has(categoryKey);
+                  const categoryOpen =
+                    (activeFamily !== null && activeFamily === family) ||
+                    search.trim() !== "" ||
+                    !collapsed.has(categoryKey);
                   return (
                     <div key={label} className="mt-1 pl-2">
                       <button

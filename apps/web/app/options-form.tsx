@@ -22,7 +22,8 @@ import {
   randomBytesValue,
   redundantOptionIds,
 } from "@ocs/engine";
-import { Button, SecretField, StringListEditor, Toggle, cn } from "@ocs/ui";
+import { Button, CopyIconButton, SecretField, StringListEditor, Toggle, cn } from "@ocs/ui";
+import { platform } from "@ocs/platform";
 
 const BYTES_ENCODINGS: readonly BytesEncoding[] = [
   "hex",
@@ -336,7 +337,7 @@ function OptionControl({
               return segment.group === undefined ? (
                 <Fragment key={`plain-${index}`}>{options}</Fragment>
               ) : (
-                <optgroup key={segment.group} label={segment.group}>
+                <optgroup key={`${segment.group}-${index}`} label={segment.group}>
                   {options}
                 </optgroup>
               );
@@ -420,6 +421,20 @@ function OptionControl({
           placeholder={option.arg?.placeholder}
           value={typeof value === "string" ? value : ""}
           onValueChange={(next) => onChange(option.id, next || undefined)}
+          action={
+            <CopyIconButton
+              value={() => (typeof value === "string" ? value : "")}
+              writeClipboard={(text) => platform().copyToClipboard(text)}
+              disabled={!value}
+              aria-label={`Copy ${option.label.toLowerCase()}`}
+              title={
+                !value
+                  ? `Nothing to copy: ${option.label.toLowerCase()} is empty.`
+                  : `Copy ${option.label.toLowerCase()}`
+              }
+              className="shrink-0"
+            />
+          }
           {...(option.arg?.multiline ? { multiline: true, rows: option.arg.rows ?? 6 } : {})}
         />
       );
@@ -606,6 +621,21 @@ function BytesControl({
     </Button>
   ) : null;
 
+  const copyButton = (
+    <CopyIconButton
+      value={() => value}
+      writeClipboard={(text) => platform().copyToClipboard(text)}
+      disabled={value === ""}
+      aria-label={`Copy ${option.label.toLowerCase()}`}
+      title={
+        value === ""
+          ? `Nothing to copy: ${option.label.toLowerCase()} is empty.`
+          : `Copy ${option.label.toLowerCase()}`
+      }
+      className="shrink-0"
+    />
+  );
+
   // A secret gets the masked control; an IV or nonce is public and gets a plain one.
   if (option.secret) {
     return (
@@ -615,6 +645,7 @@ function BytesControl({
         problem={problem}
         value={value}
         onValueChange={(next) => onChange(option.id, next || undefined)}
+        action={copyButton}
         trailing={
           <>
             {encodingSelect}
@@ -626,7 +657,12 @@ function BytesControl({
   }
 
   return (
-    <Field option={option} problem={problem} hint={`${option.summary} — ${counter}`}>
+    <Field
+      option={option}
+      problem={problem}
+      hint={`${option.summary} — ${counter}`}
+      action={copyButton}
+    >
       <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
         <input
           type="text"
@@ -661,12 +697,14 @@ function Field({
   problem,
   hint,
   inline = false,
+  action,
   children,
 }: {
   option: OptionDef;
   problem: string | undefined;
   hint?: string;
   inline?: boolean;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   const note = problem ? (
@@ -682,6 +720,7 @@ function Field({
           {/* A fixed column so several rows line up rather than each finding its own width. */}
           <Label option={option} className="w-24 shrink-0" />
           <div className="min-w-0 flex-1">{children}</div>
+          {action}
         </div>
         {note}
       </div>
@@ -690,7 +729,10 @@ function Field({
 
   return (
     <div className="space-y-1">
-      <Label option={option} />
+      <div className="flex items-center justify-between gap-2">
+        <Label option={option} />
+        {action}
+      </div>
       {children}
       {note}
     </div>

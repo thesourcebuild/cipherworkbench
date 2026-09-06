@@ -404,6 +404,7 @@ export const HMAC_HASHES: readonly {
   { id: "ripemd256", label: "RIPEMD-256", outputLen: 32, blockLen: 64, legacy: true, group: "RIPEMD" },
   { id: "ripemd320", label: "RIPEMD-320", outputLen: 40, blockLen: 64, legacy: true, group: "RIPEMD" },
   { id: "whirlpool", label: "Whirlpool", outputLen: 64, blockLen: 64, group: "Other" },
+  { id: "snefru", label: "Snefru-256", outputLen: 32, blockLen: 32, legacy: true, group: "Other" },
   { id: "tiger128-3", label: "Tiger-128,3", outputLen: 16, blockLen: 64, legacy: true, group: "Tiger" },
   { id: "tiger160-3", label: "Tiger-160,3", outputLen: 20, blockLen: 64, legacy: true, group: "Tiger" },
   { id: "tiger192-3", label: "Tiger-192,3", outputLen: 24, blockLen: 64, legacy: true, group: "Tiger" },
@@ -425,7 +426,6 @@ export const HMAC_HASHES: readonly {
   { id: "haval192-5", label: "HAVAL-192,5", outputLen: 24, blockLen: 128, legacy: true, group: "HAVAL" },
   { id: "haval224-5", label: "HAVAL-224,5", outputLen: 28, blockLen: 128, legacy: true, group: "HAVAL" },
   { id: "haval256-5", label: "HAVAL-256,5", outputLen: 32, blockLen: 128, legacy: true, group: "HAVAL" },
-  { id: "snefru", label: "Snefru-256", outputLen: 32, blockLen: 32, legacy: true, group: "Other" },
   { id: "gost94", label: "GOST R 34.11-94", outputLen: 32, blockLen: 32, legacy: true, group: "GOST" },
   {
     id: "gost94-crypto",

@@ -387,8 +387,7 @@ export function KeypairResultView({
           </div>
 
           <MonoBlock
-            data-ocs-result=""
-            data-ocs-status={status}
+            data-ocs-private-result=""
             value={revealedPrivate ? activePrivate.value : "•".repeat(64)}
             className="max-h-56 overflow-auto whitespace-pre font-mono text-[11px] leading-relaxed"
           />
@@ -433,6 +432,8 @@ export function KeypairResultView({
           </div>
 
           <MonoBlock
+            data-ocs-result=""
+            data-ocs-status={status}
             value={activePublic.value}
             className="max-h-56 overflow-auto whitespace-pre font-mono text-[11px] leading-relaxed"
           />

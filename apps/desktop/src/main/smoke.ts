@@ -208,6 +208,8 @@ function checkSeededInput(window: BrowserWindow): Promise<ComputeProbe> {
          while (!selected && Date.now() < clickDeadline) {
            const button = document.querySelector(selector);
            if (!button) {
+             const collapsed = document.querySelectorAll('[data-ocs-family-group][aria-expanded="false"]');
+             for (const c of collapsed) c.click();
              await sleep(100);
              continue;
            }
@@ -4211,6 +4213,40 @@ function checkNoOutbound(
   ) as Promise<{ blocked?: boolean; detail?: string }>;
 }
 
+/**
+ * Verifies that the initial sidebar state matches the specification:
+ * all tool families are collapsed by default except the CRC family.
+ *
+ * After verifying this initial state, it expands all families so that subsequent
+ * probes testing algorithms across all families can access their tool buttons.
+ */
+function checkSidebarInitialCollapse(
+  window: BrowserWindow,
+): Promise<{ error?: string; verified?: boolean }> {
+  return window.webContents.executeJavaScript(
+    `(async () => {
+       const groups = document.querySelectorAll("[data-ocs-family-group]");
+       if (groups.length === 0) return { error: "no family groups rendered in the sidebar" };
+       for (const group of groups) {
+         const family = group.getAttribute("data-ocs-family-group");
+         const expanded = group.getAttribute("aria-expanded") === "true";
+         if (family === "crc") {
+           if (!expanded) return { error: "CRC family should be expanded by default" };
+         } else {
+           if (expanded) return { error: family + " family should be collapsed by default" };
+         }
+       }
+       for (const group of groups) {
+         if (group.getAttribute("aria-expanded") !== "true") {
+           group.click();
+         }
+       }
+       await new Promise((r) => setTimeout(r, 100));
+       return { verified: true };
+     })()`,
+  ) as Promise<{ error?: string; verified?: boolean }>;
+}
+
 export function runSmokeTest(window: BrowserWindow): void {
   const consoleErrors: string[] = [];
   window.webContents.on("console-message", (event) => {
@@ -4311,7 +4347,14 @@ export function runSmokeTest(window: BrowserWindow): void {
           return fail(`app name is "${shell.appName}", expected the product name`);
         }
 
-        return checkSeededInput(window)
+        return checkSidebarInitialCollapse(window)
+          .then((sidebarProbe) => {
+            process.stdout.write(`SMOKE SIDEBAR: ${JSON.stringify(sidebarProbe, null, 2)}\n`);
+            if (sidebarProbe.error) {
+              fail(`sidebar collapse state: ${sidebarProbe.error}`);
+            }
+            return checkSeededInput(window);
+          })
           .then((seedProbe) => {
             process.stdout.write(`SMOKE SEED: ${JSON.stringify(seedProbe, null, 2)}
 `);

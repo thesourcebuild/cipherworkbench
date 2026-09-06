@@ -15,6 +15,8 @@ export interface SecretFieldProps extends Omit<
   problem?: string;
   /** Right-hand controls: a "Generate" button for a key or nonce, an encoding selector. */
   trailing?: ReactNode;
+  /** Controls rendered after the Show button in the label row (e.g. CopyIconButton). */
+  action?: ReactNode;
   /**
    * Render a textarea instead of an input. For PEM private keys, which are multi-line by
    * construction and unreadable squeezed onto one line.
@@ -38,6 +40,7 @@ export function SecretField({
   hint,
   problem,
   trailing,
+  action,
   multiline = false,
   rows = 6,
   className,
@@ -56,18 +59,21 @@ export function SecretField({
 
   return (
     <div className="space-y-1">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <label htmlFor={id} className="text-xs font-medium text-slate-700 dark:text-slate-300">
           {label}
         </label>
-        <button
-          type="button"
-          onClick={() => setRevealed((r) => !r)}
-          className="text-[11px] text-slate-500 underline decoration-dotted hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-          aria-pressed={revealed}
-        >
-          {revealed ? "Hide" : "Show"}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setRevealed((r) => !r)}
+            className="text-[11px] text-slate-500 underline decoration-dotted hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+            aria-pressed={revealed}
+          >
+            {revealed ? "Hide" : "Show"}
+          </button>
+          {action}
+        </div>
       </div>
       <div className={cn("flex gap-2", multiline ? "items-start" : "items-center")}>
         {multiline ? (
