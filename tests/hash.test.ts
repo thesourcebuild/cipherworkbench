@@ -1356,16 +1356,41 @@ describe("all variants", () => {
     }
   });
 
-  it("leaves TupleHash out, by the flag rather than by name", () => {
-    /**
-     * Its input is a tuple of elements rather than a byte string, so there is nothing to feed it
-     * from a stream and `createHashStream` refuses outright. Filtering on `usesInputPanel` rather
-     * than on an id list is what keeps that true for whatever arrives next.
-     */
-    const tuple = HASH_ALGORITHMS.find((m) => !usesInputPanel(m));
-    expect(tuple, "no non-streaming algorithm left to check").toBeDefined();
-    const { rows } = hashToolDefinition(tuple!.id).variants!(specFor(tuple!.id));
-    expect(rows.map((r) => r.id)).not.toContain(tuple!.id);
+  it("includes all four TupleHash variants and computes over the tuple options", async () => {
+    const spec = specFor("tuplehash128", {
+      [OPTION_TUPLE]: ["000102", "101112131415"],
+      tupleEncoding: "hex",
+    });
+    const table = hashToolDefinition("tuplehash128").variants!(spec);
+    expect(table.columns).toEqual(["Output", "Block"]);
+    expect(table.rows.map((r) => r.id)).toEqual([
+      "tuplehash128",
+      "tuplehash256",
+      "tuplehash128xof",
+      "tuplehash256xof",
+    ]);
+
+    const results = await runStreams(
+      table.rows.map((r) => r.stream()),
+      (async function* () {
+        yield new Uint8Array(0);
+      })(),
+    );
+    expect(results.every((r) => r.bytes !== undefined)).toBe(true);
+    expect(results[0]!.bytes).toHaveLength(32);
+    expect(results[1]!.bytes).toHaveLength(64);
+    expect(results[2]!.bytes).toHaveLength(32);
+    expect(results[3]!.bytes).toHaveLength(64);
+
+    const expected128 = await hashToolDefinition("tuplehash128").compute(
+      spec,
+      new Uint8Array(0),
+    );
+    expect(encodeHex(results[0]!.bytes!)).toBe(encodeHex(expected128.bytes!));
+    // Sample #1 from NIST TupleHash_samples.pdf
+    expect(encodeHex(results[0]!.bytes!)).toBe(
+      "c5d8786c1afb9b82111ab34b65b2c0048fa64e6d48e263264ce1707d3ffc8ed1",
+    );
   });
 
   it("states each row's own output length, which is what settles a family", () => {

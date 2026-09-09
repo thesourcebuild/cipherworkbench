@@ -62,22 +62,27 @@ export function useVariants(
   const [progress, setProgress] = useState<StreamProgress | undefined>();
   const [error, setError] = useState<string | undefined>();
 
+  const readsInput =
+    tool && spec
+      ? tool.readsInputForSpec
+        ? tool.readsInputForSpec(spec)
+        : tool.readsInput
+      : true;
+
   /**
    * What the values were computed from, so "stale" is a fact rather than a guess.
    *
-   * The input only, and deliberately not the spec -- an earlier version of this comment claimed
-   * otherwise and was simply wrong about its own code. No spec option can invalidate a value here,
-   * because every family runs each row at *its own* defaults: changing CRC's model, or HAVAL's pass
-   * count, moves which row is marked and leaves all the values untouched. The one spec change that
-   * would alter the row set is a change of width or category, and that is a change of *tool*, which
-   * remounts this hook.
+   * For tools that read the input panel, this tracks the input mode, text/file and encoding.
+   * For tools that take their input from options (e.g. TupleHash), this tracks the spec options.
    */
   const inputKey =
-    input.mode === "file"
-      ? input.file
-        ? `file:${input.file.name}:${input.file.size}:${input.file.lastModified}`
-        : "file:none"
-      : `${input.mode}:${input.textEncoding}:${input.text}`;
+    !readsInput
+      ? JSON.stringify(spec?.options ?? {})
+      : input.mode === "file"
+        ? input.file
+          ? `file:${input.file.name}:${input.file.size}:${input.file.lastModified}`
+          : "file:none"
+        : `${input.mode}:${input.textEncoding}:${input.text}`;
   const [ranKey, setRanKey] = useState<string | undefined>(undefined);
 
   const abortRef = useRef<AbortController | undefined>(undefined);
@@ -110,6 +115,34 @@ export function useVariants(
 
     void (async () => {
       try {
+        if (!readsInput) {
+          await Promise.all(table.rows.map((row) => row.prepare?.()));
+          if (!live()) return;
+
+          const results = await runStreams(
+            table.rows.map((row) => row.stream()),
+            once(new Uint8Array(0)),
+            {
+              totalBytes: 0,
+              onProgress: (nextProgress) => {
+                if (live()) setProgress(nextProgress);
+              },
+              signal: controller.signal,
+            },
+          );
+
+          if (!live()) return;
+          const next = new Map<string, Uint8Array>();
+          results.forEach((result, index) => {
+            const row = table.rows[index];
+            if (row && result.bytes) next.set(row.id, result.bytes);
+          });
+          setValues(next);
+          setRanKey(inputKey);
+          setStatus("done");
+          return;
+        }
+
         if (input.mode === "file") {
           if (!input.file) {
             if (live()) {
@@ -180,7 +213,7 @@ export function useVariants(
         setError(thrown instanceof Error ? thrown.message : String(thrown));
       }
     })();
-  }, [tool, spec, table, input.mode, input.text, input.textEncoding, input.file, inputKey]);
+  }, [tool, spec, table, input.mode, input.text, input.textEncoding, input.file, inputKey, readsInput]);
 
   /**
    * A row set from another width is not a stale version of this one's, so the values go rather than
@@ -188,7 +221,7 @@ export function useVariants(
    *
    * It aborts first, which it did not before. `ToolWorkbench` is keyed by tool id, so today a tool
    * change remounts this hook and the unmount cleanup catches the run -- which made the omission
-   * unreachable rather than harmless. Unreachable is a property of a call site somewhere else: drop
+   * unreachable rather than harmless. Drop
    * the key, or reuse the hook across tools, and a hundred-gigabyte read would carry on in the
    * background with nothing left holding a reference to stop it.
    */
@@ -216,7 +249,8 @@ export function useVariants(
     stop,
     canRun:
       Boolean(tool?.variants && spec && table && table.rows.length > 0) &&
-      (input.mode === "file" ? input.file !== undefined : input.text !== ""),
+      (!readsInput ||
+        (input.mode === "file" ? input.file !== undefined : input.text !== "")),
   };
 }
 

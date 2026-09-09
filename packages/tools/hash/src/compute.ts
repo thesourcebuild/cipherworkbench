@@ -290,9 +290,8 @@ function tupleFields(resolved: ResolvedSpec) {
  * belong to the algorithm selected above. A row is "SHAKE256 as it comes", not "SHAKE256 with your
  * SHAKE128 settings".
  *
- * TupleHash is left out entirely -- its input is a *tuple* of elements rather than a byte string, so
- * there is nothing to feed it from a stream. `createHashStream` refuses outright, and
- * `usesInputPanel` is the flag that already records the distinction.
+ * TupleHash algorithms form their own sibling family comparing the 128-bit, 256-bit and XOF
+ * variants over the shared tuple and customisation string options.
  */
 export function hashVariants(spec: HashSpec): ToolVariantTable {
   const meta = requireHashAlgorithm(spec.algorithm);
@@ -309,17 +308,7 @@ export function hashVariants(spec: HashSpec): ToolVariantTable {
   const family = HASH_ALGORITHMS.filter(
     (other) =>
       other.category === meta.category &&
-      /*
-       * Not filtered on whether the implementation is loaded, which it used to be.
-       *
-       * The old predicate excluded anything declaring `prepare` -- FSB alone, which cost FSB its
-       * rows. Now that every algorithm implemented in `@ocs/algos` is a dynamic import, that
-       * predicate would have emptied the table for eight of the 51 categories rather than trimming
-       * them: MD spans four modules and xxHash three, and a category down to one member renders no
-       * panel at all. Each row carries its own `prepare` instead, awaited by the panel on Run --
-       * which also gives FSB the rows it never had.
-       */
-      usesInputPanel(other),
+      (meta.tupleInput ? other.tupleInput : usesInputPanel(other)),
   );
 
   if (family.length < 2) return { columns: [], rows: [] };
@@ -335,7 +324,29 @@ export function hashVariants(spec: HashSpec): ToolVariantTable {
       ...(requireHashBinding(other.id).prepare
         ? { prepare: () => requireHashBinding(other.id).prepare!() }
         : {}),
-      stream: () => createHashStream(createSpec({ algorithm: other.id })),
+      stream: () => {
+        if (other.tupleInput) {
+          const base = createSpec({ algorithm: other.id });
+          const rowSpec: HashSpec = {
+            ...base,
+            options: { ...base.options, ...spec.options },
+          };
+          const resolved = resolve(rowSpec);
+          const hasher = resolved.binding.create(resolved.params);
+          let finished = false;
+          return {
+            update(_chunk: Uint8Array) {},
+            finish(): ToolResult {
+              if (finished) throw new Error("finish() called twice on the same hash stream.");
+              finished = true;
+              if (resolved.problem) return { error: resolved.problem };
+              for (const element of resolved.tuple) hasher.update(element);
+              return { bytes: iterate(hasher.digest(), resolved) };
+            },
+          };
+        }
+        return createHashStream(createSpec({ algorithm: other.id }));
+      },
       selected: other.id === spec.algorithm,
       cells: [`${other.outputLen} bytes`, `${other.blockLen} bytes`],
     })),
