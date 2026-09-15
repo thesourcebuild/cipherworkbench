@@ -1,9 +1,16 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { TOOL_MANIFESTS } from "@ocs/registry";
 import robots from "../apps/web/app/robots";
 import sitemap from "../apps/web/app/sitemap";
 import {
   ALL_TOOLS,
+  FAMILY_LABEL,
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_PATH,
+  OG_IMAGE_URL,
+  OG_IMAGE_WIDTH,
   SITE_DESCRIPTION,
   SITE_KEYWORDS,
   SITE_NAME,
@@ -204,5 +211,30 @@ describe("the site constants", () => {
     const restated = SITE_KEYWORDS.filter((k) => labels.has(k.toLowerCase()));
     expect(restated.length, `site keywords restating tool labels: ${restated.join(", ")}`)
       .toBeLessThanOrEqual(3);
+  });
+});
+
+describe("open graph and social preview cards", () => {
+  it("defines 1200x630 dimensions matching social scraper standards", () => {
+    expect(OG_IMAGE_WIDTH).toBe(1200);
+    expect(OG_IMAGE_HEIGHT).toBe(630);
+    expect(OG_IMAGE_PATH).toBe("/og-image.png");
+    expect(OG_IMAGE_URL).toBe(`${SITE_URL}/og-image.png`);
+  });
+
+  it("has a physical og-image.png asset in public directory", () => {
+    const filePath = path.join(__dirname, "../apps/web/public/og-image.png");
+    expect(fs.existsSync(filePath), `${filePath} does not exist`).toBe(true);
+    const stat = fs.statSync(filePath);
+    expect(stat.size).toBeGreaterThan(10000);
+  });
+});
+
+describe("breadcrumbs and family labels", () => {
+  it("provides a human-readable display label for every tool family", () => {
+    for (const manifest of ALL_TOOLS) {
+      expect(FAMILY_LABEL[manifest.family], `Missing family label for ${manifest.family}`).toBeDefined();
+      expect(FAMILY_LABEL[manifest.family]!.length).toBeGreaterThan(0);
+    }
   });
 });

@@ -36,6 +36,26 @@ export const SITE_DESCRIPTION =
 /** Short form for Open Graph and Twitter, where the space is tighter than a meta description's. */
 export const SITE_TAGLINE = "Hashes, checksums, MACs and ciphers — computed and verified offline";
 
+export const OG_IMAGE_PATH = "/og-image.png";
+export const OG_IMAGE_URL = `${SITE_URL}${OG_IMAGE_PATH}`;
+export const OG_IMAGE_WIDTH = 1200;
+export const OG_IMAGE_HEIGHT = 630;
+
+/** Human-readable category labels for breadcrumbs and schema. */
+export const FAMILY_LABEL: Record<string, string> = {
+  hash: "Hashes",
+  crc: "CRC",
+  checksum: "Checksums",
+  parity: "Parity",
+  mac: "MACs",
+  kdf: "Key derivation",
+  cipher: "Ciphers",
+  classical: "Classical",
+  asymmetric: "Public key",
+  encoding: "Encodings",
+  format: "Formats",
+};
+
 /**
  * Search terms worth carrying, chosen rather than scraped.
  *

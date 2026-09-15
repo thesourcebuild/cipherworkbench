@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ToolFamily, ToolManifest } from "@ocs/engine";
 import { cn } from "@ocs/ui";
+import { getInitialCollapsed } from "./sidebar-state";
 
 export interface SidebarProps {
   manifests: readonly ToolManifest[];
@@ -155,18 +156,34 @@ export function Sidebar({
   /**
    * Collapse state for both levels, in one set, keyed `family:<id>` or `cat:<family>/<label>`.
    *
-   * All families are collapsed by default except the CRC family.
+   * By default, the family and category of the selected tool are expanded, while other families
+   * and categories are collapsed.
    */
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    const initial = new Set<string>();
-    for (const f of families) {
-      if (f !== "crc") {
-        initial.add(`family:${f}`);
-      }
-    }
-    return initial;
-  });
+  const [collapsed, setCollapsed] = useState<Set<string>>(() =>
+    getInitialCollapsed(manifests, families, selectedId),
+  );
   const searchRef = useRef<HTMLInputElement | null>(null);
+
+  // Auto-expand the selected tool's family and category whenever selectedId changes.
+  useEffect(() => {
+    if (!selectedId) return;
+    const target = manifests.find((m) => m.id === selectedId);
+    if (!target) return;
+
+    setCollapsed((prev) => {
+      const familyKey = `family:${target.family}`;
+      const catKey = `cat:${target.family}/${target.category}`;
+
+      if (!prev.has(familyKey) && !prev.has(catKey)) {
+        return prev;
+      }
+
+      const next = new Set(prev);
+      next.delete(familyKey);
+      next.delete(catKey);
+      return next;
+    });
+  }, [selectedId, manifests]);
 
   // "/" focuses search, as in every other tool with a list this long.
   useEffect(() => {
@@ -331,21 +348,8 @@ export function Sidebar({
                   return copy;
                 });
               } else {
-                // Revert to the last actually selected family and the sub-family of the selected algorithm.
-                const targetFamily = here?.family ?? "crc";
-                const targetCategory = here?.category;
-                const reset = new Set<string>();
-                for (const f of families) {
-                  if (f !== targetFamily) {
-                    reset.add(`family:${f}`);
-                  }
-                }
-                for (const manifest of manifests) {
-                  if (manifest.family === targetFamily && manifest.category !== targetCategory) {
-                    reset.add(`cat:${targetFamily}/${manifest.category}`);
-                  }
-                }
-                setCollapsed(reset);
+                // Revert to the selected algorithm's family and sub-family.
+                setCollapsed(getInitialCollapsed(manifests, families, selectedId));
               }
             }}
             className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
@@ -463,8 +467,17 @@ function ToolRow({
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
+  const rowRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (selected) {
+      rowRef.current?.scrollIntoView?.({ block: "nearest" });
+    }
+  }, [selected]);
+
   return (
     <button
+      ref={rowRef}
       type="button"
       // Stable hook for the desktop smoke test. Needed rather than matching on label text: a
       // heading can render the same string as a tool inside it, and the probe was clicking the

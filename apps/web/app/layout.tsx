@@ -4,6 +4,9 @@ import "./globals.css";
 import { THEME_STORAGE_KEY } from "./theme-constants";
 import {
   BASE_PATH,
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_URL,
+  OG_IMAGE_WIDTH,
   SITE_DESCRIPTION,
   SITE_KEYWORDS,
   SITE_NAME,
@@ -55,8 +58,21 @@ export const metadata: Metadata = {
     title: `${SITE_NAME} — ${SITE_TAGLINE}`,
     description: SITE_DESCRIPTION,
     locale: "en",
+    images: [
+      {
+        url: OG_IMAGE_URL,
+        width: OG_IMAGE_WIDTH,
+        height: OG_IMAGE_HEIGHT,
+        alt: `${SITE_NAME} — ${SITE_TAGLINE}`,
+      },
+    ],
   },
-  twitter: { card: "summary", title: SITE_NAME, description: SITE_DESCRIPTION },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+    images: [OG_IMAGE_URL],
+  },
   icons: {
     icon: [
       { url: `${BASE_PATH}/icon.svg`, type: "image/svg+xml" },

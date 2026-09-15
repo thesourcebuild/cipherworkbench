@@ -40,7 +40,7 @@ export function ToolHeader({
   return (
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100">{manifest.label}</h1>
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{manifest.label}</h2>
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             className={cn(

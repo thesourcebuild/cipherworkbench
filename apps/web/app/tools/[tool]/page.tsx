@@ -2,7 +2,17 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getManifest, TOOL_MANIFESTS } from "@ocs/registry";
 import { AppShell } from "../../app-shell";
-import { SITE_NAME, toolDescription, toolTitle, toolUrl } from "../../site";
+import {
+  FAMILY_LABEL,
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_URL,
+  OG_IMAGE_WIDTH,
+  SITE_NAME,
+  SITE_URL,
+  toolDescription,
+  toolTitle,
+  toolUrl,
+} from "../../site";
 
 /**
  * One statically exported page per tool -- 213 of them -- and this is the whole point of the SEO work.
@@ -76,8 +86,21 @@ export async function generateMetadata({
       siteName: SITE_NAME,
       title,
       description,
+      images: [
+        {
+          url: OG_IMAGE_URL,
+          width: OG_IMAGE_WIDTH,
+          height: OG_IMAGE_HEIGHT,
+          alt: `${manifest.label} — ${SITE_NAME}`,
+        },
+      ],
     },
-    twitter: { card: "summary", title, description },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [OG_IMAGE_URL],
+    },
   };
 }
 
@@ -101,20 +124,15 @@ export default async function ToolPage({ params }: { params: Promise<{ tool: str
         by `ToolHeader`, styled rather than structural. A page with no h1 and a title that says
         "SHA-256" is a page an engine is unsure about.
       */}
-      <div className="sr-only">
-        <h1>{toolTitle(manifest)}</h1>
-        <p>{toolDescription(manifest)}</p>
-        <p>
-          {manifest.label} is one of {TOOL_MANIFESTS.length} tools in {SITE_NAME}. Every computation
-          runs locally in this page; no input is sent anywhere.
-        </p>
-      </div>
+      {/* Single authoritative page heading for search engines and screen readers */}
+      <h1 className="sr-only">{toolTitle(manifest)}</h1>
 
       {/*
-        Structured data for this specific tool.
+        Structured data for this specific tool and breadcrumb hierarchy.
 
         `SoftwareApplication` with the tool's name is what lets a result carry the tool rather than the
-        site, and `isPartOf` is what ties the 213 together as one work instead of 213 unrelated pages.
+        site, and `isPartOf` is what ties all tools together as one suite. `BreadcrumbList` provides
+        hierarchical navigation context for rich search result snippets.
         Inline, so the desktop CSP hashes it automatically -- see the note in `layout.tsx`.
       */}
       <script
@@ -122,15 +140,42 @@ export default async function ToolPage({ params }: { params: Promise<{ tool: str
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            name: `${manifest.label} calculator`,
-            url: toolUrl(manifest.id),
-            description: toolDescription(manifest),
-            applicationCategory: "DeveloperApplication",
-            operatingSystem: "Any",
-            isAccessibleForFree: true,
-            offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-            isPartOf: { "@type": "WebApplication", name: SITE_NAME, url: toolUrl(manifest.id) },
+            "@graph": [
+              {
+                "@type": "SoftwareApplication",
+                name: `${manifest.label} calculator`,
+                url: toolUrl(manifest.id),
+                description: toolDescription(manifest),
+                applicationCategory: "DeveloperApplication",
+                operatingSystem: "Any",
+                isAccessibleForFree: true,
+                offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+                isPartOf: { "@type": "WebApplication", name: SITE_NAME, url: `${SITE_URL}/` },
+              },
+              {
+                "@type": "BreadcrumbList",
+                itemListElement: [
+                  {
+                    "@type": "ListItem",
+                    position: 1,
+                    name: "Home",
+                    item: `${SITE_URL}/`,
+                  },
+                  {
+                    "@type": "ListItem",
+                    position: 2,
+                    name: FAMILY_LABEL[manifest.family] ?? manifest.family,
+                    item: `${SITE_URL}/#${manifest.family}`,
+                  },
+                  {
+                    "@type": "ListItem",
+                    position: 3,
+                    name: manifest.label,
+                    item: toolUrl(manifest.id),
+                  },
+                ],
+              },
+            ],
           }),
         }}
       />

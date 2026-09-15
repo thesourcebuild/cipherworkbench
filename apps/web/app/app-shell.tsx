@@ -10,6 +10,7 @@ import { parseShareLink, type ParsedShare } from "./share-link";
 import { ScrollToTop } from "./scroll-to-top";
 import { SettingsOverlay } from "./settings-overlay";
 import { Sidebar } from "./sidebar";
+import { ToolDetails } from "./tool-details";
 import { ToolWorkbench } from "./tool-workbench";
 
 const FAMILIES = presentFamilies();
@@ -299,27 +300,30 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
         */}
         <main ref={setWorkbenchScroller} className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 min-w-0">
           {manifest ? (
-            <ToolWorkbench
-              // Remounting on tool change is deliberate: it discards the previous
-              // tool's spec, output encoding and verify field, none of which mean
-              // anything under a different algorithm.
-              key={selectedId}
-              toolId={selectedId}
-              input={input}
-              onInputChange={(next) => {
-                setInput(next);
-                setInputIsSeeded(false);
-              }}
-              inputIsSeeded={inputIsSeeded}
-              // Seeding leaves the flag alone, so a tool's sample is still replaceable by the next
-              // tool's. Two callbacks rather than one with a flag argument, because the two mean
-              // different things and a boolean parameter at the call site says neither.
-              onSeedInput={setInput}
-              autoUpdate={autoUpdate}
-              onAutoUpdateChange={setAutoUpdate}
-              restore={restore}
-              onRestoreConsumed={consumeRestore}
-            />
+            <div className="space-y-6">
+              <ToolWorkbench
+                // Remounting on tool change is deliberate: it discards the previous
+                // tool's spec, output encoding and verify field, none of which mean
+                // anything under a different algorithm.
+                key={selectedId}
+                toolId={selectedId}
+                input={input}
+                onInputChange={(next) => {
+                  setInput(next);
+                  setInputIsSeeded(false);
+                }}
+                inputIsSeeded={inputIsSeeded}
+                // Seeding leaves the flag alone, so a tool's sample is still replaceable by the next
+                // tool's. Two callbacks rather than one with a flag argument, because the two mean
+                // different things and a boolean parameter at the call site says neither.
+                onSeedInput={setInput}
+                autoUpdate={autoUpdate}
+                onAutoUpdateChange={setAutoUpdate}
+                restore={restore}
+                onRestoreConsumed={consumeRestore}
+              />
+              <ToolDetails manifest={manifest} />
+            </div>
           ) : (
             <p className="text-xs text-slate-500 dark:text-slate-400">
               No such tool: {selectedId}
