@@ -59,6 +59,7 @@ const ENCODING_LABEL: Record<string, string> = {
 
 export interface ToolDetailsProps {
   manifest: ToolManifest;
+  onSelect?: (id: string) => void;
   className?: string;
 }
 
@@ -72,7 +73,7 @@ export interface ToolDetailsProps {
  * Uses the HTML5 `<details>` and `<summary>` pattern: collapsed by default for a clean, non-intrusive
  * workbench interface, while remaining 100% indexed by search engines and expandable on demand.
  */
-export function ToolDetails({ manifest, className }: ToolDetailsProps) {
+export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps) {
   const familyName = FAMILY_LABEL[manifest.family] ?? manifest.family;
   const posture = POSTURE_EXPLANATION[manifest.security];
 
@@ -240,6 +241,15 @@ export function ToolDetails({ manifest, className }: ToolDetailsProps) {
                 <a
                   key={sibling.id}
                   href={toolPath(sibling.id)}
+                  onClick={(e) => {
+                    if (onSelect && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0) {
+                      e.preventDefault();
+                      onSelect(sibling.id);
+                      if (typeof window !== "undefined") {
+                        window.history.pushState(null, "", toolPath(sibling.id));
+                      }
+                    }
+                  }}
                   className="group block rounded-md border border-slate-200 p-2.5 transition-colors hover:border-blue-400 hover:bg-slate-50 dark:border-slate-800 dark:hover:border-blue-700 dark:hover:bg-slate-800/60"
                 >
                   <div className="flex items-center justify-between gap-1">

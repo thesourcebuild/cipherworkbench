@@ -102,13 +102,20 @@ const FAMILY_PROSE: Record<string, string> = {
   format: "text format",
 };
 
-/** `/tools/sha256/` — one indexable URL per tool. Trailing slash, matching `trailingSlash: true`. */
+/**
+ * Path to a tool, including any deploy subpath (e.g. `/CipherWorkbench/tools/crc16/` on Pages, or
+ * `/tools/crc16/` on desktop/root). Trailing slash, matching `trailingSlash: true`.
+ */
 export function toolPath(id: string): string {
-  return `/tools/${id}/`;
+  return `${BASE_PATH}/tools/${id}/`;
 }
 
 export function toolUrl(id: string): string {
-  return `${SITE_URL}${toolPath(id)}`;
+  const origin =
+    BASE_PATH && SITE_URL.endsWith(BASE_PATH)
+      ? SITE_URL.slice(0, -BASE_PATH.length)
+      : SITE_URL;
+  return `${origin}${toolPath(id)}`;
 }
 
 /**

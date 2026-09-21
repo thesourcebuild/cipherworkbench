@@ -6,6 +6,7 @@ import robots from "../apps/web/app/robots";
 import sitemap from "../apps/web/app/sitemap";
 import {
   ALL_TOOLS,
+  BASE_PATH,
   FAMILY_LABEL,
   OG_IMAGE_HEIGHT,
   OG_IMAGE_PATH,
@@ -155,8 +156,16 @@ describe("per-tool metadata", () => {
 
   it("builds a path and an absolute URL that agree", () => {
     for (const manifest of ALL_TOOLS) {
-      expect(toolPath(manifest.id)).toBe(`/tools/${manifest.id}/`);
-      expect(toolUrl(manifest.id)).toBe(`${SITE_URL}${toolPath(manifest.id)}`);
+      expect(toolPath(manifest.id)).toBe(`${BASE_PATH}/tools/${manifest.id}/`);
+      expect(toolUrl(manifest.id)).toBe(
+        BASE_PATH && SITE_URL.endsWith(BASE_PATH)
+          ? `${SITE_URL.slice(0, -BASE_PATH.length)}${toolPath(manifest.id)}`
+          : `${SITE_URL}${toolPath(manifest.id)}`,
+      );
+      // Ensure no double base paths like /CipherWorkbench/CipherWorkbench/
+      if (BASE_PATH) {
+        expect(toolUrl(manifest.id)).not.toContain(`${BASE_PATH}${BASE_PATH}`);
+      }
     }
   });
 

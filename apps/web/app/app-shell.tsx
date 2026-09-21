@@ -10,6 +10,7 @@ import { parseShareLink, type ParsedShare } from "./share-link";
 import { ScrollToTop } from "./scroll-to-top";
 import { SettingsOverlay } from "./settings-overlay";
 import { Sidebar } from "./sidebar";
+import { BASE_PATH } from "./site";
 import { ToolDetails } from "./tool-details";
 import { ToolWorkbench } from "./tool-workbench";
 
@@ -200,6 +201,25 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
     }
   };
 
+  // Sync selectedId when the user navigates back or forward with browser history
+  useEffect(() => {
+    const onPopState = () => {
+      const pathname = window.location.pathname;
+      const match = pathname.match(/\/tools\/([^/]+)\/?$/);
+      if (match && match[1] && getManifest(match[1])) {
+        setSelectedId(match[1]);
+      } else if (
+        pathname === "/" ||
+        pathname === `${BASE_PATH}/` ||
+        (BASE_PATH && pathname === BASE_PATH)
+      ) {
+        setSelectedId(DEFAULT_TOOL_ID);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   const manifest = getManifest(selectedId);
 
   return (
@@ -322,7 +342,7 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
                 restore={restore}
                 onRestoreConsumed={consumeRestore}
               />
-              <ToolDetails manifest={manifest} />
+              <ToolDetails manifest={manifest} onSelect={setSelectedId} />
             </div>
           ) : (
             <p className="text-xs text-slate-500 dark:text-slate-400">
