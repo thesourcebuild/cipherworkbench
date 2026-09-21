@@ -25,6 +25,8 @@ export default tseslint.config(
       "**/renderer/**",
       "**/release/**",
       "**/*.d.ts",
+      "scratch/**",
+      "**/scratch/**",
       // Vendored third-party source. Kept diffable against upstream rather than reformatted or
       // relinted; the two files carry `/* eslint-disable */` as well, and this makes it explicit.
       "packages/encodings/src/vendor/**",
@@ -227,6 +229,15 @@ export default tseslint.config(
     files: ["**/*.cjs"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    /**
+     * Standalone example scripts that drive external CLI tools (e.g. OpenSSL).
+     */
+    files: ["examples/**/*.ts"],
+    rules: {
+      "no-restricted-imports": "off",
     },
   },
 );

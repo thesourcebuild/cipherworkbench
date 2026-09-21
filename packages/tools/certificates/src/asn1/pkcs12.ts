@@ -12,7 +12,6 @@ import {
 import { detectInputBytes, encodePem } from "./pem";
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { pbkdf2 } from "@noble/hashes/pbkdf2.js";
 
 export interface Pkcs12ExportOptions {
   certDers: Uint8Array[];
@@ -45,6 +44,87 @@ function encodeBmpString(str: string): Uint8Array {
     bytes[i * 2 + 1] = code & 0xff;
   }
   return encodeDerTlv(UniversalTag.BMPString, TagClass.Universal, false, bytes);
+}
+
+/**
+ * RFC 7292 Appendix B: PKCS#12 Key Derivation Function.
+ * Used for deriving MAC and legacy encryption keys from passwords.
+ */
+function pkcs12Kdf(
+  id: number,
+  password: string,
+  salt: Uint8Array,
+  iterations: number,
+  dkLen: number,
+): Uint8Array {
+  const u = 32; // SHA-256 output length
+  const v = 64; // SHA-256 block size
+
+  const D = new Uint8Array(v).fill(id);
+
+  const sLen = v * Math.ceil(salt.length / v);
+  const S = new Uint8Array(sLen);
+  for (let i = 0; i < sLen; i++) {
+    S[i] = salt[i % salt.length]!;
+  }
+
+  let P: Uint8Array;
+  if (password.length > 0) {
+    const bmpBytes = new Uint8Array((password.length + 1) * 2);
+    for (let i = 0; i < password.length; i++) {
+      const code = password.charCodeAt(i);
+      bmpBytes[i * 2] = (code >> 8) & 0xff;
+      bmpBytes[i * 2 + 1] = code & 0xff;
+    }
+    bmpBytes[bmpBytes.length - 2] = 0;
+    bmpBytes[bmpBytes.length - 1] = 0;
+
+    const pLen = v * Math.ceil(bmpBytes.length / v);
+    P = new Uint8Array(pLen);
+    for (let i = 0; i < pLen; i++) {
+      P[i] = bmpBytes[i % bmpBytes.length]!;
+    }
+  } else {
+    P = new Uint8Array(0);
+  }
+
+  const I = new Uint8Array(S.length + P.length);
+  I.set(S, 0);
+  I.set(P, S.length);
+
+  const c = Math.ceil(dkLen / u);
+  const out = new Uint8Array(c * u);
+
+  for (let i = 1; i <= c; i++) {
+    const ai = new Uint8Array(D.length + I.length);
+    ai.set(D, 0);
+    ai.set(I, D.length);
+
+    let h = sha256(ai);
+    for (let iter = 1; iter < iterations; iter++) {
+      h = sha256(h);
+    }
+
+    out.set(h, (i - 1) * u);
+
+    if (i < c) {
+      const B = new Uint8Array(v);
+      for (let j = 0; j < v; j++) {
+        B[j] = h[j % h.length]!;
+      }
+
+      for (let j = 0; j < I.length; j += v) {
+        let carry = 1;
+        for (let k = v - 1; k >= 0; k--) {
+          const sum = I[j + k]! + B[k]! + carry;
+          I[j + k] = sum & 0xff;
+          carry = sum >> 8;
+        }
+      }
+    }
+  }
+
+  return out.slice(0, dkLen);
 }
 
 /**
@@ -278,13 +358,8 @@ export async function encodePkcs12Archive(
     globalThis.crypto.getRandomValues(macSalt);
     const macIterations = 10000;
 
-    // Compute HMAC-SHA256 over authenticatedSafe bytes using derived key
-    const macKey = pbkdf2(
-      sha256,
-      new TextEncoder().encode(opts.password),
-      macSalt,
-      { c: macIterations, dkLen: 32 },
-    );
+    // Compute HMAC-SHA256 over authenticatedSafe bytes using RFC 7292 Appendix B derived key
+    const macKey = pkcs12Kdf(3, opts.password ?? "", macSalt, macIterations, 32);
     const macDigest = hmac(sha256, macKey, authenticatedSafe);
 
     // DigestInfo: SEQUENCE { AlgorithmIdentifier (SHA-256), OCTET STRING (digest) }

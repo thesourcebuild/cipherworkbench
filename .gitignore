@@ -48,6 +48,8 @@ desktop.ini
 # logs and scratch
 *.log
 *.tmp
+scratch/
+examples/**/temp_*
 
 .claude
 CLAUDE.md
