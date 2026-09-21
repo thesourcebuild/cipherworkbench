@@ -52,6 +52,7 @@ export const FAMILY_LABEL: Record<string, string> = {
   cipher: "Ciphers",
   classical: "Classical",
   asymmetric: "Public key",
+  certificates: "Certificates",
   encoding: "Encodings",
   format: "Formats",
 };
@@ -80,6 +81,9 @@ export const SITE_KEYWORDS: readonly string[] = [
   "key derivation",
   "encryption tool",
   "cryptography workbench",
+  "x509 certificate parser",
+  "csr parser",
+  "certificate converter",
 ];
 
 /**
@@ -98,6 +102,7 @@ const FAMILY_PROSE: Record<string, string> = {
   kdf: "key derivation function",
   cipher: "cipher",
   asymmetric: "public-key",
+  certificates: "certificate and PKI",
   encoding: "encoding",
   format: "text format",
 };

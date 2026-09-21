@@ -23,6 +23,9 @@ importers:
       '@ocs/asymmetric':
         specifier: workspace:*
         version: link:packages/tools/asymmetric
+      '@ocs/certificates':
+        specifier: workspace:*
+        version: link:packages/tools/certificates
       '@ocs/checksum':
         specifier: workspace:*
         version: link:packages/tools/checksum
@@ -155,6 +158,9 @@ importers:
       '@ocs/asymmetric':
         specifier: workspace:*
         version: link:../../packages/tools/asymmetric
+      '@ocs/certificates':
+        specifier: workspace:*
+        version: link:../../packages/tools/certificates
       '@ocs/checksum':
         specifier: workspace:*
         version: link:../../packages/tools/checksum
@@ -271,6 +277,9 @@ importers:
       '@ocs/asymmetric':
         specifier: workspace:*
         version: link:../tools/asymmetric
+      '@ocs/certificates':
+        specifier: workspace:*
+        version: link:../tools/certificates
       '@ocs/checksum':
         specifier: workspace:*
         version: link:../tools/checksum
@@ -367,6 +376,34 @@ importers:
       '@ocs/algos':
         specifier: workspace:*
         version: link:../../algos
+      '@ocs/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@ocs/engine':
+        specifier: workspace:*
+        version: link:../../cipher-engine
+      '@scure/base':
+        specifier: ^1.2.6
+        version: 1.2.6
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@ocs/config':
+        specifier: workspace:*
+        version: link:../../config
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/tools/certificates:
+    dependencies:
+      '@noble/curves':
+        specifier: ^2.1.0
+        version: 2.3.0
+      '@noble/hashes':
+        specifier: ^2.2.0
+        version: 2.3.0
       '@ocs/contracts':
         specifier: workspace:*
         version: link:../../contracts

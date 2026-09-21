@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolFamily, ToolManifest, ToolSpecBase } from "@ocs/engine";
 import { ASYMMETRIC_MANIFESTS } from "@ocs/asymmetric/manifests";
+import { CERTIFICATES_MANIFESTS } from "@ocs/certificates/manifests";
 import { CHECKSUM_MANIFESTS } from "@ocs/checksum/manifests";
 import { CRC_MANIFESTS } from "@ocs/crc/manifests";
 import { ENCODING_MANIFESTS } from "@ocs/encoding/manifests";
@@ -29,6 +30,7 @@ export const TOOL_MANIFESTS: readonly ToolManifest[] = [
   ...CIPHER_MANIFESTS,
   ...CLASSICAL_MANIFESTS,
   ...ASYMMETRIC_MANIFESTS,
+  ...CERTIFICATES_MANIFESTS,
   ...ENCODING_MANIFESTS,
   ...FORMAT_MANIFESTS,
 ];
@@ -82,6 +84,7 @@ export const FAMILY_ORDER: readonly ToolFamily[] = [
    */
   "classical",
   "asymmetric",
+  "certificates",
   "encoding",
   "format",
 ];
@@ -140,6 +143,10 @@ export async function loadTool(id: string): Promise<ToolDefinition<ToolSpecBase>
     case "asymmetric": {
       const { asymmetricToolDefinition } = await import("@ocs/asymmetric/definition");
       return asymmetricToolDefinition(id) as unknown as ToolDefinition<ToolSpecBase>;
+    }
+    case "certificates": {
+      const { certificatesToolDefinition } = await import("@ocs/certificates/definition");
+      return certificatesToolDefinition(id) as unknown as ToolDefinition<ToolSpecBase>;
     }
     case "encoding": {
       const { encodingToolDefinition } = await import("@ocs/encoding/definition");

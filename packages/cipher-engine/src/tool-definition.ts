@@ -47,6 +47,7 @@ export type ToolFamily =
    */
   | "classical"
   | "asymmetric"
+  | "certificates"
   | "encoding"
   | "format";
 
