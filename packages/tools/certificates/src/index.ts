@@ -26,6 +26,7 @@ export { encodePkcs7CertBundle, decodePkcs7CertBundle } from "./asn1/pkcs7";
 export { encodePkcs12Archive, decodePkcs12Archive } from "./asn1/pkcs12";
 export { createCertificate } from "./asn1/create-cert";
 export { createCsr } from "./asn1/create-csr";
+export { generateMtlsSuite } from "./asn1/mtls";
 export { parseAsn1, TagClass, UniversalTag } from "./asn1/asn1";
 export { encodeDerSequence, encodeDerInteger, encodeDerOid, encodeDerOctetString } from "./asn1/encoder";
 export { encodePem, parseAllPem, detectInputBytes } from "./asn1/pem";

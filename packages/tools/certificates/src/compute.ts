@@ -1,4 +1,4 @@
-import type { ToolResult, ToolResultField } from "@ocs/engine";
+import type { ToolExportFile, ToolResult, ToolResultField } from "@ocs/engine";
 import { parseAsn1 } from "./asn1/asn1";
 import { convertCertificate } from "./asn1/converter";
 import { parseCsr } from "./asn1/csr";
@@ -6,6 +6,7 @@ import { detectInputBytes } from "./asn1/pem";
 import { parseX509Certificate } from "./asn1/x509";
 import { createCertificate } from "./asn1/create-cert";
 import { createCsr } from "./asn1/create-csr";
+import { generateMtlsSuite } from "./asn1/mtls";
 import {
   readConverterOp,
   readDetailLevel,
@@ -26,6 +27,12 @@ import {
   readCodeSigning,
   readPassword,
   readPrivateKey,
+  readCreatorMode,
+  readIssuanceMode,
+  readCaCert,
+  readCaPrivateKey,
+  readClientCommonName,
+  readMtlsP12Password,
 } from "./pure";
 import type { CertificateSpec } from "./spec";
 
@@ -36,6 +43,7 @@ export async function computeCertificate(
   // Creator tools generate certificates/requests directly without requiring input
   if (spec.variant === "cert-creator") {
     try {
+      const creatorMode = readCreatorMode(spec.options);
       const commonName = readCommonName(spec.options, "localhost");
       const san = readSan(spec.options, "localhost, 127.0.0.1");
       const organization = readOrganization(spec.options, "Cipher Workbench");
@@ -46,10 +54,148 @@ export async function computeCertificate(
       const keyType = readKeyType(spec.options, "ecdsa-p256");
       const hashType = readHashType(spec.options, "sha256");
       const validityDays = readValidityDays(spec.options, 365);
+
+      if (creatorMode === "mtls-suite") {
+        const clientCommonName = readClientCommonName(spec.options, "client-app-01");
+        const p12Password = readMtlsP12Password(spec.options, "changeit");
+
+        const mtls = await generateMtlsSuite({
+          caCommonName: "Internal Root CA",
+          organization,
+          organizationalUnit,
+          country,
+          state,
+          locality,
+          serverCommonName: commonName,
+          serverSan: san,
+          clientCommonName,
+          keyType,
+          hashType,
+          validityDays,
+          p12Password,
+        });
+
+        const fields: ToolResultField[] = [
+          { label: "Suite Mode", value: "Full Mutual TLS (mTLS) Hierarchy" },
+          { label: "Root CA", value: mtls.ca.subjectDn, hint: `SHA-256: ${mtls.ca.fingerprint}` },
+          { label: "Server Certificate", value: `${mtls.server.subjectDn} (SANs: ${mtls.server.san})` },
+          { label: "Client Certificate", value: `${mtls.client.subjectDn} (Client Auth)` },
+          { label: "Client PKCS#12", value: `Protected (.p12) - Password: ${p12Password}` },
+          { label: "Key Algorithm", value: keyType.toUpperCase() },
+          { label: "Validity", value: `${validityDays} days` },
+        ];
+
+        const working = [
+          "### Full mTLS Suite Generated",
+          "",
+          "#### 1. Root Certificate Authority (`ca.crt`)",
+          `- **Subject**: ${mtls.ca.subjectDn}`,
+          `- **SHA-256 Fingerprint**: ${mtls.ca.fingerprint}`,
+          "",
+          "#### 2. Server Certificate (`server.crt`) & Key (`server.key`)",
+          `- **Subject**: ${mtls.server.subjectDn}`,
+          `- **SANs**: ${mtls.server.san}`,
+          `- **Issuer**: ${mtls.server.issuerDn}`,
+          `- **EKU**: TLS Web Server Authentication (id-kp-serverAuth)`,
+          "",
+          "#### 3. Client Certificate (`client.crt`) & PKCS#12 (`client.p12`)",
+          `- **Subject**: ${mtls.client.subjectDn}`,
+          `- **Issuer**: ${mtls.client.issuerDn}`,
+          `- **EKU**: TLS Web Client Authentication (id-kp-clientAuth)`,
+          `- **PKCS#12 Password**: \`${p12Password}\``,
+          "",
+          "#### Turnkey Verification Commands",
+          "",
+          "**Start Mock mTLS Server (Requires Client Cert):**",
+          "```bash",
+          mtls.commands.opensslServer,
+          "```",
+          "",
+          "**Connect with cURL (PEM):**",
+          "```bash",
+          mtls.commands.curlPem,
+          "```",
+          "",
+          "**Connect with cURL (PKCS#12):**",
+          "```bash",
+          mtls.commands.curlP12,
+          "```",
+          "",
+          "**NGINX mTLS Configuration Block:**",
+          "```nginx",
+          mtls.commands.nginxConfig,
+          "```",
+        ].join("\n");
+
+        const files: ToolExportFile[] = [
+          { name: "ca.crt", content: mtls.ca.certPem },
+          { name: "ca.key", content: mtls.ca.keyPem },
+          { name: "server.crt", content: mtls.server.certPem },
+          { name: "server.key", content: mtls.server.keyPem },
+          { name: "server-chain.pem", content: mtls.server.chainPem },
+          { name: "client.crt", content: mtls.client.certPem },
+          { name: "client.key", content: mtls.client.keyPem },
+          { name: "client.p12", content: mtls.client.p12Der },
+          {
+            name: "commands.sh",
+            content: [
+              "#!/usr/bin/env bash",
+              "# mTLS Verification Commands",
+              "",
+              "# 1. Start OpenSSL Mock Server:",
+              mtls.commands.opensslServer,
+              "",
+              "# 2. Test Connection with cURL (PEM):",
+              mtls.commands.curlPem,
+              "",
+              "# 3. Test Connection with cURL (PKCS#12):",
+              mtls.commands.curlP12,
+              "",
+            ].join("\n"),
+          },
+          { name: "nginx.conf", content: mtls.commands.nginxConfig },
+          {
+            name: "README.txt",
+            content: [
+              "Cipher Workbench - mTLS PKI Suite",
+              "==================================",
+              `Root CA:   ${mtls.ca.subjectDn}`,
+              `Server:    ${mtls.server.subjectDn} [${mtls.server.san}]`,
+              `Client:    ${mtls.client.subjectDn}`,
+              `P12 Pass:  ${p12Password}`,
+              "",
+              "Files in this folder:",
+              "- ca.crt: Root CA certificate",
+              "- ca.key: Root CA private key (secret)",
+              "- server.crt: Server certificate",
+              "- server.key: Server private key (secret)",
+              "- server-chain.pem: Server certificate + CA chain",
+              "- client.crt: Client certificate",
+              "- client.key: Client private key (secret)",
+              "- client.p12: Password-encrypted PKCS#12 bundle",
+              "- commands.sh: Test commands",
+              "- nginx.conf: NGINX mTLS block",
+            ].join("\n"),
+          },
+        ];
+
+        return {
+          text: mtls.allInOneText,
+          bytes: mtls.client.p12Der,
+          fields,
+          working,
+          files,
+        };
+      }
+
+      // Single Certificate Mode
       const isCa = readIsCa(spec.options, false);
       const serverAuth = readServerAuth(spec.options, true);
       const clientAuth = readClientAuth(spec.options, true);
       const codeSigning = readCodeSigning(spec.options, false);
+      const issuanceMode = readIssuanceMode(spec.options);
+      const caCertPem = readCaCert(spec.options);
+      const caPrivateKeyPem = readCaPrivateKey(spec.options);
 
       const created = await createCertificate({
         commonName,
@@ -66,11 +212,18 @@ export async function computeCertificate(
         serverAuth,
         clientAuth,
         codeSigning,
+        issuanceMode,
+        caCertPem: caCertPem || undefined,
+        caPrivateKeyPem: caPrivateKeyPem || undefined,
       });
 
       const fields: ToolResultField[] = [
         { label: "Subject", value: created.subjectDn, hint: "Subject Distinguished Name" },
-        { label: "Issuer", value: created.issuerDn, hint: "Issuer Distinguished Name (Self-Signed)" },
+        {
+          label: "Issuer",
+          value: created.issuerDn,
+          hint: issuanceMode === "ca-signed" ? "Signed by CA Authority" : "Issuer Distinguished Name (Self-Signed)",
+        },
         {
           label: "Validity",
           value: `${created.notBefore.toISOString().split("T")[0]} to ${created.notAfter.toISOString().split("T")[0]} (Active, ${validityDays} days)`,
@@ -92,6 +245,7 @@ export async function computeCertificate(
       const working = [
         "### Generated X.509 v3 Certificate",
         `**Subject**: ${created.subjectDn}`,
+        `**Issuer**: ${created.issuerDn} (${issuanceMode === "ca-signed" ? "CA-Signed" : "Self-Signed"})`,
         `**Key Type**: ${keyType.toUpperCase()} | **Hash**: ${hashType.toUpperCase()}`,
         `**Serial**: 0x${created.serialNumberHex}`,
         `**Validity**: ${created.notBefore.toISOString()} -> ${created.notAfter.toISOString()} (${validityDays} days)`,
@@ -102,17 +256,45 @@ export async function computeCertificate(
         created.privateKeyPem,
         "```",
         "",
+        created.chainPem
+          ? [
+              "#### Full Certificate Chain (End-Entity + CA):",
+              "```pem",
+              created.chainPem,
+              "```",
+              "",
+            ].join("\n")
+          : "",
         "#### OpenSSL Command Equivalent:",
         "```bash",
         created.opensslCommand,
         "```",
-      ].join("\n");
+      ].filter(Boolean).join("\n");
+
+      const files: ToolExportFile[] = [
+        { name: "certificate.crt", content: created.certPem },
+        { name: "private.key", content: created.privateKeyPem },
+        { name: "public.key", content: created.publicKeyPem },
+        ...(created.chainPem ? [{ name: "chain.pem", content: created.chainPem }] : []),
+        { name: "commands.sh", content: created.opensslCommand },
+        {
+          name: "cert-info.txt",
+          content: [
+            `Subject: ${created.subjectDn}`,
+            `Issuer:  ${created.issuerDn} (${issuanceMode === "ca-signed" ? "CA-Signed" : "Self-Signed"})`,
+            `Serial:  0x${created.serialNumberHex}`,
+            `SHA-256 Fingerprint: ${created.fingerprintSha256}`,
+            `Validity: ${created.notBefore.toISOString()} -> ${created.notAfter.toISOString()} (${validityDays} days)`,
+          ].join("\n"),
+        },
+      ];
 
       return {
-        text: created.certPem,
+        text: created.chainPem ?? created.certPem,
         bytes: created.certDer,
         fields,
         working,
+        files,
       };
     } catch (err) {
       return {
@@ -184,11 +366,19 @@ export async function computeCertificate(
         "```",
       ].join("\n");
 
+      const files: ToolExportFile[] = [
+        { name: "request.csr", content: created.csrPem },
+        { name: "private.key", content: created.privateKeyPem },
+        { name: "public.key", content: created.publicKeyPem },
+        { name: "commands.sh", content: created.opensslCommand },
+      ];
+
       return {
         text: created.csrPem,
         bytes: created.csrDer,
         fields,
         working,
+        files,
       };
     } catch (err) {
       return {
@@ -387,11 +577,28 @@ export async function computeCertificate(
           });
         }
 
+        const files: ToolExportFile[] = [];
+        if (result.blocks && result.blocks.length > 0) {
+          result.blocks.forEach((b, idx) => {
+            files.push({ name: `cert-${idx + 1}.crt`, content: b.pem });
+          });
+        } else if (result.bytes) {
+          const ext = result.operation.includes("pkcs12")
+            ? "p12"
+            : result.operation.includes("pkcs7")
+              ? "p7b"
+              : "der";
+          files.push({ name: `certificate.${ext}`, content: result.bytes });
+        } else if (result.text) {
+          files.push({ name: "certificate.pem", content: result.text });
+        }
+
         return {
           text: result.text,
           bytes: result.bytes,
           fields,
           working: result.text ?? result.summary,
+          files: files.length > 0 ? files : undefined,
         };
       } catch (err) {
         return {

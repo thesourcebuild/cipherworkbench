@@ -7,6 +7,7 @@ import { encodeOutput, type ToolManifest, type ToolResult, type ToolResultField,
 import { Button, CopyButton, MonoBlock, Panel, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
 import { buildExportPayload, downloadJsonFile } from "./export-json";
+import { collectExportFiles, exportFilesToFolder } from "./export-folder";
 import { FieldTable } from "./field-table";
 import { KeypairResultView } from "./keypair-result-view";
 import type { InputState } from "./input-state";
@@ -93,6 +94,38 @@ export function ResultPanel({
     if (!manifest || !spec || !input) return undefined;
     return buildExportPayload(manifest, spec, input, state.result, outputEncoding, infoFields);
   }, [manifest, spec, input, state.result, outputEncoding, infoFields]);
+
+  const [exporting, setExporting] = useState<"idle" | "saving" | "done">("idle");
+
+  const exportFiles = useMemo(
+    () => collectExportFiles(state.result, manifest, spec),
+    [state.result, manifest, spec],
+  );
+
+  const folderName = useMemo(() => {
+    if (manifest?.id === "cert-creator") {
+      if (spec?.options?.operation === "mtls-suite") return "mtls-suite";
+      if (spec?.options?.operation === "csr") return "csr-output";
+      return "certificate-suite";
+    }
+    return `${manifest?.id ?? "export"}-files`;
+  }, [manifest?.id, spec?.options?.operation]);
+
+  const handleExportFolder = async () => {
+    if (exportFiles.length === 0 || exporting === "saving") return;
+    setExporting("saving");
+    try {
+      const res = await exportFilesToFolder(folderName, exportFiles);
+      if (res.method !== "cancelled") {
+        setExporting("done");
+        setTimeout(() => setExporting("idle"), 2000);
+      } else {
+        setExporting("idle");
+      }
+    } catch {
+      setExporting("idle");
+    }
+  };
 
   /**
    * The size of what is on screen, as a caption under it.
@@ -189,6 +222,22 @@ export function ResultPanel({
               title="Download computation JSON file"
             >
               Save JSON
+            </Button>
+          )}
+          {exportFiles.length > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={exporting === "saving" || (primary === "" && !state.result?.files?.length)}
+              onClick={handleExportFolder}
+              title={
+                exportFiles.length > 1
+                  ? `Export all ${exportFiles.length} files to folder`
+                  : "Export file to folder"
+              }
+              data-ocs-export-folder=""
+            >
+              {exporting === "saving" ? "Exporting..." : exporting === "done" ? "Exported!" : "Export"}
             </Button>
           )}
         </div>

@@ -1,8 +1,10 @@
 import { requireCertificateTool } from "./catalogue/tool-meta";
 import {
   OPTION_CONVERTER_OP,
+  OPTION_CREATOR_MODE,
   OPTION_DETAIL_LEVEL,
   OPTION_INPUT_FORMAT,
+  OPTION_ISSUANCE_MODE,
   OPTION_VERIFY_CSR_SIG,
   SPEC_VERSION,
 } from "./pure";
@@ -25,6 +27,8 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts[OPTION_CONVERTER_OP] = "auto";
     opts[OPTION_INPUT_FORMAT] = "auto";
   } else if (variant === "cert-creator") {
+    opts[OPTION_CREATOR_MODE] = "single-cert";
+    opts[OPTION_ISSUANCE_MODE] = "self-signed";
     opts["commonName"] = "localhost";
     opts["san"] = "localhost, 127.0.0.1";
     opts["organization"] = "Cipher Workbench";

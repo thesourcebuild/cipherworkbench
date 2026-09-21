@@ -24,8 +24,18 @@ export const OPTION_SERVER_AUTH = "serverAuth";
 export const OPTION_CLIENT_AUTH = "clientAuth";
 export const OPTION_CODE_SIGNING = "codeSigning";
 
+export const OPTION_CREATOR_MODE = "creatorMode";
+export const OPTION_ISSUANCE_MODE = "issuanceMode";
+export const OPTION_CA_CERT = "caCert";
+export const OPTION_CA_PRIVATE_KEY = "caPrivateKey";
+export const OPTION_CLIENT_COMMON_NAME = "clientCommonName";
+export const OPTION_MTLS_P12_PASSWORD = "mtlsP12Password";
+
 export const OPTION_PASSWORD = "password";
 export const OPTION_PRIVATE_KEY = "privateKey";
+
+export type CreatorModeOption = "single-cert" | "mtls-suite";
+export type IssuanceModeOption = "self-signed" | "ca-signed";
 
 export type InputFormatOption = "auto" | "pem" | "der" | "hex";
 export type DetailLevelOption = "summary" | "full-dump";
@@ -165,5 +175,33 @@ export function readClientAuth(options: OptionValues, defaultVal = true): boolea
 
 export function readCodeSigning(options: OptionValues, defaultVal = false): boolean {
   return optBool(options, OPTION_CODE_SIGNING) ?? defaultVal;
+}
+
+export function readCreatorMode(options: OptionValues): CreatorModeOption {
+  const val = optString(options, OPTION_CREATOR_MODE);
+  if (val === "mtls-suite") return "mtls-suite";
+  return "single-cert";
+}
+
+export function readIssuanceMode(options: OptionValues): IssuanceModeOption {
+  const val = optString(options, OPTION_ISSUANCE_MODE);
+  if (val === "ca-signed") return "ca-signed";
+  return "self-signed";
+}
+
+export function readCaCert(options: OptionValues): string {
+  return optString(options, OPTION_CA_CERT) ?? "";
+}
+
+export function readCaPrivateKey(options: OptionValues): string {
+  return optString(options, OPTION_CA_PRIVATE_KEY) ?? "";
+}
+
+export function readClientCommonName(options: OptionValues, defaultVal = "client-app-01"): string {
+  return optString(options, OPTION_CLIENT_COMMON_NAME) ?? defaultVal;
+}
+
+export function readMtlsP12Password(options: OptionValues, defaultVal = "changeit"): string {
+  return optString(options, OPTION_MTLS_P12_PASSWORD) ?? defaultVal;
 }
 

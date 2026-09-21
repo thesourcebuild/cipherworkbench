@@ -14,11 +14,13 @@ import {
 } from "./encoder";
 import {
   generateKeyBundle,
+  importCaSigner,
   type KeyAlgorithmType,
   type HashAlgorithmType,
   type GeneratedKeyBundle,
+  type CaSigner,
 } from "../crypto/keys";
-import { encodePem } from "./pem";
+import { detectInputBytes, encodePem } from "./pem";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 
@@ -39,6 +41,10 @@ export interface CertificateCreatorOptions {
   codeSigning?: boolean;
   emailProtection?: boolean;
   customSerialHex?: string;
+  issuanceMode?: "self-signed" | "ca-signed";
+  caCertPem?: string;
+  caPrivateKeyPem?: string;
+  caSigner?: CaSigner;
 }
 
 export interface CreatedCertificateResult {
@@ -46,6 +52,7 @@ export interface CreatedCertificateResult {
   certDer: Uint8Array;
   privateKeyPem: string;
   publicKeyPem: string;
+  chainPem?: string;
   serialNumberHex: string;
   subjectDn: string;
   issuerDn: string;
@@ -182,7 +189,6 @@ export async function createCertificate(
   ].filter((e) => e.value.length > 0);
 
   const subjectDnDer = encodeDistinguishedName(rdnEntries);
-  const issuerDnDer = subjectDnDer; // Self-signed: Issuer == Subject
 
   const dnStringParts: string[] = [];
   for (const entry of rdnEntries) {
@@ -196,7 +202,6 @@ export async function createCertificate(
     dnStringParts.push(`${name}=${entry.value}`);
   }
   const subjectDnStr = dnStringParts.join(", ");
-  const issuerDnStr = subjectDnStr;
 
   // 2. Validity
   const now = new Date();
@@ -289,9 +294,33 @@ export async function createCertificate(
   );
 
   // 4f. Authority Key Identifier (OID 2.5.29.35)
-  // For self-signed, AKI == SKI
+  // Resolve issuing signer: either provided CA signer, parsed CA PEMs, or self-signed
+  let signer: {
+    issuerDnDer: Uint8Array;
+    issuerSki: Uint8Array;
+    signatureAlgorithmDer: Uint8Array;
+    signTbs: (tbsBytes: Uint8Array) => Promise<Uint8Array>;
+    issuerDnString: string;
+  };
+
+  if (opts.caSigner) {
+    signer = opts.caSigner;
+  } else if (opts.issuanceMode === "ca-signed" && opts.caCertPem && opts.caPrivateKeyPem) {
+    const caCertDer = detectInputBytes(new TextEncoder().encode(opts.caCertPem)).der;
+    const caKeyDer = detectInputBytes(new TextEncoder().encode(opts.caPrivateKeyPem)).der;
+    signer = await importCaSigner(caCertDer, caKeyDer);
+  } else {
+    signer = {
+      issuerDnDer: subjectDnDer,
+      issuerSki: keyBundle.ski,
+      signatureAlgorithmDer: keyBundle.signatureAlgorithmDer,
+      signTbs: keyBundle.signTbs,
+      issuerDnString: subjectDnStr,
+    };
+  }
+
   const akiInner = encodeDerSequence([
-    encodeDerContext(0, keyBundle.ski, false),
+    encodeDerContext(0, signer.issuerSki, false),
   ]);
   extensions.push(
     encodeDerSequence([
@@ -307,9 +336,9 @@ export async function createCertificate(
     // serialNumber: INTEGER
     encodeDerInteger(serialBigInt),
     // signature: AlgorithmIdentifier
-    keyBundle.signatureAlgorithmDer,
+    signer.signatureAlgorithmDer,
     // issuer: Name
-    issuerDnDer,
+    signer.issuerDnDer,
     // validity: Validity
     validityDer,
     // subject: Name
@@ -320,19 +349,20 @@ export async function createCertificate(
     encodeDerContext(3, encodeDerSequence(extensions), true),
   ]);
 
-  // 6. Sign TBSCertificate
-  const signatureBytes = await keyBundle.signTbs(tbsSequence);
+  // 6. Sign TBSCertificate with signer
+  const signatureBytes = await signer.signTbs(tbsSequence);
   const signatureBitString = encodeDerBitString(signatureBytes, 0);
 
   // 7. Assemble Full Certificate
   const certDer = encodeDerSequence([
     tbsSequence,
-    keyBundle.signatureAlgorithmDer,
+    signer.signatureAlgorithmDer,
     signatureBitString,
   ]);
 
   const certPem = encodePem("CERTIFICATE", certDer);
   const fingerprintSha256 = bytesToHex(sha256(certDer)).toUpperCase().match(/../g)?.join(":") ?? "";
+  const chainPem = opts.caCertPem ? `${certPem}\n${opts.caCertPem.trim()}` : undefined;
 
   // 8. OpenSSL Command reproduction
   let opensslKeyOpt = "-newkey ec -pkeyopt ec_paramgen_curve:prime256v1";
@@ -341,16 +371,20 @@ export async function createCertificate(
   else if (opts.keyType === "ecdsa-p384") opensslKeyOpt = "-newkey ec -pkeyopt ec_paramgen_curve:secp384r1";
   else if (opts.keyType === "ed25519") opensslKeyOpt = "-newkey ed25519";
 
-  const opensslCommand = `openssl req -x509 ${opensslKeyOpt} -keyout key.pem -out cert.pem -days ${opts.validityDays} -nodes -subj "/CN=${opts.commonName}"`;
+  let opensslCommand = `openssl req -x509 ${opensslKeyOpt} -keyout key.pem -out cert.pem -days ${opts.validityDays} -nodes -subj "/CN=${opts.commonName}"`;
+  if (opts.issuanceMode === "ca-signed" || opts.caSigner) {
+    opensslCommand = `openssl req -new ${opensslKeyOpt} -keyout key.pem -out req.csr -nodes -subj "/CN=${opts.commonName}"\nopenssl x509 -req -in req.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out cert.pem -days ${opts.validityDays}`;
+  }
 
   return {
     certPem,
     certDer,
     privateKeyPem: keyBundle.privateKeyPem,
     publicKeyPem: keyBundle.publicKeyPem,
+    chainPem,
     serialNumberHex,
     subjectDn: subjectDnStr,
-    issuerDn: issuerDnStr,
+    issuerDn: signer.issuerDnString,
     notBefore,
     notAfter,
     fingerprintSha256,

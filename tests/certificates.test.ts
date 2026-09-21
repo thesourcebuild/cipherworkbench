@@ -5,7 +5,9 @@ import {
   convertCertificate,
   createCertificate,
   createCsr,
+  decodePkcs12Archive,
   ECDSA_CSR_PEM,
+  generateMtlsSuite,
   parseAsn1,
   parseCsr,
   parseX509Certificate,
@@ -405,3 +407,136 @@ describe("Certificate and CSR Creation", () => {
     expect(created.verified).toBe(true);
   });
 });
+
+describe("CA-Signed Certificate Issuance", () => {
+  it("generates a Root CA and issues a child certificate signed by that CA", async () => {
+    // 1. Generate Root CA
+    const ca = await createCertificate({
+      commonName: "Test Root CA",
+      organization: "Test Org",
+      organizationalUnit: "Security",
+      country: "US",
+      state: "California",
+      locality: "San Francisco",
+      keyType: "ecdsa-p256",
+      hashType: "sha256",
+      validityDays: 3650,
+      isCa: true,
+      san: "",
+    });
+
+    const parsedCa = parseX509Certificate(ca.certDer);
+    expect(parsedCa.extensions.basicConstraints?.isCa).toBe(true);
+    expect(parsedCa.extensions.keyUsages).toContain("keyCertSign");
+
+    // 2. Issue child certificate signed by this Root CA
+    const child = await createCertificate({
+      commonName: "child.internal",
+      organization: "Test Org",
+      organizationalUnit: "Engineering",
+      country: "US",
+      state: "California",
+      locality: "San Francisco",
+      keyType: "ecdsa-p256",
+      hashType: "sha256",
+      validityDays: 365,
+      isCa: false,
+      san: "child.internal, 10.0.0.1",
+      serverAuth: true,
+      clientAuth: false,
+      issuanceMode: "ca-signed",
+      caCertPem: ca.certPem,
+      caPrivateKeyPem: ca.privateKeyPem,
+    });
+
+    expect(child.chainPem).toContain(child.certPem);
+    expect(child.chainPem).toContain(ca.certPem);
+
+    // 3. Inspect child certificate
+    const parsedChild = parseX509Certificate(child.certDer);
+    expect(parsedChild.subject.commonName).toBe("child.internal");
+    expect(parsedChild.issuer.commonName).toBe("Test Root CA");
+    expect(parsedChild.extensions.basicConstraints?.isCa).toBe(false);
+    expect(parsedChild.extensions.sans).toContain("DNS:child.internal");
+    expect(parsedChild.extensions.sans).toContain("IP:10.0.0.1");
+    expect(parsedChild.extensions.extendedKeyUsages.some((u) => u.includes("TLS Web Server Authentication"))).toBe(true);
+    expect(parsedChild.extensions.authorityKeyIdentifier).toBe(parsedCa.extensions.subjectKeyIdentifier);
+  });
+});
+
+describe("Full mTLS Suite Generator", () => {
+  it("generates complete 3-tier mTLS suite with Root CA, Server Cert, Client Cert, and PKCS#12 archive", async () => {
+    const mtls = await generateMtlsSuite({
+      caCommonName: "mTLS Root CA",
+      serverCommonName: "secure.internal",
+      serverSan: "secure.internal, 192.168.1.100",
+      clientCommonName: "client-alice",
+      keyType: "ecdsa-p256",
+      validityDays: 365,
+      p12Password: "mtls-secret-pass",
+    });
+
+    // 1. Root CA
+    const parsedCa = parseX509Certificate(mtls.ca.certDer);
+    expect(parsedCa.subject.commonName).toBe("mTLS Root CA");
+    expect(parsedCa.extensions.basicConstraints?.isCa).toBe(true);
+    expect(parsedCa.extensions.keyUsages).toContain("keyCertSign");
+
+    // 2. Server Certificate
+    const parsedServer = parseX509Certificate(mtls.server.certDer);
+    expect(parsedServer.subject.commonName).toBe("secure.internal");
+    expect(parsedServer.issuer.commonName).toBe("mTLS Root CA");
+    expect(parsedServer.extensions.sans).toContain("DNS:secure.internal");
+    expect(parsedServer.extensions.sans).toContain("IP:192.168.1.100");
+    expect(parsedServer.extensions.extendedKeyUsages.some((u) => u.includes("TLS Web Server Authentication"))).toBe(true);
+
+    // 3. Client Certificate
+    const parsedClient = parseX509Certificate(mtls.client.certDer);
+    expect(parsedClient.subject.commonName).toBe("client-alice");
+    expect(parsedClient.issuer.commonName).toBe("mTLS Root CA");
+    expect(parsedClient.extensions.extendedKeyUsages.some((u) => u.includes("TLS Web Client Authentication"))).toBe(true);
+
+    // 4. Client PKCS#12 archive decodes with password
+    const p12Decoded = await decodePkcs12Archive(mtls.client.p12Der, "mtls-secret-pass");
+    expect(p12Decoded.certs.length).toBeGreaterThanOrEqual(1);
+    expect(p12Decoded.certs[0]!.pem).toBe(mtls.client.certPem);
+    expect(p12Decoded.privateKey?.pem).toBe(mtls.client.keyPem);
+
+    // 5. Verification Commands
+    expect(mtls.commands.curlPem).toContain("--cacert ca.crt --cert client.crt --key client.key");
+    expect(mtls.commands.curlP12).toContain("client.p12:mtls-secret-pass");
+    expect(mtls.commands.opensslServer).toContain("-Verify 1");
+    expect(mtls.commands.nginxConfig).toContain("ssl_verify_client       on;");
+
+    // 6. All-in-one text contains all artifacts
+    expect(mtls.allInOneText).toContain("ROOT CERTIFICATE AUTHORITY");
+    expect(mtls.allInOneText).toContain("SERVER CERTIFICATE");
+    expect(mtls.allInOneText).toContain("CLIENT CERTIFICATE");
+    expect(mtls.allInOneText).toContain("CLIENT PKCS#12 ARCHIVE");
+  });
+
+  it("computes mTLS suite through Certificate Creator tool definition", async () => {
+    const def = await loadTool("cert-creator");
+    expect(def).toBeDefined();
+
+    const spec = def.createSpec();
+    spec.options = {
+      creatorMode: "mtls-suite",
+      commonName: "api.service.internal",
+      clientCommonName: "client-agent-01",
+      mtlsP12Password: "pass456",
+    };
+
+    const result = await def.compute(spec, new Uint8Array(0));
+
+    expect(result.error).toBeUndefined();
+    expect(result.text).toContain("ROOT CERTIFICATE AUTHORITY");
+    expect(result.text).toContain("SERVER CERTIFICATE");
+    expect(result.text).toContain("CLIENT CERTIFICATE");
+    expect(result.fields?.some((f) => f.label === "Suite Mode")).toBe(true);
+    expect(result.fields?.some((f) => f.label === "Root CA")).toBe(true);
+    expect(result.fields?.some((f) => f.label === "Server Certificate")).toBe(true);
+    expect(result.fields?.some((f) => f.label === "Client Certificate")).toBe(true);
+  });
+});
+

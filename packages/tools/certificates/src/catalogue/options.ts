@@ -22,6 +22,12 @@ import {
   OPTION_SERVER_AUTH,
   OPTION_CLIENT_AUTH,
   OPTION_CODE_SIGNING,
+  OPTION_CREATOR_MODE,
+  OPTION_ISSUANCE_MODE,
+  OPTION_CA_CERT,
+  OPTION_CA_PRIVATE_KEY,
+  OPTION_CLIENT_COMMON_NAME,
+  OPTION_MTLS_P12_PASSWORD,
   OPTION_PASSWORD,
   OPTION_PRIVATE_KEY,
 } from "../pure";
@@ -279,6 +285,80 @@ const CODE_SIGNING: OptionDef<CertificateOptionGroup> = {
   order: 60,
 };
 
+const CREATOR_MODE: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CREATOR_MODE,
+  label: "Creation Mode",
+  group: "mode",
+  kind: "enum",
+  choices: [
+    { value: "single-cert", label: "Single Certificate", summary: "Generate an individual certificate (Self-Signed or CA-Signed)" },
+    { value: "mtls-suite", label: "Full mTLS Suite", summary: "Generate complete Root CA + Server Cert + Client Cert + PKCS#12 bundle" },
+  ],
+  summary: "Select whether to generate a single certificate or a complete mTLS hierarchy.",
+  detail: "In Full mTLS Suite mode, produces Root CA, Server Certificate with SANs, Client Certificate, and Client PKCS#12 bundle in one operation.",
+  order: 10,
+};
+
+const ISSUANCE_MODE: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_ISSUANCE_MODE,
+  label: "Issuance Mode",
+  group: "mode",
+  kind: "enum",
+  choices: [
+    { value: "self-signed", label: "Self-Signed", summary: "Certificate signs itself (or serves as Root CA)" },
+    { value: "ca-signed", label: "CA-Signed", summary: "Sign child certificate using an existing CA certificate and private key" },
+  ],
+  summary: "Issue a self-signed certificate or sign with an existing CA authority.",
+  detail: "When CA-Signed is selected, provide the issuing CA certificate and private key in the CA Signing Authority section below.",
+  order: 20,
+};
+
+const CA_CERT: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CA_CERT,
+  label: "CA Certificate (PEM)",
+  group: "ca",
+  kind: "text",
+  arg: { placeholder: "-----BEGIN CERTIFICATE-----\n...", multiline: true },
+  summary: "Issuing CA certificate in PEM format.",
+  detail: "The CA certificate whose Subject DN and SKI will be used as Issuer and AKI.",
+  order: 10,
+};
+
+const CA_PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CA_PRIVATE_KEY,
+  label: "CA Private Key (PEM)",
+  group: "ca",
+  kind: "password",
+  secret: true,
+  arg: { placeholder: "-----BEGIN PRIVATE KEY-----\n...", multiline: true },
+  summary: "Issuing CA's private key to sign the child certificate.",
+  detail: "The private key corresponding to the CA certificate (PKCS#8 PEM format).",
+  order: 20,
+};
+
+const CLIENT_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CLIENT_COMMON_NAME,
+  label: "Client Identity (CN)",
+  group: "mtls",
+  kind: "text",
+  arg: { placeholder: "client-app-01" },
+  summary: "Subject Common Name for the mTLS client certificate.",
+  detail: "Identity of the connecting client (e.g. client-service, username, or client-app-01).",
+  order: 10,
+};
+
+const MTLS_P12_PASSWORD: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_MTLS_P12_PASSWORD,
+  label: "Client PKCS#12 Password",
+  group: "mtls",
+  kind: "password",
+  secret: true,
+  arg: { placeholder: "e.g. changeit" },
+  summary: "Password used to encrypt the client.p12 PKCS#12 archive with PBES2 AES-256-CBC.",
+  detail: "Required by browsers, Postman, and OS keychains to import the client certificate and private key.",
+  order: 20,
+};
+
 export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>[] = [
   INPUT_FORMAT,
   DETAIL_LEVEL,
@@ -286,6 +366,8 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   CONVERTER_OP,
   PASSWORD,
   PRIVATE_KEY,
+  CREATOR_MODE,
+  ISSUANCE_MODE,
   COMMON_NAME,
   ORGANIZATION,
   ORG_UNIT,
@@ -300,6 +382,10 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   SERVER_AUTH,
   CLIENT_AUTH,
   CODE_SIGNING,
+  CA_CERT,
+  CA_PRIVATE_KEY,
+  CLIENT_COMMON_NAME,
+  MTLS_P12_PASSWORD,
 ];
 
 export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalogue {
@@ -313,6 +399,8 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
     options.push(CONVERTER_OP, INPUT_FORMAT, PASSWORD, PRIVATE_KEY);
   } else if (meta.id === "cert-creator") {
     options.push(
+      CREATOR_MODE,
+      ISSUANCE_MODE,
       COMMON_NAME,
       SAN,
       ORGANIZATION,
@@ -327,6 +415,10 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
       SERVER_AUTH,
       CLIENT_AUTH,
       CODE_SIGNING,
+      CA_CERT,
+      CA_PRIVATE_KEY,
+      CLIENT_COMMON_NAME,
+      MTLS_P12_PASSWORD,
     );
   } else if (meta.id === "csr-creator") {
     options.push(

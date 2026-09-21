@@ -1,9 +1,12 @@
 import type { OptionGroupMeta } from "@ocs/engine";
 
 export const OPTION_GROUPS = [
+  "mode",
   "subject",
   "key",
   "extensions",
+  "ca",
+  "mtls",
   "format",
   "convert",
   "verify",
@@ -14,6 +17,13 @@ export const OPTION_GROUP_META: Record<
   CertificateOptionGroup,
   OptionGroupMeta<CertificateOptionGroup>
 > = {
+  mode: {
+    id: "mode",
+    label: "Creation Mode",
+    summary: "Select between an individual certificate or the full mTLS suite.",
+    order: 2,
+    collapsedByDefault: false,
+  },
   subject: {
     id: "subject",
     label: "Subject Identity",
@@ -33,6 +43,20 @@ export const OPTION_GROUP_META: Record<
     label: "Extensions & Validity",
     summary: "Validity duration, CA constraints, SANs, and key usages.",
     order: 15,
+    collapsedByDefault: false,
+  },
+  ca: {
+    id: "ca",
+    label: "CA Signing Authority",
+    summary: "Issuing CA certificate and private key for CA-signed issuance.",
+    order: 16,
+    collapsedByDefault: false,
+  },
+  mtls: {
+    id: "mtls",
+    label: "mTLS Suite Settings",
+    summary: "Settings for client certificate, SANs, and PKCS#12 archive.",
+    order: 18,
     collapsedByDefault: false,
   },
   format: {
