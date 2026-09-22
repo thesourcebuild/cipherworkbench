@@ -100,12 +100,13 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(result.files).toBeDefined();
 
     const files = collectExportFiles(result, undefined, spec);
-    expect(files.length).toBe(11);
+    expect(files.length).toBe(19);
 
     const fileNames = files.map((f) => f.name);
     // Root CA
     expect(fileNames).toContain("ca.crt");
     expect(fileNames).toContain("ca.key");
+    expect(fileNames).toContain("ca.crl");
     // Server
     expect(fileNames).toContain("server.crt");
     expect(fileNames).toContain("server.key");
@@ -114,9 +115,17 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(fileNames).toContain("client.crt");
     expect(fileNames).toContain("client.key");
     expect(fileNames).toContain("client.p12");
+    // Keys & Compliance
+    expect(fileNames).toContain("authorized_keys");
+    expect(fileNames).toContain("jwks.json");
     // Devops / verification scripts & configs
     expect(fileNames).toContain("commands.sh");
     expect(fileNames).toContain("nginx.conf");
+    expect(fileNames).toContain("k8s-tls-secret.yaml");
+    expect(fileNames).toContain("caddy.Caddyfile");
+    expect(fileNames).toContain("traefik.yaml");
+    expect(fileNames).toContain("haproxy.cfg");
+    expect(fileNames).toContain("envoy.yaml");
     expect(fileNames).toContain("README.txt");
 
     // Client PKCS#12 is binary Uint8Array
@@ -124,22 +133,57 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(p12File.content instanceof Uint8Array).toBe(true);
     expect((p12File.content as Uint8Array).length).toBeGreaterThan(100);
 
-    // Verify ZIP archive generation with all 11 files
+    // Verify ZIP archive generation with all 19 files
     const zipBytes = createZipArchive(files);
-    expect(zipBytes.length).toBeGreaterThan(4000);
+    expect(zipBytes.length).toBeGreaterThan(7000);
 
-    // End-of-central-directory should reflect exactly 11 entries
+    // End-of-central-directory should reflect exactly 19 entries
     const view = new DataView(zipBytes.buffer, zipBytes.byteOffset, zipBytes.byteLength);
     let foundEocd = false;
     for (let i = 0; i <= zipBytes.length - 22; i++) {
       if (view.getUint32(i, true) === 0x06054b50) {
         foundEocd = true;
-        expect(view.getUint16(i + 8, true)).toBe(11);
-        expect(view.getUint16(i + 10, true)).toBe(11);
+        expect(view.getUint16(i + 8, true)).toBe(19);
+        expect(view.getUint16(i + 10, true)).toBe(19);
         break;
       }
     }
     expect(foundEocd).toBe(true);
+  });
+
+  it("exports all individual files for a 3-Tier Enterprise mTLS Suite", async () => {
+    const def = await loadTool("cert-creator");
+    const spec = def.createSpec();
+    spec.options = {
+      creatorMode: "mtls-suite",
+      pkiHierarchy: "3-tier",
+      commonName: "gateway.internal",
+      intermediateCommonName: "Issuing Sub-CA",
+      clientCommonName: "agent-007",
+      mtlsP12Password: "export-pass-123",
+    };
+
+    const result = await def.compute(spec, new Uint8Array(0));
+    expect(result.error).toBeUndefined();
+    expect(result.files).toBeDefined();
+
+    const files = collectExportFiles(result, undefined, spec);
+    expect(files.length).toBe(21);
+
+    const fileNames = files.map((f) => f.name);
+    expect(fileNames).toContain("ca.crt");
+    expect(fileNames).toContain("ca.key");
+    expect(fileNames).toContain("ca.crl");
+    expect(fileNames).toContain("intermediate.crt");
+    expect(fileNames).toContain("intermediate.key");
+    expect(fileNames).toContain("server.crt");
+    expect(fileNames).toContain("server.key");
+    expect(fileNames).toContain("server-chain.pem");
+    expect(fileNames).toContain("client.crt");
+    expect(fileNames).toContain("client.key");
+    expect(fileNames).toContain("client.p12");
+    expect(fileNames).toContain("authorized_keys");
+    expect(fileNames).toContain("jwks.json");
   });
 
   it("exports individual files for CSR Creator", async () => {

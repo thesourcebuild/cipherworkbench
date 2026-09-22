@@ -42,6 +42,20 @@ export const CERTIFICATE_TOOLS: readonly CertificateToolMeta[] = [
     summary: "Convert certificates and keys between PEM and DER formats, extract public keys, and inspect certificate chains.",
     tags: ["pem", "der", "convert", "x509", "spki", "chain", "bundle"],
   },
+  {
+    id: "crl",
+    label: "CRL (Revocation List)",
+    category: "Parser",
+    summary: "Inspect and parse RFC 5280 X.509 v2 Certificate Revocation Lists (CRL) in PEM or DER format.",
+    tags: ["crl", "revocation", "x509", "pki", "tls", "der", "pem"],
+  },
+  {
+    id: "cert-verifier",
+    label: "Chain Verifier",
+    category: "Verification",
+    summary: "Verify full X.509 certificate chains, validate trust paths, digital signatures, validity dates, and AKI/SKI linkages.",
+    tags: ["verify", "chain", "path", "pki", "trust", "x509", "tls", "root", "intermediate"],
+  },
 ] as const;
 
 export const CERTIFICATE_TOOL_IDS = CERTIFICATE_TOOLS.map((t) => t.id);

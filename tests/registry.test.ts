@@ -229,6 +229,8 @@ describe("loadTool", () => {
     xml: /./,
     x509: /X\.509|certificate|PEM|DER/i,
     csr: /PKCS#10|CSR|certificate|PEM|DER/i,
+    crl: /CRL|X\.509|certificate|PEM|DER/i,
+    "cert-verifier": /chain|certificate|PEM|DER/i,
     /**
      * BCH is here for a different reason from the four above, and it is worth distinguishing.
      *

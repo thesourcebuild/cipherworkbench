@@ -10,10 +10,11 @@ All certificate generation, mock server lifecycle, and client connection handlin
 
 ```
 examples/certificates/
-├── tls_test_harness.ts    # Reusable harness (cert creation, server lifecycle, client runner)
-├── verify_mock_tls.ts     # Dedicated test for Mock One-Way TLS Server & Client
-├── verify_mock_mtls.ts    # Dedicated test for Mock Mutual TLS (mTLS) Server & Client
-└── README.md              # Documentation & Run instructions
+├── tls_test_harness.ts           # Reusable harness (cert creation, server lifecycle, client runner)
+├── verify_mock_tls.ts            # Dedicated test for Mock One-Way TLS Server & Client
+├── verify_mock_mtls.ts           # Dedicated test for Mock Mutual TLS (mTLS) Server & Client
+├── verify_pki_crl_and_keys.ts    # 3-Tier PKI, RFC 5280 CRL revocation, OpenSSH & JWKS validation
+└── README.md                     # Documentation & Run instructions
 ```
 
 ---
@@ -75,6 +76,43 @@ Connecting mock mTLS client presenting client.crt + client.key...
 Starting OpenSSL mock mTLS server on port 9545 requiring client cert...
 Connecting client WITHOUT client certificate...
 ✓ PASS: Mock mTLS server strictly rejected unauthenticated client!
+```
+
+---
+ 
+### 3. Run 3-Tier Enterprise PKI, CRL Revocation & Key Formats Test
+Validates full 3-tier PKI hierarchy (`Root CA` ➔ `Intermediate CA` ➔ `Server` + `Client`), cryptographic chain verification, OpenSSL CRL verification, OpenSSH key validation, and RFC 7517 JWK/JWKS bundles:
+```bash
+npx tsx examples/certificates/verify_pki_crl_and_keys.ts
+```
+
+**Expected output:**
+```text
+=================================================================
+   3-TIER ENTERPRISE PKI, CRL REVOCATION & KEY FORMATS TEST      
+=================================================================
+[1/4] Generating 3-Tier Enterprise PKI Suite...
+  ✓ Root CA:         ACME Global Offline Root CA
+  ✓ Intermediate CA: ACME Subordinate Issuing CA
+  ✓ Server:          vault.acme.internal
+  ✓ Client:          service-worker-prod
+
+[2/4] Verifying 3-Tier Certificate Chain Path...
+  ✓ Chain Depth:      3
+  ✓ Target Subject:   vault.acme.internal
+  ✓ Root Trust Anchor:ACME Global Offline Root CA
+  ✓ Status:           VERIFIED VALID
+
+[3/4] Validating RFC 5280 X.509 v2 CRL...
+  ✓ OpenSSL verified CRL signature against Root CA: OK
+  ✓ OpenSSL parsed CRL Number: 1
+  ✓ OpenSSL parsed Revoked Certificates: 1
+
+[4/4] Validating OpenSSH & RFC 7517 JWK/JWKS Export Formats...
+  ✓ Client OpenSSH:    ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...
+  ✓ OpenSSH SHA-256:   SHA256:...
+  ✓ ssh-keygen verification: 2048 SHA256:...
+  ✓ JWKS Bundle Keys:  4 keys in bundle
 ```
 
 ---

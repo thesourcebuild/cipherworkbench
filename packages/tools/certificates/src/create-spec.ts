@@ -5,6 +5,7 @@ import {
   OPTION_DETAIL_LEVEL,
   OPTION_INPUT_FORMAT,
   OPTION_ISSUANCE_MODE,
+  OPTION_PKI_HIERARCHY,
   OPTION_VERIFY_CSR_SIG,
   SPEC_VERSION,
 } from "./pure";
@@ -26,9 +27,16 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
   } else if (variant === "cert-converter") {
     opts[OPTION_CONVERTER_OP] = "auto";
     opts[OPTION_INPUT_FORMAT] = "auto";
+  } else if (variant === "crl") {
+    opts[OPTION_INPUT_FORMAT] = "auto";
+    opts[OPTION_DETAIL_LEVEL] = "summary";
+  } else if (variant === "cert-verifier") {
+    opts[OPTION_INPUT_FORMAT] = "auto";
+    opts[OPTION_DETAIL_LEVEL] = "summary";
   } else if (variant === "cert-creator") {
     opts[OPTION_CREATOR_MODE] = "single-cert";
     opts[OPTION_ISSUANCE_MODE] = "self-signed";
+    opts[OPTION_PKI_HIERARCHY] = "2-tier";
     opts["commonName"] = "localhost";
     opts["san"] = "localhost, 127.0.0.1";
     opts["organization"] = "Cipher Workbench";

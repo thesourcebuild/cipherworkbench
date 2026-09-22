@@ -24,6 +24,8 @@ import {
   OPTION_CODE_SIGNING,
   OPTION_CREATOR_MODE,
   OPTION_ISSUANCE_MODE,
+  OPTION_PKI_HIERARCHY,
+  OPTION_INTERMEDIATE_COMMON_NAME,
   OPTION_CA_CERT,
   OPTION_CA_PRIVATE_KEY,
   OPTION_CLIENT_COMMON_NAME,
@@ -336,6 +338,40 @@ const CA_PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
   order: 20,
 };
 
+const PKI_HIERARCHY: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_PKI_HIERARCHY,
+  label: "PKI Architecture",
+  group: "mtls",
+  kind: "enum",
+  choices: [
+    {
+      value: "2-tier",
+      label: "2-Tier (Root CA ➔ Leaf)",
+      summary: "Root CA directly signs Server and Client certificates.",
+    },
+    {
+      value: "3-tier",
+      label: "3-Tier (Root CA ➔ Intermediate CA ➔ Leaf)",
+      summary: "Root CA signs an Intermediate Issuing CA, which signs Server and Client certificates.",
+    },
+  ],
+  summary: "PKI hierarchy depth: 2-tier simple or 3-tier enterprise with Intermediate CA.",
+  detail:
+    "In 3-tier enterprise PKI, the offline Root CA delegates issuance to an Intermediate Issuing CA with path length constraints, and the server chain bundles the intermediate.",
+  order: 5,
+};
+
+const INTERMEDIATE_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_INTERMEDIATE_COMMON_NAME,
+  label: "Intermediate CA Common Name",
+  group: "mtls",
+  kind: "text",
+  arg: { placeholder: "Internal Issuing CA" },
+  summary: "Common Name for the Intermediate Certificate Authority in 3-tier PKI mode.",
+  detail: "The Subject Common Name (CN) for the issuing CA that directly signs server and client certificates.",
+  order: 12,
+};
+
 const CLIENT_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
   id: OPTION_CLIENT_COMMON_NAME,
   label: "Client Identity (CN)",
@@ -344,7 +380,7 @@ const CLIENT_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
   arg: { placeholder: "client-app-01" },
   summary: "Subject Common Name for the mTLS client certificate.",
   detail: "Identity of the connecting client (e.g. client-service, username, or client-app-01).",
-  order: 10,
+  order: 15,
 };
 
 const MTLS_P12_PASSWORD: OptionDef<CertificateOptionGroup> = {
@@ -368,6 +404,8 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   PRIVATE_KEY,
   CREATOR_MODE,
   ISSUANCE_MODE,
+  PKI_HIERARCHY,
+  INTERMEDIATE_COMMON_NAME,
   COMMON_NAME,
   ORGANIZATION,
   ORG_UNIT,
@@ -401,6 +439,8 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
     options.push(
       CREATOR_MODE,
       ISSUANCE_MODE,
+      PKI_HIERARCHY,
+      INTERMEDIATE_COMMON_NAME,
       COMMON_NAME,
       SAN,
       ORGANIZATION,

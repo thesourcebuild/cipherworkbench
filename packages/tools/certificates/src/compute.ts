@@ -7,6 +7,10 @@ import { parseX509Certificate } from "./asn1/x509";
 import { createCertificate } from "./asn1/create-cert";
 import { createCsr } from "./asn1/create-csr";
 import { generateMtlsSuite } from "./asn1/mtls";
+import { parseX509Crl } from "./asn1/crl";
+import { verifyCertificateChain } from "./asn1/chain-verifier";
+import { spkiToOpenSsh } from "./crypto/openssh";
+import { spkiToJwk } from "./crypto/jwk";
 import {
   readConverterOp,
   readDetailLevel,
@@ -33,6 +37,8 @@ import {
   readCaPrivateKey,
   readClientCommonName,
   readMtlsP12Password,
+  readPkiHierarchy,
+  readIntermediateCommonName,
 } from "./pure";
 import type { CertificateSpec } from "./spec";
 
@@ -56,11 +62,15 @@ export async function computeCertificate(
       const validityDays = readValidityDays(spec.options, 365);
 
       if (creatorMode === "mtls-suite") {
+        const pkiHierarchy = readPkiHierarchy(spec.options);
+        const intermediateCommonName = readIntermediateCommonName(spec.options, "Internal Issuing CA");
         const clientCommonName = readClientCommonName(spec.options, "client-app-01");
         const p12Password = readMtlsP12Password(spec.options, "changeit");
 
         const mtls = await generateMtlsSuite({
+          pkiHierarchy,
           caCommonName: "Internal Root CA",
+          intermediateCommonName,
           organization,
           organizationalUnit,
           country,
@@ -76,29 +86,53 @@ export async function computeCertificate(
         });
 
         const fields: ToolResultField[] = [
-          { label: "Suite Mode", value: "Full Mutual TLS (mTLS) Hierarchy" },
+          { label: "Suite Mode", value: `Full mTLS Hierarchy (${pkiHierarchy.toUpperCase()})` },
           { label: "Root CA", value: mtls.ca.subjectDn, hint: `SHA-256: ${mtls.ca.fingerprint}` },
+        ];
+
+        if (mtls.intermediate) {
+          fields.push({
+            label: "Intermediate CA",
+            value: mtls.intermediate.subjectDn,
+            hint: `SHA-256: ${mtls.intermediate.fingerprint}`,
+          });
+        }
+
+        fields.push(
           { label: "Server Certificate", value: `${mtls.server.subjectDn} (SANs: ${mtls.server.san})` },
           { label: "Client Certificate", value: `${mtls.client.subjectDn} (Client Auth)` },
           { label: "Client PKCS#12", value: `Protected (.p12) - Password: ${p12Password}` },
           { label: "Key Algorithm", value: keyType.toUpperCase() },
           { label: "Validity", value: `${validityDays} days` },
-        ];
+        );
 
         const working = [
-          "### Full mTLS Suite Generated",
+          `### Full mTLS Suite Generated (${pkiHierarchy.toUpperCase()})`,
           "",
           "#### 1. Root Certificate Authority (`ca.crt`)",
           `- **Subject**: ${mtls.ca.subjectDn}`,
           `- **SHA-256 Fingerprint**: ${mtls.ca.fingerprint}`,
           "",
-          "#### 2. Server Certificate (`server.crt`) & Key (`server.key`)",
+        ];
+
+        if (mtls.intermediate) {
+          working.push(
+            "#### 2. Intermediate Issuing CA (`intermediate.crt`)",
+            `- **Subject**: ${mtls.intermediate.subjectDn}`,
+            `- **Issuer**: ${mtls.intermediate.issuerDn}`,
+            `- **SHA-256 Fingerprint**: ${mtls.intermediate.fingerprint}`,
+            "",
+          );
+        }
+
+        working.push(
+          `#### ${mtls.intermediate ? "3" : "2"}. Server Certificate (\`server.crt\`) & Key (\`server.key\`)`,
           `- **Subject**: ${mtls.server.subjectDn}`,
           `- **SANs**: ${mtls.server.san}`,
           `- **Issuer**: ${mtls.server.issuerDn}`,
           `- **EKU**: TLS Web Server Authentication (id-kp-serverAuth)`,
           "",
-          "#### 3. Client Certificate (`client.crt`) & PKCS#12 (`client.p12`)",
+          `#### ${mtls.intermediate ? "4" : "3"}. Client Certificate (\`client.crt\`) & PKCS#12 (\`client.p12\`)`,
           `- **Subject**: ${mtls.client.subjectDn}`,
           `- **Issuer**: ${mtls.client.issuerDn}`,
           `- **EKU**: TLS Web Client Authentication (id-kp-clientAuth)`,
@@ -125,11 +159,21 @@ export async function computeCertificate(
           "```nginx",
           mtls.commands.nginxConfig,
           "```",
-        ].join("\n");
+        );
 
         const files: ToolExportFile[] = [
           { name: "ca.crt", content: mtls.ca.certPem },
           { name: "ca.key", content: mtls.ca.keyPem },
+        ];
+
+        if (mtls.intermediate) {
+          files.push(
+            { name: "intermediate.crt", content: mtls.intermediate.certPem },
+            { name: "intermediate.key", content: mtls.intermediate.keyPem },
+          );
+        }
+
+        files.push(
           { name: "server.crt", content: mtls.server.certPem },
           { name: "server.key", content: mtls.server.keyPem },
           { name: "server-chain.pem", content: mtls.server.chainPem },
@@ -154,36 +198,56 @@ export async function computeCertificate(
             ].join("\n"),
           },
           { name: "nginx.conf", content: mtls.commands.nginxConfig },
+          { name: "k8s-tls-secret.yaml", content: mtls.commands.k8sSecret },
+          { name: "caddy.Caddyfile", content: mtls.commands.caddyConfig },
+          { name: "traefik.yaml", content: mtls.commands.traefikConfig },
+          { name: "haproxy.cfg", content: mtls.commands.haproxyConfig },
+          { name: "envoy.yaml", content: mtls.commands.envoyConfig },
+          { name: "ca.crl", content: mtls.crl.crlPem },
+          { name: "authorized_keys", content: mtls.ssh.authorizedKeysLine },
+          { name: "jwks.json", content: mtls.jwksJson },
           {
             name: "README.txt",
             content: [
               "Cipher Workbench - mTLS PKI Suite",
               "==================================",
+              `Hierarchy: ${mtls.pkiHierarchy.toUpperCase()}`,
               `Root CA:   ${mtls.ca.subjectDn}`,
+              ...(mtls.intermediate ? [`Interm CA: ${mtls.intermediate.subjectDn}`] : []),
               `Server:    ${mtls.server.subjectDn} [${mtls.server.san}]`,
               `Client:    ${mtls.client.subjectDn}`,
               `P12 Pass:  ${p12Password}`,
               "",
-              "Files in this folder:",
-              "- ca.crt: Root CA certificate",
-              "- ca.key: Root CA private key (secret)",
-              "- server.crt: Server certificate",
-              "- server.key: Server private key (secret)",
+              "Certificates:",
+              "- ca.crt / ca.key: Root CA certificate & key",
+              ...(mtls.intermediate ? ["- intermediate.crt / intermediate.key: Intermediate CA certificate & key"] : []),
+              "- server.crt / server.key: Server certificate & key",
               "- server-chain.pem: Server certificate + CA chain",
-              "- client.crt: Client certificate",
-              "- client.key: Client private key (secret)",
-              "- client.p12: Password-encrypted PKCS#12 bundle",
-              "- commands.sh: Test commands",
-              "- nginx.conf: NGINX mTLS block",
+              "- client.crt / client.key: Client certificate & key",
+              "- client.p12: Password-encrypted PKCS#12 container",
+              "",
+              "Keys & Revocation:",
+              "- ca.crl: RFC 5280 v2 Certificate Revocation List",
+              "- authorized_keys: OpenSSH client public key (RFC 4253)",
+              "- jwks.json: RFC 7517 JSON Web Key Set bundle",
+              "",
+              "Cloud Deployments & Proxies:",
+              "- k8s-tls-secret.yaml: Kubernetes TLS Secret manifest",
+              "- caddy.Caddyfile: Caddy 2 reverse proxy with mTLS",
+              "- traefik.yaml: Traefik dynamic TLS configuration",
+              "- haproxy.cfg: HAProxy mTLS frontend bind",
+              "- envoy.yaml: Envoy TransportSocket context",
+              "- nginx.conf: NGINX mTLS reverse proxy block",
+              "- commands.sh: OpenSSL and cURL test scripts",
             ].join("\n"),
           },
-        ];
+        );
 
         return {
           text: mtls.allInOneText,
           bytes: mtls.client.p12Der,
           fields,
-          working,
+          working: working.join("\n"),
           files,
         };
       }
@@ -277,6 +341,14 @@ export async function computeCertificate(
         { name: "public.key", content: created.publicKeyPem },
         ...(created.chainPem ? [{ name: "chain.pem", content: created.chainPem }] : []),
         { name: "commands.sh", content: created.opensslCommand },
+        {
+          name: "authorized_keys",
+          content: spkiToOpenSsh(created.keyBundle.spkiBytes, keyType, commonName).authorizedKeysLine,
+        },
+        {
+          name: "jwk.json",
+          content: JSON.stringify(spkiToJwk(created.keyBundle.spkiBytes, keyType), null, 2),
+        },
         {
           name: "cert-info.txt",
           content: [
@@ -603,6 +675,138 @@ export async function computeCertificate(
       } catch (err) {
         return {
           error: `Conversion failed: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }
+
+    case "crl": {
+      try {
+        const parsed = parseX509Crl(der);
+        const fields: ToolResultField[] = [
+          { label: "Issuer", value: parsed.issuerDn, hint: "CA that issued this CRL" },
+          { label: "Version", value: `X.509 v${parsed.version} CRL` },
+          { label: "Revoked Certificates", value: `${parsed.revokedCertificates.length} certificates` },
+          {
+            label: "This Update",
+            value: parsed.thisUpdate.toISOString().replace("T", " ").replace(/\..+/, " UTC"),
+            hint: "Issue date of this CRL",
+          },
+        ];
+
+        if (parsed.nextUpdate) {
+          fields.push({
+            label: "Next Update",
+            value: parsed.nextUpdate.toISOString().replace("T", " ").replace(/\..+/, " UTC"),
+            hint: "Expiry / refresh date of this CRL",
+          });
+        }
+
+        if (parsed.crlNumber !== undefined) {
+          fields.push({ label: "CRL Number", value: String(parsed.crlNumber) });
+        }
+
+        fields.push({
+          label: "Signature Algorithm",
+          value: parsed.signatureAlgorithmName,
+        });
+
+        if (parsed.authorityKeyIdentifierHex) {
+          fields.push({
+            label: "Authority Key Identifier",
+            value: parsed.authorityKeyIdentifierHex,
+          });
+        }
+
+        const workingLines = [
+          "### X.509 Certificate Revocation List (CRL)",
+          `- **Version**: v${parsed.version}`,
+          `- **Issuer**: ${parsed.issuerDn}`,
+          `- **This Update**: ${parsed.thisUpdate.toISOString()}`,
+          ...(parsed.nextUpdate ? [`- **Next Update**: ${parsed.nextUpdate.toISOString()}`] : []),
+          `- **Signature Algorithm**: ${parsed.signatureAlgorithmName}`,
+          ...(parsed.crlNumber !== undefined ? [`- **CRL Number**: ${parsed.crlNumber}`] : []),
+          "",
+          `#### Revoked Certificates (${parsed.revokedCertificates.length}):`,
+        ];
+
+        if (parsed.revokedCertificates.length === 0) {
+          workingLines.push("*(No certificates revoked in this list - CRL is empty)*");
+        } else {
+          for (const rev of parsed.revokedCertificates) {
+            workingLines.push(
+              `- **Serial**: \`0x${rev.serialNumberHex}\` (${rev.serialNumberDec}) | **Date**: ${rev.revocationDate.toISOString()}${rev.reasonText ? ` | **Reason**: ${rev.reasonText}` : ""}`,
+            );
+          }
+        }
+
+        return {
+          text: parsed.pem,
+          bytes: parsed.rawDer,
+          fields,
+          working: workingLines.join("\n"),
+        };
+      } catch (err) {
+        return {
+          error: `Could not parse X.509 CRL: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }
+
+    case "cert-verifier": {
+      try {
+        const result = await verifyCertificateChain(input);
+        const fields: ToolResultField[] = [
+          {
+            label: "Chain Verification",
+            value: result.isValid ? "Valid (Trust Path & Signatures Verified)" : "Verification Failed",
+            hint: result.summary,
+          },
+          { label: "Chain Depth", value: `${result.chainDepth} Certificate${result.chainDepth === 1 ? "" : "s"}` },
+          { label: "Target / Leaf", value: result.leafSubject },
+          { label: "Root / Trust Anchor", value: result.rootSubject },
+          { label: "Root Self-Signed", value: result.isSelfSignedRoot ? "Yes (Self-Signed Anchor)" : "No" },
+        ];
+
+        const workingLines = [
+          "### Certificate Chain Trust Path Verification",
+          `**Result**: ${result.isValid ? "Verified Valid" : "Verification Failed"}`,
+          `**Summary**: ${result.summary}`,
+          "",
+          "#### Visual Trust Hierarchy:",
+          "```",
+          result.treeDiagram,
+          "```",
+          "",
+          "#### Certificate Details in Path:",
+        ];
+
+        for (const node of result.nodes) {
+          workingLines.push(
+            `##### [Tier ${node.index + 1}] ${node.isRoot ? "Root CA" : node.isCa ? "Intermediate CA" : "End-Entity Leaf"}`,
+            `- **Subject**: ${node.subjectDn}`,
+            `- **Issuer**: ${node.issuerDn}`,
+            `- **Serial**: \`0x${node.serialNumber}\``,
+            `- **Validity Status**: ${node.datesMessage}`,
+            `- **Digital Signature**: ${node.signatureValid ? "VALID" : `FAILED (${node.signatureError})`}`,
+            ...(node.akiSkiMatch !== undefined ? [`- **AKI / SKI Match**: ${node.akiSkiMatch ? "MATCHED" : "MISMATCH"}`] : []),
+          );
+          if (node.errors.length > 0) {
+            workingLines.push(`- **Errors**: ${node.errors.join("; ")}`);
+          }
+          if (node.warnings.length > 0) {
+            workingLines.push(`- **Warnings**: ${node.warnings.join("; ")}`);
+          }
+          workingLines.push("");
+        }
+
+        return {
+          text: result.summary + "\n\n" + result.treeDiagram,
+          fields,
+          working: workingLines.join("\n"),
+        };
+      } catch (err) {
+        return {
+          error: `Certificate chain verification failed: ${err instanceof Error ? err.message : String(err)}`,
         };
       }
     }

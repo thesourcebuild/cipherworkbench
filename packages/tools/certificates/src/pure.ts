@@ -26,6 +26,8 @@ export const OPTION_CODE_SIGNING = "codeSigning";
 
 export const OPTION_CREATOR_MODE = "creatorMode";
 export const OPTION_ISSUANCE_MODE = "issuanceMode";
+export const OPTION_PKI_HIERARCHY = "pkiHierarchy";
+export const OPTION_INTERMEDIATE_COMMON_NAME = "intermediateCommonName";
 export const OPTION_CA_CERT = "caCert";
 export const OPTION_CA_PRIVATE_KEY = "caPrivateKey";
 export const OPTION_CLIENT_COMMON_NAME = "clientCommonName";
@@ -36,6 +38,7 @@ export const OPTION_PRIVATE_KEY = "privateKey";
 
 export type CreatorModeOption = "single-cert" | "mtls-suite";
 export type IssuanceModeOption = "self-signed" | "ca-signed";
+export type PkiHierarchyOption = "2-tier" | "3-tier";
 
 export type InputFormatOption = "auto" | "pem" | "der" | "hex";
 export type DetailLevelOption = "summary" | "full-dump";
@@ -204,4 +207,15 @@ export function readClientCommonName(options: OptionValues, defaultVal = "client
 export function readMtlsP12Password(options: OptionValues, defaultVal = "changeit"): string {
   return optString(options, OPTION_MTLS_P12_PASSWORD) ?? defaultVal;
 }
+
+export function readPkiHierarchy(options: OptionValues): PkiHierarchyOption {
+  const val = optString(options, OPTION_PKI_HIERARCHY);
+  if (val === "3-tier") return "3-tier";
+  return "2-tier";
+}
+
+export function readIntermediateCommonName(options: OptionValues, defaultVal = "Internal Issuing CA"): string {
+  return optString(options, OPTION_INTERMEDIATE_COMMON_NAME) ?? defaultVal;
+}
+
 

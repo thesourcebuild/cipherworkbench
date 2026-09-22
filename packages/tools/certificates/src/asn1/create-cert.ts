@@ -26,16 +26,17 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 
 export interface CertificateCreatorOptions {
   commonName: string;
-  organization: string;
-  organizationalUnit: string;
-  country: string;
-  state: string;
-  locality: string;
+  organization?: string;
+  organizationalUnit?: string;
+  country?: string;
+  state?: string;
+  locality?: string;
   keyType: KeyAlgorithmType;
   hashType: HashAlgorithmType;
   validityDays: number;
   isCa: boolean;
-  san: string;
+  pathLenConstraint?: number;
+  san?: string;
   serverAuth?: boolean;
   clientAuth?: boolean;
   codeSigning?: boolean;
@@ -51,6 +52,7 @@ export interface CreatedCertificateResult {
   certPem: string;
   certDer: Uint8Array;
   privateKeyPem: string;
+  privateKeyDer: Uint8Array;
   publicKeyPem: string;
   chainPem?: string;
   serialNumberHex: string;
@@ -180,12 +182,12 @@ export async function createCertificate(
 
   // 1. Subject DN
   const rdnEntries: RdnEntry[] = [
-    { oid: "2.5.4.6", value: opts.country.slice(0, 2).toUpperCase(), isPrintable: true }, // C
-    { oid: "2.5.4.8", value: opts.state }, // ST
-    { oid: "2.5.4.7", value: opts.locality }, // L
-    { oid: "2.5.4.10", value: opts.organization }, // O
-    { oid: "2.5.4.11", value: opts.organizationalUnit }, // OU
-    { oid: "2.5.4.3", value: opts.commonName }, // CN
+    { oid: "2.5.4.6", value: opts.country ? opts.country.slice(0, 2).toUpperCase() : "", isPrintable: true }, // C
+    { oid: "2.5.4.8", value: opts.state ?? "" }, // ST
+    { oid: "2.5.4.7", value: opts.locality ?? "" }, // L
+    { oid: "2.5.4.10", value: opts.organization ?? "" }, // O
+    { oid: "2.5.4.11", value: opts.organizationalUnit ?? "" }, // OU
+    { oid: "2.5.4.3", value: opts.commonName ?? "" }, // CN
   ].filter((e) => e.value.length > 0);
 
   const subjectDnDer = encodeDistinguishedName(rdnEntries);
@@ -231,7 +233,9 @@ export async function createCertificate(
 
   // 4a. Basic Constraints (OID 2.5.29.19)
   const basicConstraintsDer = opts.isCa
-    ? encodeDerSequence([encodeDerBoolean(true)])
+    ? (opts.pathLenConstraint !== undefined
+        ? encodeDerSequence([encodeDerBoolean(true), encodeDerInteger(opts.pathLenConstraint)])
+        : encodeDerSequence([encodeDerBoolean(true)]))
     : encodeDerSequence([encodeDerBoolean(false)]);
   extensions.push(
     encodeDerSequence([
@@ -380,6 +384,7 @@ export async function createCertificate(
     certPem,
     certDer,
     privateKeyPem: keyBundle.privateKeyPem,
+    privateKeyDer: keyBundle.pkcs8Bytes,
     publicKeyPem: keyBundle.publicKeyPem,
     chainPem,
     serialNumberHex,

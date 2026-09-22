@@ -142,6 +142,13 @@ export function encodeDerBoolean(val: boolean): Uint8Array {
 }
 
 /**
+ * Encodes an ASN.1 ENUMERATED.
+ */
+export function encodeDerEnumerated(value: number): Uint8Array {
+  return encodeDerTlv(UniversalTag.Enumerated, TagClass.Universal, false, new Uint8Array([value & 0xff]));
+}
+
+/**
  * Encodes an ASN.1 OBJECT IDENTIFIER (OID).
  */
 export function encodeDerOid(oidStr: string): Uint8Array {

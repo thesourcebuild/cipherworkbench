@@ -79,6 +79,8 @@ export interface ParsedX509Certificate {
     sha1: string;
     md5: string;
   };
+  tbsRaw: Uint8Array;
+  signatureBytes: Uint8Array;
   rawDer: Uint8Array;
   pem: string;
   textDump: string;
@@ -517,6 +519,8 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
       all: allExtensions,
     },
     fingerprints,
+    tbsRaw: tbs.raw,
+    signatureBytes: sigBytes,
     rawDer: der,
     pem,
     textDump: textLines.join("\n"),

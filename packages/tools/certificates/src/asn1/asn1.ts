@@ -21,6 +21,7 @@ export enum UniversalTag {
   OctetString = 0x04,
   Null = 0x05,
   ObjectIdentifier = 0x06,
+  Enumerated = 0x0a,
   UTF8String = 0x0c,
   PrintableString = 0x13,
   TeletexString = 0x14,

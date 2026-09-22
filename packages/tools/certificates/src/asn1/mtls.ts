@@ -1,9 +1,14 @@
 import { createCertificate, type CreatedCertificateResult } from "./create-cert";
 import { importCaSigner, type HashAlgorithmType, type KeyAlgorithmType } from "../crypto/keys";
 import { encodePkcs12Archive } from "./pkcs12";
+import { createCrl, CrlReasonCode, type CreatedCrl } from "./crl";
+import { spkiToOpenSsh, type OpenSshKeyResult } from "../crypto/openssh";
+import { spkiToJwk, formatJwks, type Jwk } from "../crypto/jwk";
 
 export interface MtlsSuiteOptions {
   caCommonName?: string;
+  intermediateCommonName?: string;
+  pkiHierarchy?: "2-tier" | "3-tier";
   organization?: string;
   organizationalUnit?: string;
   country?: string;
@@ -29,37 +34,48 @@ export interface MtlsSuiteEntity {
 }
 
 export interface MtlsSuiteResult {
+  pkiHierarchy: "2-tier" | "3-tier";
   ca: MtlsSuiteEntity;
+  intermediate?: MtlsSuiteEntity;
   server: MtlsSuiteEntity & { san: string };
   client: MtlsSuiteEntity & {
     p12Der: Uint8Array;
     p12Base64: string;
     p12Password: string;
   };
+  crl: CreatedCrl;
+  ssh: OpenSshKeyResult;
+  jwksJson: string;
   commands: {
     opensslServer: string;
     opensslClient: string;
     curlPem: string;
     curlP12: string;
     nginxConfig: string;
+    k8sSecret: string;
+    caddyConfig: string;
+    traefikConfig: string;
+    haproxyConfig: string;
+    envoyConfig: string;
   };
   allInOneText: string;
   rawCa: CreatedCertificateResult;
+  rawIntermediate?: CreatedCertificateResult;
   rawServer: CreatedCertificateResult;
   rawClient: CreatedCertificateResult;
 }
 
 /**
  * Generates an end-to-end Mutual TLS (mTLS) PKI suite:
- * 1. Self-signed Root CA (cA=TRUE, keyCertSign, cRLSign)
- * 2. Server Certificate signed by CA (serverAuth, SANs)
- * 3. Client Certificate signed by CA (clientAuth)
- * 4. Password-encrypted Client PKCS#12 (.p12) container
- * 5. Turnkey verification and server configuration commands
+ * - 2-tier: Root CA ➔ Server & Client
+ * - 3-tier: Root CA ➔ Intermediate Issuing CA ➔ Server & Client
+ * - Password-encrypted Client PKCS#12 (.p12) container
+ * - Turnkey verification and cloud deployment configs (NGINX, K8s, Caddy, Traefik, HAProxy, Envoy)
  */
 export async function generateMtlsSuite(
   opts: MtlsSuiteOptions = {},
 ): Promise<MtlsSuiteResult> {
+  const pkiHierarchy = opts.pkiHierarchy ?? "2-tier";
   const org = opts.organization ?? "Cipher Workbench";
   const ou = opts.organizationalUnit ?? "Security";
   const country = opts.country ?? "US";
@@ -89,10 +105,54 @@ export async function generateMtlsSuite(
     clientAuth: false,
   });
 
-  // Prepare reusable CA signer
-  const caSigner = await importCaSigner(caResult.certDer, caResult.keyBundle.pkcs8Bytes);
+  const rootCaSigner = await importCaSigner(caResult.certDer, caResult.keyBundle.pkcs8Bytes);
 
-  // 2. Generate Server Certificate signed by Root CA
+  let rawIntermediate: CreatedCertificateResult | undefined;
+  let intermediateEntity: MtlsSuiteEntity | undefined;
+  let issuingSigner = rootCaSigner;
+  let issuingCertPem = caResult.certPem;
+  let caCertChainForClient = [caResult.certDer];
+
+  // 2. Optional: Generate Intermediate CA (3-tier mode)
+  if (pkiHierarchy === "3-tier") {
+    const intermediateCommonName = opts.intermediateCommonName ?? "Internal Issuing CA";
+    const intermediateValidityDays = Math.max(validityDays * 2, 1825); // 5 years
+    rawIntermediate = await createCertificate({
+      commonName: intermediateCommonName,
+      organization: org,
+      organizationalUnit: ou,
+      country,
+      state,
+      locality,
+      keyType,
+      hashType,
+      validityDays: intermediateValidityDays,
+      isCa: true,
+      pathLenConstraint: 0, // Cannot issue further CAs, only leaf certs
+      san: "",
+      serverAuth: false,
+      clientAuth: false,
+      issuanceMode: "ca-signed",
+      caSigner: rootCaSigner,
+      caCertPem: caResult.certPem,
+    });
+
+    issuingSigner = await importCaSigner(rawIntermediate.certDer, rawIntermediate.keyBundle.pkcs8Bytes);
+    issuingCertPem = rawIntermediate.certPem;
+    caCertChainForClient = [rawIntermediate.certDer, caResult.certDer];
+
+    intermediateEntity = {
+      certPem: rawIntermediate.certPem,
+      certDer: rawIntermediate.certDer,
+      keyPem: rawIntermediate.privateKeyPem,
+      chainPem: `${rawIntermediate.certPem}\n${caResult.certPem}`,
+      fingerprint: rawIntermediate.fingerprintSha256,
+      subjectDn: rawIntermediate.subjectDn,
+      issuerDn: rawIntermediate.issuerDn,
+    };
+  }
+
+  // 3. Generate Server Certificate
   const serverCommonName = opts.serverCommonName ?? "localhost";
   const serverSan = opts.serverSan ?? "localhost, 127.0.0.1";
   const serverResult = await createCertificate({
@@ -110,11 +170,15 @@ export async function generateMtlsSuite(
     serverAuth: true,
     clientAuth: false,
     issuanceMode: "ca-signed",
-    caSigner,
-    caCertPem: caResult.certPem,
+    caSigner: issuingSigner,
+    caCertPem: issuingCertPem,
   });
 
-  // 3. Generate Client Certificate signed by Root CA
+  const serverChainPem = pkiHierarchy === "3-tier" && rawIntermediate
+    ? `${serverResult.certPem}\n${rawIntermediate.certPem}\n${caResult.certPem}`
+    : `${serverResult.certPem}\n${caResult.certPem}`;
+
+  // 4. Generate Client Certificate
   const clientCommonName = opts.clientCommonName ?? "client-app-01";
   const clientResult = await createCertificate({
     commonName: clientCommonName,
@@ -131,28 +195,34 @@ export async function generateMtlsSuite(
     serverAuth: false,
     clientAuth: true,
     issuanceMode: "ca-signed",
-    caSigner,
-    caCertPem: caResult.certPem,
+    caSigner: issuingSigner,
+    caCertPem: issuingCertPem,
   });
 
-  // 4. Package Client Certificate + Private Key + Root CA into PKCS#12 (.p12) container
+  const clientChainPem = pkiHierarchy === "3-tier" && rawIntermediate
+    ? `${clientResult.certPem}\n${rawIntermediate.certPem}\n${caResult.certPem}`
+    : `${clientResult.certPem}\n${caResult.certPem}`;
+
+  // 5. Package Client Certificate + Private Key + CAs into PKCS#12 (.p12) container
   const p12Export = await encodePkcs12Archive({
-    certDers: [clientResult.certDer, caResult.certDer],
+    certDers: [clientResult.certDer, ...caCertChainForClient],
     privateKeyDer: clientResult.keyBundle.pkcs8Bytes,
     password: p12Password,
     friendlyName: clientCommonName,
   });
 
-  // 5. Verification & Deployment Commands
+  // 6. Verification & Deployment Commands
   const opensslServer = `openssl s_server -key server.key -cert server.crt -CAfile ca.crt -Verify 1 -port 8443`;
   const opensslClient = `openssl s_client -connect localhost:8443 -cert client.crt -key client.key -CAfile ca.crt`;
   const curlPem = `curl --cacert ca.crt --cert client.crt --key client.key https://localhost:8443/`;
   const curlP12 = `curl --cacert ca.crt --cert client.p12:${p12Password} https://localhost:8443/`;
+
+  // Server & Cloud Config Templates
   const nginxConfig = `server {
     listen 8443 ssl;
     server_name ${serverCommonName};
 
-    ssl_certificate         /etc/ssl/certs/server.crt;
+    ssl_certificate         /etc/ssl/certs/server-chain.pem;
     ssl_certificate_key     /etc/ssl/private/server.key;
     ssl_client_certificate  /etc/ssl/certs/ca.crt;
     ssl_verify_client       on;
@@ -164,10 +234,86 @@ export async function generateMtlsSuite(
     }
 }`;
 
-  // 6. Assembled All-In-One Text
-  const allInOneText = [
+  const k8sSecret = `apiVersion: v1
+kind: Secret
+metadata:
+  name: mtls-server-secret
+  namespace: default
+type: kubernetes.io/tls
+data:
+  tls.crt: ${btoa(serverChainPem)}
+  tls.key: ${btoa(serverResult.privateKeyPem)}
+  ca.crt: ${btoa(caResult.certPem)}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mtls-client-secret
+  namespace: default
+type: Opaque
+data:
+  tls.crt: ${btoa(clientChainPem)}
+  tls.key: ${btoa(clientResult.privateKeyPem)}
+  ca.crt: ${btoa(caResult.certPem)}
+  client.p12: ${p12Export.base64}
+`;
+
+  const caddyConfig = `${serverCommonName}:8443 {
+    tls /etc/ssl/certs/server-chain.pem /etc/ssl/private/server.key {
+        client_auth {
+            mode require_and_verify
+            trusted_ca_cert_file /etc/ssl/certs/ca.crt
+        }
+    }
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Client-Cert-Subject {http.request.tls.client.subject}
+    }
+}`;
+
+  const traefikConfig = `tls:
+  options:
+    mtls-policy:
+      clientAuth:
+        caFiles:
+          - /etc/ssl/certs/ca.crt
+        clientAuthType: RequireAndVerifyClientCert
+  certificates:
+    - certFile: /etc/ssl/certs/server-chain.pem
+      keyFile: /etc/ssl/private/server.key
+`;
+
+  const haproxyConfig = `frontend mtls_in
+    bind :8443 ssl crt /etc/ssl/certs/server-chain.pem ca-file /etc/ssl/certs/ca.crt verify required
+    http-request set-header X-SSL-Client-DN %{+Q}[ssl_c_s_dn]
+    default_backend app_servers
+
+backend app_servers
+    server app1 127.0.0.1:8080
+`;
+
+  const envoyConfig = `static_resources:
+  listeners:
+  - name: mtls_listener
+    address:
+      socket_address: { address: 0.0.0.0, port_value: 8443 }
+    filter_chains:
+    - transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+          common_tls_context:
+            tls_certificates:
+            - certificate_chain: { filename: "/etc/ssl/certs/server-chain.pem" }
+              private_key: { filename: "/etc/ssl/private/server.key" }
+            validation_context:
+              trusted_ca: { filename: "/etc/ssl/certs/ca.crt" }
+              require_client_certificate: true
+`;
+
+  // 7. Assembled All-In-One Text
+  const textParts: string[] = [
     `# ==============================================================================`,
-    `# CIPHER WORKBENCH - FULL mTLS PKI SUITE`,
+    `# CIPHER WORKBENCH - FULL mTLS PKI SUITE (${pkiHierarchy.toUpperCase()})`,
     `# ==============================================================================`,
     ``,
     `# ------------------------------------------------------------------------------`,
@@ -182,8 +328,29 @@ export async function generateMtlsSuite(
     `# ------------------------------------------------------------------------------`,
     caResult.privateKeyPem,
     ``,
+  ];
+
+  if (pkiHierarchy === "3-tier" && rawIntermediate) {
+    textParts.push(
+      `# ------------------------------------------------------------------------------`,
+      `# INTERMEDIATE ISSUING CA (intermediate.crt)`,
+      `# Subject: ${rawIntermediate.subjectDn}`,
+      `# Issuer: ${rawIntermediate.issuerDn}`,
+      `# SHA-256 Fingerprint: ${rawIntermediate.fingerprintSha256}`,
+      `# ------------------------------------------------------------------------------`,
+      rawIntermediate.certPem,
+      ``,
+      `# ------------------------------------------------------------------------------`,
+      `# INTERMEDIATE CA PRIVATE KEY (intermediate.key) - KEEP SECRET`,
+      `# ------------------------------------------------------------------------------`,
+      rawIntermediate.privateKeyPem,
+      ``,
+    );
+  }
+
+  textParts.push(
     `# ------------------------------------------------------------------------------`,
-    `# 3. SERVER CERTIFICATE (server.crt) - Signed by Root CA`,
+    `# SERVER CERTIFICATE (server.crt) - Signed by ${pkiHierarchy === "3-tier" ? "Intermediate CA" : "Root CA"}`,
     `# Subject: ${serverResult.subjectDn}`,
     `# SANs: ${serverSan}`,
     `# SHA-256 Fingerprint: ${serverResult.fingerprintSha256}`,
@@ -191,29 +358,29 @@ export async function generateMtlsSuite(
     serverResult.certPem,
     ``,
     `# ------------------------------------------------------------------------------`,
-    `# 4. SERVER PRIVATE KEY (server.key) - KEEP SECRET`,
+    `# SERVER PRIVATE KEY (server.key) - KEEP SECRET`,
     `# ------------------------------------------------------------------------------`,
     serverResult.privateKeyPem,
     ``,
     `# ------------------------------------------------------------------------------`,
-    `# 5. SERVER FULL CHAIN (server-chain.pem)`,
+    `# SERVER FULL CHAIN (server-chain.pem)`,
     `# ------------------------------------------------------------------------------`,
-    serverResult.chainPem ?? `${serverResult.certPem}\n${caResult.certPem}`,
+    serverChainPem,
     ``,
     `# ------------------------------------------------------------------------------`,
-    `# 6. CLIENT CERTIFICATE (client.crt) - Signed by Root CA`,
+    `# CLIENT CERTIFICATE (client.crt) - Signed by ${pkiHierarchy === "3-tier" ? "Intermediate CA" : "Root CA"}`,
     `# Subject: ${clientResult.subjectDn}`,
     `# SHA-256 Fingerprint: ${clientResult.fingerprintSha256}`,
     `# ------------------------------------------------------------------------------`,
     clientResult.certPem,
     ``,
     `# ------------------------------------------------------------------------------`,
-    `# 7. CLIENT PRIVATE KEY (client.key) - KEEP SECRET`,
+    `# CLIENT PRIVATE KEY (client.key) - KEEP SECRET`,
     `# ------------------------------------------------------------------------------`,
     clientResult.privateKeyPem,
     ``,
     `# ------------------------------------------------------------------------------`,
-    `# 8. CLIENT PKCS#12 ARCHIVE (client.p12 - Base64) - Password: ${p12Password}`,
+    `# CLIENT PKCS#12 ARCHIVE (client.p12 - Base64) - Password: ${p12Password}`,
     `# ------------------------------------------------------------------------------`,
     p12Export.base64,
     ``,
@@ -226,9 +393,41 @@ export async function generateMtlsSuite(
     `#   ${curlPem}`,
     `# Or using PKCS#12:`,
     `#   ${curlP12}`,
-  ].join("\n");
+  );
+
+  // 6. Generate RFC 5280 X.509 v2 CRL for the Root CA
+  const crlSigner = await importCaSigner(caResult.certDer, caResult.keyBundle.pkcs8Bytes);
+  const crlResult = await createCrl({
+    signer: crlSigner,
+    crlNumber: 1,
+    revokedCertificates: [
+      {
+        serialNumber: "0xDEADBEEF",
+        revocationDate: new Date(),
+        reasonCode: CrlReasonCode.KeyCompromise,
+      },
+    ],
+  });
+
+  // 7. Generate OpenSSH and JWK/JWKS representations
+  const clientSsh = spkiToOpenSsh(clientResult.keyBundle.spkiBytes, keyType, clientCommonName);
+  const jwksList: Jwk[] = [
+    spkiToJwk(caResult.keyBundle.spkiBytes, keyType, "ca-root"),
+  ];
+  if (rawIntermediate) {
+    jwksList.push(spkiToJwk(rawIntermediate.keyBundle.spkiBytes, keyType, "intermediate-ca"));
+  }
+  jwksList.push(
+    spkiToJwk(serverResult.keyBundle.spkiBytes, keyType, "server-tls"),
+    spkiToJwk(clientResult.keyBundle.spkiBytes, keyType, "client-app"),
+  );
+  const jwksJson = formatJwks(jwksList);
 
   return {
+    pkiHierarchy,
+    crl: crlResult,
+    ssh: clientSsh,
+    jwksJson,
     ca: {
       certPem: caResult.certPem,
       certDer: caResult.certDer,
@@ -238,11 +437,12 @@ export async function generateMtlsSuite(
       subjectDn: caResult.subjectDn,
       issuerDn: caResult.issuerDn,
     },
+    intermediate: intermediateEntity,
     server: {
       certPem: serverResult.certPem,
       certDer: serverResult.certDer,
       keyPem: serverResult.privateKeyPem,
-      chainPem: serverResult.chainPem ?? `${serverResult.certPem}\n${caResult.certPem}`,
+      chainPem: serverChainPem,
       fingerprint: serverResult.fingerprintSha256,
       subjectDn: serverResult.subjectDn,
       issuerDn: serverResult.issuerDn,
@@ -252,7 +452,7 @@ export async function generateMtlsSuite(
       certPem: clientResult.certPem,
       certDer: clientResult.certDer,
       keyPem: clientResult.privateKeyPem,
-      chainPem: clientResult.chainPem ?? `${clientResult.certPem}\n${caResult.certPem}`,
+      chainPem: clientChainPem,
       fingerprint: clientResult.fingerprintSha256,
       subjectDn: clientResult.subjectDn,
       issuerDn: clientResult.issuerDn,
@@ -266,9 +466,15 @@ export async function generateMtlsSuite(
       curlPem,
       curlP12,
       nginxConfig,
+      k8sSecret,
+      caddyConfig,
+      traefikConfig,
+      haproxyConfig,
+      envoyConfig,
     },
-    allInOneText,
+    allInOneText: textParts.join("\n"),
     rawCa: caResult,
+    rawIntermediate,
     rawServer: serverResult,
     rawClient: clientResult,
   };
