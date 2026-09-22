@@ -86,4 +86,30 @@ describe("Certificate Chain Verifier (Phase 6)", () => {
       expect(err).toBeDefined();
     }
   });
+
+  it("provides valid and complete samples for Chain Verifier", async () => {
+    const { samplesFor } = await import("../packages/tools/certificates/src/samples");
+    const samples = samplesFor("cert-verifier");
+    expect(samples.length).toBe(3);
+
+    const [twoTier, threeTier, rootCa] = samples;
+    expect(twoTier?.id).toBe("2tier-chain");
+    expect(threeTier?.id).toBe("3tier-chain");
+    expect(rootCa?.id).toBe("root-ca-anchor");
+
+    // Verify 2-tier sample
+    const result2 = await verifyCertificateChain(twoTier!.text);
+    expect(result2.isValid).toBe(true);
+    expect(result2.chainDepth).toBe(2);
+
+    // Verify 3-tier sample
+    const result3 = await verifyCertificateChain(threeTier!.text);
+    expect(result3.isValid).toBe(true);
+    expect(result3.chainDepth).toBe(3);
+
+    // Verify root CA sample
+    const resultRoot = await verifyCertificateChain(rootCa!.text);
+    expect(resultRoot.isValid).toBe(true);
+    expect(resultRoot.chainDepth).toBe(1);
+  });
 });

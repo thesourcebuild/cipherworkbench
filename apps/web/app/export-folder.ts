@@ -47,6 +47,7 @@ export function createZipArchive(files: readonly ExportableFile[]): Uint8Array {
   const { time: dosTime, date: dosDate } = toDosDateTime(now);
 
   interface PreparedEntry {
+    name: string;
     nameBytes: Uint8Array;
     contentBytes: Uint8Array;
     crc: number;
@@ -54,11 +55,13 @@ export function createZipArchive(files: readonly ExportableFile[]): Uint8Array {
   }
 
   const prepared: PreparedEntry[] = files.map((f) => {
-    const nameBytes = encoder.encode(f.name.replace(/\\/g, "/"));
+    const name = f.name.replace(/\\/g, "/");
+    const nameBytes = encoder.encode(name);
     const contentBytes =
       typeof f.content === "string" ? encoder.encode(f.content) : f.content;
     const crc = calcCrc32(contentBytes);
     return {
+      name,
       nameBytes,
       contentBytes,
       crc,
@@ -132,7 +135,9 @@ export function createZipArchive(files: readonly ExportableFile[]): Uint8Array {
     view.setUint16(cursor + 32, 0, true); // Comment length
     view.setUint16(cursor + 34, 0, true); // Disk number start
     view.setUint16(cursor + 36, 0, true); // Internal attributes
-    view.setUint32(cursor + 38, 0x81a40000, true); // External attributes (regular file 0644)
+    // External attributes: grant 0o755 (-rwxr-xr-x) to shell scripts for Linux/macOS, 0o644 for data files
+    const isExecutable = entry.name.endsWith(".sh");
+    view.setUint32(cursor + 38, isExecutable ? 0x81ed0000 : 0x81a40000, true);
     view.setUint32(cursor + 42, entry.localHeaderOffset, true); // Offset of local header
 
     cursor += 46;

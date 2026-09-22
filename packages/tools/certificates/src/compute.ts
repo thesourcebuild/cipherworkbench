@@ -12,6 +12,11 @@ import { verifyCertificateChain } from "./asn1/chain-verifier";
 import { spkiToOpenSsh } from "./crypto/openssh";
 import { spkiToJwk } from "./crypto/jwk";
 import {
+  generateCertCommandScripts,
+  generateMtlsCommandScripts,
+  generateCsrCommandScripts,
+} from "./export/commands";
+import {
   readConverterOp,
   readDetailLevel,
   readVerifyCsrSig,
@@ -173,6 +178,13 @@ export async function computeCertificate(
           );
         }
 
+        const cmdScripts = generateMtlsCommandScripts({
+          pkiHierarchy,
+          opensslServer: mtls.commands.opensslServer,
+          curlPem: mtls.commands.curlPem,
+          curlP12: mtls.commands.curlP12,
+        });
+
         files.push(
           { name: "server.crt", content: mtls.server.certPem },
           { name: "server.key", content: mtls.server.keyPem },
@@ -180,23 +192,9 @@ export async function computeCertificate(
           { name: "client.crt", content: mtls.client.certPem },
           { name: "client.key", content: mtls.client.keyPem },
           { name: "client.p12", content: mtls.client.p12Der },
-          {
-            name: "commands.sh",
-            content: [
-              "#!/usr/bin/env bash",
-              "# mTLS Verification Commands",
-              "",
-              "# 1. Start OpenSSL Mock Server:",
-              mtls.commands.opensslServer,
-              "",
-              "# 2. Test Connection with cURL (PEM):",
-              mtls.commands.curlPem,
-              "",
-              "# 3. Test Connection with cURL (PKCS#12):",
-              mtls.commands.curlP12,
-              "",
-            ].join("\n"),
-          },
+          { name: "commands.sh", content: cmdScripts.sh },
+          { name: "commands.ps1", content: cmdScripts.ps1 },
+          { name: "commands.bat", content: cmdScripts.bat },
           { name: "nginx.conf", content: mtls.commands.nginxConfig },
           { name: "k8s-tls-secret.yaml", content: mtls.commands.k8sSecret },
           { name: "caddy.Caddyfile", content: mtls.commands.caddyConfig },
@@ -238,7 +236,9 @@ export async function computeCertificate(
               "- haproxy.cfg: HAProxy mTLS frontend bind",
               "- envoy.yaml: Envoy TransportSocket context",
               "- nginx.conf: NGINX mTLS reverse proxy block",
-              "- commands.sh: OpenSSL and cURL test scripts",
+              "- commands.sh: OpenSSL and cURL test scripts (Bash)",
+              "- commands.ps1: OpenSSL and cURL test scripts (PowerShell)",
+              "- commands.bat: Windows batch launcher with OpenSSL sanity check",
             ].join("\n"),
           },
         );
@@ -335,12 +335,21 @@ export async function computeCertificate(
         "```",
       ].filter(Boolean).join("\n");
 
+      const cmdScripts = generateCertCommandScripts({
+        certFile: "certificate.crt",
+        keyFile: "private.key",
+        chainFile: created.chainPem ? "chain.pem" : undefined,
+        opensslCommand: created.opensslCommand,
+      });
+
       const files: ToolExportFile[] = [
         { name: "certificate.crt", content: created.certPem },
         { name: "private.key", content: created.privateKeyPem },
         { name: "public.key", content: created.publicKeyPem },
         ...(created.chainPem ? [{ name: "chain.pem", content: created.chainPem }] : []),
-        { name: "commands.sh", content: created.opensslCommand },
+        { name: "commands.sh", content: cmdScripts.sh },
+        { name: "commands.ps1", content: cmdScripts.ps1 },
+        { name: "commands.bat", content: cmdScripts.bat },
         {
           name: "authorized_keys",
           content: spkiToOpenSsh(created.keyBundle.spkiBytes, keyType, commonName).authorizedKeysLine,
@@ -438,11 +447,19 @@ export async function computeCertificate(
         "```",
       ].join("\n");
 
+      const cmdScripts = generateCsrCommandScripts({
+        csrFile: "request.csr",
+        keyFile: "private.key",
+        opensslCommand: created.opensslCommand,
+      });
+
       const files: ToolExportFile[] = [
         { name: "request.csr", content: created.csrPem },
         { name: "private.key", content: created.privateKeyPem },
         { name: "public.key", content: created.publicKeyPem },
-        { name: "commands.sh", content: created.opensslCommand },
+        { name: "commands.sh", content: cmdScripts.sh },
+        { name: "commands.ps1", content: cmdScripts.ps1 },
+        { name: "commands.bat", content: cmdScripts.bat },
       ];
 
       return {

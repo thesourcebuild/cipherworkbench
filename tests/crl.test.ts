@@ -97,4 +97,17 @@ describe("RFC 5280 X.509 v2 CRL Generator & Parser", () => {
     expect(parsed.revokedCertificates).toHaveLength(0);
     expect(parsed.issuerDn).toContain("ECDSA Root CA");
   });
+
+  it("provides valid and parseable samples for CRL tool", async () => {
+    const { samplesFor } = await import("../packages/tools/certificates/src/samples");
+    const samples = samplesFor("crl");
+    expect(samples.length).toBeGreaterThan(0);
+
+    const crlSample = samples[0]!;
+    expect(crlSample.id).toBe("crl-sample");
+    const parsed = parseX509Crl(crlSample.text);
+    expect(parsed.version).toBe(2);
+    expect(parsed.revokedCertificates.length).toBeGreaterThan(0);
+    expect(parsed.issuerDn).toContain("Workbench Root CA");
+  });
 });
