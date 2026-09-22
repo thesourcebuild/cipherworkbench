@@ -10,6 +10,7 @@ import { buildExportPayload, downloadJsonFile } from "./export-json";
 import { collectExportFiles, exportFilesToFolder } from "./export-folder";
 import { FieldTable } from "./field-table";
 import { KeypairResultView } from "./keypair-result-view";
+import { CertDiffResultView } from "./cert-diff-result-view";
 import type { InputState } from "./input-state";
 import type { ComputeState } from "./use-compute";
 
@@ -84,6 +85,8 @@ export function ResultPanel({
 
   const isKeygen =
     manifest?.family === "asymmetric" && spec?.options?.operation === "generate";
+
+  const isCertDiff = Boolean(state.result?.tableRows?.length);
 
   const primary = useMemo(
     () => renderPrimary(state.result, outputEncoding, hexPrefix),
@@ -273,6 +276,13 @@ export function ResultPanel({
             stale={stale}
             pending={pending}
           />
+        ) : isCertDiff ? (
+          <CertDiffResultView
+            fields={state.result?.fields ?? []}
+            rows={state.result?.tableRows ?? []}
+            stale={stale}
+            pending={pending}
+          />
         ) : (
           <>
             <MonoBlock
@@ -318,7 +328,7 @@ export function ResultPanel({
           </p>
         )}
 
-        {!isKeygen && state.result?.fields && state.result.fields.length > 0 && (
+        {!isKeygen && !isCertDiff && state.result?.fields && state.result.fields.length > 0 && (
           <FieldTable fields={state.result.fields} />
         )}
 
@@ -333,7 +343,7 @@ export function ResultPanel({
           Headed, because an unlabelled second monospace block under the first reads as a continuation
           of the result rather than as an explanation of it.
         */}
-        {state.result?.working && (
+        {!isCertDiff && state.result?.working && (
           <div className="space-y-1">
             <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
               Working

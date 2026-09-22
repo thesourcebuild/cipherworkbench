@@ -10,7 +10,7 @@ import { generateMtlsSuite } from "./asn1/mtls";
 import { parseX509Crl } from "./asn1/crl";
 import { verifyCertificateChain } from "./asn1/chain-verifier";
 import { verifyCertificateKeyPair } from "./asn1/cert-matcher";
-import { diffCertificates } from "./asn1/cert-diff";
+import { diffCertificates, type CertDiffAttribute } from "./asn1/cert-diff";
 import { signCsr } from "./asn1/csr-signer";
 import { buildOcspRequest, parseOcspResponse, createMockOcspResponse } from "./asn1/ocsp";
 import { calculateAcmeChallenges } from "./crypto/acme";
@@ -619,10 +619,27 @@ export async function computeCertificate(
         },
       ];
 
+      const statusMap: Record<
+        CertDiffAttribute["status"],
+        "ok" | "diff" | "warn" | "added" | "removed"
+      > = {
+        identical: "ok",
+        changed: "diff",
+        warning: "warn",
+        added: "added",
+        removed: "removed",
+      };
+
       return {
-        text: res.summary + "\n\n" + res.markdownTable,
+        text: res.summary,
         fields,
-        working: res.markdownTable,
+        tableRows: res.attributes.map((a) => ({
+          property: a.name,
+          left: a.cert1Value,
+          right: a.cert2Value,
+          status: statusMap[a.status],
+          note: a.note,
+        })),
       };
     } catch (err) {
       return {

@@ -189,6 +189,20 @@ export interface ToolResult {
    * that can be exported directly into a folder or zip archive.
    */
   files?: readonly ToolExportFile[];
+  /**
+   * Structured comparison rows for tools like cert-diff that produce a side-by-side table.
+   * Rendered by a dedicated table component instead of a raw MonoBlock.
+   */
+  tableRows?: readonly ToolResultTableRow[];
+}
+
+/** One row in a structured comparison table (e.g. cert-diff property comparison). */
+export interface ToolResultTableRow {
+  property: string;
+  left: string;
+  right: string;
+  status: "ok" | "diff" | "warn" | "added" | "removed";
+  note?: string;
 }
 
 export interface ToolResultField {
