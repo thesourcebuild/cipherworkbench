@@ -10,6 +10,7 @@ export const OPTION_GROUPS = [
   "format",
   "convert",
   "verify",
+  "pair",
 ] as const;
 export type CertificateOptionGroup = (typeof OPTION_GROUPS)[number];
 
@@ -79,5 +80,13 @@ export const OPTION_GROUP_META: Record<
     summary: "Cryptographic signature validation settings.",
     order: 30,
     collapsedByDefault: false,
+  },
+  pair: {
+    id: "pair",
+    label: "",
+    summary: "Second certificate or private key to match or compare against.",
+    order: 1,
+    collapsedByDefault: false,
+    placement: "input",
   },
 };

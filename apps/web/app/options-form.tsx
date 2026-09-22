@@ -1,7 +1,7 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
-import type { BytesEncoding, OptionValue, OptionValues } from "@ocs/contracts";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import type { ByteSourceMode, BytesEncoding, OptionValue, OptionValues } from "@ocs/contracts";
 import { BYTES_ENCODING_LABEL, optEnumOr } from "@ocs/contracts";
 import type {
   OptionCatalogue,
@@ -22,8 +22,9 @@ import {
   randomBytesValue,
   redundantOptionIds,
 } from "@ocs/engine";
-import { Button, CopyIconButton, SecretField, StringListEditor, Toggle, cn } from "@ocs/ui";
+import { Button, ClearButton, CopyIconButton, SecretField, StringListEditor, Toggle, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
+import { formatBytes } from "./input-state";
 
 const BYTES_ENCODINGS: readonly BytesEncoding[] = [
   "hex",
@@ -67,6 +68,8 @@ export interface OptionsFormProps {
    * parameters" does not need "CUSTOM PARAMETERS" as its first line.
    */
   headings?: boolean;
+  /** Active input mode from the parent workbench, e.g. "text" or "file". */
+  inputMode?: ByteSourceMode;
   onChange: (id: string, value: OptionValue | undefined) => void;
   /**
    * How many bytes this option's Generate button should produce, when the answer depends on the spec.
@@ -145,6 +148,7 @@ export function OptionsForm({
   scope = "all",
   groupIds,
   headings = true,
+  inputMode,
   onChange,
   generateLength,
   acceptedByteLengths,
@@ -179,7 +183,7 @@ export function OptionsForm({
 
         return (
           <div key={group.id}>
-            {!headings ? null : group.collapsedByDefault ? (
+            {!headings || !group.label ? null : group.collapsedByDefault ? (
               <button
                 type="button"
                 onClick={() =>
@@ -215,6 +219,7 @@ export function OptionsForm({
                     <OptionControl
                       option={option}
                       value={options[option.id]}
+                      inputMode={inputMode}
                       generateLength={generateLength}
                       acceptedByteLengths={acceptedByteLengths}
                       // A `bytes` option's encoding lives in a synthesised companion
@@ -243,6 +248,7 @@ export function OptionsForm({
 interface OptionControlProps {
   option: OptionDef;
   value: OptionValue | undefined;
+  inputMode?: ByteSourceMode;
   bytesEncoding: BytesEncoding;
   supersededBy: string | undefined;
   catalogue: OptionCatalogue;
@@ -256,6 +262,7 @@ interface OptionControlProps {
 function OptionControl({
   option,
   value,
+  inputMode,
   bytesEncoding,
   supersededBy,
   catalogue,
@@ -384,32 +391,26 @@ function OptionControl({
     }
 
     case "text":
+      if (option.arg?.multiline) {
+        return (
+          <MultilineTextControl
+            option={option}
+            value={value}
+            parentInputMode={inputMode}
+            onChange={onChange}
+          />
+        );
+      }
       return (
-        // Inline unless it is a textarea: a polynomial is six characters and reads as a row, a PEM
-        // key is twenty lines and cannot share one.
-        <Field option={option} problem={undefined} inline={!option.arg?.multiline}>
-          {option.arg?.multiline ? (
-            // PEM keys and certificates. A single-line input for these is unusable.
-            <textarea
-              value={typeof value === "string" ? value : ""}
-              placeholder={option.arg.placeholder}
-              rows={option.arg.rows ?? 6}
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              onChange={(event) => onChange(option.id, event.target.value || undefined)}
-              className={cn(inputClass(false), "w-full resize-y whitespace-pre font-mono")}
-            />
-          ) : (
-            <input
-              type="text"
-              value={typeof value === "string" ? value : ""}
-              placeholder={option.arg?.placeholder}
-              spellCheck={false}
-              onChange={(event) => onChange(option.id, event.target.value || undefined)}
-              className={inputClass(false)}
-            />
-          )}
+        <Field option={option} problem={undefined} inline={true}>
+          <input
+            type="text"
+            value={typeof value === "string" ? value : ""}
+            placeholder={option.arg?.placeholder}
+            spellCheck={false}
+            onChange={(event) => onChange(option.id, event.target.value || undefined)}
+            className={inputClass(false)}
+          />
         </Field>
       );
 
@@ -435,7 +436,7 @@ function OptionControl({
               className="shrink-0"
             />
           }
-          {...(option.arg?.multiline ? { multiline: true, rows: option.arg.rows ?? 6 } : {})}
+          {...(option.arg?.multiline ? { multiline: true, rows: option.arg.rows ?? 10 } : {})}
         />
       );
 
@@ -461,6 +462,202 @@ function OptionControl({
         />
       );
   }
+}
+
+/**
+ * A multi-line text control (such as a PEM certificate or private key).
+ *
+ * Supports both Text and File input modes:
+ * - In Text mode: Renders a matching 10-row textarea with identical typography and padding.
+ * - In File mode: Renders the same drag-and-drop / Choose File dropzone as the primary input panel.
+ *
+ * Aligns with the parent input's mode when in File mode, and provides a Source selector so
+ * users can choose files for both inputs or mix text and files.
+ */
+function MultilineTextControl({
+  option,
+  value,
+  parentInputMode,
+  onChange,
+}: {
+  option: OptionDef;
+  value: OptionValue | undefined;
+  parentInputMode?: ByteSourceMode;
+  onChange: (id: string, value: OptionValue | undefined) => void;
+}) {
+  const [mode, setMode] = useState<"text" | "file">(
+    parentInputMode === "file" ? "file" : "text",
+  );
+  const [dragging, setDragging] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<{ name: string; size: number } | undefined>();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textValue = typeof value === "string" ? value : "";
+
+  // Mirror the parent workbench source in both directions.
+  // One-way sync (only file→file) left the secondary stuck in File mode after
+  // the user toggled the main source back to Text.
+  useEffect(() => {
+    setMode(parentInputMode === "file" ? "file" : "text");
+  }, [parentInputMode]);
+
+  const takeFile = (file: File | undefined) => {
+    if (!file) return;
+    setSelectedFile({ name: file.name, size: file.size });
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        onChange(option.id, reader.result);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const byteLength = textValue ? new TextEncoder().encode(textValue).length : undefined;
+  const sizeDescription =
+    mode === "file"
+      ? selectedFile
+        ? `${selectedFile.name} — ${formatBytes(selectedFile.size)}`
+        : "No file chosen"
+      : byteLength !== undefined
+        ? formatBytes(byteLength)
+        : "Nothing entered yet.";
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label
+          option={option}
+          className="text-xs font-semibold text-slate-800 dark:text-slate-200"
+        />
+        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          {sizeDescription}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
+          Source
+          <select
+            aria-label={`${option.label} source`}
+            value={mode}
+            onChange={(event) => setMode(event.target.value as "text" | "file")}
+            className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-full dark:border-slate-700 dark:bg-slate-950"
+          >
+            <option value="text">Text</option>
+            <option value="file">File</option>
+          </select>
+        </label>
+
+        <div className="flex items-center gap-1.5 ml-auto shrink-0">
+          <CopyIconButton
+            value={() => textValue}
+            writeClipboard={(text) => platform().copyToClipboard(text)}
+            disabled={!textValue || mode === "file"}
+            aria-label={`Copy ${option.label.toLowerCase()}`}
+            title={
+              mode === "file"
+                ? "Nothing to copy: a file is read from disk rather than into the box."
+                : !textValue
+                  ? `Nothing to copy: ${option.label.toLowerCase()} is empty.`
+                  : `Copy ${option.label.toLowerCase()}`
+            }
+          />
+          <ClearButton
+            disabled={mode === "file" ? !selectedFile : !textValue}
+            onClick={() => {
+              setSelectedFile(undefined);
+              onChange(option.id, undefined);
+            }}
+            aria-label={mode === "file" ? "Remove this file" : `Clear ${option.label.toLowerCase()}`}
+            title={
+              mode === "file"
+                ? "Forget this file. The source stays on File."
+                : "Empty the box above. The source stays as it is."
+            }
+          />
+        </div>
+      </div>
+
+      {mode === "file" ? (
+        <div
+          data-ocs-dropzone=""
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            takeFile(event.dataTransfer.files[0]);
+          }}
+          className={cn(
+            "flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-8 text-center transition-colors",
+            dragging
+              ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20"
+              : "border-slate-300 dark:border-slate-700",
+          )}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(event) => takeFile(event.target.files?.[0])}
+          />
+          {selectedFile ? (
+            <>
+              <p className="font-mono text-xs break-all">{selectedFile.name}</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {formatBytes(selectedFile.size)}
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Drop a file here, or choose one.
+            </p>
+          )}
+          <Button size="sm" type="button" onClick={() => fileInputRef.current?.click()}>
+            {selectedFile ? "Choose another" : "Choose file"}
+          </Button>
+          <p className="max-w-md text-[11px] text-slate-500 dark:text-slate-400">
+            This tool reads the file into memory to check against the certificate.
+          </p>
+        </div>
+      ) : (
+        <textarea
+          value={textValue}
+          placeholder={option.arg?.placeholder}
+          rows={option.arg?.rows ?? 10}
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes("Files")) {
+              event.preventDefault();
+            }
+          }}
+          onDrop={(event) => {
+            if (event.dataTransfer.files.length > 0) {
+              event.preventDefault();
+              takeFile(event.dataTransfer.files[0]);
+            }
+          }}
+          onChange={(event) => onChange(option.id, event.target.value || undefined)}
+          className={cn(
+            "w-full resize-y rounded-md border px-3 py-2 font-mono text-xs leading-relaxed",
+            "border-slate-300 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100",
+            "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600",
+          )}
+        />
+      )}
+
+      {option.summary && (
+        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          {option.summary}
+        </p>
+      )}
+    </div>
+  );
 }
 
 /**

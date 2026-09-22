@@ -12,8 +12,11 @@ import {
   OPTION_ACME_DOMAIN,
   OPTION_ACME_TOKEN,
   OPTION_ACME_ACCOUNT_KEY,
+  OPTION_PRIVATE_KEY,
+  OPTION_COMPARISON_CERT,
   SPEC_VERSION,
 } from "./pure";
+import { RSA_CERTIFICATE_PEM, RSA_PRIVATE_KEY_PEM } from "./samples";
 import type { CertificateSpec } from "./spec";
 
 export function createSpec(options?: { variant?: string }): CertificateSpec {
@@ -81,6 +84,10 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts[OPTION_ACME_DOMAIN] = "example.com";
     opts[OPTION_ACME_TOKEN] = "evaGxfADs6pSRb2LAv9IZf17Dt3juxGJ-PCt92wr-oA";
     opts[OPTION_ACME_ACCOUNT_KEY] = "kRLr_6fsVn8_93J9l7Xp89V44W5R5-kZ3v3Y1b2_ABC";
+  } else if (variant === "cert-matcher") {
+    opts[OPTION_PRIVATE_KEY] = RSA_PRIVATE_KEY_PEM;
+  } else if (variant === "cert-diff") {
+    opts[OPTION_COMPARISON_CERT] = RSA_CERTIFICATE_PEM;
   }
 
   return {

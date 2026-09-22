@@ -297,18 +297,18 @@ export function samplesFor(toolId: string): ToolSample[] {
       return [
         {
           id: "matched-keypair",
-          label: "Matching RSA-2048 Certificate & Private Key",
-          note: "Certificate and its exact mathematically matching PKCS#8 private key",
-          text: SAMPLE_MATCHING_KEYPAIR_PEM,
+          label: "Matching RSA-2048 Certificate",
+          note: "Certificate paired with the matching private key in the second input box",
+          text: RSA_CERTIFICATE_PEM,
         },
       ];
     case "cert-diff":
       return [
         {
           id: "cert-comparison",
-          label: "Certificate Renewal Comparison",
-          note: "Side-by-side comparison of two certificates to audit renewals, dates, and keys",
-          text: SAMPLE_DIFF_PAIR_PEM,
+          label: "Original Certificate (Renewal Comparison)",
+          note: "Primary certificate compared side-by-side against the second certificate input",
+          text: SAMPLE_2TIER_SERVER_PEM,
         },
       ];
     case "csr-signer":

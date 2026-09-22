@@ -137,7 +137,11 @@ export async function verifyCertificateKeyPair(
           certDer = blocks[0].bytes;
         }
       } else {
-        certDer = detectInputBytes(certOrCsrInput).der;
+        try {
+          certDer = detectInputBytes(certOrCsrInput).der;
+        } catch {
+          throw new Error("No valid X.509 Certificate or CSR found in the provided input (expected PEM or DER).");
+        }
       }
     } else {
       certDer = certOrCsrInput;
@@ -148,7 +152,11 @@ export async function verifyCertificateKeyPair(
       if (keyBlocks.length > 0 && keyBlocks[0]) {
         rawKeyDer = keyBlocks[0].bytes;
       } else {
-        rawKeyDer = detectInputBytes(keyInput).der;
+        try {
+          rawKeyDer = detectInputBytes(keyInput).der;
+        } catch {
+          throw new Error("No valid private key found in key input (expected PEM or DER).");
+        }
       }
     } else {
       rawKeyDer = keyInput;

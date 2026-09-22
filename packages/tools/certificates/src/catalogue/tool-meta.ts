@@ -8,20 +8,6 @@ export interface CertificateToolMeta {
 
 export const CERTIFICATE_TOOLS: readonly CertificateToolMeta[] = [
   {
-    id: "x509",
-    label: "X.509 Certificate",
-    category: "Parser",
-    summary: "Inspect and parse X.509 TLS/SSL certificates in PEM or DER format.",
-    tags: ["tls", "ssl", "x509", "certificate", "pki", "der", "pem", "crt"],
-  },
-  {
-    id: "csr",
-    label: "CSR (PKCS#10)",
-    category: "Parser",
-    summary: "Parse and verify PKCS#10 Certificate Signing Requests in PEM or DER format.",
-    tags: ["csr", "pkcs10", "pki", "request", "tls", "pem", "der"],
-  },
-  {
     id: "cert-creator",
     label: "Certificate Creator",
     category: "Creator",
@@ -36,11 +22,25 @@ export const CERTIFICATE_TOOLS: readonly CertificateToolMeta[] = [
     tags: ["csr", "pkcs10", "creator", "generator", "pki", "request", "tls", "san"],
   },
   {
-    id: "cert-converter",
-    label: "Certificate Converter",
-    category: "Conversion",
-    summary: "Convert certificates and keys between PEM and DER formats, extract public keys, and inspect certificate chains.",
-    tags: ["pem", "der", "convert", "x509", "spki", "chain", "bundle"],
+    id: "csr-signer",
+    label: "CSR Signer (Micro-CA)",
+    category: "Creator",
+    summary: "Sign PKCS#10 CSRs in-browser using a custom CA or generate an ephemeral root CA to issue verified certificates.",
+    tags: ["csr", "signer", "ca", "micro-ca", "pki", "issue", "tls", "x509"],
+  },
+  {
+    id: "x509",
+    label: "X.509 Certificate",
+    category: "Parser",
+    summary: "Inspect and parse X.509 TLS/SSL certificates in PEM or DER format.",
+    tags: ["tls", "ssl", "x509", "certificate", "pki", "der", "pem", "crt"],
+  },
+  {
+    id: "csr",
+    label: "CSR (PKCS#10)",
+    category: "Parser",
+    summary: "Parse and verify PKCS#10 Certificate Signing Requests in PEM or DER format.",
+    tags: ["csr", "pkcs10", "pki", "request", "tls", "pem", "der"],
   },
   {
     id: "crl",
@@ -48,6 +48,13 @@ export const CERTIFICATE_TOOLS: readonly CertificateToolMeta[] = [
     category: "Parser",
     summary: "Inspect and parse RFC 5280 X.509 v2 Certificate Revocation Lists (CRL) in PEM or DER format.",
     tags: ["crl", "revocation", "x509", "pki", "tls", "der", "pem"],
+  },
+  {
+    id: "cert-converter",
+    label: "Certificate Converter",
+    category: "Conversion",
+    summary: "Convert certificates and keys between PEM and DER formats, extract public keys, and inspect certificate chains.",
+    tags: ["pem", "der", "convert", "x509", "spki", "chain", "bundle"],
   },
   {
     id: "cert-verifier",
@@ -69,13 +76,6 @@ export const CERTIFICATE_TOOLS: readonly CertificateToolMeta[] = [
     category: "Analysis",
     summary: "Side-by-side visual comparison and audit of two X.509 certificates to verify renewals and inspect changes.",
     tags: ["diff", "compare", "renewal", "x509", "certificate", "sans", "audit"],
-  },
-  {
-    id: "csr-signer",
-    label: "CSR Signer (Micro-CA)",
-    category: "Creator",
-    summary: "Sign PKCS#10 CSRs in-browser using a custom CA or generate an ephemeral root CA to issue verified certificates.",
-    tags: ["csr", "signer", "ca", "micro-ca", "pki", "issue", "tls", "x509"],
   },
   {
     id: "ocsp",

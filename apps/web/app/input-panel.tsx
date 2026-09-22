@@ -340,6 +340,26 @@ export function InputPanel({
                 data-ocs-input=""
                 value={input.text}
                 onChange={(event) => onChange({ ...input, text: event.target.value })}
+                onDragOver={(event) => {
+                  if (event.dataTransfer.types.includes("Files")) {
+                    event.preventDefault();
+                  }
+                }}
+                onDrop={(event) => {
+                  if (event.dataTransfer.files.length > 0) {
+                    event.preventDefault();
+                    const file = event.dataTransfer.files[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === "string") {
+                          onChange({ ...input, text: reader.result });
+                        }
+                      };
+                      reader.readAsText(file);
+                    }
+                  }
+                }}
                 spellCheck={false}
                 // Autocorrect and capitalisation on a hex field would silently alter
                 // the bytes being hashed.

@@ -485,6 +485,7 @@ export function ToolWorkbench({
                 scope="input"
                 generateLength={generateLength}
                 acceptedByteLengths={acceptedByteLengths}
+                inputMode={input.mode}
                 onChange={setOptionValue}
               />
             ) : undefined

@@ -404,6 +404,9 @@ importers:
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.3.0
+      '@noble/post-quantum':
+        specifier: 0.7.0
+        version: 0.7.0
       '@ocs/contracts':
         specifier: workspace:*
         version: link:../../contracts

@@ -44,8 +44,16 @@ export function diffCertificates(
       }
     }
   } else {
-    cert1Der = typeof cert1Input === "string" ? detectInputBytes(cert1Input).der : cert1Input;
-    cert2Der = typeof cert2Input === "string" ? detectInputBytes(cert2Input).der : cert2Input;
+    try {
+      cert1Der = typeof cert1Input === "string" ? detectInputBytes(cert1Input).der : cert1Input;
+    } catch {
+      throw new Error("No valid X.509 Certificate found in primary input (expected PEM or DER).");
+    }
+    try {
+      cert2Der = typeof cert2Input === "string" ? detectInputBytes(cert2Input).der : cert2Input;
+    } catch {
+      throw new Error("No valid X.509 Certificate found in comparison input (expected PEM or DER).");
+    }
   }
 
   if (!cert1Der || !cert2Der) {

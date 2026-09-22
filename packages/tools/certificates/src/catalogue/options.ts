@@ -127,22 +127,23 @@ const PASSWORD: OptionDef<CertificateOptionGroup> = {
 const PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
   id: OPTION_PRIVATE_KEY,
   label: "Private Key (PEM)",
-  group: "convert",
+  group: "pair",
   kind: "text",
-  arg: { placeholder: "-----BEGIN PRIVATE KEY----- ...", multiline: true },
-  summary: "Optional separate private key to bundle into PKCS#12.",
-  detail: "If not included in the main input box, paste the private key PEM here to bundle it with the certificate.",
-  order: 30,
+  secret: true,
+  arg: { placeholder: "-----BEGIN PRIVATE KEY----- ...", multiline: true, rows: 10 },
+  summary: "Matching private key to check against the certificate or CSR above.",
+  detail: "Paste the private key (PKCS#8, PKCS#1 RSA, SEC1 EC, or OpenSSH) to verify whether it matches the certificate or CSR.",
+  order: 10,
 };
 
 const COMPARISON_CERT: OptionDef<CertificateOptionGroup> = {
   id: OPTION_COMPARISON_CERT,
   label: "Second Certificate (PEM)",
-  group: "convert",
+  group: "pair",
   kind: "text",
-  arg: { placeholder: "-----BEGIN CERTIFICATE----- ...", multiline: true },
-  summary: "Optional second certificate to diff against.",
-  detail: "If not included in the main input box alongside the first certificate, paste the second certificate PEM here.",
+  arg: { placeholder: "-----BEGIN CERTIFICATE----- ...", multiline: true, rows: 10 },
+  summary: "Second certificate to compare side-by-side against the certificate above.",
+  detail: "Paste the new or renewed certificate to highlight differences in dates, SANs, serial numbers, and keys.",
   order: 10,
 };
 
@@ -520,6 +521,13 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   CA_PRIVATE_KEY,
   CLIENT_COMMON_NAME,
   MTLS_P12_PASSWORD,
+  COMPARISON_CERT,
+  CA_MODE,
+  OCSP_OP,
+  ISSUER_CERT,
+  ACME_DOMAIN,
+  ACME_TOKEN,
+  ACME_ACCOUNT_KEY,
 ];
 
 export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalogue {

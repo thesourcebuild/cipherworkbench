@@ -223,8 +223,18 @@ export function formatHexColons(bytes: Uint8Array): string {
  * Parses an X.509 Certificate (PEM text or DER binary).
  */
 export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
-  const der = detectInputBytes(input).der;
-  const root = parseAsn1(der);
+  let der: Uint8Array;
+  try {
+    der = detectInputBytes(input).der;
+  } catch (err) {
+    throw new Error(`Invalid X.509 certificate data (expected PEM or DER): ${err instanceof Error ? err.message : String(err)}`);
+  }
+  let root;
+  try {
+    root = parseAsn1(der);
+  } catch (err) {
+    throw new Error(`Invalid X.509 certificate ASN.1 DER: ${err instanceof Error ? err.message : String(err)}`);
+  }
   if (root.tagNumber !== UniversalTag.Sequence || root.children.length < 3) {
     throw new Error("Invalid X.509 certificate: root element is not a sequence with at least 3 elements");
   }
