@@ -2,8 +2,9 @@ import { parseAsn1 } from "./asn1";
 import { parseCsr } from "./csr";
 import { detectInputBytes, encodePem, parseAllPem } from "./pem";
 import { decodePkcs7CertBundle, encodePkcs7CertBundle } from "./pkcs7";
-import { decodePkcs12Archive, encodePkcs12Archive } from "./pkcs12";
+import { decodePkcs12Archive, encodePkcs12Archive, inspectPkcs12 } from "./pkcs12";
 import { parseX509Certificate } from "./x509";
+import { exportToPpkV3 } from "../crypto/putty";
 
 export type ConverterOperation =
   | "auto"
@@ -15,6 +16,8 @@ export type ConverterOperation =
   | "pkcs7-to-pem"
   | "pem-to-pkcs12"
   | "pkcs12-to-pem"
+  | "pem-to-ppk"
+  | "pkcs12-inspect"
   | "extract-public-key"
   | "split-chain";
 
@@ -179,6 +182,47 @@ export async function convertCertificate(
       detectedType: "PKCS#12 Archive",
       text: combinedText,
       summary: `Extracted ${decoded.certs.length} certificate(s)${decoded.privateKey ? " and private key" : ""} from PKCS#12 archive.`,
+    };
+  }
+
+  if (op === "pem-to-ppk") {
+    const ppk = exportToPpkV3({ keyInput: input, comment: "cipherworkbench-key" });
+    return {
+      operation: "pem-to-ppk",
+      detectedType: `PuTTY Private Key (${ppk.keyType})`,
+      text: ppk.ppkText,
+      summary: `Exported private key to PuTTY Private Key v3 format (${ppk.keyType}, comment: ${ppk.comment}).`,
+    };
+  }
+
+  if (op === "pkcs12-inspect") {
+    const inspection = inspectPkcs12(input);
+    const lines = [
+      `### PKCS#12 Container Inspection Report`,
+      `- **Version**: PKCS#12 v${inspection.version}`,
+      `- **MAC Present**: ${inspection.hasMac ? "YES" : "NO"}`,
+      ...(inspection.macAlgorithm ? [`- **MAC Algorithm**: ${inspection.macAlgorithm}`] : []),
+      ...(inspection.macIterations ? [`- **MAC Iterations**: ${inspection.macIterations}`] : []),
+      ...(inspection.macSaltHex ? [`- **MAC Salt (hex)**: \`${inspection.macSaltHex}\``] : []),
+      `- **Certificates Found**: ${inspection.certCount}`,
+      `- **Private Key Present**: ${inspection.hasPrivateKey ? "YES" : "NO"}`,
+      `- **Encrypted Bags**: ${inspection.isEncrypted ? "YES" : "NO"}`,
+      "",
+      `#### SafeBags Structure (${inspection.bags.length} bags):`,
+    ];
+    for (let i = 0; i < inspection.bags.length; i++) {
+      const b = inspection.bags[i]!;
+      lines.push(
+        `- **Bag #${i + 1}**: \`${b.bagType}\` (OID: ${b.bagTypeOid})` +
+          (b.friendlyName ? ` - FriendlyName: "${b.friendlyName}"` : "") +
+          (b.localKeyIdHex ? ` - LocalKeyID: 0x${b.localKeyIdHex}` : ""),
+      );
+    }
+    return {
+      operation: "pkcs12-inspect",
+      detectedType: "PKCS#12 Archive",
+      text: lines.join("\n"),
+      summary: inspection.summary,
     };
   }
 

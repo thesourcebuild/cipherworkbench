@@ -56,6 +56,41 @@ export const CERTIFICATE_TOOLS: readonly CertificateToolMeta[] = [
     summary: "Verify full X.509 certificate chains, validate trust paths, digital signatures, validity dates, and AKI/SKI linkages.",
     tags: ["verify", "chain", "path", "pki", "trust", "x509", "tls", "root", "intermediate"],
   },
+  {
+    id: "cert-matcher",
+    label: "Cert & Key Matcher",
+    category: "Verification",
+    summary: "Verify whether a private key mathematically and cryptographically matches an X.509 certificate or CSR.",
+    tags: ["verify", "matcher", "keypair", "private-key", "certificate", "csr", "modulus"],
+  },
+  {
+    id: "cert-diff",
+    label: "Certificate Diff",
+    category: "Analysis",
+    summary: "Side-by-side visual comparison and audit of two X.509 certificates to verify renewals and inspect changes.",
+    tags: ["diff", "compare", "renewal", "x509", "certificate", "sans", "audit"],
+  },
+  {
+    id: "csr-signer",
+    label: "CSR Signer (Micro-CA)",
+    category: "Creator",
+    summary: "Sign PKCS#10 CSRs in-browser using a custom CA or generate an ephemeral root CA to issue verified certificates.",
+    tags: ["csr", "signer", "ca", "micro-ca", "pki", "issue", "tls", "x509"],
+  },
+  {
+    id: "ocsp",
+    label: "OCSP Inspector & Builder",
+    category: "Protocols",
+    summary: "Inspect RFC 6960 OCSP revocation responses, build OCSP queries, and generate offline OCSP staple bundles.",
+    tags: ["ocsp", "revocation", "staple", "rfc6960", "tls", "pki", "x509"],
+  },
+  {
+    id: "acme",
+    label: "ACME Challenge Calculator",
+    category: "Cloud-Native",
+    summary: "Calculate RFC 8555 HTTP-01 and DNS-01 challenge digests, TXT records, and cross-platform verification scripts.",
+    tags: ["acme", "letsencrypt", "dns01", "http01", "rfc8555", "tls", "zerossl", "challenge"],
+  },
 ] as const;
 
 export const CERTIFICATE_TOOL_IDS = CERTIFICATE_TOOLS.map((t) => t.id);

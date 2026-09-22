@@ -32,6 +32,13 @@ import {
   OPTION_MTLS_P12_PASSWORD,
   OPTION_PASSWORD,
   OPTION_PRIVATE_KEY,
+  OPTION_COMPARISON_CERT,
+  OPTION_CA_MODE,
+  OPTION_OCSP_OP,
+  OPTION_ISSUER_CERT,
+  OPTION_ACME_DOMAIN,
+  OPTION_ACME_TOKEN,
+  OPTION_ACME_ACCOUNT_KEY,
 } from "../pure";
 import type { CertificateOptionGroup } from "./groups";
 import type { CertificateToolMeta } from "./tool-meta";
@@ -94,6 +101,8 @@ const CONVERTER_OP: OptionDef<CertificateOptionGroup> = {
     { value: "pkcs7-to-pem", label: "PKCS#7 to PEM", summary: "Extracts certificates from PKCS#7 / P7B bundle into PEM" },
     { value: "pem-to-pkcs12", label: "PEM to PKCS#12 (.pfx / .p12)", summary: "Packages certificate + private key into PKCS#12 archive" },
     { value: "pkcs12-to-pem", label: "PKCS#12 to PEM", summary: "Extracts certificate and private key from PKCS#12 (.pfx) archive" },
+    { value: "pkcs12-inspect", label: "Inspect PKCS#12 (.pfx)", summary: "Inspects SafeBags, attributes, and MAC of PKCS#12 container" },
+    { value: "pem-to-ppk", label: "Private Key to PuTTY (.ppk v3)", summary: "Converts RSA, ECDSA, or Ed25519 key to PuTTY v3 format" },
     { value: "extract-public-key", label: "Extract Public Key", summary: "Extracts SubjectPublicKeyInfo (SPKI) as PEM" },
     { value: "split-chain", label: "Split Chain / Bundle", summary: "Splits multiple concatenated PEM certs into separate blocks" },
   ],
@@ -124,6 +133,17 @@ const PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
   summary: "Optional separate private key to bundle into PKCS#12.",
   detail: "If not included in the main input box, paste the private key PEM here to bundle it with the certificate.",
   order: 30,
+};
+
+const COMPARISON_CERT: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_COMPARISON_CERT,
+  label: "Second Certificate (PEM)",
+  group: "convert",
+  kind: "text",
+  arg: { placeholder: "-----BEGIN CERTIFICATE----- ...", multiline: true },
+  summary: "Optional second certificate to diff against.",
+  detail: "If not included in the main input box alongside the first certificate, paste the second certificate PEM here.",
+  order: 10,
 };
 
 // Creator Options
@@ -204,9 +224,12 @@ const KEY_TYPE: OptionDef<CertificateOptionGroup> = {
     { value: "rsa-2048", label: "RSA 2048", summary: "RSA 2048-bit with PKCS#1 v1.5 padding" },
     { value: "rsa-4096", label: "RSA 4096", summary: "RSA 4096-bit - Extended security RSA" },
     { value: "ed25519", label: "Ed25519", summary: "Edwards-curve Ed25519 signature algorithm (RFC 8410)" },
+    { value: "ml-dsa-44", label: "ML-DSA-44 (Post-Quantum FIPS 204)", summary: "NIST Security Level 2 lattice-based signature scheme" },
+    { value: "ml-dsa-65", label: "ML-DSA-65 (Post-Quantum FIPS 204)", summary: "NIST Security Level 3 lattice-based signature scheme" },
+    { value: "ml-dsa-87", label: "ML-DSA-87 (Post-Quantum FIPS 204)", summary: "NIST Security Level 5 lattice-based signature scheme" },
   ],
   summary: "Cryptographic algorithm and key size.",
-  detail: "Select ECDSA, RSA, or Ed25519 for key pair generation and digital signatures.",
+  detail: "Select ECDSA, RSA, Ed25519, or FIPS 204 ML-DSA for key pair generation and digital signatures.",
   order: 10,
 };
 
@@ -313,6 +336,79 @@ const ISSUANCE_MODE: OptionDef<CertificateOptionGroup> = {
   summary: "Issue a self-signed certificate or sign with an existing CA authority.",
   detail: "When CA-Signed is selected, provide the issuing CA certificate and private key in the CA Signing Authority section below.",
   order: 20,
+};
+
+const CA_MODE: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CA_MODE,
+  label: "CA Mode",
+  group: "ca",
+  kind: "enum",
+  choices: [
+    { value: "ephemeral-ca", label: "Ephemeral Micro-CA", summary: "Automatically generate a fresh Root CA to sign this CSR" },
+    { value: "custom-ca", label: "Custom CA", summary: "Use provided CA certificate and CA private key" },
+  ],
+  summary: "How the CSR is signed.",
+  detail: "Select whether to use an ephemeral in-browser Root CA or sign with an existing custom CA.",
+  order: 5,
+};
+
+const OCSP_OP: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_OCSP_OP,
+  label: "OCSP Operation",
+  group: "format",
+  kind: "enum",
+  choices: [
+    { value: "inspect-response", label: "Inspect Response", summary: "Parse and decode an RFC 6960 OCSP Response or Staple" },
+    { value: "build-request", label: "Build OCSP Request", summary: "Construct an OCSP query and CertID from a certificate and its issuer" },
+    { value: "generate-staple", label: "Generate OCSP Staple", summary: "Produce an authentic offline OCSP Staple response bundle" },
+  ],
+  summary: "Action to perform on OCSP data.",
+  detail: "Select whether to inspect an existing OCSP revocation response, generate a query for an OCSP responder, or build an offline staple.",
+  order: 5,
+};
+
+const ISSUER_CERT: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_ISSUER_CERT,
+  label: "Issuer CA Certificate (PEM)",
+  group: "ca",
+  kind: "text",
+  arg: { placeholder: "-----BEGIN CERTIFICATE-----\n...", multiline: true },
+  summary: "Issuing CA certificate required to compute RFC 6960 CertID hashes.",
+  detail: "The issuing Certificate Authority certificate needed to hash issuer Name and Key for OCSP requests.",
+  order: 15,
+};
+
+const ACME_DOMAIN: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_ACME_DOMAIN,
+  label: "Domain Name",
+  group: "subject",
+  kind: "text",
+  arg: { placeholder: "example.com" },
+  summary: "Target fully qualified domain name (FQDN) for ACME validation.",
+  detail: "The domain name being certified (e.g. example.com or *.example.com). Wildcard prefix is automatically stripped for DNS-01 TXT record calculation.",
+  order: 1,
+};
+
+const ACME_TOKEN: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_ACME_TOKEN,
+  label: "Challenge Token",
+  group: "format",
+  kind: "text",
+  arg: { placeholder: "evaGxfADs6pSRb2LAv9IZf17Dt3juxGJ-PCt92wr-oA" },
+  summary: "Challenge token provided by the ACME server.",
+  detail: "The random challenge token issued by the ACME directory server (e.g., Let's Encrypt / ZeroSSL) for HTTP-01 or DNS-01 validation.",
+  order: 2,
+};
+
+const ACME_ACCOUNT_KEY: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_ACME_ACCOUNT_KEY,
+  label: "Account Key or Thumbprint",
+  group: "key",
+  kind: "text",
+  arg: { placeholder: "PEM Private/Public Key, JWK JSON, or 43-char Thumbprint", multiline: true },
+  summary: "ACME Account Key or RFC 7638 JWK Thumbprint.",
+  detail: "Your ACME account private key (PEM), public key, JWK JSON object, or a precomputed 43-character Base64URL JWK thumbprint.",
+  order: 3,
 };
 
 const CA_CERT: OptionDef<CertificateOptionGroup> = {
@@ -475,6 +571,25 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
       CLIENT_AUTH,
       CODE_SIGNING,
     );
+  } else if (meta.id === "cert-matcher") {
+    options.push(PRIVATE_KEY);
+  } else if (meta.id === "cert-diff") {
+    options.push(COMPARISON_CERT);
+  } else if (meta.id === "csr-signer") {
+    options.push(
+      CA_MODE,
+      CA_CERT,
+      CA_PRIVATE_KEY,
+      VALIDITY_DAYS,
+      SAN,
+      SERVER_AUTH,
+      CLIENT_AUTH,
+      CODE_SIGNING,
+    );
+  } else if (meta.id === "ocsp") {
+    options.push(OCSP_OP, ISSUER_CERT);
+  } else if (meta.id === "acme") {
+    options.push(ACME_DOMAIN, ACME_TOKEN, ACME_ACCOUNT_KEY);
   }
 
   return createOptionCatalogue(options);

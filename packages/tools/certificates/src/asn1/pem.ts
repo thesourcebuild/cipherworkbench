@@ -63,20 +63,21 @@ export type InputFormatKind = "pem" | "der" | "hex" | "unknown";
 /**
  * Detects whether the input is PEM, hex-encoded DER, or raw DER bytes.
  */
-export function detectInputBytes(input: Uint8Array): {
+export function detectInputBytes(input: Uint8Array | string): {
   kind: InputFormatKind;
   der: Uint8Array;
   label?: string;
   blocks?: PemBlock[];
 } {
-  if (input.length === 0) {
+  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  if (bytes.length === 0) {
     throw new Error("Input is empty");
   }
 
   // Try decoding as UTF-8 string first to check for PEM or Hex
   let text = "";
   try {
-    text = new TextDecoder("utf-8", { fatal: false }).decode(input).trim();
+    text = typeof input === "string" ? input.trim() : new TextDecoder("utf-8", { fatal: false }).decode(bytes).trim();
   } catch {
     // Binary
   }
@@ -108,11 +109,24 @@ export function detectInputBytes(input: Uint8Array): {
     }
   }
 
+  // Check if it is a pure Base64 string that decodes to ASN.1 DER (starts with 0x30)
+  const cleanB64 = text.replace(/\s+/g, "");
+  if (/^[0-9a-zA-Z+/=]+$/.test(cleanB64) && cleanB64.length >= 16) {
+    try {
+      const decoded = base64.decode(cleanB64);
+      if (decoded.length > 0 && decoded[0] === 0x30) {
+        return { kind: "der", der: decoded };
+      }
+    } catch {
+      // Fall through
+    }
+  }
+
   // Check if raw bytes start with 0x30 (ASN.1 SEQUENCE)
-  if (input.length > 0 && input[0] === 0x30) {
-    return { kind: "der", der: input };
+  if (bytes.length > 0 && bytes[0] === 0x30) {
+    return { kind: "der", der: bytes };
   }
 
   // Fallback: try raw bytes
-  return { kind: "unknown", der: input };
+  return { kind: "unknown", der: bytes };
 }

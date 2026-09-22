@@ -7,6 +7,11 @@ import {
   OPTION_ISSUANCE_MODE,
   OPTION_PKI_HIERARCHY,
   OPTION_VERIFY_CSR_SIG,
+  OPTION_CA_MODE,
+  OPTION_OCSP_OP,
+  OPTION_ACME_DOMAIN,
+  OPTION_ACME_TOKEN,
+  OPTION_ACME_ACCOUNT_KEY,
   SPEC_VERSION,
 } from "./pure";
 import type { CertificateSpec } from "./spec";
@@ -64,6 +69,18 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts["serverAuth"] = true;
     opts["clientAuth"] = true;
     opts["codeSigning"] = false;
+  } else if (variant === "csr-signer") {
+    opts[OPTION_CA_MODE] = "ephemeral-ca";
+    opts["validityDays"] = "365";
+    opts["serverAuth"] = true;
+    opts["clientAuth"] = true;
+    opts["codeSigning"] = false;
+  } else if (variant === "ocsp") {
+    opts[OPTION_OCSP_OP] = "inspect-response";
+  } else if (variant === "acme") {
+    opts[OPTION_ACME_DOMAIN] = "example.com";
+    opts[OPTION_ACME_TOKEN] = "evaGxfADs6pSRb2LAv9IZf17Dt3juxGJ-PCt92wr-oA";
+    opts[OPTION_ACME_ACCOUNT_KEY] = "kRLr_6fsVn8_93J9l7Xp89V44W5R5-kZ3v3Y1b2_ABC";
   }
 
   return {

@@ -9,8 +9,14 @@ import { createCsr } from "./asn1/create-csr";
 import { generateMtlsSuite } from "./asn1/mtls";
 import { parseX509Crl } from "./asn1/crl";
 import { verifyCertificateChain } from "./asn1/chain-verifier";
+import { verifyCertificateKeyPair } from "./asn1/cert-matcher";
+import { diffCertificates } from "./asn1/cert-diff";
+import { signCsr } from "./asn1/csr-signer";
+import { buildOcspRequest, parseOcspResponse, createMockOcspResponse } from "./asn1/ocsp";
+import { calculateAcmeChallenges } from "./crypto/acme";
 import { spkiToOpenSsh } from "./crypto/openssh";
 import { spkiToJwk } from "./crypto/jwk";
+import { generateTerraformConfig, generateAnsiblePlaybook } from "./export/iac";
 import {
   generateCertCommandScripts,
   generateMtlsCommandScripts,
@@ -44,6 +50,13 @@ import {
   readMtlsP12Password,
   readPkiHierarchy,
   readIntermediateCommonName,
+  readComparisonCert,
+  readCaMode,
+  readOcspOp,
+  readIssuerCert,
+  readAcmeDomain,
+  readAcmeToken,
+  readAcmeAccountKey,
 } from "./pure";
 import type { CertificateSpec } from "./spec";
 
@@ -359,6 +372,14 @@ export async function computeCertificate(
           content: JSON.stringify(spkiToJwk(created.keyBundle.spkiBytes, keyType), null, 2),
         },
         {
+          name: "main.tf",
+          content: generateTerraformConfig({ certFilename: "cert.crt", keyFilename: "cert.key", caFilename: "ca.crt" }),
+        },
+        {
+          name: "deploy-playbook.yaml",
+          content: generateAnsiblePlaybook({ certFilename: "cert.crt", keyFilename: "cert.key", caFilename: "ca.crt" }),
+        },
+        {
           name: "cert-info.txt",
           content: [
             `Subject: ${created.subjectDn}`,
@@ -482,6 +503,464 @@ export async function computeCertificate(
     };
   }
 
+  if (spec.variant === "cert-matcher") {
+    try {
+      const text = new TextDecoder().decode(input);
+      const privateKeyOpt = readPrivateKey(spec.options);
+      const res = await verifyCertificateKeyPair(text, privateKeyOpt || undefined);
+
+      const fields: ToolResultField[] = [
+        {
+          label: "Pair Match Status",
+          value: res.matches
+            ? "MATCHED (Mathematical & Cryptographic Verification Successful)"
+            : "MISMATCH (Keys Do Not Match)",
+          hint: res.summary,
+        },
+        {
+          label: "Target Type",
+          value: res.targetType === "certificate" ? "X.509 Certificate" : "PKCS#10 CSR",
+        },
+        {
+          label: "Key Algorithm",
+          value: `${res.keyType.toUpperCase()} (${res.keyDetails})`,
+        },
+        {
+          label: "Cryptographic Probe",
+          value: res.details.probeVerified
+            ? "PASSED (Live sign & verify challenge verified)"
+            : "FAILED",
+        },
+        {
+          label: "Public Key Hash (Cert/CSR)",
+          value: res.fingerprints.certOrCsrPublicKeySha256,
+          hint: "SHA-256 hash of SubjectPublicKeyInfo (SPKI)",
+        },
+      ];
+
+      if (res.fingerprints.privateKeyDerivedPublicKeySha256) {
+        fields.push({
+          label: "Derived Public Key Hash (Key)",
+          value: res.fingerprints.privateKeyDerivedPublicKeySha256,
+          hint: "SHA-256 hash of public key derived from private key",
+        });
+      }
+
+      if (res.details.subjectDn) {
+        fields.push({ label: "Subject DN", value: res.details.subjectDn });
+      }
+      if (res.details.serialNumber) {
+        fields.push({ label: "Serial Number", value: `0x${res.details.serialNumber}` });
+      }
+      if (res.details.notAfter) {
+        fields.push({ label: "Expires", value: res.details.notAfter });
+      }
+
+      const working = [
+        "### Certificate & Private Key Matcher Report",
+        "",
+        `**Status**: ${res.matches ? "VALID KEYPAIR MATCH" : "KEYPAIR MISMATCH"}`,
+        "",
+        `- **Target Type**: ${res.targetType === "certificate" ? "X.509 Certificate" : "PKCS#10 CSR"}`,
+        `- **Key Algorithm**: ${res.keyType.toUpperCase()} (${res.keyDetails})`,
+        `- **Cryptographic Challenge**: ${res.details.probeVerified ? "Passed (Real signature challenge verified)" : "Failed"}`,
+        `- **Cert/CSR SPKI SHA-256**: \`${res.fingerprints.certOrCsrPublicKeySha256}\``,
+        ...(res.fingerprints.privateKeyDerivedPublicKeySha256
+          ? [`- **Private Key Derived SPKI SHA-256**: \`${res.fingerprints.privateKeyDerivedPublicKeySha256}\``]
+          : []),
+        ...(res.details.subjectDn ? [`- **Subject**: ${res.details.subjectDn}`] : []),
+        ...(res.details.serialNumber ? [`- **Serial**: \`0x${res.details.serialNumber}\``] : []),
+        ...(res.details.notAfter ? [`- **Expiry**: ${res.details.notAfter}`] : []),
+        "",
+        ...(res.errors.length > 0 ? ["#### Diagnostics / Errors", ...res.errors.map((e) => `- ${e}`)] : []),
+      ].join("\n");
+
+      return {
+        text: res.summary,
+        fields,
+        working,
+      };
+    } catch (err) {
+      return {
+        error: `Cert/Key matcher failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  if (spec.variant === "cert-diff") {
+    try {
+      const text = new TextDecoder().decode(input);
+      const comparisonOpt = readComparisonCert(spec.options);
+      const res = diffCertificates(text, comparisonOpt || undefined);
+
+      const fields: ToolResultField[] = [
+        {
+          label: "Diff Status",
+          value: res.isIdentical ? "Identical Certificates" : "Differences Detected",
+          hint: res.summary,
+        },
+        {
+          label: "Renewal Status",
+          value: res.isCleanRenewal
+            ? "Clean Renewal (Same Subject & SANs, Extended Validity)"
+            : res.isIdentical
+              ? "Exact Duplicate"
+              : "Modified Parameters",
+        },
+        {
+          label: "Public Key Rollover",
+          value: res.keyRolledOver
+            ? "Key Rolled Over (New Public Key Generated)"
+            : "Reused Key (Same SPKI Public Key)",
+        },
+        {
+          label: "SAN Evolution",
+          value: `+${res.addedSans.length} added, -${res.removedSans.length} removed, ${res.unchangedSans.length} retained`,
+        },
+      ];
+
+      return {
+        text: res.summary + "\n\n" + res.markdownTable,
+        fields,
+        working: res.markdownTable,
+      };
+    } catch (err) {
+      return {
+        error: `Certificate diff failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  if (spec.variant === "csr-signer") {
+    try {
+      const caMode = readCaMode(spec.options);
+      const caCertPem = readCaCert(spec.options);
+      const caPrivateKeyPem = readCaPrivateKey(spec.options);
+      const validityDays = readValidityDays(spec.options, 365);
+      const overrideSan = readSan(spec.options, "");
+      const serverAuth = readServerAuth(spec.options);
+      const clientAuth = readClientAuth(spec.options);
+      const codeSigning = readCodeSigning(spec.options);
+
+      const res = await signCsr({
+        csrInput: input,
+        caMode,
+        caCertPem,
+        caPrivateKeyPem,
+        validityDays,
+        overrideSan,
+        serverAuth,
+        clientAuth,
+        codeSigning,
+      });
+
+      const fields: ToolResultField[] = [
+        {
+          label: "Status",
+          value: "CSR Successfully Signed & Issued",
+          hint: `Signed by ${caMode === "custom-ca" ? "Custom CA" : "Ephemeral Micro-CA"}`,
+        },
+        { label: "Subject", value: res.subjectDn, hint: "Subject DN preserved from CSR" },
+        { label: "Issuer", value: res.issuerDn, hint: "Signing Certificate Authority" },
+        { label: "Serial Number", value: `0x${res.serialNumberHex}` },
+        {
+          label: "Validity",
+          value: `${validityDays} days (${res.notBefore.toISOString().split("T")[0]} to ${res.notAfter.toISOString().split("T")[0]})`,
+        },
+        {
+          label: "Subject Alternative Names",
+          value: res.sans.join(", ") || "(none)",
+        },
+        {
+          label: "Leaf Fingerprint (SHA-256)",
+          value: res.fingerprints.certSha256,
+        },
+        {
+          label: "CA Fingerprint (SHA-256)",
+          value: res.fingerprints.caSha256,
+        },
+      ];
+
+      const working = [
+        "### Certificate Signing Request (CSR) Signed Successfully",
+        "",
+        `**CA Mode**: ${caMode === "custom-ca" ? "Custom Certificate Authority" : "Ephemeral In-Browser Micro-CA (ECDSA P-256)"}`,
+        "",
+        `- **Subject**: ${res.subjectDn}`,
+        `- **Issuer**: ${res.issuerDn}`,
+        `- **Serial**: \`0x${res.serialNumberHex}\``,
+        `- **Validity Period**: ${validityDays} days`,
+        `- **Effective**: ${res.notBefore.toISOString()}`,
+        `- **Expires**: ${res.notAfter.toISOString()}`,
+        `- **SANs**: ${res.sans.join(", ") || "(none)"}`,
+        `- **Leaf SHA-256**: \`${res.fingerprints.certSha256}\``,
+        `- **CA SHA-256**: \`${res.fingerprints.caSha256}\``,
+        "",
+        "#### Verification Commands",
+        "```bash",
+        'openssl verify -CAfile "ca.crt" "cert.crt"',
+        "```",
+        "",
+        "```bash",
+        'openssl x509 -in "cert.crt" -text -noout',
+        "```",
+      ].join("\n");
+
+      const exportFiles = [
+        ...res.exportFiles,
+        {
+          name: "main.tf",
+          content: generateTerraformConfig({ certFilename: "cert.crt", keyFilename: "cert.key", caFilename: "ca.crt" }),
+        },
+        {
+          name: "deploy-playbook.yaml",
+          content: generateAnsiblePlaybook({ certFilename: "cert.crt", keyFilename: "cert.key", caFilename: "ca.crt" }),
+        },
+      ];
+
+      return {
+        text: res.certPem,
+        fields,
+        working,
+        files: exportFiles,
+      };
+    } catch (err) {
+      return {
+        error: `CSR signing failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  if (spec.variant === "ocsp") {
+    try {
+      const ocspOp = readOcspOp(spec.options);
+
+      if (ocspOp === "build-request") {
+        const issuerPem = readIssuerCert(spec.options);
+        if (!issuerPem || issuerPem.trim().length === 0) {
+          return {
+            error: "Building an OCSP Request requires the Issuer CA Certificate. Provide the issuer CA certificate in the options.",
+          };
+        }
+        const req = buildOcspRequest({
+          certInput: input,
+          issuerCertInput: issuerPem,
+          hashAlgorithm: "sha256",
+        });
+
+        const fields: ToolResultField[] = [
+          { label: "Operation", value: "RFC 6960 OCSP Request Built" },
+          { label: "Target Serial", value: `0x${req.certId.serialNumberHex}` },
+          { label: "Hash Algorithm", value: req.certId.hashAlgorithm.toUpperCase() },
+          { label: "Issuer Name Hash", value: req.certId.issuerNameHashHex },
+          { label: "Issuer Key Hash", value: req.certId.issuerKeyHashHex },
+          ...(req.ocspUrl ? [{ label: "AIA OCSP URL", value: req.ocspUrl }] : []),
+        ];
+
+        const working = [
+          "### RFC 6960 OCSP Request Generated",
+          "",
+          `- **Target Serial Number**: \`0x${req.certId.serialNumberHex}\``,
+          `- **Digest Algorithm**: ${req.certId.hashAlgorithm.toUpperCase()}`,
+          `- **Issuer Name SHA-256**: \`${req.certId.issuerNameHashHex}\``,
+          `- **Issuer Key SHA-256**: \`${req.certId.issuerKeyHashHex}\``,
+          ...(req.ocspUrl ? [`- **AIA OCSP Responder URL**: ${req.ocspUrl}`] : []),
+          "",
+          "#### OpenSSL Query Command",
+          "```bash",
+          req.opensslCommand,
+          "```",
+        ].join("\n");
+
+        return {
+          text: req.requestB64,
+          bytes: req.requestDer,
+          fields,
+          working,
+        };
+      }
+
+      if (ocspOp === "generate-staple") {
+        const issuerPem = readIssuerCert(spec.options);
+        const staple = createMockOcspResponse({
+          targetCertDer: detectInputBytes(input).der,
+          issuerCertDer: issuerPem ? detectInputBytes(issuerPem).der : detectInputBytes(input).der,
+          certStatus: "good",
+          validityHours: 48,
+        });
+
+        const fields: ToolResultField[] = [
+          { label: "Staple Status", value: "Generated Offline OCSP Staple Bundle" },
+          { label: "Certificate Status", value: "GOOD (Valid, Not Revoked)" },
+          { label: "Validity Window", value: "48 Hours" },
+        ];
+
+        return {
+          text: staple.b64,
+          bytes: staple.der,
+          fields,
+          working: "### Offline OCSP Staple Generated\n\nUse this binary DER bundle for Web Server TLS Stapling (e.g. `ssl_stapling_file` in Nginx).",
+        };
+      }
+
+      // Default: inspect-response
+      const res = parseOcspResponse(input);
+      const fields: ToolResultField[] = [
+        { label: "Response Status", value: res.responseStatus },
+        { label: "Number of Responses", value: `${res.responses.length}` },
+      ];
+
+      if (res.responderId) {
+        fields.push({ label: "Responder ID", value: res.responderId });
+      }
+      if (res.producedAt) {
+        fields.push({ label: "Produced At", value: res.producedAt.toISOString() });
+      }
+
+      const workingLines = [
+        "### RFC 6960 OCSP Response Report",
+        "",
+        `- **Response Status**: ${res.responseStatus}`,
+        ...(res.responderId ? [`- **Responder ID**: ${res.responderId}`] : []),
+        ...(res.producedAt ? [`- **Produced At**: ${res.producedAt.toISOString()}`] : []),
+        "",
+        "#### Certificate Statuses in Response:",
+      ];
+
+      for (let i = 0; i < res.responses.length; i++) {
+        const r = res.responses[i]!;
+        fields.push({
+          label: `Cert #${i + 1} Status`,
+          value: `${r.certStatus.toUpperCase()} (Serial: 0x${r.serialNumberHex})`,
+        });
+        workingLines.push(
+          `##### Response #${i + 1}`,
+          `- **Status**: ${r.certStatus.toUpperCase()}`,
+          `- **Serial Number**: \`0x${r.serialNumberHex}\``,
+          `- **This Update**: ${r.thisUpdate.toISOString()}`,
+          ...(r.nextUpdate ? [`- **Next Update**: ${r.nextUpdate.toISOString()}`] : []),
+          ...(r.revocationTime ? [`- **Revocation Time**: ${r.revocationTime.toISOString()}`] : []),
+          ...(r.revocationReason ? [`- **Revocation Reason**: ${r.revocationReason}`] : []),
+          "",
+        );
+      }
+
+      return {
+        text: res.summary,
+        bytes: res.rawDer,
+        fields,
+        working: workingLines.join("\n"),
+      };
+    } catch (err) {
+      return {
+        error: `OCSP processing failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  if (spec.variant === "acme") {
+    try {
+      const domain = readAcmeDomain(spec.options) || "example.com";
+      let token = readAcmeToken(spec.options);
+      let accountKey = readAcmeAccountKey(spec.options);
+
+      // If user typed token or key in input text, resolve it
+      if (input.length > 0) {
+        let inputText = "";
+        try {
+          inputText = new TextDecoder("utf-8").decode(input).trim();
+        } catch {
+          // ignore
+        }
+        if (inputText) {
+          if (!token && /^[0-9a-zA-Z_-]{16,}$/.test(inputText)) {
+            token = inputText;
+          } else if (!accountKey && (inputText.includes("BEGIN") || inputText.startsWith("{"))) {
+            accountKey = inputText;
+          }
+        }
+      }
+
+      if (!token) {
+        token = "evaGxfADs6pSRb2LAv9IZf17Dt3juxGJ-PCt92wr-oA";
+      }
+      if (!accountKey) {
+        accountKey = "kRLr_6fsVn8_93J9l7Xp89V44W5R5-kZ3v3Y1b2_ABC";
+      }
+
+      const res = calculateAcmeChallenges({
+        domain,
+        token,
+        accountKeyOrThumbprint: accountKey,
+      });
+
+      const fields: ToolResultField[] = [
+        { label: "Target Domain", value: res.domain },
+        { label: "DNS-01 TXT Name", value: res.dns01.recordName },
+        { label: "DNS-01 TXT Value", value: res.dns01.recordValue },
+        { label: "HTTP-01 URL", value: res.http01.fullUrl },
+        { label: "JWK Thumbprint", value: res.jwkThumbprint },
+        { label: "Key Authorization", value: res.keyAuthorization },
+        { label: "TLS-ALPN-01 SHA-256", value: res.tlsAlpn01.sha256Hex },
+      ];
+
+      const workingLines = [
+        `### RFC 8555 ACME Challenge Verification for \`${res.cleanDomain}\``,
+        "",
+        `- **Domain**: \`${res.domain}\``,
+        `- **Challenge Token**: \`${res.token}\``,
+        `- **RFC 7638 JWK Thumbprint**: \`${res.jwkThumbprint}\``,
+        `- **Key Authorization**: \`${res.keyAuthorization}\``,
+        "",
+        "#### 1. DNS-01 Challenge (Recommended for Wildcards)",
+        `- **Record Type**: \`TXT\``,
+        `- **Record Name**: \`${res.dns01.recordName}\``,
+        `- **Record Value**: \`${res.dns01.recordValue}\``,
+        "",
+        "**RFC 1035 Zone Snippet:**",
+        "```text",
+        res.dns01.zoneSnippet,
+        "```",
+        "",
+        "**Verification Command:**",
+        "```bash",
+        res.dns01.digCommand,
+        "```",
+        "",
+        "#### 2. HTTP-01 Challenge",
+        `- **URL Path**: \`${res.http01.urlPath}\``,
+        `- **Full URL**: ${res.http01.fullUrl}`,
+        `- **Expected File Content**: \`${res.http01.keyAuthorization}\``,
+        "",
+        "**Test Command (cURL):**",
+        "```bash",
+        res.http01.curlCommand,
+        "```",
+        "",
+        "**Nginx Configuration:**",
+        "```nginx",
+        res.http01.nginxConfig,
+        "```",
+        "",
+        "#### 3. TLS-ALPN-01 Challenge (RFC 8737)",
+        `- **ALPN Protocol**: \`${res.tlsAlpn01.protocol}\``,
+        `- **Extension OID**: \`${res.tlsAlpn01.extensionOid}\` (acmeIdentifier)`,
+        `- **SHA-256 Digest**: \`${res.tlsAlpn01.sha256Hex}\``,
+      ];
+
+      return {
+        text: res.dns01.recordValue,
+        fields,
+        working: workingLines.join("\n"),
+        files: res.exportFiles,
+      };
+    } catch (err) {
+      return {
+        error: `ACME calculation failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
   // Resolve bytes based on auto-detect
   let der: Uint8Array;
   try {
@@ -517,6 +996,14 @@ export async function computeCertificate(
             label: "Subject Alternative Names",
             value: cert.extensions.sans.join(", "),
             hint: "Hostnames, IPs, or domains this certificate protects",
+          });
+        }
+
+        if (cert.extensions.spiffeIds && cert.extensions.spiffeIds.length > 0) {
+          fields.push({
+            label: "SPIFFE ID",
+            value: cert.extensions.spiffeIds.join(", "),
+            hint: "Zero-Trust SPIFFE Identity URI for workload attestation",
           });
         }
 

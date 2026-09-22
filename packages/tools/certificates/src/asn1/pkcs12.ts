@@ -546,3 +546,198 @@ export async function decodePkcs12Archive(
 
   return { certs, privateKey };
 }
+
+export interface Pkcs12SafeBagInfo {
+  bagType: "certBag" | "keyBag" | "pkcs8ShroudedKeyBag" | "secretBag" | "crlBag" | "unknown";
+  bagTypeOid: string;
+  friendlyName?: string;
+  localKeyIdHex?: string;
+}
+
+export interface Pkcs12InspectionResult {
+  version: number;
+  hasMac: boolean;
+  macAlgorithm?: string;
+  macIterations?: number;
+  macSaltHex?: string;
+  safeContentsCount: number;
+  bags: Pkcs12SafeBagInfo[];
+  certCount: number;
+  hasPrivateKey: boolean;
+  isEncrypted: boolean;
+  summary: string;
+}
+
+function decodeBmpString(bytes: Uint8Array): string {
+  let str = "";
+  for (let i = 0; i < bytes.length; i += 2) {
+    const code = (bytes[i]! << 8) | (bytes[i + 1] ?? 0);
+    if (code !== 0) str += String.fromCharCode(code);
+  }
+  return str;
+}
+
+/**
+ * Inspects a PKCS#12 (.pfx / .p12) container and extracts metadata, SafeBags, attributes, and MAC info.
+ */
+export function inspectPkcs12(input: Uint8Array): Pkcs12InspectionResult {
+  const { der } = detectInputBytes(input);
+  const pfxNode = parseAsn1(der);
+
+  if (pfxNode.tagNumber !== UniversalTag.Sequence || pfxNode.children.length < 2) {
+    throw new Error("Invalid PKCS#12 file: expected PFX SEQUENCE.");
+  }
+
+  const version = pfxNode.children[0]?.asIntegerNumber() ?? 3;
+  let hasMac = false;
+  let macAlgorithm: string | undefined;
+  let macIterations: number | undefined;
+  let macSaltHex: string | undefined;
+
+  // MacData is optional 3rd child: MacData ::= SEQUENCE { mac DigestInfo, macSalt OCTET STRING, iterations INTEGER DEFAULT 1 }
+  if (pfxNode.children.length >= 3) {
+    const macDataNode = pfxNode.children[2];
+    if (macDataNode && macDataNode.tagNumber === UniversalTag.Sequence) {
+      hasMac = true;
+      const digestInfo = macDataNode.children[0];
+      const algId = digestInfo?.children[0];
+      macAlgorithm = algId?.children[0]?.asOid() ?? "1.3.14.3.2.26";
+      const saltNode = macDataNode.children[1];
+      if (saltNode) {
+        macSaltHex = Array.from(saltNode.asOctetString())
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+      }
+      const iterNode = macDataNode.children[2];
+      macIterations = iterNode ? iterNode.asIntegerNumber() : 1;
+    }
+  }
+
+  const authSafeContentInfo = pfxNode.children[1]!;
+  const authSafeContext0 = authSafeContentInfo.children[1];
+  let authSafeDer: Uint8Array | undefined;
+  if (authSafeContext0) {
+    if (authSafeContext0.tagNumber === UniversalTag.OctetString) {
+      authSafeDer = authSafeContext0.asOctetString();
+    } else if (authSafeContext0.children.length > 0) {
+      authSafeDer = authSafeContext0.children[0]?.asOctetString() ?? authSafeContext0.children[0]?.valueBytes;
+    }
+  }
+
+  const bags: Pkcs12SafeBagInfo[] = [];
+  let safeContentsCount = 0;
+  let certCount = 0;
+  let hasPrivateKey = false;
+  let isEncrypted = false;
+
+  if (authSafeDer) {
+    try {
+      const authenticatedSafeNode = parseAsn1(authSafeDer);
+      safeContentsCount = authenticatedSafeNode.children.length;
+
+      for (const ci of authenticatedSafeNode.children) {
+        const contentType = ci.children[0]?.asOid();
+        const expNode = ci.children[1];
+        if (!expNode) continue;
+
+        let safeBagSeq: Asn1Node | undefined;
+        if (contentType === "1.2.840.113549.1.7.1") {
+          const octetNode = expNode.tagNumber === UniversalTag.OctetString ? expNode : expNode.children[0];
+          if (octetNode) safeBagSeq = parseAsn1(octetNode.asOctetString());
+        } else if (contentType === "1.2.840.113549.1.7.6") {
+          isEncrypted = true;
+        }
+
+        if (safeBagSeq && safeBagSeq.tagNumber === UniversalTag.Sequence) {
+          for (const bag of safeBagSeq.children) {
+            const bagId = bag.children[0]?.asOid() ?? "unknown";
+            let bagType: Pkcs12SafeBagInfo["bagType"] = "unknown";
+            let friendlyName: string | undefined;
+            let localKeyIdHex: string | undefined;
+
+            if (bagId === "1.2.840.113549.1.12.10.1.3") {
+              bagType = "certBag";
+              certCount++;
+            } else if (bagId === "1.2.840.113549.1.12.10.1.1") {
+              bagType = "keyBag";
+              hasPrivateKey = true;
+            } else if (bagId === "1.2.840.113549.1.12.10.1.2") {
+              bagType = "pkcs8ShroudedKeyBag";
+              hasPrivateKey = true;
+              isEncrypted = true;
+            }
+
+            // BagAttributes SET OF Attribute (3rd element in SafeBag)
+            if (bag.children.length >= 3) {
+              const bagAttrs = bag.children[2];
+              if (bagAttrs) {
+                for (const attr of bagAttrs.children) {
+                  const attrOid = attr.children[0]?.asOid();
+                  const attrValues = attr.children[1];
+                  if (attrOid === "1.2.840.113549.1.9.20" && attrValues?.children[0]) {
+                    // friendlyName BMPString
+                    const valNode = attrValues.children[0];
+                    friendlyName = decodeBmpString(valNode.valueBytes);
+                  } else if (attrOid === "1.2.840.113549.1.9.21" && attrValues?.children[0]) {
+                    // localKeyId OCTET STRING
+                    localKeyIdHex = Array.from(attrValues.children[0].valueBytes)
+                      .map((b) => b.toString(16).padStart(2, "0"))
+                      .join("");
+                  }
+                }
+              }
+            }
+
+            bags.push({
+              bagType,
+              bagTypeOid: bagId,
+              friendlyName,
+              localKeyIdHex,
+            });
+          }
+        }
+      }
+    } catch {
+      // Ignore inner parse errors
+    }
+  }
+
+  const summary = `PKCS#12 v${version} Archive: ${certCount} Certificate(s), Private Key: ${hasPrivateKey ? "YES" : "NO"}, Encrypted: ${isEncrypted ? "YES" : "NO"}`;
+
+  return {
+    version,
+    hasMac,
+    macAlgorithm,
+    macIterations,
+    macSaltHex,
+    safeContentsCount,
+    bags,
+    certCount,
+    hasPrivateKey,
+    isEncrypted,
+    summary,
+  };
+}
+
+/**
+ * Changes or removes the password protecting a PKCS#12 (.pfx / .p12) archive.
+ */
+export async function changePkcs12Password(
+  input: Uint8Array,
+  oldPassword = "",
+  newPassword = "",
+  friendlyName?: string,
+): Promise<{ der: Uint8Array; base64: string }> {
+  const decoded = await decodePkcs12Archive(input, oldPassword);
+  const reEncoded = await encodePkcs12Archive({
+    certDers: decoded.certs.map((c) => c.der),
+    privateKeyDer: decoded.privateKey?.der,
+    password: newPassword,
+    friendlyName,
+  });
+
+  return {
+    der: reEncoded.der,
+    base64: reEncoded.base64,
+  };
+}

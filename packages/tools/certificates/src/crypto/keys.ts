@@ -11,6 +11,11 @@ import {
 } from "../asn1/encoder";
 import { parseAsn1, UniversalTag } from "../asn1/asn1";
 import { encodePem } from "../asn1/pem";
+import {
+  generatePqcKeyPair,
+  signWithPqc,
+  type PqcAlgorithm,
+} from "./pqc";
 
 export type KeyAlgorithmType =
   | "rsa-2048"
@@ -19,7 +24,10 @@ export type KeyAlgorithmType =
   | "ecdsa-p256"
   | "ecdsa-p384"
   | "ecdsa-p521"
-  | "ed25519";
+  | "ed25519"
+  | "ml-dsa-44"
+  | "ml-dsa-65"
+  | "ml-dsa-87";
 
 export type HashAlgorithmType = "sha256" | "sha384" | "sha512";
 
@@ -62,6 +70,14 @@ export function getSignatureAlgorithmInfo(
 
   if (keyType === "ed25519") {
     const oid = "1.3.101.112"; // id-Ed25519
+    const der = encodeDerSequence([encodeDerOid(oid)]);
+    return { oid, der };
+  }
+
+  if (keyType.startsWith("ml-dsa")) {
+    const oid = keyType === "ml-dsa-44" ? "2.16.840.1.101.3.4.3.17"
+      : keyType === "ml-dsa-65" ? "2.16.840.1.101.3.4.3.18"
+      : "2.16.840.1.101.3.4.3.19";
     const der = encodeDerSequence([encodeDerOid(oid)]);
     return { oid, der };
   }
@@ -223,6 +239,27 @@ export async function generateKeyBundle(
           tbsBytes as unknown as BufferSource,
         );
         return ecdsaP1363ToDer(new Uint8Array(rawSig));
+      },
+    };
+  }
+
+  if (keyType.startsWith("ml-dsa")) {
+    const pqcAlg = keyType as PqcAlgorithm;
+    const kp = generatePqcKeyPair(pqcAlg);
+    const ski = deriveSki(kp.spkiDer);
+
+    return {
+      algorithmType: keyType,
+      hashType,
+      spkiBytes: kp.spkiDer,
+      pkcs8Bytes: kp.pkcs8Der,
+      privateKeyPem: kp.privateKeyPem,
+      publicKeyPem: kp.publicKeyPem,
+      signatureAlgorithmOid: oid,
+      signatureAlgorithmDer: der,
+      ski,
+      signTbs: async (tbsBytes: Uint8Array) => {
+        return signWithPqc(pqcAlg, tbsBytes, kp.secretKey);
       },
     };
   }

@@ -1,6 +1,6 @@
 {
   "name": "@ocs/certificates",
-  "version": "0.11.4",
+  "version": "0.12.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -17,6 +17,7 @@
   "dependencies": {
     "@noble/curves": "^2.1.0",
     "@noble/hashes": "^2.2.0",
+    "@noble/post-quantum": "0.7.0",
     "@ocs/contracts": "workspace:*",
     "@ocs/engine": "workspace:*",
     "@scure/base": "^1.2.6",

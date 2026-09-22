@@ -61,6 +61,37 @@ x3VuEqqAkeoiXQMSCXrYPRURm05yIJH73XBybruMKe/hHtPpXA/voYullEGDQH0s
 
 export const CERTIFICATE_CHAIN_PEM = `${RSA_CERTIFICATE_PEM}\n\n${CA_CERTIFICATE_PEM}`;
 
+export const RSA_PRIVATE_KEY_PEM = `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCYzR+clC8+8Ryb
+yjDJv361dx0qBSyObatwEr1tuvzAiKzaZttC1Pp1zeptMLifnEjPkTznToFxuxTn
+N5bIPYmXOKPviju16IsvZ1qSmpgwZlKR45GDvN+LD2kRrhLcP/nfP6HYrTgiRkRR
+bQYvMeLJ+NCCqw55bJ61LtKflJ5xRHPbnKUAdaYuDwJNcQ+9heEj1Ayzmpncc/P6
+cSL96tsGJky2jUtvGSxWqzeCwh/mUUzEF7KrWgKfq5TkHIPKi/IqEay/RUULS3Rh
+ZJii9DoCXZBjasW3R8O+2D94l2PJAVk0I7BIOiYCXcJ2iiwyUqtJu+0VzbBXAtL7
+KiFhIriDAgMBAAECggEABe+UMLTjhyay4HLPVAWXwD+kD8JIPgK/YHd1iaxc6FYy
+h113uFjUcOUeSrKxMhuUCxFLxZGncGQQOBc5vUwBmYJhUn+1876qEvsUxwYZ3ca9
+RYFn7OmQmwRu4AUK3OL3t1zvjCpK21IAY8hL0mOHc5rJezQwrGSFvLp7juKN8SYS
+4Cvh98oN3Km+NuE8ekzouU8Mj9jFqQ9jZWjRNl9+4Ev4TXVYqoJpCBZW2eGFXaCI
+T/7tpKQONmDgvVDbhaERDoTN9RA/zx7GO7lYkNzu+2lZy6Czh+73C1lUtW/w+CU3
+CA2e6uz/PwdO+4nOIQ9D7MwuaDzZLffDAuaWww6WmQKBgQDJ7Rfj1sFqeaq/cIDe
+/xb+60wiuCZ279kDsoYwN3Bc9nG4pvtOtS2c+Z5Clf5wKAkwmgHyBNLvhaJ7KYxY
+rIPeWgb5S+t6HZOk0Ug1JXOIqjpy5gxld3jHC3T5ouIS3xUodDx7bM9tyoxWSYn8
+tNyrRpZIqc3M6+JMlGI2jcnK7wKBgQDBuE7YB9oTjrJGjF4toKq/QtsctU6PifK/
+wJHSpvYjlYe1M01S+E0knfiKm8pjvx1YJEY8wi7Gp9yZKlY9Du0IXSQz7O0y2G70
+zMTHBGUvISDdKkL0YgnLevCGvhYB88knEcw70D7oHZBDRmqYauIDqZbDOzucmgJX
+wE34f/i7rQKBgHKLA9pCoET971XZQ8E7gpfoca/gNjGRrNDkHCqNyDdztN7CGhxz
+ugQptRSgcUy96TigpCndgqpMa/bhgrNqaQNgnkQcRN9ol7AO557+N6N2rOEwjieg
+tepzHU/ejc+WrDHefdCl0KS/GQx5esTW87ZUvDtL12o/BIfcRDoeBDIRAoGBAKNZ
+5mo2XMcHGf9xV+0DwVecaaWQoVlaiq71FEHcdkvVSGUciISBSpOo/a7r5cMsofL0
+S6HqYIU1gUhKsgO0tV3LJL8Ad5fbd9zHWtszMpuGRO8aNvFaRkYmOfJ1EZu91Y4z
+bNO3K4SRgVepZjN2VXWfKLkiFodcOsOCLn1wc+7VAoGAccKeTe4eNgMJ/r4EM9k0
+8udMz6RWiCuuhifz8N4k4I76rUI35RhxeXmatXpDZWdqcQcHECophPtQ+jVNMbjC
+q1lQBhU1DapWeC6gbxJhJ9i9TNC70ZnzIUaq2L5glm53XMjTxwbadOyxu5Vak5Ui
+UTOqabWAR2xH8rrUTxSjuTQ=
+-----END PRIVATE KEY-----`;
+
+export const SAMPLE_MATCHING_KEYPAIR_PEM = `${RSA_CERTIFICATE_PEM}\n\n${RSA_PRIVATE_KEY_PEM}`;
+
 export const SAMPLE_ROOT_CA_PEM = `-----BEGIN CERTIFICATE-----
 MIIEGDCCAwCgAwIBAgIQYwpzO0249UOv73J1kkHCajANBgkqhkiG9w0BAQsFADCB
 hDELMAkGA1UEBhMCVVMxEzARBgNVBAgMCkNhbGlmb3JuaWExFjAUBgNVBAcMDVNh
@@ -113,6 +144,8 @@ eatVLWSZznezHtJo
 -----END CERTIFICATE-----`;
 
 export const SAMPLE_2TIER_CHAIN_PEM = `${SAMPLE_2TIER_SERVER_PEM}\n${SAMPLE_ROOT_CA_PEM}`;
+
+export const SAMPLE_DIFF_PAIR_PEM = `${SAMPLE_2TIER_SERVER_PEM}\n\n${RSA_CERTIFICATE_PEM}`;
 
 export const SAMPLE_3TIER_CHAIN_PEM = `-----BEGIN CERTIFICATE-----
 MIICqDCCAk+gAwIBAgIQFi5KRuHeq79jvt/ReJ0WdDAKBggqhkjOPQQDAjCBizEL
@@ -180,6 +213,8 @@ X4eHS/6tzQbiUWlN+3qBJ6IsO6/2KymJ6KdZaI6qjfu5uiCSv1OR7M/odkuTVoBE
 FQGiZgkaGusWEC1/X3rzxrRSr6/s65t2yWs1SdMobwnirhqbqYtsX2olTGLPOdIW
 +zxVbB7Cc1YDMfvwpnTwr1qTAF712k9UOVOrtw==
 -----END X509 CRL-----`;
+
+export const SAMPLE_OCSP_RESPONSE_B64 = `MIIBMQoBAKCCASowggEmBgkrBgEFBQcwAQEEggEXMIIBEzCBvqIWBBSyuNQSh3H1557C5l5lEsKN7UOb4RgPMjAyNjA5MjIyMDU0MTRaMIGSMIGPMGUwDQYJYIZIAWUDBAIBBQAEIIdVe8PFh5/8cKsrRjKGCK1D2auAAzHG1yEE9USdCPDCBCB3z8RvSF8lAJTwWbde0tFZdPNWgA0JJfeRxvrmaygY9AIQHDU/+ip09DnECnxf3US5O4ACBQAYDzIwMjYwOTIyMjA1NDE0WqARGA8yMDI2MDkyNDIwNTQxNFowDQYJYIZIAWUDBAIBBQADQQBaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpa`;
 
 export function samplesFor(toolId: string): ToolSample[] {
   switch (toolId) {
@@ -256,6 +291,51 @@ export function samplesFor(toolId: string): ToolSample[] {
           label: "Root CA Trust Anchor",
           note: "Self-signed root certificate authority",
           text: SAMPLE_ROOT_CA_PEM,
+        },
+      ];
+    case "cert-matcher":
+      return [
+        {
+          id: "matched-keypair",
+          label: "Matching RSA-2048 Certificate & Private Key",
+          note: "Certificate and its exact mathematically matching PKCS#8 private key",
+          text: SAMPLE_MATCHING_KEYPAIR_PEM,
+        },
+      ];
+    case "cert-diff":
+      return [
+        {
+          id: "cert-comparison",
+          label: "Certificate Renewal Comparison",
+          note: "Side-by-side comparison of two certificates to audit renewals, dates, and keys",
+          text: SAMPLE_DIFF_PAIR_PEM,
+        },
+      ];
+    case "csr-signer":
+      return [
+        {
+          id: "ec-csr-signing",
+          label: "ECDSA P-256 CSR to Sign",
+          note: "PKCS#10 CSR with SANs ready to be signed into an active TLS certificate",
+          text: ECDSA_CSR_PEM,
+        },
+      ];
+    case "ocsp":
+      return [
+        {
+          id: "ocsp-response-good",
+          label: "RFC 6960 OCSP Response (Good)",
+          note: "Base64-encoded OCSP revocation response verifying valid certificate status",
+          text: SAMPLE_OCSP_RESPONSE_B64,
+        },
+      ];
+    case "acme":
+      return [
+        {
+          id: "acme-sample",
+          label: "ACME Challenge Token",
+          note: "RFC 8555 HTTP-01 and DNS-01 challenge calculation sample",
+          text: "evaGxfADs6pSRb2LAv9IZf17Dt3juxGJ-PCt92wr-oA",
         },
       ];
     default:

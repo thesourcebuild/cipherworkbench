@@ -1,6 +1,6 @@
 {
   "name": "@ocs/desktop",
-  "version": "0.11.4",
+  "version": "0.12.0",
   "private": true,
   "description": "Cipher Workbench — desktop shell",
   "author": "Cipher Workbench contributors",

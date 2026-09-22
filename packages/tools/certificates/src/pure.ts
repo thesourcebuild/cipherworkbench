@@ -35,6 +35,7 @@ export const OPTION_MTLS_P12_PASSWORD = "mtlsP12Password";
 
 export const OPTION_PASSWORD = "password";
 export const OPTION_PRIVATE_KEY = "privateKey";
+export const OPTION_COMPARISON_CERT = "comparisonCert";
 
 export type CreatorModeOption = "single-cert" | "mtls-suite";
 export type IssuanceModeOption = "self-signed" | "ca-signed";
@@ -52,6 +53,8 @@ export type ConverterOpOption =
   | "pkcs7-to-pem"
   | "pem-to-pkcs12"
   | "pkcs12-to-pem"
+  | "pem-to-ppk"
+  | "pkcs12-inspect"
   | "extract-public-key"
   | "split-chain";
 
@@ -60,7 +63,10 @@ export type KeyTypeOption =
   | "ecdsa-p384"
   | "rsa-2048"
   | "rsa-4096"
-  | "ed25519";
+  | "ed25519"
+  | "ml-dsa-44"
+  | "ml-dsa-65"
+  | "ml-dsa-87";
 
 export type HashTypeOption = "sha256" | "sha384" | "sha512";
 
@@ -91,6 +97,8 @@ export function readConverterOp(options: OptionValues): ConverterOpOption {
     val === "pkcs7-to-pem" ||
     val === "pem-to-pkcs12" ||
     val === "pkcs12-to-pem" ||
+    val === "pem-to-ppk" ||
+    val === "pkcs12-inspect" ||
     val === "extract-public-key" ||
     val === "split-chain"
   ) {
@@ -138,7 +146,10 @@ export function readKeyType(options: OptionValues, defaultVal: KeyTypeOption = "
     val === "ecdsa-p384" ||
     val === "rsa-2048" ||
     val === "rsa-4096" ||
-    val === "ed25519"
+    val === "ed25519" ||
+    val === "ml-dsa-44" ||
+    val === "ml-dsa-65" ||
+    val === "ml-dsa-87"
   ) {
     return val;
   }
@@ -216,6 +227,49 @@ export function readPkiHierarchy(options: OptionValues): PkiHierarchyOption {
 
 export function readIntermediateCommonName(options: OptionValues, defaultVal = "Internal Issuing CA"): string {
   return optString(options, OPTION_INTERMEDIATE_COMMON_NAME) ?? defaultVal;
+}
+
+export function readComparisonCert(options: OptionValues): string {
+  return optString(options, OPTION_COMPARISON_CERT) ?? "";
+}
+
+export const OPTION_CA_MODE = "caMode";
+export type CaModeOption = "ephemeral-ca" | "custom-ca";
+
+export function readCaMode(options: OptionValues): CaModeOption {
+  const val = optString(options, OPTION_CA_MODE);
+  if (val === "custom-ca") return "custom-ca";
+  return "ephemeral-ca";
+}
+
+export const OPTION_OCSP_OP = "ocspOp";
+export type OcspOpOption = "inspect-response" | "build-request" | "generate-staple";
+
+export function readOcspOp(options: OptionValues): OcspOpOption {
+  const val = optString(options, OPTION_OCSP_OP);
+  if (val === "build-request") return "build-request";
+  if (val === "generate-staple") return "generate-staple";
+  return "inspect-response";
+}
+
+export const OPTION_ISSUER_CERT = "issuerCert";
+export function readIssuerCert(options: OptionValues): string {
+  return optString(options, OPTION_ISSUER_CERT) ?? "";
+}
+
+export const OPTION_ACME_DOMAIN = "acmeDomain";
+export function readAcmeDomain(options: OptionValues): string {
+  return optString(options, OPTION_ACME_DOMAIN) ?? "example.com";
+}
+
+export const OPTION_ACME_TOKEN = "acmeToken";
+export function readAcmeToken(options: OptionValues): string {
+  return optString(options, OPTION_ACME_TOKEN) ?? "";
+}
+
+export const OPTION_ACME_ACCOUNT_KEY = "acmeAccountKey";
+export function readAcmeAccountKey(options: OptionValues): string {
+  return optString(options, OPTION_ACME_ACCOUNT_KEY) ?? "";
 }
 
 

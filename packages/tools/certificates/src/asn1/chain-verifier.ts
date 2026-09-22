@@ -2,6 +2,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { parseAsn1 } from "./asn1";
 import { parseX509Certificate, type ParsedX509Certificate } from "./x509";
 import { SIGNATURE_ALGORITHMS } from "./oids";
+import { verifyWithPqc, OID_TO_PQC_ALGORITHM } from "../crypto/pqc";
 
 export interface ChainNodeVerification {
   index: number;
@@ -15,6 +16,8 @@ export interface ChainNodeVerification {
   signatureValid: boolean;
   signatureError?: string;
   akiSkiMatch?: boolean;
+  ocspUrls?: string[];
+  crlUrls?: string[];
   errors: string[];
   warnings: string[];
 }
@@ -55,6 +58,18 @@ export async function verifyCertificateSignature(
       return { valid, error: valid ? undefined : "Ed25519 signature mismatch" };
     } catch (err) {
       return { valid: false, error: `Ed25519 verification error: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  // 1b. ML-DSA Post-Quantum (FIPS 204)
+  const pqcAlg = OID_TO_PQC_ALGORITHM[child.signatureAlgorithmOid];
+  if (pqcAlg) {
+    try {
+      const rawPub = parent.publicKey.rawBytes ?? parent.publicKey.spkiDer.slice(-32);
+      const valid = verifyWithPqc(pqcAlg, child.tbsRaw, child.signatureBytes, rawPub);
+      return { valid, error: valid ? undefined : `${pqcAlg.toUpperCase()} signature mismatch` };
+    } catch (err) {
+      return { valid: false, error: `${pqcAlg.toUpperCase()} verification error: ${err instanceof Error ? err.message : String(err)}` };
     }
   }
 
@@ -318,6 +333,8 @@ export async function verifyCertificateChain(
       signatureValid,
       signatureError,
       akiSkiMatch,
+      ocspUrls: cert.extensions.ocspUrls.length > 0 ? cert.extensions.ocspUrls : undefined,
+      crlUrls: cert.extensions.crlUrls.length > 0 ? cert.extensions.crlUrls : undefined,
       errors,
       warnings,
     });

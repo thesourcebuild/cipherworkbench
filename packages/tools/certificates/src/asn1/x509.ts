@@ -26,6 +26,7 @@ export interface ParsedName {
   commonName?: string;
   organization?: string;
   country?: string;
+  rawDer?: Uint8Array;
 }
 
 export interface ParsedExtension {
@@ -40,11 +41,12 @@ export interface PublicKeyDetails {
   algorithmOid: string;
   algorithmName: string;
   details: string;
-  keyType: "rsa" | "ec" | "ed25519" | "unknown";
+  keyType: "rsa" | "ec" | "ed25519" | "ml-dsa-44" | "ml-dsa-65" | "ml-dsa-87" | "unknown";
   rsaBits?: number;
   curveName?: string;
   spkiDer: Uint8Array;
   spkiPem: string;
+  rawBytes?: Uint8Array;
 }
 
 export interface ParsedX509Certificate {
@@ -72,6 +74,7 @@ export interface ParsedX509Certificate {
     ocspUrls: string[];
     caIssuerUrls: string[];
     crlUrls: string[];
+    spiffeIds: string[];
     all: ParsedExtension[];
   };
   fingerprints: {
@@ -118,6 +121,7 @@ export function parseName(nameNode: Asn1Node): ParsedName {
     commonName,
     organization,
     country,
+    rawDer: nameNode.raw,
   };
 }
 
@@ -137,10 +141,11 @@ export function parseSpki(spkiNode: Asn1Node): PublicKeyDetails {
   const spkiDer = spkiNode.raw;
   const spkiPem = encodePem("PUBLIC KEY", spkiDer);
 
-  let keyType: "rsa" | "ec" | "ed25519" | "unknown" = "unknown";
+  let keyType: PublicKeyDetails["keyType"] = "unknown";
   let details = algName;
   let rsaBits: number | undefined;
   let curveName: string | undefined;
+  const rawBytes = pubKeyBitString.asBitString().bytes;
 
   if (algOid === "1.2.840.113549.1.1.1") {
     // RSA
@@ -177,6 +182,15 @@ export function parseSpki(spkiNode: Asn1Node): PublicKeyDetails {
   } else if (algOid === "1.3.101.112") {
     keyType = "ed25519";
     details = "Ed25519 256-bit Public Key";
+  } else if (algOid === "2.16.840.1.101.3.4.3.17") {
+    keyType = "ml-dsa-44";
+    details = `Post-Quantum ML-DSA-44 (${rawBytes.length}-byte public key, NIST Security Level 2)`;
+  } else if (algOid === "2.16.840.1.101.3.4.3.18") {
+    keyType = "ml-dsa-65";
+    details = `Post-Quantum ML-DSA-65 (${rawBytes.length}-byte public key, NIST Security Level 3)`;
+  } else if (algOid === "2.16.840.1.101.3.4.3.19") {
+    keyType = "ml-dsa-87";
+    details = `Post-Quantum ML-DSA-87 (${rawBytes.length}-byte public key, NIST Security Level 5)`;
   }
 
   return {
@@ -188,6 +202,7 @@ export function parseSpki(spkiNode: Asn1Node): PublicKeyDetails {
     curveName,
     spkiDer,
     spkiPem,
+    rawBytes,
   };
 }
 
@@ -292,6 +307,7 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
   const ocspUrls: string[] = [];
   const caIssuerUrls: string[] = [];
   const crlUrls: string[] = [];
+  const spiffeIds: string[] = [];
   const allExtensions: ParsedExtension[] = [];
 
   for (let i = tbsIdx; i < tbs.children.length; i++) {
@@ -333,6 +349,9 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
                   break;
                 case 6:
                   sanItem = `URI:${strVal}`;
+                  if (strVal.toLowerCase().startsWith("spiffe://")) {
+                    spiffeIds.push(strVal);
+                  }
                   break;
                 case 7: {
                   const b = nameNode.valueBytes;
@@ -516,6 +535,7 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
       ocspUrls,
       caIssuerUrls,
       crlUrls,
+      spiffeIds,
       all: allExtensions,
     },
     fingerprints,

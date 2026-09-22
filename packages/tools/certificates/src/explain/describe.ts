@@ -40,6 +40,20 @@ export function describeSpec(spec: CertificateSpec): string {
       return "Generates a complete self-signed or CA-signed X.509 v3 TLS/SSL certificate and private key.";
     case "csr-creator":
       return "Generates a PKCS#10 Certificate Signing Request (CSR) with requested extensions and self-signature.";
+    case "crl":
+      return "Parses and inspects X.509 v2 Certificate Revocation Lists (CRL) and checks revoked serials.";
+    case "cert-verifier":
+      return "Verifies X.509 certificate chains, digital signatures, validity dates, and AKI/SKI linkages.";
+    case "cert-matcher":
+      return "Verifies whether a private key cryptographically matches an X.509 certificate or CSR.";
+    case "cert-diff":
+      return "Performs side-by-side visual comparison and audit of two X.509 certificates to verify renewals.";
+    case "csr-signer":
+      return "Signs a PKCS#10 Certificate Signing Request (CSR) using a custom CA or an ephemeral in-browser Root CA.";
+    case "ocsp":
+      return "Inspects and decodes RFC 6960 OCSP revocation responses, generates responder queries, and exports OCSP staple bundles.";
+    case "acme":
+      return "Calculates RFC 8555 HTTP-01 and DNS-01 challenge parameters, TXT record digests, and cross-platform verification scripts.";
     default:
       return "Certificate analysis and conversion tool.";
   }

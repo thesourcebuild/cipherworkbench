@@ -46,6 +46,9 @@ export interface CertificateCreatorOptions {
   caCertPem?: string;
   caPrivateKeyPem?: string;
   caSigner?: CaSigner;
+  ocspResponderUrl?: string;
+  caIssuersUrl?: string;
+  crlDistributionPoint?: string;
 }
 
 export interface CreatedCertificateResult {
@@ -108,6 +111,16 @@ export function encodeSanExtension(sanStr: string): Uint8Array | null {
     } else if (raw.toLowerCase().startsWith("email:")) {
       type = "email";
       val = raw.slice(6).trim();
+    } else if (raw.toLowerCase().startsWith("spiffe:")) {
+      type = "uri";
+      const rest = raw.slice(7).trim();
+      if (rest.startsWith("spiffe://")) {
+        val = rest;
+      } else if (rest.startsWith("//")) {
+        val = `spiffe:${rest}`;
+      } else {
+        val = `spiffe://${rest}`;
+      }
     } else if (raw.toLowerCase().startsWith("uri:")) {
       type = "uri";
       val = raw.slice(4).trim();
@@ -332,6 +345,54 @@ export async function createCertificate(
       encodeDerOctetString(akiInner),
     ]),
   );
+
+  // 4g. Authority Information Access (AIA, OID 1.3.6.1.5.5.7.1.1)
+  if (opts.ocspResponderUrl || opts.caIssuersUrl) {
+    const accessDescriptions: Uint8Array[] = [];
+    if (opts.ocspResponderUrl) {
+      const uriBytes = new TextEncoder().encode(opts.ocspResponderUrl);
+      accessDescriptions.push(
+        encodeDerSequence([
+          encodeDerOid("1.3.6.1.5.5.7.48.1"),
+          encodeDerContext(6, uriBytes, false),
+        ]),
+      );
+    }
+    if (opts.caIssuersUrl) {
+      const uriBytes = new TextEncoder().encode(opts.caIssuersUrl);
+      accessDescriptions.push(
+        encodeDerSequence([
+          encodeDerOid("1.3.6.1.5.5.7.48.2"),
+          encodeDerContext(6, uriBytes, false),
+        ]),
+      );
+    }
+    if (accessDescriptions.length > 0) {
+      extensions.push(
+        encodeDerSequence([
+          encodeDerOid("1.3.6.1.5.5.7.1.1"),
+          encodeDerOctetString(encodeDerSequence(accessDescriptions)),
+        ]),
+      );
+    }
+  }
+
+  // 4h. CRL Distribution Points (cRLDistributionPoints, OID 2.5.29.31)
+  if (opts.crlDistributionPoint) {
+    const uriBytes = new TextEncoder().encode(opts.crlDistributionPoint);
+    const gn = encodeDerContext(6, uriBytes, false);
+    const gns = encodeDerSequence([gn]);
+    const dpn = encodeDerContext(0, gns, true);
+    const dp = encodeDerSequence([encodeDerContext(0, dpn, true)]);
+    const crlDpSeq = encodeDerSequence([dp]);
+
+    extensions.push(
+      encodeDerSequence([
+        encodeDerOid("2.5.29.31"),
+        encodeDerOctetString(crlDpSeq),
+      ]),
+    );
+  }
 
   // 5. Assemble TBSCertificate
   const tbsSequence = encodeDerSequence([

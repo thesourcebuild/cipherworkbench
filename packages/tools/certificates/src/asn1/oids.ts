@@ -35,7 +35,7 @@ export const DN_LONG_NAMES: Record<string, string> = {
 export interface SignatureAlgorithmDetails {
   name: string;
   hash?: "SHA-256" | "SHA-384" | "SHA-512" | "SHA-224" | "SHA-1" | "MD5";
-  keyType: "rsa" | "ecdsa" | "ed25519" | "ed448" | "dsa";
+  keyType: "rsa" | "ecdsa" | "ed25519" | "ed448" | "dsa" | "ml-dsa-44" | "ml-dsa-65" | "ml-dsa-87";
 }
 
 export const SIGNATURE_ALGORITHMS: Record<string, SignatureAlgorithmDetails> = {
@@ -61,6 +61,11 @@ export const SIGNATURE_ALGORITHMS: Record<string, SignatureAlgorithmDetails> = {
 
   // DSA
   "1.2.840.10040.4.3": { name: "dsa-with-sha1", hash: "SHA-1", keyType: "dsa" },
+
+  // Post-Quantum ML-DSA (FIPS 204)
+  "2.16.840.1.101.3.4.3.17": { name: "ML-DSA-44", keyType: "ml-dsa-44" },
+  "2.16.840.1.101.3.4.3.18": { name: "ML-DSA-65", keyType: "ml-dsa-65" },
+  "2.16.840.1.101.3.4.3.19": { name: "ML-DSA-87", keyType: "ml-dsa-87" },
 };
 
 export const PUBLIC_KEY_ALGORITHMS: Record<string, string> = {
@@ -71,6 +76,9 @@ export const PUBLIC_KEY_ALGORITHMS: Record<string, string> = {
   "1.3.101.110": "X25519",
   "1.3.101.111": "X448",
   "1.2.840.10040.4.1": "DSA",
+  "2.16.840.1.101.3.4.3.17": "ML-DSA-44 (FIPS 204)",
+  "2.16.840.1.101.3.4.3.18": "ML-DSA-65 (FIPS 204)",
+  "2.16.840.1.101.3.4.3.19": "ML-DSA-87 (FIPS 204)",
 };
 
 export const NAMED_CURVES: Record<string, string> = {

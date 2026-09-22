@@ -57,12 +57,12 @@ export async function createCsr(opts: CsrCreatorOptions): Promise<CreatedCsrResu
 
   // 1. Subject DN
   const rdnEntries: RdnEntry[] = [
-    { oid: "2.5.4.6", value: opts.country.slice(0, 2).toUpperCase(), isPrintable: true }, // C
-    { oid: "2.5.4.8", value: opts.state }, // ST
-    { oid: "2.5.4.7", value: opts.locality }, // L
-    { oid: "2.5.4.10", value: opts.organization }, // O
-    { oid: "2.5.4.11", value: opts.organizationalUnit }, // OU
-    { oid: "2.5.4.3", value: opts.commonName }, // CN
+    { oid: "2.5.4.6", value: (opts.country ?? "").slice(0, 2).toUpperCase(), isPrintable: true }, // C
+    { oid: "2.5.4.8", value: opts.state ?? "" }, // ST
+    { oid: "2.5.4.7", value: opts.locality ?? "" }, // L
+    { oid: "2.5.4.10", value: opts.organization ?? "" }, // O
+    { oid: "2.5.4.11", value: opts.organizationalUnit ?? "" }, // OU
+    { oid: "2.5.4.3", value: opts.commonName ?? "" }, // CN
   ].filter((e) => e.value.length > 0);
 
   const subjectDnDer = encodeDistinguishedName(rdnEntries);
