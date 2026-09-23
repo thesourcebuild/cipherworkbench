@@ -23,6 +23,7 @@ import {
   generateCsrCommandScripts,
 } from "./export/commands";
 import {
+  readInputFormat,
   readConverterOp,
   readDetailLevel,
   readVerifyCsrSig,
@@ -505,9 +506,8 @@ export async function computeCertificate(
 
   if (spec.variant === "cert-matcher") {
     try {
-      const text = new TextDecoder().decode(input);
       const privateKeyOpt = readPrivateKey(spec.options);
-      const res = await verifyCertificateKeyPair(text, privateKeyOpt || undefined);
+      const res = await verifyCertificateKeyPair(input, privateKeyOpt || undefined);
 
       const fields: ToolResultField[] = [
         {
@@ -589,9 +589,8 @@ export async function computeCertificate(
 
   if (spec.variant === "cert-diff") {
     try {
-      const text = new TextDecoder().decode(input);
       const comparisonOpt = readComparisonCert(spec.options);
-      const res = diffCertificates(text, comparisonOpt || undefined);
+      const res = diffCertificates(input, comparisonOpt || undefined);
 
       const fields: ToolResultField[] = [
         {
@@ -1337,16 +1336,326 @@ export async function computeCertificate(
   }
 }
 
-export function certificateInfo(_spec: CertificateSpec): ToolResultField[] {
-  return [
-    {
-      label: "Engine",
-      value: "Pure TypeScript ASN.1 / WebCrypto (100% client-side)",
-      hint: "Zero server calls, zero native addons, safe for offline use.",
-    },
-    {
-      label: "Privacy",
-      value: "Keys and certificates never leave your machine",
-    },
-  ];
+export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
+  const fields: ToolResultField[] = [];
+
+  switch (spec.variant) {
+    case "cert-matcher": {
+      fields.push(
+        {
+          label: "Operation",
+          value: "Cryptographic & Mathematical Keypair Matcher",
+          hint: "Verifies whether a private key matches an X.509 certificate or CSR.",
+        },
+        {
+          label: "Matching Verification",
+          value: "Modulus/Public Point Match + Live Cryptographic Signature Challenge",
+          hint: "Performs mathematical comparison of public key parameters and signs a live random nonce with the private key to verify against the public key.",
+        },
+        {
+          label: "Supported Key Formats",
+          value: "PKCS#8, PKCS#1 (RSA), SEC1 (EC), OpenSSH (RSA, ECDSA P-256/384/521, Ed25519)",
+        },
+      );
+      break;
+    }
+
+    case "cert-diff": {
+      fields.push(
+        {
+          label: "Operation",
+          value: "X.509 Certificate Semantic Field Diff & Renewal Audit",
+          hint: "Compares two certificates side-by-side to highlight modified fields and renewal validity.",
+        },
+        {
+          label: "Audited Properties",
+          value: "Subject DN, Issuer DN, Serial Number, Effective & Expiry Dates, SANs, Key Usages, SPKI Fingerprint",
+        },
+        {
+          label: "Renewal Assessment",
+          value: "Clean renewal, Key rollover, SAN changes, or modified parameters",
+        },
+      );
+      break;
+    }
+
+    case "cert-creator": {
+      const mode = readCreatorMode(spec.options);
+      const issuance = readIssuanceMode(spec.options);
+      const isCa = readIsCa(spec.options);
+      const keyType = readKeyType(spec.options);
+      const hash = readHashType(spec.options);
+      const days = readValidityDays(spec.options);
+      const cn = readCommonName(spec.options);
+      const san = readSan(spec.options);
+      const serverAuth = readServerAuth(spec.options);
+      const clientAuth = readClientAuth(spec.options);
+      const codeSign = readCodeSigning(spec.options);
+
+      const ekus: string[] = [];
+      if (serverAuth) ekus.push("TLS Server");
+      if (clientAuth) ekus.push("TLS Client");
+      if (codeSign) ekus.push("Code Signing");
+
+      fields.push(
+        {
+          label: "Certificate Type",
+          value:
+            mode === "mtls-suite"
+              ? "Complete mTLS PKI Suite (CA, Server & Client)"
+              : isCa
+                ? "Certificate Authority (CA)"
+                : "End-Entity (Leaf) TLS Certificate",
+        },
+        {
+          label: "Issuance Hierarchy",
+          value: issuance === "self-signed" ? "Self-Signed Trust Anchor" : "Signed by Specified CA Keypair",
+        },
+        {
+          label: "Key & Signature",
+          value: `${keyType.toUpperCase()} with ${hash.toUpperCase()} signature`,
+        },
+        {
+          label: "Validity Period",
+          value: `${days} days from time of generation`,
+        },
+        {
+          label: "Subject Common Name",
+          value: cn,
+        },
+        ...(san ? [{ label: "Subject Alternative Names", value: san }] : []),
+        ...(ekus.length > 0 ? [{ label: "Extended Key Usage (EKU)", value: ekus.join(", ") }] : []),
+      );
+      break;
+    }
+
+    case "csr-creator": {
+      const keyType = readKeyType(spec.options);
+      const hash = readHashType(spec.options);
+      const cn = readCommonName(spec.options);
+      const san = readSan(spec.options);
+
+      fields.push(
+        {
+          label: "Specification",
+          value: "PKCS#10 / RFC 2986 Certificate Signing Request",
+          hint: "Self-contained request structure containing Subject DN, Public Key, SAN extensions, and Proof-of-Possession signature.",
+        },
+        {
+          label: "Key & Signature",
+          value: `${keyType.toUpperCase()} with ${hash.toUpperCase()}`,
+        },
+        {
+          label: "Subject Common Name",
+          value: cn,
+        },
+        ...(san ? [{ label: "Subject Alternative Names", value: san }] : []),
+        {
+          label: "Proof of Possession",
+          value: "Self-signed signature by the newly generated private key",
+        },
+      );
+      break;
+    }
+
+    case "csr-signer": {
+      const caMode = readCaMode(spec.options);
+      const days = readValidityDays(spec.options);
+
+      fields.push(
+        {
+          label: "Operation",
+          value: "In-Browser Micro-CA CSR Signing",
+          hint: "Parses an incoming PKCS#10 CSR, extracts its Subject and Public Key, and issues an X.509 v3 certificate.",
+        },
+        {
+          label: "CA Authority",
+          value:
+            caMode === "ephemeral-ca"
+              ? "Ephemeral In-Browser Root CA (Auto-Generated)"
+              : "Custom Imported CA Certificate & Private Key",
+        },
+        {
+          label: "Issued Validity",
+          value: `${days} days`,
+        },
+      );
+      break;
+    }
+
+    case "x509": {
+      const format = readInputFormat(spec.options);
+      const detail = readDetailLevel(spec.options);
+
+      fields.push(
+        {
+          label: "Standard",
+          value: "ITU-T X.509 v3 / RFC 5280 PKI Profile",
+          hint: "Decodes TLS/SSL certificates, public keys, validity intervals, and X.509 v3 extensions.",
+        },
+        {
+          label: "Input Format",
+          value: format === "auto" ? "Auto-Detect (PEM ASCII armor or raw DER binary)" : format.toUpperCase(),
+        },
+        {
+          label: "Inspection Depth",
+          value:
+            detail === "full-dump"
+              ? "Full Hierarchical ASN.1 TLV Tree"
+              : "Decoded Fields, Extensions & OpenSSL Text",
+        },
+      );
+      break;
+    }
+
+    case "csr": {
+      const format = readInputFormat(spec.options);
+      const verifySig = readVerifyCsrSig(spec.options);
+      const detail = readDetailLevel(spec.options);
+
+      fields.push(
+        {
+          label: "Standard",
+          value: "PKCS#10 / RFC 2986 Certificate Signing Request",
+          hint: "Decodes requested Subject DN, Public Key, and Requested Extensions.",
+        },
+        {
+          label: "Input Format",
+          value: format === "auto" ? "Auto-Detect (PEM ASCII armor or raw DER binary)" : format.toUpperCase(),
+        },
+        {
+          label: "Proof of Possession",
+          value: verifySig ? "Signature verification enabled" : "Signature verification skipped",
+          hint: "Cryptographically verifies the CSR's embedded self-signature against its SPKI public key.",
+        },
+        {
+          label: "Inspection Depth",
+          value:
+            detail === "full-dump"
+              ? "Full Hierarchical ASN.1 TLV Tree"
+              : "Decoded Attributes & OpenSSL Text",
+        },
+      );
+      break;
+    }
+
+    case "crl": {
+      fields.push(
+        {
+          label: "Standard",
+          value: "RFC 5280 X.509 v2 Certificate Revocation List",
+          hint: "Signed list of revoked certificate serial numbers, revocation dates, and reason codes.",
+        },
+        {
+          label: "Revocation Verification",
+          value: "Serial lookup, CRL extensions (AKI, CRL Number), and Authority Digital Signature",
+        },
+      );
+      break;
+    }
+
+    case "cert-converter": {
+      const op = readConverterOp(spec.options);
+      const opLabels: Record<string, string> = {
+        auto: "Auto Convert (PEM ↔ DER)",
+        "pem-to-der": "PEM to binary DER",
+        "der-to-pem": "Binary DER to formatted PEM",
+        "pem-to-cer": "PEM to binary DER (.cer)",
+        "cer-to-pem": "Binary DER (.cer) to formatted PEM",
+        "pem-to-pkcs7": "Package into PKCS#7 / P7B bundle",
+        "pkcs7-to-pem": "Extract certificates from PKCS#7 / P7B bundle",
+        "pem-to-pkcs12": "Package Certificate + Private Key into PKCS#12 (.pfx / .p12)",
+        "pkcs12-to-pem": "Extract Certificate & Private Key from PKCS#12 (.pfx / .p12)",
+        "pkcs12-inspect": "Inspect PKCS#12 (.pfx) SafeBags, attributes, and MAC",
+        "pem-to-ppk": "Convert Private Key to PuTTY v3 format (.ppk)",
+        "extract-public-key": "Extract SubjectPublicKeyInfo (SPKI) as PEM",
+        "split-chain": "Split concatenated PEM chain into separate blocks",
+      };
+
+      fields.push(
+        {
+          label: "Conversion Operation",
+          value: opLabels[op] ?? op,
+        },
+        {
+          label: "Standards",
+          value: "RFC 7468 (PEM), RFC 5280 (DER), RFC 7292 (PKCS#12), RFC 2315 (PKCS#7)",
+        },
+      );
+      break;
+    }
+
+    case "cert-verifier": {
+      fields.push(
+        {
+          label: "Trust Model",
+          value: "RFC 5280 Section 6 Certification Path Validation Algorithm",
+          hint: "Builds and validates the chain of trust from leaf certificate to trusted root anchor.",
+        },
+        {
+          label: "Path Checks",
+          value: "Signatures, Validity Periods, AKI/SKI Linkages, Basic Constraints (isCA & pathlen)",
+        },
+        {
+          label: "Trust Anchors",
+          value: "Self-contained root certificate within the provided bundle",
+        },
+      );
+      break;
+    }
+
+    case "ocsp": {
+      const op = readOcspOp(spec.options);
+      fields.push(
+        {
+          label: "Standard",
+          value: "RFC 6960 Online Certificate Status Protocol (OCSP)",
+          hint: "Real-time certificate revocation status protocol query and response structures.",
+        },
+        {
+          label: "Operation",
+          value: op === "inspect-response" ? "Inspect Signed OCSP Response" : "Build OCSP Status Request",
+        },
+        {
+          label: "Status Scope",
+          value:
+            "CertID (HashAlgorithm, IssuerNameHash, IssuerKeyHash, SerialNumber), CertStatus (Good, Revoked, Unknown)",
+        },
+      );
+      break;
+    }
+
+    case "acme": {
+      const domain = readAcmeDomain(spec.options);
+      fields.push(
+        {
+          label: "Standard",
+          value: "RFC 8555 Automated Certificate Management Environment (ACME)",
+          hint: "Used by Let's Encrypt, ZeroSSL, and automated CA challenge systems.",
+        },
+        {
+          label: "Domain",
+          value: domain || "example.com",
+        },
+        {
+          label: "Supported Challenges",
+          value: "HTTP-01 (Path: /.well-known/acme-challenge/) & DNS-01 (TXT: _acme-challenge.<domain>)",
+        },
+        {
+          label: "Key Authorization",
+          value: "token || '.' || base64url(sha256(accountKeyJwk))",
+        },
+      );
+      break;
+    }
+  }
+
+  // Include Engine / Privacy details at the bottom of Info
+  fields.push({
+    label: "Execution Engine",
+    value: "Pure TypeScript ASN.1 / WebCrypto (100% client-side)",
+    hint: "Zero server calls, zero native addons, private keys never leave your device.",
+  });
+
+  return fields;
 }

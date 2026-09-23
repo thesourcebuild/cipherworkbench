@@ -538,5 +538,33 @@ describe("Full mTLS Suite Generator", () => {
     expect(result.fields?.some((f) => f.label === "Server Certificate")).toBe(true);
     expect(result.fields?.some((f) => f.label === "Client Certificate")).toBe(true);
   });
+
+  it("provides distinct, tool-specific Info fields for all 12 certificate tools", async () => {
+    const { CERTIFICATE_TOOL_IDS } = await import("@ocs/certificates");
+    for (const toolId of CERTIFICATE_TOOL_IDS) {
+      const def = await loadTool(toolId);
+      expect(def).toBeDefined();
+      expect(def.info).toBeDefined();
+
+      const spec = def.createSpec();
+      const fields = def.info!(spec);
+
+      expect(fields.length).toBeGreaterThanOrEqual(2);
+      expect(fields.some((f) => f.label === "Execution Engine")).toBe(true);
+
+      // Verify tool-specific fields are present rather than generic placeholders
+      if (toolId === "cert-matcher") {
+        expect(fields.some((f) => f.label === "Operation" && f.value.includes("Keypair Matcher"))).toBe(true);
+      } else if (toolId === "cert-diff") {
+        expect(fields.some((f) => f.label === "Operation" && f.value.includes("Diff"))).toBe(true);
+      } else if (toolId === "cert-creator") {
+        expect(fields.some((f) => f.label === "Certificate Type")).toBe(true);
+      } else if (toolId === "x509") {
+        expect(fields.some((f) => f.label === "Standard" && f.value.includes("X.509"))).toBe(true);
+      } else if (toolId === "acme") {
+        expect(fields.some((f) => f.label === "Standard" && f.value.includes("ACME"))).toBe(true);
+      }
+    }
+  });
 });
 

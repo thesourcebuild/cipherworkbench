@@ -95,8 +95,11 @@ export function detectInputBytes(input: Uint8Array | string): {
     }
   }
 
-  // Check if it is a hex string (e.g. "3082..." or "30:82:...")
-  const cleanHex = text.replace(/[\s:]+/g, "");
+  // Check if it is a hex string (e.g. "3082...", "30:82:...", "0x30, 0x82...")
+  const cleanHex = text
+    .replace(/^0x/i, "")
+    .replace(/0x/gi, "")
+    .replace(/[\s:,\-_]+/g, "");
   if (/^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length >= 8 && cleanHex.length % 2 === 0) {
     // If it starts with 30 (ASN.1 SEQUENCE), treat as hex DER
     if (cleanHex.startsWith("30")) {
@@ -109,8 +112,11 @@ export function detectInputBytes(input: Uint8Array | string): {
     }
   }
 
-  // Check if it is a pure Base64 string that decodes to ASN.1 DER (starts with 0x30)
-  const cleanB64 = text.replace(/\s+/g, "");
+  // Check if it is a pure Base64 or Base64url string that decodes to ASN.1 DER (starts with 0x30)
+  const cleanB64 = text
+    .replace(/[\s\r\n]+/g, "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
   if (/^[0-9a-zA-Z+/=]+$/.test(cleanB64) && cleanB64.length >= 16) {
     try {
       const decoded = base64.decode(cleanB64);

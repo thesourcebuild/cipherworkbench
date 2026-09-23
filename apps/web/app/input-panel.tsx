@@ -90,12 +90,16 @@ export interface InputPanelProps {
    *
    * The bottom of the input, because that is where the eye already is once you have finished typing
    * and it is the ordinary form-then-submit reading order. It sat between the Input and Result
-   * panels before -- a full-width band of its own, floating between two cards.
-   *
-   * Rendered bare rather than wrapped in an aligning row: whatever goes here decides its own width,
-   * which is what lets `Compute` span the panel.
-   */
+   * panels before -- a full-width band of its own, floating between two ca    * Rendered bare rather than wrapped in an aligning row: whatever goes here decides its own width,
+    * which is what lets `Compute` span the panel.
+    */
   footer?: ReactNode;
+  /** Custom panel title, overriding "Input" / "Generate". */
+  title?: string;
+  /** Custom description node or string. */
+  description?: ReactNode;
+  /** False to hide the Auto update toggle. Defaults to true. */
+  showAutoUpdate?: boolean;
 }
 
 /**
@@ -127,6 +131,9 @@ export function InputPanel({
   onAutoUpdateChange,
   material,
   footer,
+  title,
+  description,
+  showAutoUpdate = true,
 }: InputPanelProps) {
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -151,32 +158,22 @@ export function InputPanel({
 
   return (
     <Panel
-      title={generates ? "Generate" : "Input"}
+      title={title ?? (generates ? "Generate" : "Input")}
       description={
-        readsInput ? (
-          <span data-ocs-input-size="">
-            {describeInputSize(input, byteLength) || "Nothing entered yet."}
-          </span>
-        ) : generates ? (
-          "This tool reads no input. Everything it needs is in Settings."
-        ) : (
-          "This tool takes its input from the fields below rather than from a text box."
+        description ?? (
+          readsInput ? (
+            <span data-ocs-input-size="">
+              {describeInputSize(input, byteLength) || "Nothing entered yet."}
+            </span>
+          ) : generates ? (
+            "This tool reads no input. Everything it needs is in Settings."
+          ) : (
+            "This tool takes its input from the fields below rather than from a text box."
+          )
         )
       }
       actions={
-        /**
-         * Absent for a generator, because the switch is about typing.
-         *
-         * Its hint reads "recompute after you stop typing" over a panel with no box in it, and the
-         * behaviour it controls -- not recomputing over input you are mid-way through -- has no
-         * meaning where there is no input. The workbench forces it on for those tools rather than
-         * leaving a hidden switch governing whether a UUID appears, and puts the Generate button on
-         * screen permanently instead.
-         *
-         * A switch rather than a checkbox where it does appear: it takes effect immediately rather
-         * than holding a value for something else to act on later. See the note on `Toggle`.
-         */
-        generates ? undefined : (
+        !showAutoUpdate || generates ? undefined : (
           <Toggle
             id="auto-update"
             label="Auto update"

@@ -1,8 +1,14 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ByteSourceMode, BytesEncoding, OptionValue, OptionValues } from "@ocs/contracts";
-import { BYTES_ENCODING_LABEL, optEnumOr } from "@ocs/contracts";
+import type { ByteSourceMode, BytesEncoding, OptionValue, OptionValues, TextEncoding } from "@ocs/contracts";
+import {
+  BYTE_SOURCE_MODE_LABEL,
+  BYTES_ENCODING_LABEL,
+  ENCODING_GROUP_LABEL,
+  encodingsByGroup,
+  optEnumOr,
+} from "@ocs/contracts";
 import type {
   OptionCatalogue,
   OptionDef,
@@ -11,6 +17,7 @@ import type {
 } from "@ocs/engine";
 import {
   decodeBytesValue,
+  decodeInput,
   describeByteLength,
   encodingOptionId,
   isAvailableOn,
@@ -18,6 +25,7 @@ import {
   isValidByteLength,
   orderedGroups,
   LOSSLESS_BYTES_ENCODINGS,
+  MAX_TEXT_INPUT_CHARS,
   randomValueEntropyBits,
   randomBytesValue,
   redundantOptionIds,
@@ -25,6 +33,35 @@ import {
 import { Button, ClearButton, CopyIconButton, SecretField, StringListEditor, Toggle, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
 import { formatBytes } from "./input-state";
+
+const MODES: readonly ByteSourceMode[] = [
+  "text",
+  "hex",
+  "hex-lenient",
+  "base64",
+  "base64url",
+  "file",
+];
+
+const ENCODING_GROUPS = encodingsByGroup();
+
+const MODE_HINT: Record<ByteSourceMode, string> = {
+  text: "Characters, turned into bytes by the encoding selected beside this.",
+  hex: "Strict hex: two digits per byte, whitespace allowed, nothing else.",
+  "hex-lenient":
+    "Hex out of a debugger or a source file — 0x prefixes, commas, braces and \\x escapes are all stripped before parsing.",
+  base64: "Standard Base64, with or without padding.",
+  base64url: "Base64 with - and _ in place of + and /, as used in JWTs and URLs.",
+  file: "Streamed from disk in chunks, so file size is not bounded by memory.",
+};
+
+const PLACEHOLDERS: Record<Exclude<ByteSourceMode, "file">, string> = {
+  text: "Type or paste anything…",
+  hex: "de ad be ef  ·  0xdeadbeef  ·  de:ad:be:ef",
+  "hex-lenient": "00000000: de ad be ef   ....  ·  { 0xde, 0xad, 0xbe, 0xef }",
+  base64: "3q2+7w==",
+  base64url: "3q2-7w",
+};
 
 const BYTES_ENCODINGS: readonly BytesEncoding[] = [
   "hex",
@@ -70,6 +107,8 @@ export interface OptionsFormProps {
   headings?: boolean;
   /** Active input mode from the parent workbench, e.g. "text" or "file". */
   inputMode?: ByteSourceMode;
+  /** Active character encoding from the parent workbench, e.g. "utf-8". */
+  inputEncoding?: TextEncoding;
   onChange: (id: string, value: OptionValue | undefined) => void;
   /**
    * How many bytes this option's Generate button should produce, when the answer depends on the spec.
@@ -149,6 +188,7 @@ export function OptionsForm({
   groupIds,
   headings = true,
   inputMode,
+  inputEncoding,
   onChange,
   generateLength,
   acceptedByteLengths,
@@ -220,6 +260,7 @@ export function OptionsForm({
                       option={option}
                       value={options[option.id]}
                       inputMode={inputMode}
+                      inputEncoding={inputEncoding}
                       generateLength={generateLength}
                       acceptedByteLengths={acceptedByteLengths}
                       // A `bytes` option's encoding lives in a synthesised companion
@@ -249,6 +290,7 @@ interface OptionControlProps {
   option: OptionDef;
   value: OptionValue | undefined;
   inputMode?: ByteSourceMode;
+  inputEncoding?: TextEncoding;
   bytesEncoding: BytesEncoding;
   supersededBy: string | undefined;
   catalogue: OptionCatalogue;
@@ -263,6 +305,7 @@ function OptionControl({
   option,
   value,
   inputMode,
+  inputEncoding,
   bytesEncoding,
   supersededBy,
   catalogue,
@@ -397,6 +440,7 @@ function OptionControl({
             option={option}
             value={value}
             parentInputMode={inputMode}
+            parentTextEncoding={inputEncoding}
             onChange={onChange}
           />
         );
@@ -467,52 +511,83 @@ function OptionControl({
 /**
  * A multi-line text control (such as a PEM certificate or private key).
  *
- * Supports both Text and File input modes:
- * - In Text mode: Renders a matching 10-row textarea with identical typography and padding.
- * - In File mode: Renders the same drag-and-drop / Choose File dropzone as the primary input panel.
- *
- * Aligns with the parent input's mode when in File mode, and provides a Source selector so
- * users can choose files for both inputs or mix text and files.
+ * Provides full parity with the primary InputPanel:
+ * - Source modes: Text, Hex, Hex (loose), Base64, Base64url, File.
+ * - Text encoding selector when in Text mode.
+ * - Copy and Clear buttons.
+ * - Drag-and-drop / Choose File dropzone when in File mode.
+ * - Problem validation and error indicator.
+ * - Size / byte-length display.
+ * - Two-way sync with the parent workbench input mode and encoding.
  */
 function MultilineTextControl({
   option,
   value,
   parentInputMode,
+  parentTextEncoding,
   onChange,
 }: {
   option: OptionDef;
   value: OptionValue | undefined;
   parentInputMode?: ByteSourceMode;
+  parentTextEncoding?: TextEncoding;
   onChange: (id: string, value: OptionValue | undefined) => void;
 }) {
-  const [mode, setMode] = useState<"text" | "file">(
-    parentInputMode === "file" ? "file" : "text",
-  );
+  const [mode, setMode] = useState<ByteSourceMode>(parentInputMode ?? "text");
+  const [textEncoding, setTextEncoding] = useState<TextEncoding>(parentTextEncoding ?? "utf-8");
   const [dragging, setDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ name: string; size: number } | undefined>();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textValue = typeof value === "string" ? value : "";
 
-  // Mirror the parent workbench source in both directions.
-  // One-way sync (only file→file) left the secondary stuck in File mode after
-  // the user toggled the main source back to Text.
+  // Mirror the parent workbench source and character encoding
   useEffect(() => {
-    setMode(parentInputMode === "file" ? "file" : "text");
+    if (parentInputMode) {
+      setMode(parentInputMode);
+    }
   }, [parentInputMode]);
+
+  useEffect(() => {
+    if (parentTextEncoding) {
+      setTextEncoding(parentTextEncoding);
+    }
+  }, [parentTextEncoding]);
 
   const takeFile = (file: File | undefined) => {
     if (!file) return;
     setSelectedFile({ name: file.name, size: file.size });
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === "string") {
-        onChange(option.id, reader.result);
+      if (reader.result instanceof ArrayBuffer) {
+        const bytes = new Uint8Array(reader.result);
+        try {
+          const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+          onChange(option.id, text);
+        } catch {
+          // Binary DER - preserve as PEM so certificates/asymmetric parsers accept it directly
+          const isCert = option.id.toLowerCase().includes("cert");
+          const label = isCert ? "CERTIFICATE" : "PRIVATE KEY";
+          onChange(option.id, encodePemDirect(label, bytes));
+        }
       }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
-  const byteLength = textValue ? new TextEncoder().encode(textValue).length : undefined;
+  let problem: string | undefined;
+  let byteLength: number | undefined;
+
+  if (mode !== "file") {
+    if (textValue.length > 0) {
+      const decoded = decodeInput(textValue, mode, textEncoding);
+      if (decoded.ok) {
+        byteLength = decoded.bytes.length;
+      } else {
+        problem = decoded.error;
+      }
+    }
+  }
+
   const sizeDescription =
     mode === "file"
       ? selectedFile
@@ -520,7 +595,9 @@ function MultilineTextControl({
         : "No file chosen"
       : byteLength !== undefined
         ? formatBytes(byteLength)
-        : "Nothing entered yet.";
+        : problem
+          ? "Input has errors"
+          : "Nothing entered yet.";
 
   return (
     <div className="space-y-3">
@@ -538,15 +615,50 @@ function MultilineTextControl({
         <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
           Source
           <select
+            data-ocs-input-mode=""
             aria-label={`${option.label} source`}
             value={mode}
-            onChange={(event) => setMode(event.target.value as "text" | "file")}
+            onChange={(event) => setMode(event.target.value as ByteSourceMode)}
             className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-full dark:border-slate-700 dark:bg-slate-950"
           >
-            <option value="text">Text</option>
-            <option value="file">File</option>
+            {MODES.map((m) => (
+              <option
+                key={m}
+                value={m}
+                data-ocs-mode={m}
+                title={MODE_HINT[m]}
+              >
+                {BYTE_SOURCE_MODE_LABEL[m]}
+              </option>
+            ))}
           </select>
         </label>
+
+        {mode === "text" && (
+          <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
+            Encoding
+            <select
+              data-ocs-input-encoding=""
+              value={textEncoding}
+              onChange={(event) => setTextEncoding(event.target.value as TextEncoding)}
+              className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-[200px] sm:max-w-xs truncate dark:border-slate-700 dark:bg-slate-950"
+            >
+              {ENCODING_GROUPS.map(({ group, encodings }) => (
+                <optgroup key={group} label={ENCODING_GROUP_LABEL[group]}>
+                  {encodings.map((encoding) => (
+                    <option
+                      key={encoding.id}
+                      value={encoding.id}
+                      title={encoding.summary}
+                    >
+                      {encoding.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div className="flex items-center gap-1.5 ml-auto shrink-0">
           <CopyIconButton
@@ -572,7 +684,7 @@ function MultilineTextControl({
             title={
               mode === "file"
                 ? "Forget this file. The source stays on File."
-                : "Empty the box above. The source stays as it is."
+                : "Empty the box above. The source and encoding stay as they are."
             }
           />
         </div>
@@ -624,31 +736,43 @@ function MultilineTextControl({
           </p>
         </div>
       ) : (
-        <textarea
-          value={textValue}
-          placeholder={option.arg?.placeholder}
-          rows={option.arg?.rows ?? 10}
-          spellCheck={false}
-          autoCorrect="off"
-          autoCapitalize="off"
-          onDragOver={(event) => {
-            if (event.dataTransfer.types.includes("Files")) {
-              event.preventDefault();
+        <>
+          <textarea
+            data-ocs-input=""
+            value={textValue}
+            placeholder={
+              mode === "text"
+                ? (option.arg?.placeholder ?? PLACEHOLDERS.text)
+                : PLACEHOLDERS[mode]
             }
-          }}
-          onDrop={(event) => {
-            if (event.dataTransfer.files.length > 0) {
-              event.preventDefault();
-              takeFile(event.dataTransfer.files[0]);
-            }
-          }}
-          onChange={(event) => onChange(option.id, event.target.value || undefined)}
-          className={cn(
-            "w-full resize-y rounded-md border px-3 py-2 font-mono text-xs leading-relaxed",
-            "border-slate-300 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100",
-            "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600",
+            rows={option.arg?.rows ?? 10}
+            maxLength={MAX_TEXT_INPUT_CHARS}
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes("Files")) {
+                event.preventDefault();
+              }
+            }}
+            onDrop={(event) => {
+              if (event.dataTransfer.files.length > 0) {
+                event.preventDefault();
+                takeFile(event.dataTransfer.files[0]);
+              }
+            }}
+            onChange={(event) => onChange(option.id, event.target.value || undefined)}
+            className={cn(
+              "w-full resize-y rounded-md border px-3 py-2 font-mono text-xs leading-relaxed",
+              "border-slate-300 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100",
+              "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600",
+              problem && "border-(--color-severity-error)",
+            )}
+          />
+          {problem && (
+            <p className="text-[11px] text-(--color-severity-error)">{problem}</p>
           )}
-        />
+        </>
       )}
 
       {option.summary && (
@@ -658,6 +782,19 @@ function MultilineTextControl({
       )}
     </div>
   );
+}
+
+function encodePemDirect(label: string, bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  const b64 = btoa(binary);
+  const lines: string[] = [];
+  for (let i = 0; i < b64.length; i += 64) {
+    lines.push(b64.slice(i, i + 64));
+  }
+  return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----`;
 }
 
 /**

@@ -235,9 +235,9 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
           >
             <MenuIcon />
           </button>
-          <div className="flex items-baseline gap-2">
-            <span className="text-sm font-semibold tracking-tight">Cipher Workbench</span>
-            <span className="hidden text-[11px] text-slate-500 sm:inline dark:text-slate-400">
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold tracking-tight leading-none">Cipher Workbench</span>
+            <span className="hidden text-[11px] text-slate-500 sm:inline dark:text-slate-400 mt-1">
               Hashes, checksums, MACs and ciphers — computed and verified
             </span>
           </div>

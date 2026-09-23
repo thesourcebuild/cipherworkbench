@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { OptionValue, OutputEncoding } from "@ocs/contracts";
 import { OutputEncoding as OutputEncodingSchema, setOption } from "@ocs/contracts";
 import {
+  decodeInput,
   identifyAmong,
+  isAvailableOn,
   lint,
   type ToolDefinition,
   type ToolSample,
@@ -13,6 +15,19 @@ import {
 import { loadTool } from "@ocs/registry";
 import { platform } from "@ocs/platform";
 import { Button, MonoBlock, Panel, cn } from "@ocs/ui";
+
+function encodePemDirect(label: string, bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  const b64 = btoa(binary);
+  const lines: string[] = [];
+  for (let i = 0; i < b64.length; i += 64) {
+    lines.push(b64.slice(i, i + 64));
+  }
+  return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----`;
+}
 import { DiagnosticsPanel } from "./diagnostics-panel";
 import { InputPanel } from "./input-panel";
 import { isInputBlank, type InputState } from "./input-state";
@@ -134,10 +149,136 @@ export function ToolWorkbench({
 
   const tag = useMemo(() => (tool && spec ? tool.variantTag?.(spec) : undefined), [tool, spec]);
 
+  const secondaryOptionDef = useMemo(() => {
+    if (!tool || !spec) return undefined;
+    return tool.catalogue
+      .inGroup("pair")
+      .find((o) => isAvailableOn(o, tag));
+  }, [tool, spec, tag]);
+
   const hasInputMaterial = useMemo(() => {
     if (!tool) return false;
-    return visibleOptionGroups(tool.catalogue, tool.groups, tag, "input").length > 0;
+    const inputGroups = visibleOptionGroups(tool.catalogue, tool.groups, tag, "input");
+    return inputGroups.filter((g) => g.group.id !== "pair").length > 0;
   }, [tool, tag]);
+
+  const setOptionValue = useCallback(
+    (id: string, value: OptionValue | undefined) =>
+      setSpec((prev) =>
+        prev ? { ...prev, options: setOption(prev.options, id, value) } : prev,
+      ),
+    [],
+  );
+
+  const [secondaryInput, setSecondaryInput] = useState<InputState>(() => ({
+    mode: "text",
+    text: "",
+    textEncoding: "utf-8",
+  }));
+
+  const lastSetSecondaryVal = useRef<OptionValue | undefined>(undefined);
+  const secondarySeeded = useRef(false);
+
+  // Sync secondary input text when spec first loads or if modified from outside (e.g. preset/restore)
+  useEffect(() => {
+    if (!secondaryOptionDef || !spec) return;
+    const val = spec.options[secondaryOptionDef.id];
+
+    if (!secondarySeeded.current) {
+      secondarySeeded.current = true;
+      const text = typeof val === "string" ? val : "";
+      lastSetSecondaryVal.current = val;
+      setSecondaryInput((prev) => ({
+        ...prev,
+        text,
+      }));
+      return;
+    }
+
+    // Only update if the spec changed from an external source (not from onSecondaryInputChange)
+    if (val !== lastSetSecondaryVal.current) {
+      lastSetSecondaryVal.current = val;
+      // Do not clear the preserved text when in file mode or if val is undefined
+      if (typeof val === "string") {
+        setSecondaryInput((prev) => (prev.text === val ? prev : { ...prev, text: val }));
+      }
+    }
+  }, [secondaryOptionDef, spec]);
+
+  const onSecondaryInputChange = useCallback(
+    (next: InputState) => {
+      setSecondaryInput(next);
+      if (!secondaryOptionDef) return;
+
+      if (next.mode === "file") {
+        if (next.file) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (reader.result instanceof ArrayBuffer) {
+              const bytes = new Uint8Array(reader.result);
+              try {
+                const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+                lastSetSecondaryVal.current = text;
+                setOptionValue(secondaryOptionDef.id, text);
+              } catch {
+                const isCert = secondaryOptionDef.id.toLowerCase().includes("cert");
+                const label = isCert ? "CERTIFICATE" : "PRIVATE KEY";
+                const pem = encodePemDirect(label, bytes);
+                lastSetSecondaryVal.current = pem;
+                setOptionValue(secondaryOptionDef.id, pem);
+              }
+            }
+          };
+          reader.readAsArrayBuffer(next.file);
+        } else {
+          lastSetSecondaryVal.current = undefined;
+          setOptionValue(secondaryOptionDef.id, undefined);
+        }
+      } else {
+        const val = next.text || undefined;
+        lastSetSecondaryVal.current = val;
+        setOptionValue(secondaryOptionDef.id, val);
+      }
+    },
+    [secondaryOptionDef, setOptionValue],
+  );
+
+  const secondaryDecoded = useMemo(() => {
+    if (!secondaryInput || secondaryInput.mode === "file") {
+      return {
+        byteLength: secondaryInput?.file?.size,
+        problem: undefined,
+      };
+    }
+    if (!secondaryInput.text) {
+      return { byteLength: 0, problem: undefined };
+    }
+    const res = decodeInput(
+      secondaryInput.text,
+      secondaryInput.mode,
+      secondaryInput.textEncoding,
+    );
+    if (res.ok) {
+      return { byteLength: res.bytes.length, problem: undefined };
+    }
+    return { byteLength: undefined, problem: res.error };
+  }, [secondaryInput]);
+
+  const primaryTitle = useMemo(() => {
+    if (toolId === "cert-diff") return "First Certificate (PEM)";
+    if (toolId === "cert-matcher") return "Certificate (PEM)";
+    if (secondaryOptionDef) {
+      return "First Input";
+    }
+    return undefined;
+  }, [secondaryOptionDef, toolId]);
+
+  const secondaryTitle = useMemo(() => {
+    if (!secondaryOptionDef) return undefined;
+    if (toolId === "cert-diff") return "Second Certificate (PEM)";
+    if (toolId === "cert-matcher") return "Private Key (PEM)";
+    return secondaryOptionDef.label;
+  }, [secondaryOptionDef, toolId]);
 
   useEffect(() => {
     if (!tool || !inputIsSeeded || !effectiveReadsInput) return;
@@ -220,13 +361,7 @@ export function ToolWorkbench({
     [tool, spec],
   );
 
-  const setOptionValue = useCallback(
-    (id: string, value: OptionValue | undefined) =>
-      setSpec((prev) =>
-        prev ? { ...prev, options: setOption(prev.options, id, value) } : prev,
-      ),
-    [],
-  );
+
 
   if (loadError) {
     return (
@@ -393,6 +528,37 @@ export function ToolWorkbench({
     },
   ];
 
+  const computeFooter = (
+    <div className="space-y-2">
+      {/* Bytes read of bytes available, which a generator has neither of. */}
+      {!generates && <ProgressReadout state={state} />}
+      {(!effectiveAutoUpdate || generates) && (
+        <Button
+          data-ocs-compute=""
+          variant="primary"
+          // `sm` and full width: it is the panel's one action, so it reads as a bar across
+          // the bottom of the input rather than a button placed somewhere in it. The height
+          // comes down because a 40px slab under a textarea is the heaviest thing on the
+          // page, and the only control competing with it is a switch in the header.
+          size="sm"
+          className="w-full"
+          disabled={!canRecompute}
+          onClick={recompute}
+          title={
+            generates
+              ? "Produce another value. Nothing here depends on an input, so this is the whole interaction."
+              : "Auto update is off — nothing recomputes until you ask."
+          }
+        >
+          {/* "Compute" over a box you filled in; "Generate" where the button is the whole
+              interaction. The KDFs keep "Compute": they read no box either, but their
+              password comes from a field, so there is still an input being processed. */}
+          {generates ? "Generate" : "Compute"}
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     /*
       Two columns in one row, and *neither* scrolls: `<main>` above owns the only scrollbar in the
@@ -405,6 +571,7 @@ export function ToolWorkbench({
         <ToolHeader manifest={tool} description={tool.describe(spec)} />
 
         <InputPanel
+          title={primaryTitle}
           input={input}
           onChange={onInputChange}
           readsInput={effectiveReadsInput}
@@ -425,56 +592,8 @@ export function ToolWorkbench({
           problem={inputProblem ?? (state.status === "error" ? state.error : undefined)}
           autoUpdate={effectiveAutoUpdate}
           onAutoUpdateChange={onAutoUpdateChange}
-          /**
-           * Only when auto-update is off, because with it on there is nothing to ask for.
-           *
-           * The sentence that used to sit beside this button is its tooltip now. It explained the
-           * button's own existence -- "nothing recomputes until you ask" -- to someone who had just
-           * turned the switch off and could see the button appear, which is a lot of words for a
-           * fact already on screen.
-           */
-          /**
-           * How much of the input has been consumed, and the button that consumes it.
-           *
-           * The readout is here rather than under the result because what it measures is *input* --
-           * bytes read of bytes available. Beneath a digest it sat next to "1 byte · 2 characters as
-           * shown" and the two were different quantities in the same grey, which is a thing a reader
-           * has to stop and work out. It also puts the bar directly above the button that fills it.
-           *
-           * `ProgressReadout` is unconditional and `Compute` is not, which is why they are wrapped
-           * rather than passed as one node: turning auto-update on removes the button and must not
-           * take the bar with it.
-           */
-          footer={
-            <div className="space-y-2">
-              {/* Bytes read of bytes available, which a generator has neither of. */}
-              {!generates && <ProgressReadout state={state} />}
-              {(!effectiveAutoUpdate || generates) && (
-                <Button
-                  data-ocs-compute=""
-                  variant="primary"
-                  // `sm` and full width: it is the panel's one action, so it reads as a bar across
-                  // the bottom of the input rather than a button placed somewhere in it. The height
-                  // comes down because a 40px slab under a textarea is the heaviest thing on the
-                  // page, and the only control competing with it is a switch in the header.
-                  size="sm"
-                  className="w-full"
-                  disabled={!canRecompute}
-                  onClick={recompute}
-                  title={
-                    generates
-                      ? "Produce another value. Nothing here depends on an input, so this is the whole interaction."
-                      : "Auto update is off — nothing recomputes until you ask."
-                  }
-                >
-                  {/* "Compute" over a box you filled in; "Generate" where the button is the whole
-                      interaction. The KDFs keep "Compute": they read no box either, but their
-                      password comes from a field, so there is still an input being processed. */}
-                  {generates ? "Generate" : "Compute"}
-                </Button>
-              )}
-            </div>
-          }
+          showAutoUpdate={true}
+          footer={secondaryOptionDef ? undefined : computeFooter}
           material={
             hasInputMaterial ? (
               <OptionsForm
@@ -483,14 +602,36 @@ export function ToolWorkbench({
                 options={spec.options}
                 tag={tag}
                 scope="input"
+                groupIds={visibleOptionGroups(tool.catalogue, tool.groups, tag, "input")
+                  .filter((g) => g.group.id !== "pair")
+                  .map((g) => g.group.id)}
                 generateLength={generateLength}
                 acceptedByteLengths={acceptedByteLengths}
                 inputMode={input.mode}
+                inputEncoding={input.textEncoding}
                 onChange={setOptionValue}
               />
             ) : undefined
           }
         />
+
+        {secondaryOptionDef && (
+          <InputPanel
+            title={secondaryTitle}
+            input={secondaryInput}
+            onChange={onSecondaryInputChange}
+            readsInput={true}
+            generates={false}
+            supportsFile={true}
+            buffersWholeFile={true}
+            byteLength={secondaryDecoded.byteLength}
+            problem={secondaryDecoded.problem}
+            autoUpdate={effectiveAutoUpdate}
+            onAutoUpdateChange={onAutoUpdateChange}
+            showAutoUpdate={false}
+            footer={computeFooter}
+          />
+        )}
 
         {ownPanels.map(({ group }) => (
           <Panel key={group.id} title={group.label} description={group.summary}>
