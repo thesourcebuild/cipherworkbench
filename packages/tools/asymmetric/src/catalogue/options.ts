@@ -7,6 +7,7 @@ import {
   OPTION_PARAM_SET,
   OPTION_OPERATION,
   OPTION_PRIVATE_KEY,
+  OPTION_PUBLIC_EXPONENT,
   OPTION_PUBLIC_KEY,
   OPTION_SCHEME,
   OPTION_SIGNATURE,
@@ -175,6 +176,41 @@ const MODULUS_OPTION: Def = {
   order: 10,
 };
 
+const EXPONENT_OPTION: Def = {
+  id: OPTION_PUBLIC_EXPONENT,
+  label: "Public exponent",
+  group: "algorithm",
+  kind: "enum",
+  choices: [
+    {
+      value: "65537",
+      label: "65537 (2¹⁶ + 1)",
+      summary: "Default — industry standard 4th Fermat prime F₄ (FIPS 186-4, RFC 8017)",
+    },
+    {
+      value: "3",
+      label: "3 (2¹ + 1)",
+      summary: "Fastest verification — Fermat prime F₁, legacy / research only",
+      insecure: true,
+    },
+    {
+      value: "17",
+      label: "17 (2⁴ + 1)",
+      summary: "Fast verification — Fermat prime F₂, legacy compromise",
+    },
+    {
+      value: "257",
+      label: "257 (2⁸ + 1)",
+      summary: "Intermediate Fermat prime F₃",
+    },
+  ],
+  availableOn: ["generate"],
+  summary: "65537 unless researching low-exponent behavior.",
+  detail:
+    "The public exponent e is used during encryption and signature verification. 65537 (2¹⁶ + 1) is the universal industry standard: having only two set bits in binary makes modular exponentiation fast via square-and-multiply while preventing small-exponent attacks (like Coppersmith's or Håstad's broadcast attack). A small exponent like 3 or 17 provides even faster verification but requires strict, verified padding.",
+  order: 12,
+};
+
 /**
  * RSA keys are PEM or JWK text; curve keys are raw bytes.
  *
@@ -208,7 +244,7 @@ function pemPublicKeyOption(availableOn: readonly AsymmetricOperation[]): Def {
     kind: "text",
     arg: { placeholder: "-----BEGIN PUBLIC KEY-----", multiline: true, rows: 6 },
     availableOn,
-    summary: "SPKI PEM, or a JWK. Not secret.",
+    summary: "SPKI PEM, or a JWK. Not a secret — share it freely.",
     detail:
       "A BEGIN PUBLIC KEY block (SubjectPublicKeyInfo) or a JWK with n and e. Leave it empty while a private key is present and the public key will be taken from that, which is the quick way to check a signature you have just produced.",
     order: 20,
@@ -304,6 +340,7 @@ const OAEP_LABEL_OPTION: Def = {
 const RSA_OPTIONS: readonly Def[] = [
   operationOption(["generate", "sign", "verify", "encrypt", "decrypt"]),
   MODULUS_OPTION,
+  EXPONENT_OPTION,
   SCHEME_OPTION,
   hashOption(["sign", "verify", "encrypt", "decrypt"], true),
   pemPrivateKeyOption(["sign", "decrypt"]),
@@ -342,7 +379,7 @@ const ECDSA_OPTIONS: readonly Def[] = [
     "Public key",
     ["verify"],
     { exact: ECDSA_PUBLIC_LENGTHS },
-    "Compressed (33 bytes) or uncompressed (65). Not secret.",
+    "Compressed (33 bytes) or uncompressed (65). Not a secret — share it freely.",
     "A point on the curve. Compressed form is a 0x02 or 0x03 prefix and the x-coordinate; uncompressed is 0x04 followed by x and y. Both are accepted and mean the same point. Leave this empty while a private key is present and it will be derived from that.",
   ),
   SIGNATURE_FORMAT_OPTION,
@@ -364,7 +401,7 @@ const ED25519_OPTIONS: readonly Def[] = [
     "Public key",
     ["verify"],
     { exact: [32] },
-    "Exactly 32 bytes. Not secret.",
+    "Exactly 32 bytes. Not a secret — share it freely.",
     "A compressed curve point -- Ed25519 has only this one encoding, which is one of the reasons there is so little to get wrong. Leave it empty while a private key is present and it will be derived from that.",
   ),
   signatureOption(
@@ -476,7 +513,7 @@ function pqOptions(toolId: string): readonly Def[] {
       isKem ? "Public key (theirs)" : "Public key",
       isKem ? ["encapsulate"] : ["verify"],
       { exact: pqLengths(toolId, (set) => set.publicKeyLen) },
-      isKem ? "The recipient's encapsulation key. Not secret." : "The verification key. Not secret.",
+      isKem ? "The recipient's encapsulation key. Not a secret — share it freely." : "The verification key. Not a secret — share it freely.",
       isKem
         ? "Encapsulating produces a shared secret *for whoever holds the matching private key*, so this is their public key and not yours. There is no message input at all -- a KEM generates the secret itself, which is the difference between it and public-key encryption."
         : "Leave it empty while a private key is present and it will be derived from that, which is the quick way to check a signature you have just produced.",

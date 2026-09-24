@@ -10,6 +10,7 @@ import {
   DEFAULT_ECDH_CURVE,
   DEFAULT_ECDSA_CURVE,
   DEFAULT_PARAM_SETS,
+  DEFAULT_RSA_EXPONENT,
   DEFAULT_RSA_HASH,
   DEFAULT_RSA_MODULUS,
   type AsymmetricOperation,
@@ -22,12 +23,18 @@ export const OPTION_CURVE = "curve";
 export const OPTION_HASH = "hash";
 export const OPTION_SCHEME = "scheme";
 export const OPTION_MODULUS_LENGTH = "modulusLength";
+export const OPTION_PUBLIC_EXPONENT = "publicExponent";
 export const OPTION_PRIVATE_KEY = "privateKey";
 export const OPTION_PUBLIC_KEY = "publicKey";
 export const OPTION_SIGNATURE = "signature";
 export const OPTION_SIGNATURE_FORMAT = "signatureFormat";
 export const OPTION_OAEP_LABEL = "oaepLabel";
 export const OPTION_PARAM_SET = "paramSet";
+
+/**
+ * Uniform hint displayed on public key fields across all asymmetric algorithms and formats.
+ */
+export const PUBLIC_KEY_HINT = "Not a secret — share it freely.";
 
 /**
  * `availableOn` tags are the operations themselves.
@@ -117,6 +124,23 @@ export function readModulusLength(options: OptionValues): number {
   if (raw === undefined) return DEFAULT_RSA_MODULUS;
   const parsed = Number.parseInt(raw, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_RSA_MODULUS;
+}
+
+/**
+ * Public exponent for RSA key generation.
+ *
+ * Defaults to 65537 (the 4th Fermat prime F4 = 2^16 + 1). Also allows small exponents
+ * such as 3 (Fermat prime F1), 17 (Fermat prime F2), and 257 (F3) for educational and legacy research.
+ */
+export function readPublicExponent(options: OptionValues): number {
+  const raw = optString(options, OPTION_PUBLIC_EXPONENT);
+  if (raw === undefined) return DEFAULT_RSA_EXPONENT;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_RSA_EXPONENT;
+}
+
+export function withPublicExponent(options: OptionValues, exponent: number): OptionValues {
+  return setOption(options, OPTION_PUBLIC_EXPONENT, String(exponent));
 }
 
 /** ECDSA signature spelling: 64-byte `r || s`, or the ASN.1 sequence OpenSSL emits. */

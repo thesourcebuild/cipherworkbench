@@ -30,7 +30,7 @@ import {
 } from "./bindings";
 import { ED25519_CURVE, type CurveMeta } from "./catalogue/tool-meta";
 import { decodePem, encodePem, formatJwk, isPrivateJwk, keyInputKind, parseJwk } from "./pem";
-import { maxOaepPlaintext } from "./pure";
+import { maxOaepPlaintext, PUBLIC_KEY_HINT } from "./pure";
 import { resolveAsymmetric, type ResolvedAsymmetric } from "./resolve";
 import type { AsymmetricSpec } from "./spec";
 
@@ -184,7 +184,7 @@ async function publicKeyFor(r: ResolvedAsymmetric): Promise<KeyResult & { derive
 
 /** RSA key generation: four exports of one keypair. */
 async function generateRsa(r: ResolvedAsymmetric): Promise<ToolResult> {
-  const key = await generateRsaKeypair(r.modulusBits);
+  const key = await generateRsaKeypair(r.modulusBits, r.publicExponent);
   const privatePem = encodePem("PRIVATE KEY", key.privatePkcs8);
   const publicPem = encodePem("PUBLIC KEY", key.publicSpki);
   return {
@@ -193,19 +193,18 @@ async function generateRsa(r: ResolvedAsymmetric): Promise<ToolResult> {
     fields: [
       { label: "Key size", value: `${key.modulusBits} bits` },
       {
+        label: "Public exponent",
+        value: String(key.publicExponent),
+      },
+      {
         label: "Private key (PKCS#8 PEM)",
         value: privatePem,
         secret: true,
         hint: KEEP_IT_HINT,
       },
-      { label: "Public key (SPKI PEM)", value: publicPem },
+      { label: "Public key (SPKI PEM)", value: publicPem, hint: PUBLIC_KEY_HINT },
       { label: "Private key (JWK)", value: formatJwk(key.privateJwk), secret: true },
-      { label: "Public key (JWK)", value: formatJwk(key.publicJwk) },
-      {
-        label: "Public exponent",
-        value: "65537",
-        hint: "The universal choice. A smaller one such as 3 is valid and has produced several real attacks.",
-      },
+      { label: "Public key (JWK)", value: formatJwk(key.publicJwk), hint: PUBLIC_KEY_HINT },
     ],
   };
 }
@@ -238,10 +237,7 @@ function generateCurveKeypair(r: ResolvedAsymmetric): ToolResult {
       {
         label: "Public key",
         value: encodeHex(publicKey),
-        hint:
-          curve.uncompressedLen === undefined
-            ? "Not secret. Share it freely."
-            : "Not secret, and in compressed form -- the leading 02 or 03 says which of the two y values it is.",
+        hint: PUBLIC_KEY_HINT,
       },
     ],
   };
@@ -643,7 +639,7 @@ function pqOperate(r: ResolvedAsymmetric, input: Uint8Array): ToolResult {
         {
           label: "Public key",
           value: encodeHex(keys.publicKey),
-          hint: `${set.publicKeyLen} bytes. Not secret — share it freely.`,
+          hint: PUBLIC_KEY_HINT,
         },
       ],
     };
@@ -777,7 +773,7 @@ export async function computeAsymmetric(
           text: `Public Modulus (n): 0x${nHex}\nPrivate Lambda (λ): 0x${lHex}\nPrivate Mu (μ): 0x${muHex}`,
           bytes: new TextEncoder().encode(nHex),
           fields: [
-            { label: "Public modulus (n)", value: "0x" + nHex },
+            { label: "Public modulus (n)", value: "0x" + nHex, hint: PUBLIC_KEY_HINT },
             { label: "Private lambda (λ)", value: "0x" + lHex },
             { label: "Private mu (μ)", value: "0x" + muHex },
           ],

@@ -10,6 +10,8 @@ import { createSpec } from "./create-spec";
 import { readOperation } from "./pure";
 import { AsymmetricSpec } from "./spec";
 
+import { asymmetricInfo } from "./info";
+
 /**
  * Builds the full contract for one public-key tool.
  *
@@ -28,6 +30,7 @@ export function asymmetricToolDefinition(toolId: string): ToolDefinition<Asymmet
     createSpec: () => createSpec({ variant: toolId }),
     specSchema: AsymmetricSpec,
     describe: describeSpec,
+    info: asymmetricInfo,
     compute: computeAsymmetric,
     /**
      * The variant tag is the operation.
@@ -64,3 +67,5 @@ export { describeSpec } from "./explain/describe";
 export { RULES, RULE_CODES } from "./lint/rules";
 export { lint, applyAllFixes } from "./lint/run";
 export { decodePem, encodePem, formatJwk, keyInputKind, parseJwk } from "./pem";
+export { asymmetricInfo } from "./info";
+

@@ -28,7 +28,15 @@ export { createCertificate } from "./asn1/create-cert";
 export { createCsr } from "./asn1/create-csr";
 export { generateMtlsSuite } from "./asn1/mtls";
 export { parseAsn1, TagClass, UniversalTag } from "./asn1/asn1";
-export { encodeDerSequence, encodeDerInteger, encodeDerOid, encodeDerOctetString } from "./asn1/encoder";
+export {
+  encodeDerSequence,
+  encodeDerInteger,
+  encodeDerOid,
+  encodeDerOctetString,
+  encodeDerBitString,
+  encodeDerNull,
+  encodeDerTlv,
+} from "./asn1/encoder";
 export { encodePem, parseAllPem, detectInputBytes } from "./asn1/pem";
 export {
   RSA_CERTIFICATE_PEM,

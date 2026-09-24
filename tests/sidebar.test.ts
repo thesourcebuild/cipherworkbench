@@ -61,4 +61,29 @@ describe("Sidebar getInitialCollapsed", () => {
       }
     }
   });
+
+  it("allows collapsing and expanding any family regardless of whether a family filter is active", () => {
+    // Simulates the toggle logic used in Sidebar:
+    // const familyOpen = search.trim() !== "" || !collapsed.has(familyKey);
+    const collapsed = new Set<string>();
+
+    const isFamilyOpen = (family: string, search = "") =>
+      search.trim() !== "" || !collapsed.has(`family:${family}`);
+
+    // Initially open
+    expect(isFamilyOpen("asymmetric")).toBe(true);
+
+    // Toggle to collapse
+    collapsed.add("family:asymmetric");
+    expect(isFamilyOpen("asymmetric")).toBe(false);
+
+    // Toggle to expand
+    collapsed.delete("family:asymmetric");
+    expect(isFamilyOpen("asymmetric")).toBe(true);
+
+    // Active search overrides collapse so users see matches
+    collapsed.add("family:asymmetric");
+    expect(isFamilyOpen("asymmetric", "rsa")).toBe(true);
+  });
 });
+

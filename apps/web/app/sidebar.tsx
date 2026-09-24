@@ -376,10 +376,7 @@ export function Sidebar({
         )}
         {groups.map(({ family, count, sections }) => {
           const familyKey = `family:${family}`;
-          const familyOpen =
-            (activeFamily !== null && activeFamily === family) ||
-            search.trim() !== "" ||
-            !collapsed.has(familyKey);
+          const familyOpen = search.trim() !== "" || !collapsed.has(familyKey);
           return (
             <div key={family} className="mb-2">
               <button
@@ -416,10 +413,7 @@ export function Sidebar({
                     );
                   }
                   const categoryKey = `cat:${family}/${label}`;
-                  const categoryOpen =
-                    (activeFamily !== null && activeFamily === family) ||
-                    search.trim() !== "" ||
-                    !collapsed.has(categoryKey);
+                  const categoryOpen = search.trim() !== "" || !collapsed.has(categoryKey);
                   return (
                     <div key={label} className="mt-1 pl-2">
                       <button

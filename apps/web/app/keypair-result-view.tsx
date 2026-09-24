@@ -4,8 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ToolManifest, ToolResultField, ToolSpecBase } from "@ocs/engine";
 import { Button, MonoBlock, cn, useCopy } from "@ocs/ui";
 import { platform } from "@ocs/platform";
-import { downloadTextFile } from "./export-json";
+import { downloadBinaryFile, downloadTextFile } from "./export-json";
 import type { ComputeStatus } from "./use-compute";
+import {
+  type KeypairFormat,
+  resolveKeypairData,
+  getKeypairView,
+  downloadActiveKeypairFiles,
+  downloadPemPairFiles,
+  downloadRawBinaryPairFiles,
+  downloadJwkPairFiles,
+  downloadKeypairBundleFiles,
+} from "./keypair-formats";
 
 export interface KeypairResultViewProps {
   fields: readonly ToolResultField[];
@@ -24,11 +34,21 @@ export function KeypairResultView({
   stale,
   pending,
 }: KeypairResultViewProps) {
-  const [format, setFormat] = useState<"pem" | "jwk">("pem");
+  const keyData = useMemo(() => resolveKeypairData(fields, manifest), [fields, manifest]);
+
+  const [format, setFormat] = useState<KeypairFormat>(keyData.defaultFormat);
   const [revealedPrivate, setRevealedPrivate] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [menuAlign, setMenuAlign] = useState<"left" | "right">("right");
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+  // Sync format if switching tools makes current format invalid
+  useEffect(() => {
+    const isAvailable = keyData.availableFormats.some((f) => f.id === format);
+    if (!isAvailable) {
+      setFormat(keyData.defaultFormat);
+    }
+  }, [keyData, format]);
 
   const computeAlignment = useCallback(() => {
     if (!downloadMenuRef.current) return;
@@ -39,16 +59,13 @@ export function KeypairResultView({
     const spaceToContainerLeft = rect.right - containerLeft;
     const spaceToViewportLeft = rect.right;
     const spaceToViewportRight = window.innerWidth - rect.left;
-    const menuWidth = 260; // w-64 is 256px + margin
+    const menuWidth = 280;
 
-    // If opening to the left (right-0) would bleed into container left (sidebar) or viewport left:
     if (spaceToContainerLeft < menuWidth || spaceToViewportLeft < menuWidth) {
       setMenuAlign("left");
     } else if (spaceToViewportRight < menuWidth) {
-      // If opening to the right would bleed off right edge of viewport:
       setMenuAlign("right");
     } else {
-      // Otherwise, open towards the center of the container
       const distFromLeft = rect.left - containerLeft;
       const distFromRight = containerRight - rect.right;
       setMenuAlign(distFromLeft < distFromRight ? "left" : "right");
@@ -82,43 +99,27 @@ export function KeypairResultView({
     };
   }, [downloadMenuOpen, computeAlignment]);
 
-  // Extract fields
-  const privatePemField = fields.find(
-    (f) => f.label.includes("Private key (PKCS#8") || f.label === "Private key (PEM)",
-  );
-  const publicPemField = fields.find(
-    (f) => f.label.includes("Public key (SPKI") || f.label === "Public key (PEM)",
-  );
-  const privateJwkField = fields.find((f) => f.label.includes("Private key (JWK)"));
-  const publicJwkField = fields.find((f) => f.label.includes("Public key (JWK)"));
-
-  // Fallbacks for curve / pqc tools (raw hex or standard keys)
-  const genericPrivateField = fields.find(
+  // Original raw fields for hints and labels
+  const originalPrivateField = fields.find(
     (f) =>
-      f.label.toLowerCase() === "private key" ||
-      f.label.toLowerCase() === "secret key" ||
+      f.label.toLowerCase().includes("private") ||
+      f.label.toLowerCase().includes("secret") ||
       f.secret,
   );
-  const genericPublicField = fields.find(
-    (f) => f.label.toLowerCase() === "public key" && !f.label.includes("JWK"),
+  const originalPublicField = fields.find(
+    (f) =>
+      f.label.toLowerCase().includes("public") &&
+      !f.label.includes("JWK") &&
+      !f.label.includes("PEM"),
   );
 
-  const hasPemJwkSplit = Boolean(privatePemField && privateJwkField);
+  const basePrivateLabel = originalPrivateField?.label ?? "Private key";
+  const basePublicLabel = originalPublicField?.label ?? "Public key";
 
-  // Determine active private & public key representations
-  const activePrivate = useMemo(() => {
-    if (hasPemJwkSplit) {
-      return format === "pem" ? privatePemField : privateJwkField;
-    }
-    return privatePemField ?? genericPrivateField;
-  }, [hasPemJwkSplit, format, privatePemField, privateJwkField, genericPrivateField]);
-
-  const activePublic = useMemo(() => {
-    if (hasPemJwkSplit) {
-      return format === "pem" ? publicPemField : publicJwkField;
-    }
-    return publicPemField ?? genericPublicField;
-  }, [hasPemJwkSplit, format, publicPemField, publicJwkField, genericPublicField]);
+  const activeView = useMemo(
+    () => getKeypairView(format, keyData, basePrivateLabel, basePublicLabel),
+    [format, keyData, basePrivateLabel, basePublicLabel],
+  );
 
   // Key metadata items (Key size, curve, parameter set, public exponent)
   const metaFields = useMemo(() => {
@@ -134,110 +135,84 @@ export function KeypairResultView({
   const toolName = manifest?.id ?? "keypair";
   const keySizeLabel =
     metaFields.find((f) => f.label === "Key size")?.value.replace(/\s+/g, "-") ?? "";
+  const baseFilename = `${toolName}${keySizeLabel ? `-${keySizeLabel}` : ""}`;
+
+  const activeFormatOption = keyData.availableFormats.find((f) => f.id === format);
+  const activeFormatLabel = activeFormatOption?.label ?? format.toUpperCase();
 
   const handleDownloadPrivate = () => {
-    if (!activePrivate) return;
-    const isJwk = format === "jwk" || activePrivate.label.includes("JWK");
-    const isPem = format === "pem" || activePrivate.label.includes("PEM");
-    const ext = isJwk ? "jwk.json" : isPem ? "pem" : "key";
-    const filename = `${toolName}${keySizeLabel ? `-${keySizeLabel}` : ""}-private.${ext}`;
-    downloadTextFile(
-      filename,
-      activePrivate.value,
-      isJwk ? "application/json" : isPem ? "application/x-pem-file" : "text/plain",
-    );
+    if (format === "raw") {
+      if (keyData.rawPrivate) {
+        downloadBinaryFile(`${baseFilename}-private.bin`, keyData.rawPrivate);
+      }
+    } else {
+      downloadTextFile(
+        `${baseFilename}-private.${activeView.fileExt}`,
+        activeView.privateVal,
+        activeView.mimeType,
+      );
+    }
   };
 
   const handleDownloadPublic = () => {
-    if (!activePublic) return;
-    const isJwk = format === "jwk" || activePublic.label.includes("JWK");
-    const isPem = format === "pem" || activePublic.label.includes("PEM");
-    const ext = isJwk ? "jwk.json" : isPem ? "pem" : "pub";
-    const filename = `${toolName}${keySizeLabel ? `-${keySizeLabel}` : ""}-public.${ext}`;
-    downloadTextFile(
-      filename,
-      activePublic.value,
-      isJwk ? "application/json" : isPem ? "application/x-pem-file" : "text/plain",
-    );
-  };
-
-  const handleDownloadPemPair = () => {
-    if (!privatePemField || !publicPemField) return;
-    const base = `${toolName}${keySizeLabel ? `-${keySizeLabel}` : ""}`;
-    downloadTextFile(`${base}-private.pem`, privatePemField.value, "application/x-pem-file");
-    setTimeout(() => {
-      downloadTextFile(`${base}-public.pem`, publicPemField.value, "application/x-pem-file");
-    }, 150);
-  };
-
-  const handleDownloadJwkPair = () => {
-    if (!privateJwkField || !publicJwkField) return;
-    const base = `${toolName}${keySizeLabel ? `-${keySizeLabel}` : ""}`;
-    downloadTextFile(`${base}-private.jwk.json`, privateJwkField.value, "application/json");
-    setTimeout(() => {
-      downloadTextFile(`${base}-public.jwk.json`, publicJwkField.value, "application/json");
-    }, 150);
-  };
-
-  const handleDownloadActivePair = () => {
-    if (!activePrivate || !activePublic) return;
-    handleDownloadPrivate();
-    setTimeout(() => {
-      handleDownloadPublic();
-    }, 150);
-  };
-
-  const handleDownloadBoth = () => {
-    if (!activePrivate || !activePublic) return;
-    if (hasPemJwkSplit && privatePemField && publicPemField && privateJwkField && publicJwkField) {
-      // Create two separate pairs: PEM pair (private + public) and JWK pair (private + public)
-      const base = `${toolName}${keySizeLabel ? `-${keySizeLabel}` : ""}`;
-      downloadTextFile(`${base}-private.pem`, privatePemField.value, "application/x-pem-file");
-      setTimeout(() => {
-        downloadTextFile(`${base}-public.pem`, publicPemField.value, "application/x-pem-file");
-      }, 150);
-      setTimeout(() => {
-        downloadTextFile(`${base}-private.jwk.json`, privateJwkField.value, "application/json");
-      }, 300);
-      setTimeout(() => {
-        downloadTextFile(`${base}-public.jwk.json`, publicJwkField.value, "application/json");
-      }, 450);
+    if (format === "raw") {
+      if (keyData.rawPublic) {
+        downloadBinaryFile(`${baseFilename}-public.bin`, keyData.rawPublic);
+      }
     } else {
-      handleDownloadActivePair();
+      downloadTextFile(
+        `${baseFilename}-public.${activeView.fileExt}`,
+        activeView.publicVal,
+        activeView.mimeType,
+      );
     }
   };
+
+  const privateHint =
+    format === keyData.defaultFormat && originalPrivateField?.hint
+      ? originalPrivateField.hint
+      : activeView.privateHint ?? originalPrivateField?.hint;
+
+  const publicHint =
+    format === keyData.defaultFormat && originalPublicField?.hint
+      ? originalPublicField.hint
+      : activeView.publicHint ?? originalPublicField?.hint;
 
   return (
     <div className={cn("space-y-4", (stale || pending) && "opacity-60")}>
       {/* Format Switcher & Batch Actions Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 dark:border-slate-800">
-        <div className="flex items-center gap-2">
-          {hasPemJwkSplit && (
-            <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-200 pb-3 dark:border-slate-800">
+        <div className="flex items-center gap-2 flex-nowrap overflow-x-auto no-scrollbar py-0.5">
+          {keyData.availableFormats.length > 1 && (
+            <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
               <label
                 htmlFor="keypair-format-select"
                 className="text-[11px] font-medium text-slate-500 dark:text-slate-400"
               >
-                Format:
+                Source:
               </label>
               <select
                 id="keypair-format-select"
-                aria-label="Key format"
+                data-ocs-keypair-format=""
+                aria-label="Key source format"
                 value={format}
-                onChange={(e) => setFormat(e.target.value as "pem" | "jwk")}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 shadow-xs focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                onChange={(e) => setFormat(e.target.value as KeypairFormat)}
+                className="h-6 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-800 shadow-xs focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
               >
-                <option value="pem">PEM (PKCS#8 / SPKI)</option>
-                <option value="jwk">JWK (JSON Web Key)</option>
+                {keyData.availableFormats.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
           )}
 
-          {/* Quick info pills */}
+          {/* Quick info pills (Key size, Public exponent, Curve, Parameter set) */}
           {metaFields.map((field) => (
             <span
               key={field.label}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
             >
               <span className="text-slate-500">{field.label}:</span>
               <span className="font-semibold">{field.value}</span>
@@ -245,115 +220,144 @@ export function KeypairResultView({
           ))}
         </div>
 
-        {activePrivate && activePublic && (
-          <div className="relative inline-block text-left" ref={downloadMenuRef}>
-            {hasPemJwkSplit ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="secondary"
+        {/* Dropdown for Download Keypair */}
+        <div className="relative inline-block shrink-0 text-left" ref={downloadMenuRef}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              if (!downloadMenuOpen) {
+                computeAlignment();
+              }
+              setDownloadMenuOpen((prev) => !prev);
+            }}
+            className="inline-flex items-center gap-1.5"
+            aria-expanded={downloadMenuOpen}
+            aria-haspopup="true"
+            title="Download keypair options"
+          >
+            <span>Download Keypair</span>
+            <span
+              className="text-[9px] opacity-70 transition-transform duration-150"
+              style={{ transform: downloadMenuOpen ? "rotate(180deg)" : undefined }}
+            >
+              ▼
+            </span>
+          </Button>
+
+          {downloadMenuOpen && (
+            <div
+              className={cn(
+                "absolute z-30 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white p-1 shadow-lg ring-1 ring-black/5 dark:border-slate-800 dark:bg-slate-900",
+                menuAlign === "left" ? "left-0 origin-top-left" : "right-0 origin-top-right",
+              )}
+            >
+              <div className="space-y-0.5">
+                {/* 1. Download in currently selected source format */}
+                <button
+                  type="button"
                   onClick={() => {
-                    if (!downloadMenuOpen) {
-                      computeAlignment();
-                    }
-                    setDownloadMenuOpen((prev) => !prev);
+                    setDownloadMenuOpen(false);
+                    downloadActiveKeypairFiles(baseFilename, format, keyData);
                   }}
-                  className="inline-flex items-center gap-1.5"
-                  aria-expanded={downloadMenuOpen}
-                  aria-haspopup="true"
-                  title="Download keypair options"
+                  className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  <span>Download Keypair</span>
-                  <span
-                    className="text-[9px] opacity-70 transition-transform duration-150"
-                    style={{ transform: downloadMenuOpen ? "rotate(180deg)" : undefined }}
-                  >
-                    ▼
+                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Download Active Format ({activeFormatLabel}) (2 Files)
                   </span>
-                </Button>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Separate private and public files in {activeFormatLabel}
+                  </span>
+                </button>
 
-                {downloadMenuOpen && (
-                  <div
-                    className={cn(
-                      "absolute z-30 mt-1.5 w-64 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white p-1 shadow-lg ring-1 ring-black/5 dark:border-slate-800 dark:bg-slate-900",
-                      menuAlign === "left" ? "left-0 origin-top-left" : "right-0 origin-top-right",
-                    )}
+                {/* 2. Download PEM Pair */}
+                {keyData.hasPem && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDownloadMenuOpen(false);
+                      downloadPemPairFiles(baseFilename, keyData);
+                    }}
+                    className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
-                    <div className="space-y-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDownloadMenuOpen(false);
-                          handleDownloadPemPair();
-                        }}
-                        className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-                      >
-                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                          Download PEM Pair (2 Files)
-                        </span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Separate private and public .pem files
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDownloadMenuOpen(false);
-                          handleDownloadJwkPair();
-                        }}
-                        className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-                      >
-                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                          Download JWK Pair (2 Files)
-                        </span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Separate private and public .jwk.json files
-                        </span>
-                      </button>
-
-                      <div className="my-1 border-t border-slate-200 dark:border-slate-800" />
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDownloadMenuOpen(false);
-                          handleDownloadBoth();
-                        }}
-                        className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-                      >
-                        <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                          Download Keypair Bundle (All 4 Files)
-                        </span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Both PEM and JWK pairs across 4 separate files
-                        </span>
-                      </button>
-                    </div>
-                  </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      Download PEM Pair (2 Files)
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Separate private and public .pem files (Base64 ASCII)
+                    </span>
+                  </button>
                 )}
-              </>
-            ) : (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleDownloadActivePair}
-                title="Download private and public keys as 2 separate files"
-              >
-                Download Keypair (2 Files)
-              </Button>
-            )}
-          </div>
-        )}
+
+                {/* 3. Download Raw Binary Files */}
+                {(keyData.rawPrivate || keyData.rawPublic) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDownloadMenuOpen(false);
+                      downloadRawBinaryPairFiles(baseFilename, keyData);
+                    }}
+                    className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      Download Raw Binary Files (2 Files)
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Raw binary .bin key files (genuine bytes)
+                    </span>
+                  </button>
+                )}
+
+                {/* 4. Download JWK Pair */}
+                {keyData.hasJwk && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDownloadMenuOpen(false);
+                      downloadJwkPairFiles(baseFilename, keyData);
+                    }}
+                    className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      Download JWK Pair (2 Files)
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Separate private and public .jwk.json files
+                    </span>
+                  </button>
+                )}
+
+                <div className="my-1 border-t border-slate-200 dark:border-slate-800" />
+
+                {/* 5. Download Keypair Bundle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDownloadMenuOpen(false);
+                    downloadKeypairBundleFiles(baseFilename, keyData);
+                  }}
+                  className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                    Download Keypair Bundle (All Formats)
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    PEM, Raw Binary, Active Format, and JWK across separate files
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Private Key Card */}
-      {activePrivate && (
+      {activeView.privateVal && (
         <div className="rounded-lg border border-amber-200/80 bg-gradient-to-b from-amber-50/30 to-transparent p-3.5 dark:border-amber-900/40 dark:from-amber-950/20">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                {activePrivate.label}
+                {activeView.privateLabel}
               </span>
               <span className="inline-flex items-center rounded-sm border border-amber-300/50 bg-amber-100/80 px-1.5 py-0.2 text-[10px] font-semibold text-amber-900 dark:border-amber-800/40 dark:bg-amber-950/60 dark:text-amber-300">
                 SECRET
@@ -369,7 +373,7 @@ export function KeypairResultView({
                 {revealedPrivate ? "Hide" : "Show"}
               </button>
               <CardCopyIconButton
-                value={() => activePrivate.value}
+                value={() => activeView.privateVal}
                 aria-label="Copy private key"
                 title="Copy private key"
               />
@@ -379,7 +383,7 @@ export function KeypairResultView({
                 onClick={handleDownloadPrivate}
                 className="h-6 w-6 rounded-full p-0 flex items-center justify-center text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                 aria-label="Download private key"
-                title="Download private key file"
+                title={`Download private key (${activeView.fileExt})`}
               >
                 <DownloadIcon />
               </Button>
@@ -388,24 +392,24 @@ export function KeypairResultView({
 
           <MonoBlock
             data-ocs-private-result=""
-            value={revealedPrivate ? activePrivate.value : "•".repeat(64)}
+            value={revealedPrivate ? activeView.privateVal : "•".repeat(64)}
             className="max-h-56 overflow-auto whitespace-pre font-mono text-[11px] leading-relaxed"
           />
-          {activePrivate.hint && (
+          {privateHint && (
             <p className="mt-1.5 text-[11px] text-amber-800/80 dark:text-amber-400/80">
-              {activePrivate.hint}
+              {privateHint}
             </p>
           )}
         </div>
       )}
 
       {/* Public Key Card */}
-      {activePublic && (
+      {activeView.publicVal && (
         <div className="rounded-lg border border-emerald-200/80 bg-gradient-to-b from-emerald-50/30 to-transparent p-3.5 dark:border-emerald-900/40 dark:from-emerald-950/20">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                {activePublic.label}
+                {activeView.publicLabel}
               </span>
               <span className="inline-flex items-center rounded-sm border border-emerald-300/50 bg-emerald-100/80 px-1.5 py-0.2 text-[10px] font-semibold text-emerald-900 dark:border-emerald-800/40 dark:bg-emerald-950/60 dark:text-emerald-300">
                 PUBLIC · SHAREABLE
@@ -414,7 +418,7 @@ export function KeypairResultView({
 
             <div className="flex items-center gap-1.5">
               <CardCopyIconButton
-                value={() => activePublic.value}
+                value={() => activeView.publicVal}
                 aria-label="Copy public key"
                 title="Copy public key"
               />
@@ -424,7 +428,7 @@ export function KeypairResultView({
                 onClick={handleDownloadPublic}
                 className="h-6 w-6 rounded-full p-0 flex items-center justify-center text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                 aria-label="Download public key"
-                title="Download public key file"
+                title={`Download public key (${activeView.fileExt})`}
               >
                 <DownloadIcon />
               </Button>
@@ -434,12 +438,12 @@ export function KeypairResultView({
           <MonoBlock
             data-ocs-result=""
             data-ocs-status={status}
-            value={activePublic.value}
+            value={activeView.publicVal}
             className="max-h-56 overflow-auto whitespace-pre font-mono text-[11px] leading-relaxed"
           />
-          {activePublic.hint && (
+          {publicHint && (
             <p className="mt-1.5 text-[11px] text-emerald-800/80 dark:text-emerald-400/80">
-              {activePublic.hint}
+              {publicHint}
             </p>
           )}
         </div>
@@ -532,4 +536,3 @@ function DownloadIcon() {
     </svg>
   );
 }
-

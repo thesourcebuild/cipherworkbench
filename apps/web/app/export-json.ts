@@ -266,3 +266,21 @@ export function downloadTextFile(filename: string, content: string, mimeType = "
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+export function downloadBinaryFile(
+  filename: string,
+  bytes: Uint8Array,
+  mimeType = "application/octet-stream",
+): void {
+  const blob = new Blob([bytes as unknown as BlobPart], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+
+

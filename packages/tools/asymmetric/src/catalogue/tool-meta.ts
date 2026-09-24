@@ -409,6 +409,10 @@ export function defaultCurveFor(toolId: string): string {
 export const RSA_MODULUS_SIZES = [512, 1024, 2048, 3072, 4096] as const;
 export const DEFAULT_RSA_MODULUS = 2048;
 
+/** Public exponents offered: 65537 (standard), 3 (legacy/educational), 17, 257. */
+export const RSA_PUBLIC_EXPONENTS = [65537, 3, 17, 257] as const;
+export const DEFAULT_RSA_EXPONENT = 65537;
+
 
 /**
  * Hashes RSA can be parameterised with — every one OpenSSL will sign with, which is more

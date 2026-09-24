@@ -10,11 +10,14 @@ import {
   OPTION_HASH,
   OPTION_OPERATION,
   OPTION_PARAM_SET,
+  OPTION_PUBLIC_EXPONENT,
   OPTION_SCHEME,
   readHash,
   readOperation,
+  readPublicExponent,
   readScheme,
   withHash,
+  withPublicExponent,
   withScheme,
 } from "../pure";
 import { resolveAsymmetric } from "../resolve";
@@ -32,6 +35,7 @@ export const RULE_CODES = [
   "A009",
   "A010",
   "A011",
+  "A012",
 ] as const;
 
 /** The operation, read without going through the resolver -- the info rules need only this. */
@@ -393,6 +397,32 @@ export const RULES: readonly LintRule<AsymmetricSpec>[] = [
           message: `${set.label} signatures are ${set.signatureLen} bytes — about ${ratio} times an Ed25519 signature.`,
           detail: `The public key is ${set.publicKeyLen} bytes and the private key ${set.secretKeyLen}, against Ed25519's 32 and 32. That size is the price of post-quantum security with today's standards, and it is why deployments are hybrid: TLS pairs ML-KEM with X25519 rather than replacing it, and certificate chains carrying ML-DSA signatures grow by kilobytes per link. Worth knowing before it is a surprise in a protocol with a size limit.`,
           optionIds: [OPTION_PARAM_SET],
+        },
+      ];
+    },
+  },
+  {
+    /**
+     * e = 3 is vulnerable to low-exponent attacks unless padding is rigorously verified.
+     */
+    code: "A012",
+    check(spec) {
+      if (spec.variant !== "rsa" || operationOf(spec) !== "generate") return [];
+      const exp = readPublicExponent(spec.options);
+      if (exp !== 3) return [];
+
+      return [
+        {
+          code: "A012",
+          level: "warning",
+          message: "e = 3 is vulnerable to low-exponent attacks. Use 65537 for production.",
+          detail:
+            "A small public exponent like 3 makes verification extremely fast, but exposes RSA to Coppersmith's and Håstad's broadcast attacks if the same message is sent to multiple recipients or if padding is flawed or absent. 65537 (2¹⁶ + 1) is the universal industry standard (FIPS 186-4, RFC 8017).",
+          optionIds: [OPTION_PUBLIC_EXPONENT],
+          fix: {
+            label: "Switch to 65537",
+            apply: (s) => ({ ...s, options: withPublicExponent(s.options, 65537) }),
+          },
         },
       ];
     },

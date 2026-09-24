@@ -2,6 +2,7 @@ import {
   DEFAULT_ECDH_CURVE,
   DEFAULT_ECDSA_CURVE,
   DEFAULT_PARAM_SETS,
+  DEFAULT_RSA_EXPONENT,
   DEFAULT_RSA_HASH,
   DEFAULT_RSA_MODULUS,
   requireAsymmetricTool,
@@ -14,6 +15,7 @@ import {
   OPTION_MODULUS_LENGTH,
   OPTION_OPERATION,
   OPTION_PARAM_SET,
+  OPTION_PUBLIC_EXPONENT,
   OPTION_SCHEME,
   OPTION_SIGNATURE_FORMAT,
   SPEC_VERSION,
@@ -31,6 +33,7 @@ export function createSpec(options?: { variant?: string }): AsymmetricSpec {
 
   if (variant === "rsa") {
     values[OPTION_MODULUS_LENGTH] = String(DEFAULT_RSA_MODULUS);
+    values[OPTION_PUBLIC_EXPONENT] = String(DEFAULT_RSA_EXPONENT);
     values[OPTION_SCHEME] = DEFAULT_RSA_SCHEME;
     values[OPTION_HASH] = DEFAULT_RSA_HASH;
   }

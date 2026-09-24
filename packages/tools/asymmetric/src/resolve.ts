@@ -26,6 +26,7 @@ import {
   readModulusLength,
   readOperation,
   readParamSet,
+  readPublicExponent,
   readScheme,
   readSignatureFormat,
   type RsaScheme,
@@ -44,6 +45,7 @@ export interface ResolvedAsymmetric {
   hash: string;
   scheme: RsaScheme;
   modulusBits: number;
+  publicExponent: number;
   signatureFormat: SignatureFormat;
   /** Raw key bytes, for the three curve tools. Empty for RSA. */
   privateKey: Uint8Array;
@@ -122,6 +124,7 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
     hash: readHash(spec.options),
     scheme: readScheme(spec.options),
     modulusBits: readModulusLength(spec.options),
+    publicExponent: readPublicExponent(spec.options),
     signatureFormat: readSignatureFormat(spec.options),
     privateKey: new Uint8Array(0),
     publicKey: new Uint8Array(0),

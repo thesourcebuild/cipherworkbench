@@ -246,8 +246,22 @@ export function agreementCurve(id: string): AgreementCurve {
 export type RsaSignatureAlgorithm = "RSASSA-PKCS1-v1_5" | "RSA-PSS";
 export type RsaAlgorithmName = RsaSignatureAlgorithm | "RSA-OAEP";
 
-/** 65537, as every RSA key in practice uses. */
-const PUBLIC_EXPONENT = new Uint8Array([0x01, 0x00, 0x01]);
+/**
+ * Converts a numeric public exponent (e.g. 65537, 3, 17, 257) to big-endian bytes for WebCrypto.
+ */
+export function exponentToUint8Array(exp: number): Uint8Array {
+  if (exp === 65537) return new Uint8Array([0x01, 0x00, 0x01]);
+  if (exp === 3) return new Uint8Array([0x03]);
+  if (exp === 17) return new Uint8Array([0x11]);
+  if (exp === 257) return new Uint8Array([0x01, 0x01]);
+  const bytes: number[] = [];
+  let n = exp;
+  while (n > 0) {
+    bytes.unshift(n & 0xff);
+    n = Math.floor(n / 256);
+  }
+  return new Uint8Array(bytes.length > 0 ? bytes : [0x01, 0x00, 0x01]);
+}
 
 export interface GeneratedRsaKey {
   privatePkcs8: Uint8Array;
@@ -255,6 +269,7 @@ export interface GeneratedRsaKey {
   privateJwk: Record<string, unknown>;
   publicJwk: Record<string, unknown>;
   modulusBits: number;
+  publicExponent: number;
 }
 
 /**
@@ -266,14 +281,18 @@ export interface GeneratedRsaKey {
  * PKCS#1 v1.5 or as OAEP -- verified, not assumed. Generating under one name and using under
  * another is a WebCrypto quirk, not a cryptographic one: an RSA key is an RSA key.
  */
-export async function generateRsaKeypair(modulusBits: number): Promise<GeneratedRsaKey> {
+export async function generateRsaKeypair(
+  modulusBits: number,
+  publicExponent: number = 65537,
+): Promise<GeneratedRsaKey> {
+  const params: RsaHashedKeyGenParams = {
+    name: "RSASSA-PKCS1-v1_5",
+    modulusLength: modulusBits,
+    publicExponent: exponentToUint8Array(publicExponent) as unknown as Uint8Array<ArrayBuffer>,
+    hash: "SHA-256",
+  };
   const pair = (await crypto.subtle.generateKey(
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      modulusLength: modulusBits,
-      publicExponent: PUBLIC_EXPONENT,
-      hash: "SHA-256",
-    },
+    params,
     true,
     ["sign", "verify"],
   )) as CryptoKeyPair;
@@ -291,6 +310,7 @@ export async function generateRsaKeypair(modulusBits: number): Promise<Generated
     privateJwk: stripJwkConstraints(privateJwk as Record<string, unknown>),
     publicJwk: stripJwkConstraints(publicJwk as Record<string, unknown>),
     modulusBits,
+    publicExponent,
   };
 }
 

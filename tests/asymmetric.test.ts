@@ -12,10 +12,14 @@ import {
   OPTION_OPERATION,
   OPTION_PARAM_SET,
   OPTION_PRIVATE_KEY,
+  OPTION_PUBLIC_EXPONENT,
   OPTION_PUBLIC_KEY,
   OPTION_SCHEME,
   DEFAULT_PARAM_SETS,
+  DEFAULT_RSA_EXPONENT,
+  RSA_PUBLIC_EXPONENTS,
   PQ_PARAM_SETS,
+  PUBLIC_KEY_HINT,
   OPTION_SIGNATURE,
   OPTION_SIGNATURE_FORMAT,
   requireAsymmetricTool,
@@ -25,6 +29,7 @@ import {
   acceptedPublicKeyLengths,
   applyAllFixes,
   asymmetricCatalogueFor,
+  asymmetricInfo,
   asymmetricToolDefinition,
   createSpec,
   decodePem,
@@ -1528,4 +1533,161 @@ describe("the post-quantum tools", () => {
       expect(option.secret, tool.id).toBe(true);
     }
   });
+
+  it("provides comprehensive spec-derived info for RSA in the right sidebar Info panel", () => {
+    const spec = specFor("rsa", {
+      [OPTION_OPERATION]: "generate",
+      [OPTION_MODULUS_LENGTH]: "2048",
+    });
+    const info = asymmetricInfo(spec);
+    expect(info.length).toBeGreaterThan(0);
+    expect(info.find((f) => f.label === "Algorithm")?.value).toContain("RSA");
+    expect(info.find((f) => f.label === "Public exponent (e)")?.value).toContain("65537");
+    expect(info.find((f) => f.label === "Modulus length")?.value).toContain("2048 bits");
+    expect(info.find((f) => f.label === "Standards")?.value).toContain("RFC 8017");
+  });
+
+  it("provides info for curve tools (secp256k1 and Ed25519) in the Info panel", () => {
+    const secpSpec = specFor("ecdsa", {
+      [OPTION_OPERATION]: "generate",
+      [OPTION_CURVE]: "secp256k1",
+    });
+    const secpInfo = asymmetricInfo(secpSpec);
+    expect(secpInfo.find((f) => f.label === "Curve")?.value).toContain("secp256k1");
+    expect(secpInfo.find((f) => f.label === "Ecosystem standard")?.value).toContain("Bitcoin");
+
+    const edSpec = specFor("ed25519", {
+      [OPTION_OPERATION]: "generate",
+    });
+    const edInfo = asymmetricInfo(edSpec);
+    expect(edInfo.find((f) => f.label === "Algorithm")?.value).toContain("Ed25519");
+    expect(edInfo.find((f) => f.label === "Key size")?.value).toContain("256 bits");
+  });
+
+  it("provides info for post-quantum tools (ML-KEM) in the Info panel", () => {
+    const mlkemSpec = specFor("mlkem", {
+      [OPTION_OPERATION]: "generate",
+      [OPTION_PARAM_SET]: "768",
+    });
+    const info = asymmetricInfo(mlkemSpec);
+    expect(info.find((f) => f.label === "Algorithm")?.value).toContain("ML-KEM");
+    expect(info.find((f) => f.label === "Parameter set")?.value).toContain("768");
+    expect(info.find((f) => f.label === "Standard")?.value).toContain("FIPS 203");
+  });
+
+  describe("RSA Configurable Public Exponent", () => {
+    it("exposes publicExponent option in the RSA catalogue with 65537 as default", () => {
+      const catalogue = asymmetricCatalogueFor("rsa");
+      const opt = catalogue.options.find((o) => o.id === OPTION_PUBLIC_EXPONENT);
+      expect(opt).toBeDefined();
+      expect(opt?.label).toBe("Public exponent");
+      expect(opt?.availableOn).toEqual(["generate"]);
+      expect(opt?.kind).toBe("enum");
+      expect(opt?.choices?.map((c) => c.value)).toContain("65537");
+      expect(opt?.choices?.map((c) => c.value)).toContain("3");
+      expect(opt?.choices?.map((c) => c.value)).toContain("17");
+      expect(DEFAULT_RSA_EXPONENT).toBe(65537);
+      expect(RSA_PUBLIC_EXPONENTS).toContain(65537);
+    });
+
+    it("generates an RSA key with public exponent 65537 by default", async () => {
+      const def = asymmetricToolDefinition("rsa");
+      const spec = specFor("rsa", {
+        [OPTION_OPERATION]: "generate",
+        [OPTION_MODULUS_LENGTH]: "1024",
+      });
+      const result = await def.compute(spec, new Uint8Array(0));
+      const expField = result.fields?.find((f) => f.label === "Public exponent");
+      expect(expField?.value).toBe("65537");
+    });
+
+    it("generates an RSA key with custom public exponent 3 and 17", async () => {
+      const def = asymmetricToolDefinition("rsa");
+      for (const exp of ["3", "17"]) {
+        const spec = specFor("rsa", {
+          [OPTION_OPERATION]: "generate",
+          [OPTION_MODULUS_LENGTH]: "1024",
+          [OPTION_PUBLIC_EXPONENT]: exp,
+        });
+        const result = await def.compute(spec, new Uint8Array(0));
+        const expField = result.fields?.find((f) => f.label === "Public exponent");
+        expect(expField?.value).toBe(exp);
+      }
+    });
+
+    it("updates the right sidebar Info panel with detailed context for the selected exponent", () => {
+      const spec3 = specFor("rsa", {
+        [OPTION_OPERATION]: "generate",
+        [OPTION_PUBLIC_EXPONENT]: "3",
+      });
+      const info3 = asymmetricInfo(spec3);
+      const field3 = info3.find((f) => f.label === "Public exponent (e)");
+      expect(field3?.value).toBe("3 (0x3)");
+      expect(field3?.hint).toContain("Fermat prime F₁");
+      expect(field3?.hint).toContain("Coppersmith");
+
+      const spec65537 = specFor("rsa", {
+        [OPTION_OPERATION]: "generate",
+        [OPTION_PUBLIC_EXPONENT]: "65537",
+      });
+      const info65537 = asymmetricInfo(spec65537);
+      const field65537 = info65537.find((f) => f.label === "Public exponent (e)");
+      expect(field65537?.value).toBe("65537 (0x10001)");
+      expect(field65537?.hint).toContain("Fermat prime F₄");
+    });
+
+    it("fires diagnostic rule A012 for e = 3 and allows auto-fix to 65537", () => {
+      const spec = specFor("rsa", {
+        [OPTION_OPERATION]: "generate",
+        [OPTION_PUBLIC_EXPONENT]: "3",
+      });
+      const lintResult = lint(spec);
+      const a012 = lintResult.diagnostics.find((d) => d.code === "A012");
+      expect(a012).toBeDefined();
+      expect(a012?.level).toBe("warning");
+      expect(a012?.message).toContain("e = 3 is vulnerable to low-exponent attacks");
+
+      // Apply fix
+      const fixed = applyAllFixes(spec);
+      expect(fixed.options[OPTION_PUBLIC_EXPONENT]).toBe("65537");
+      const postFixDiagnostics = lint(fixed);
+      expect(postFixDiagnostics.diagnostics.find((d) => d.code === "A012")).toBeUndefined();
+    });
+  });
+
+  describe("Uniform Public Key Hint", () => {
+    it("uses uniform PUBLIC_KEY_HINT for RSA generated public keys", async () => {
+      const res = await run("rsa", {
+        [OPTION_OPERATION]: "generate",
+        [OPTION_MODULUS_LENGTH]: "2048",
+      });
+      const spki = res.fields?.find((f) => f.label === "Public key (SPKI PEM)");
+      const jwk = res.fields?.find((f) => f.label === "Public key (JWK)");
+      expect(spki?.hint).toBe(PUBLIC_KEY_HINT);
+      expect(jwk?.hint).toBe(PUBLIC_KEY_HINT);
+    });
+
+    it("uses uniform PUBLIC_KEY_HINT for Curve generated public keys", async () => {
+      const resEcdsa = await run("ecdsa", {
+        [OPTION_OPERATION]: "generate",
+      });
+      const pubEcdsa = resEcdsa.fields?.find((f) => f.label === "Public key");
+      expect(pubEcdsa?.hint).toBe(PUBLIC_KEY_HINT);
+
+      const resEd = await run("ed25519", {
+        [OPTION_OPERATION]: "generate",
+      });
+      const pubEd = resEd.fields?.find((f) => f.label === "Public key");
+      expect(pubEd?.hint).toBe(PUBLIC_KEY_HINT);
+    });
+
+    it("uses uniform PUBLIC_KEY_HINT for Post-Quantum generated public keys", async () => {
+      const res = await run("mlkem", {
+        [OPTION_OPERATION]: "generate",
+      });
+      const pub = res.fields?.find((f) => f.label === "Public key");
+      expect(pub?.hint).toBe(PUBLIC_KEY_HINT);
+    });
+  });
 });
+
