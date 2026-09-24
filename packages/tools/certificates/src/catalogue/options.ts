@@ -440,6 +440,7 @@ const PKI_HIERARCHY: OptionDef<CertificateOptionGroup> = {
   label: "PKI Architecture",
   group: "mtls",
   kind: "enum",
+  availableOn: ["mtls-suite"],
   choices: [
     {
       value: "2-tier",
@@ -463,6 +464,7 @@ const INTERMEDIATE_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
   label: "Intermediate CA Common Name",
   group: "mtls",
   kind: "text",
+  availableOn: ["mtls-suite"],
   arg: { placeholder: "Internal Issuing CA" },
   summary: "Common Name for the Intermediate Certificate Authority in 3-tier PKI mode.",
   detail: "The Subject Common Name (CN) for the issuing CA that directly signs server and client certificates.",
@@ -474,6 +476,7 @@ const CLIENT_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
   label: "Client Identity (CN)",
   group: "mtls",
   kind: "text",
+  availableOn: ["mtls-suite"],
   arg: { placeholder: "client-app-01" },
   summary: "Subject Common Name for the mTLS client certificate.",
   detail: "Identity of the connecting client (e.g. client-service, username, or client-app-01).",
@@ -486,6 +489,7 @@ const MTLS_P12_PASSWORD: OptionDef<CertificateOptionGroup> = {
   group: "mtls",
   kind: "password",
   secret: true,
+  availableOn: ["mtls-suite"],
   arg: { placeholder: "e.g. changeit" },
   summary: "Password used to encrypt the client.p12 PKCS#12 archive with PBES2 AES-256-CBC.",
   detail: "Required by browsers, Postman, and OS keychains to import the client certificate and private key.",

@@ -7,6 +7,7 @@ import { createSpec } from "./create-spec";
 import { describeSpec } from "./explain/describe";
 import { RULES } from "./lint/rules";
 import { CERTIFICATES_MANIFESTS } from "./manifest";
+import { OPTION_CREATOR_MODE } from "./pure";
 import { samplesFor } from "./samples";
 import { CertificateSpec } from "./spec";
 
@@ -26,6 +27,12 @@ export function certificatesToolDefinition(toolId: string): ToolDefinition<Certi
     describe: describeSpec,
     info: certificateInfo,
     compute: computeCertificate,
+    variantTag: (spec) => {
+      if (toolId === "cert-creator") {
+        return [String(spec.options[OPTION_CREATOR_MODE] ?? "single-cert")];
+      }
+      return undefined;
+    },
   };
 }
 

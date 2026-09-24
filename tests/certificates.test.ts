@@ -566,5 +566,40 @@ describe("Full mTLS Suite Generator", () => {
       }
     }
   });
+
+  it("hides mTLS Suite Settings group in single-cert mode and reveals it in mtls-suite mode", async () => {
+    const { isAvailableOn } = await import("@ocs/engine");
+    const def = await loadTool("cert-creator");
+    expect(def).toBeDefined();
+    expect(def.variantTag).toBeDefined();
+
+    // 1. Single Certificate Mode (Default)
+    const singleSpec = def.createSpec();
+    singleSpec.options = { ...singleSpec.options, creatorMode: "single-cert" };
+    const singleTag = def.variantTag!(singleSpec);
+    expect(singleTag).toEqual(["single-cert"]);
+
+    const mtlsOptions = def.catalogue.inGroup("mtls");
+    expect(mtlsOptions.length).toBeGreaterThan(0);
+    for (const opt of mtlsOptions) {
+      expect(isAvailableOn(opt, singleTag)).toBe(false);
+    }
+
+    // Client Auth extension must remain visible in single-cert mode
+    const clientAuthOpt = def.catalogue.inGroup("extensions").find((o) => o.id === "clientAuth");
+    expect(clientAuthOpt).toBeDefined();
+    expect(isAvailableOn(clientAuthOpt!, singleTag)).toBe(true);
+
+    // 2. Full mTLS Suite Mode
+    const mtlsSpec = def.createSpec();
+    mtlsSpec.options = { ...mtlsSpec.options, creatorMode: "mtls-suite" };
+    const mtlsTag = def.variantTag!(mtlsSpec);
+    expect(mtlsTag).toEqual(["mtls-suite"]);
+
+    for (const opt of mtlsOptions) {
+      expect(isAvailableOn(opt, mtlsTag)).toBe(true);
+    }
+    expect(isAvailableOn(clientAuthOpt!, mtlsTag)).toBe(true);
+  });
 });
 
