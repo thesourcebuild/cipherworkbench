@@ -25,6 +25,7 @@ export const OPTION_CLIENT_AUTH = "clientAuth";
 export const OPTION_CODE_SIGNING = "codeSigning";
 
 export const OPTION_CREATOR_MODE = "creatorMode";
+export const OPTION_WORKFLOW_LAYOUT = "workflowLayout";
 export const OPTION_ISSUANCE_MODE = "issuanceMode";
 export const OPTION_PKI_HIERARCHY = "pkiHierarchy";
 export const OPTION_INTERMEDIATE_COMMON_NAME = "intermediateCommonName";
@@ -38,8 +39,18 @@ export const OPTION_PRIVATE_KEY = "privateKey";
 export const OPTION_COMPARISON_CERT = "comparisonCert";
 
 export type CreatorModeOption = "single-cert" | "mtls-suite";
+export type WorkflowLayoutOption = "wizard" | "panels" | "classic";
 export type IssuanceModeOption = "self-signed" | "ca-signed";
 export type PkiHierarchyOption = "2-tier" | "3-tier";
+
+export function readWorkflowLayout(
+  options: OptionValues,
+  fallback: WorkflowLayoutOption = "wizard",
+): WorkflowLayoutOption {
+  const val = optString(options, OPTION_WORKFLOW_LAYOUT);
+  if (val === "wizard" || val === "panels" || val === "classic") return val;
+  return fallback;
+}
 
 export type InputFormatOption = "auto" | "pem" | "der" | "hex";
 export type DetailLevelOption = "summary" | "full-dump";

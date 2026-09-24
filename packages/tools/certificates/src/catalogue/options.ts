@@ -23,6 +23,7 @@ import {
   OPTION_CLIENT_AUTH,
   OPTION_CODE_SIGNING,
   OPTION_CREATOR_MODE,
+  OPTION_WORKFLOW_LAYOUT,
   OPTION_ISSUANCE_MODE,
   OPTION_PKI_HIERARCHY,
   OPTION_INTERMEDIATE_COMMON_NAME,
@@ -273,12 +274,12 @@ const IS_CA: OptionDef<CertificateOptionGroup> = {
 const SAN: OptionDef<CertificateOptionGroup> = {
   id: OPTION_SAN,
   label: "Subject Alt Names (SAN)",
-  group: "extensions",
+  group: "subject",
   kind: "text",
   arg: { placeholder: "localhost, 127.0.0.1" },
   summary: "Comma-separated domain names or IP addresses.",
   detail: "Alternative identities (e.g. localhost, 127.0.0.1, example.com, admin@example.com).",
-  order: 30,
+  order: 15,
 };
 
 const SERVER_AUTH: OptionDef<CertificateOptionGroup> = {
@@ -311,6 +312,21 @@ const CODE_SIGNING: OptionDef<CertificateOptionGroup> = {
   order: 60,
 };
 
+const WORKFLOW_LAYOUT: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_WORKFLOW_LAYOUT,
+  label: "Workflow Layout",
+  group: "mode",
+  kind: "enum",
+  choices: [
+    { value: "wizard", label: "Step-by-Step Wizard", summary: "Interactive guided steps in the main workbench canvas" },
+    { value: "panels", label: "All Panels (Overview)", summary: "All creation settings laid out as panels in the main section" },
+    { value: "classic", label: "Sidebar Only (Classic)", summary: "Traditional layout with all options placed in the right sidebar" },
+  ],
+  summary: "Display layout in the main workspace: Step-by-Step Wizard, All Panels, or Classic Sidebar.",
+  detail: "Choose between an interactive step-by-step wizard, full canvas panels, or sidebar-only controls.",
+  order: 5,
+};
+
 const CREATOR_MODE: OptionDef<CertificateOptionGroup> = {
   id: OPTION_CREATOR_MODE,
   label: "Creation Mode",
@@ -330,6 +346,7 @@ const ISSUANCE_MODE: OptionDef<CertificateOptionGroup> = {
   label: "Issuance Mode",
   group: "mode",
   kind: "enum",
+  availableOn: ["single-cert"],
   choices: [
     { value: "self-signed", label: "Self-Signed", summary: "Certificate signs itself (or serves as Root CA)" },
     { value: "ca-signed", label: "CA-Signed", summary: "Sign child certificate using an existing CA certificate and private key" },
@@ -417,6 +434,7 @@ const CA_CERT: OptionDef<CertificateOptionGroup> = {
   label: "CA Certificate (PEM)",
   group: "ca",
   kind: "text",
+  availableOn: ["ca-signed"],
   arg: { placeholder: "-----BEGIN CERTIFICATE-----\n...", multiline: true },
   summary: "Issuing CA certificate in PEM format.",
   detail: "The CA certificate whose Subject DN and SKI will be used as Issuer and AKI.",
@@ -429,6 +447,7 @@ const CA_PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
   group: "ca",
   kind: "password",
   secret: true,
+  availableOn: ["ca-signed"],
   arg: { placeholder: "-----BEGIN PRIVATE KEY-----\n...", multiline: true },
   summary: "Issuing CA's private key to sign the child certificate.",
   detail: "The private key corresponding to the CA certificate (PKCS#8 PEM format).",
@@ -503,6 +522,7 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   CONVERTER_OP,
   PASSWORD,
   PRIVATE_KEY,
+  WORKFLOW_LAYOUT,
   CREATOR_MODE,
   ISSUANCE_MODE,
   PKI_HIERARCHY,
@@ -545,6 +565,7 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
     options.push(CONVERTER_OP, INPUT_FORMAT, PASSWORD, PRIVATE_KEY);
   } else if (meta.id === "cert-creator") {
     options.push(
+      WORKFLOW_LAYOUT,
       CREATOR_MODE,
       ISSUANCE_MODE,
       PKI_HIERARCHY,

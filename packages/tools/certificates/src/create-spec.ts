@@ -2,6 +2,7 @@ import { requireCertificateTool } from "./catalogue/tool-meta";
 import {
   OPTION_CONVERTER_OP,
   OPTION_CREATOR_MODE,
+  OPTION_WORKFLOW_LAYOUT,
   OPTION_DETAIL_LEVEL,
   OPTION_INPUT_FORMAT,
   OPTION_ISSUANCE_MODE,
@@ -42,6 +43,7 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts[OPTION_INPUT_FORMAT] = "auto";
     opts[OPTION_DETAIL_LEVEL] = "summary";
   } else if (variant === "cert-creator") {
+    opts[OPTION_WORKFLOW_LAYOUT] = "wizard";
     opts[OPTION_CREATOR_MODE] = "single-cert";
     opts[OPTION_ISSUANCE_MODE] = "self-signed";
     opts[OPTION_PKI_HIERARCHY] = "2-tier";

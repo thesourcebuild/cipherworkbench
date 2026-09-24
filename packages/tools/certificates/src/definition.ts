@@ -7,7 +7,7 @@ import { createSpec } from "./create-spec";
 import { describeSpec } from "./explain/describe";
 import { RULES } from "./lint/rules";
 import { CERTIFICATES_MANIFESTS } from "./manifest";
-import { OPTION_CREATOR_MODE } from "./pure";
+import { OPTION_CREATOR_MODE, OPTION_ISSUANCE_MODE } from "./pure";
 import { samplesFor } from "./samples";
 import { CertificateSpec } from "./spec";
 
@@ -29,7 +29,15 @@ export function certificatesToolDefinition(toolId: string): ToolDefinition<Certi
     compute: computeCertificate,
     variantTag: (spec) => {
       if (toolId === "cert-creator") {
-        return [String(spec.options[OPTION_CREATOR_MODE] ?? "single-cert")];
+        const creatorMode = String(spec.options[OPTION_CREATOR_MODE] ?? "single-cert");
+        if (creatorMode === "mtls-suite") {
+          return ["mtls-suite"];
+        }
+        const issuanceMode = String(spec.options[OPTION_ISSUANCE_MODE] ?? "self-signed");
+        if (issuanceMode === "ca-signed") {
+          return ["single-cert", "ca-signed"];
+        }
+        return ["single-cert"];
       }
       return undefined;
     },

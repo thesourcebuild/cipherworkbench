@@ -30,6 +30,8 @@ function encodePemDirect(label: string, bytes: Uint8Array): string {
 }
 import { DiagnosticsPanel } from "./diagnostics-panel";
 import { InputPanel } from "./input-panel";
+import { CertCreatorWorkbench } from "./cert-creator-workbench";
+import { readWorkflowLayout } from "@ocs/certificates";
 import { isInputBlank, type InputState } from "./input-state";
 import { OptionsForm, visibleOptionGroups } from "./options-form";
 import { ProgressReadout } from "./progress-readout";
@@ -388,6 +390,10 @@ export function ToolWorkbench({
    * spec, which a once-per-tool catalogue cannot say. Both the hint and the validity check read it.
    */
   const acceptedByteLengths = (optionId: string) => tool.acceptedByteLengths?.(spec, optionId);
+  const certCreatorLayout =
+    tool?.id === "cert-creator"
+      ? readWorkflowLayout(spec?.options ?? {}, "wizard")
+      : undefined;
   const hasSettings =
     visibleOptionGroups(tool.catalogue, tool.groups, tag, "settings").length > 0;
   /**
@@ -464,17 +470,68 @@ export function ToolWorkbench({
                    *
                    * Open by default. The whole point of the tab is these controls.
                    */
-                  <Panel title="Settings" description={`${tool.label} options`} collapsible>
-                    <OptionsForm
-                      catalogue={tool.catalogue}
-                      groups={tool.groups}
-                      options={spec.options}
-                      tag={tag}
-                      scope="settings"
-                      generateLength={generateLength}
-                      acceptedByteLengths={acceptedByteLengths}
-                      onChange={setOptionValue}
-                    />
+                  <Panel
+                    title="Settings"
+                    description={
+                      certCreatorLayout && certCreatorLayout !== "classic"
+                        ? "Workflow layout"
+                        : `${tool.label} options`
+                    }
+                    collapsible
+                  >
+                    {certCreatorLayout && certCreatorLayout !== "classic" ? (
+                      <div className="space-y-3">
+                        <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-950 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200">
+                          <div className="font-semibold flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
+                            <span>✓</span>
+                            <span>Main Workspace Active</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                            Certificate parameters are configured step-by-step in the main canvas (
+                            {certCreatorLayout === "wizard" ? "Step-by-Step Wizard" : "All Panels"}
+                            ).
+                          </p>
+                        </div>
+                        <OptionsForm
+                          catalogue={tool.catalogue}
+                          groups={tool.groups}
+                          options={spec.options}
+                          tag={tag}
+                          scope="settings"
+                          groupIds={["mode"]}
+                          headings={false}
+                          generateLength={generateLength}
+                          acceptedByteLengths={acceptedByteLengths}
+                          onChange={setOptionValue}
+                        />
+                      </div>
+                    ) : certCreatorLayout === "classic" ? (
+                      /* Classic sidebar for cert-creator: exclude "ca" group — those fields live in Step 3 canvas */
+                      <OptionsForm
+                        catalogue={tool.catalogue}
+                        groups={tool.groups}
+                        options={spec.options}
+                        tag={tag}
+                        scope="settings"
+                        groupIds={visibleOptionGroups(tool.catalogue, tool.groups, tag, "settings")
+                          .map((g) => g.group.id)
+                          .filter((id) => id !== "ca")}
+                        generateLength={generateLength}
+                        acceptedByteLengths={acceptedByteLengths}
+                        onChange={setOptionValue}
+                      />
+                    ) : (
+                      <OptionsForm
+                        catalogue={tool.catalogue}
+                        groups={tool.groups}
+                        options={spec.options}
+                        tag={tag}
+                        scope="settings"
+                        generateLength={generateLength}
+                        acceptedByteLengths={acceptedByteLengths}
+                        onChange={setOptionValue}
+                      />
+                    )}
                   </Panel>
                 )}
                 {info.length > 0 && (
@@ -570,50 +627,64 @@ export function ToolWorkbench({
       <div className="min-w-0 flex-1 space-y-4 w-full">
         <ToolHeader manifest={tool} description={tool.describe(spec)} />
 
-        <InputPanel
-          title={primaryTitle}
-          input={input}
-          onChange={onInputChange}
-          readsInput={effectiveReadsInput}
-          // Passed rather than inferred from `!readsInput && !material`, so there is one answer to
-          // "is this a generator" and it is the one the compute hook was given.
-          generates={generates}
-          supportsFile={effectiveReadsInput && tool.supportsFile}
-          buffersWholeFile={tool.supportsFile && !tool.streaming}
-          byteLength={state.inputByteLength}
-          /**
-           * The decode failure first, because it is true earlier.
-           *
-           * `inputProblem` comes off the decode, which happens whether or not anything computes, so
-           * bad hex is reported the moment it is typed rather than when Compute is next pressed.
-           * `state.error` stays as the fallback: it also carries a throw from inside the tool, which
-           * the decode knows nothing about.
-           */
-          problem={inputProblem ?? (state.status === "error" ? state.error : undefined)}
-          autoUpdate={effectiveAutoUpdate}
-          onAutoUpdateChange={onAutoUpdateChange}
-          showAutoUpdate={true}
-          footer={secondaryOptionDef ? undefined : computeFooter}
-          material={
-            hasInputMaterial ? (
-              <OptionsForm
-                catalogue={tool.catalogue}
-                groups={tool.groups}
-                options={spec.options}
-                tag={tag}
-                scope="input"
-                groupIds={visibleOptionGroups(tool.catalogue, tool.groups, tag, "input")
-                  .filter((g) => g.group.id !== "pair")
-                  .map((g) => g.group.id)}
-                generateLength={generateLength}
-                acceptedByteLengths={acceptedByteLengths}
-                inputMode={input.mode}
-                inputEncoding={input.textEncoding}
-                onChange={setOptionValue}
-              />
-            ) : undefined
-          }
-        />
+        {tool.id === "cert-creator" ? (
+          <CertCreatorWorkbench
+            tool={tool}
+            spec={spec}
+            setOptionValue={setOptionValue}
+            recompute={recompute}
+            canRecompute={canRecompute}
+            state={state}
+            tag={tag}
+            generateLength={generateLength}
+            acceptedByteLengths={acceptedByteLengths}
+          />
+        ) : (
+          <InputPanel
+            title={primaryTitle}
+            input={input}
+            onChange={onInputChange}
+            readsInput={effectiveReadsInput}
+            // Passed rather than inferred from `!readsInput && !material`, so there is one answer to
+            // "is this a generator" and it is the one the compute hook was given.
+            generates={generates}
+            supportsFile={effectiveReadsInput && tool.supportsFile}
+            buffersWholeFile={tool.supportsFile && !tool.streaming}
+            byteLength={state.inputByteLength}
+            /**
+             * The decode failure first, because it is true earlier.
+             *
+             * `inputProblem` comes off the decode, which happens whether or not anything computes, so
+             * bad hex is reported the moment it is typed rather than when Compute is next pressed.
+             * `state.error` stays as the fallback: it also carries a throw from inside the tool, which
+             * the decode knows nothing about.
+             */
+            problem={inputProblem ?? (state.status === "error" ? state.error : undefined)}
+            autoUpdate={effectiveAutoUpdate}
+            onAutoUpdateChange={onAutoUpdateChange}
+            showAutoUpdate={true}
+            footer={secondaryOptionDef ? undefined : computeFooter}
+            material={
+              hasInputMaterial ? (
+                <OptionsForm
+                  catalogue={tool.catalogue}
+                  groups={tool.groups}
+                  options={spec.options}
+                  tag={tag}
+                  scope="input"
+                  groupIds={visibleOptionGroups(tool.catalogue, tool.groups, tag, "input")
+                    .filter((g) => g.group.id !== "pair")
+                    .map((g) => g.group.id)}
+                  generateLength={generateLength}
+                  acceptedByteLengths={acceptedByteLengths}
+                  inputMode={input.mode}
+                  inputEncoding={input.textEncoding}
+                  onChange={setOptionValue}
+                />
+              ) : undefined
+            }
+          />
+        )}
 
         {secondaryOptionDef && (
           <InputPanel
