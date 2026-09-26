@@ -271,6 +271,20 @@ export function generateCertCommandScripts(opts: {
         description: "Validate private key parameters",
         commands: [`openssl pkey -in "${keyFile}" -text -noout`],
       },
+      {
+        id: "server",
+        description: "Launch OpenSSL mock TLS server on port 8443",
+        commands: [
+          `openssl s_server -cert "${certFile}" -key "${keyFile}" -port 8443 -www`,
+        ],
+      },
+      {
+        id: "client",
+        description: "Test HTTPS TLS connection with cURL",
+        commands: [
+          `curl -vk https://localhost:8443 --cacert "${chainFile ?? certFile}"`,
+        ],
+      },
     ],
     reproduceCommand: opensslCommand,
   });

@@ -1,20 +1,276 @@
-# Interactive cryptography tutorials
+# X.509 Certificate Architecture & Modern PKI Guide
 
-Learn why cryptographic tools behave the way they do, then test each idea directly in the browser. Tutorial components run locally alongside the workbench and never upload input data.
+A comprehensive guide to self-signed certificates, certificate authorities, mTLS hierarchies, and dual-stack (IPv4 & IPv6) TLS validation across Python and modern web browsers.
 
-<TutorialCallout title="MDX tutorial system ready">
-  Tutorial authors can combine normal Markdown with approved interactive React components. Add
-  new components to `mdx-components.tsx` to make them available to every lesson.
+<TutorialCallout title="Why a Single Certificate Cannot Seamlessly Be Both Root CA and Server Leaf">
+  Under **RFC 5280** and CA/Browser Forum rules, a single certificate cannot cleanly serve both purposes without security warnings:
+  - **In Browsers (Chrome, Edge, Safari):** The OS Root Store requires a trusted root to have `basicConstraints: critical,CA:TRUE` and `keyUsage: critical,keyCertSign,cRLSign`. However, during the TLS handshake, modern Chromium and Safari enforce strict rules: a server presenting a certificate that has `CA:TRUE` directly as its leaf will trigger `ERR_CERT_COMMON_NAME_INVALID` or `ERR_CERT_AUTHORITY_INVALID`.
+  - **In Windows Certificate Manager:** A leaf certificate (`CA:FALSE`) cannot be imported into "Trusted Root Certification Authorities" because Windows warns that the certificate is not a valid CA.
+  - **The Solution:** A 2-Tier hierarchy (Root CA with `CA:TRUE` + Leaf Server with `CA:FALSE`) is the industry standard that works cleanly in both environments.
 </TutorialCallout>
 
-## First checkpoint
+---
 
-A cryptographic hash maps an input of any length to a fixed-size digest. Changing even one input bit should produce a substantially different digest.
+## The Three Fundamental Rules for Modern Certificates
 
-<TutorialReveal summary="Why can two inputs still have the same digest?">
-  A fixed-size digest has finitely many possible values while the set of possible inputs is
-  unlimited, so collisions must exist. A secure hash makes finding one computationally
-  impractical.
+### 1. Key-Algorithm-Aware Key Usage
+- **EC (P-256 / P-384 / P-521) & Ed25519:**
+  - **Leaf Server:** `critical,digitalSignature`. Under RFC 5480, `keyEncipherment` is strictly for RSA key transport and is invalid for EC keys. Static `keyAgreement` is obsolete and prohibited in TLS 1.3.
+  - **CA Authority:** `critical,digitalSignature,keyCertSign,cRLSign`.
+- **RSA (2048 / 3072 / 4096):**
+  - **Leaf Server:** `critical,digitalSignature,keyEncipherment`.
+  - **CA Authority:** `critical,keyCertSign,cRLSign`.
+
+### 2. Dual-Stack SAN & Key Identifiers
+Modern stacks (Node.js, Vite, Next.js, FastAPI, browsers, curl) frequently resolve `localhost` to IPv6 `::1` before IPv4 `127.0.0.1`.
+- **Subject Alternative Names (SAN):** Must include `DNS:localhost,IP:127.0.0.1,IP:::1`.
+- **Key Identifiers:** Standard X.509 v3 certificates should include `subjectKeyIdentifier=hash` and `authorityKeyIdentifier=keyid:always,issuer` for chain building.
+
+### 3. Windows Shell Safety
+In Windows CMD, single quotes `'` are passed literally to OpenSSL, causing extension parsing errors. In PowerShell, double quotes `"` are safest for multi-argument commands.
+
+---
+
+## Architectural Hierarchy Comparison
+
+| Architecture | Chain Length | Trust Model | Client Auth (mTLS) | Root Key Exposure | Browser Status | Python Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **1. Single (Self-Signed)** | 1 (Self-Issued) | Direct Cert Pinning | No (Server only) | N/A (No Root) | Warning unless bypassed | `verify="cert.crt"` |
+| **2. Single (CA-Signed)** | 2 (Leaf -> CA) | Trust via existing CA | Optional | Depends on external CA | **Trusted** if CA in store | `verify="ca.crt"` |
+| **3. mTLS (2-Tier Suite)** | 2 (Leaf -> Root CA) | Trust via local Root CA | **Yes** (Bundled `.p12` + CRL) | Root CA signs leaf directly | **Trusted** with Root in store | `verify="ca.crt"`, `cert=(cli, key)` |
+| **4. mTLS Enterprise (3-Tier)** | 3 (Leaf -> Interm -> Root) | Trust via Root CA | **Yes** (Enterprise `.p12` + CRL) | **Air-gapped** (Root only signs Interm) | **Trusted** with Root in store | `verify="ca.crt"`, `cert=(cli, key)` |
+
+---
+
+## Deep Dive: The Four Deployment Modes
+
+### Mode 1: Single (Self-Signed)
+
+> **"One key, one certificate, signs itself."**
+
+A single private key generates a public key and signs its own certificate (`Subject DN == Issuer DN`). No separate Certificate Authority is used.
+
+#### Generate Certificate (PowerShell):
+```powershell
+openssl req -x509 -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
+  -keyout private.key -out certificate.crt -days 365 -sha256 `
+  -subj "/C=US/ST=California/L=San Francisco/O=Cipher Workbench/OU=Security/CN=localhost" `
+  -addext "basicConstraints=CA:FALSE" `
+  -addext "keyUsage=critical,digitalSignature" `
+  -addext "extendedKeyUsage=serverAuth,clientAuth" `
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" `
+  -addext "subjectKeyIdentifier=hash"
+```
+
+#### Client & Browser Usage:
+- **Python:**
+  ```python
+  import requests
+  res = requests.get("https://localhost:8443", verify="certificate.crt")
+  ```
+- **Windows / Chrome:**
+  Because `CA:FALSE` cannot be installed into Root CAs, import it into the Windows **"Trusted People"** store:
+  ```powershell
+  Import-Certificate -FilePath .\certificate.crt -CertStoreLocation Cert:\CurrentUser\TrustedPeople
+  ```
+  *(Or enable `chrome://flags/#allow-insecure-localhost` in Chrome for local development).*
+
+---
+
+### Mode 2: Single (CA-Signed)
+
+> **"Use an existing Authority to stamp a new Server or Client identity."**
+
+You already have an authority (`ca.crt` and `ca.key` from an internal corporate CA or a shared team authority). You supply the CA credentials and issue an individual leaf certificate.
+
+#### Step 2a: Generate Private Key & CSR
+```powershell
+openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
+  -keyout server.key -out server.csr `
+  -subj "/C=US/ST=California/L=San Francisco/O=Cipher Workbench/OU=Security/CN=localhost"
+```
+
+#### Step 2b: Sign with your existing CA
+Create a temporary extension file `server_ext.cnf`:
+```ini
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName = DNS:localhost, IP:127.0.0.1, IP:::1
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid, issuer
+```
+
+Sign the certificate:
+```powershell
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial `
+  -out server.crt -days 365 -sha256 -extfile server_ext.cnf
+```
+
+#### Client & Browser Usage:
+- **Browsers:** If `ca.crt` is already in your operating system trust store (e.g., corporate domain policy), `server.crt` is **automatically trusted with a green/grey padlock**.
+- **Python:** Works seamlessly with `verify="ca.crt"`.
+
+---
+
+### Mode 3: mTLS (2-Tier Suite)
+
+> **"Turnkey mutual authentication: Root CA -> Server + Client."**
+
+This is the recommended industry standard for local microservices and secure development. It creates a self-contained PKI ecosystem in one pass:
+1. **Root CA (`ca.crt`)**: Pure CA (`CA:TRUE`, `keyCertSign,cRLSign`).
+2. **Server Cert (`server.crt`)**: Leaf for HTTPS server (`CA:FALSE`, `serverAuth`).
+3. **Client Cert (`client.crt`) & PKCS#12 (`client.p12`)**: Identity for API clients/browsers (`CA:FALSE`, `clientAuth`).
+4. **Revocation List (`ca.crl`)**: RFC 5280 v2 CRL for revocation checks.
+
+#### Step 3a: Create the Local Root CA
+```powershell
+openssl req -x509 -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
+  -keyout ca.key -out ca.crt -days 3650 -sha256 `
+  -subj "/C=US/ST=California/L=San Francisco/O=Cipher Workbench/CN=Cipher Workbench Local Root CA" `
+  -addext "basicConstraints=critical,CA:TRUE" `
+  -addext "keyUsage=critical,keyCertSign,cRLSign" `
+  -addext "subjectKeyIdentifier=hash"
+```
+
+#### Step 3b: Trust the Root CA Globally on Windows
+Run in Administrator PowerShell:
+```powershell
+Import-Certificate -FilePath .\ca.crt -CertStoreLocation Cert:\LocalMachine\Root
+```
+
+#### Step 3c: Sign Server Certificate
+```powershell
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial `
+  -out server.crt -days 365 -sha256 -extfile server_ext.cnf
+```
+
+#### Step 3d: Sign Client Certificate & Bundle PKCS#12
+```powershell
+openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
+  -keyout client.key -out client.csr `
+  -subj "/C=US/ST=California/L=San Francisco/O=Cipher Workbench/OU=Clients/CN=client-app-01"
+
+openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial `
+  -out client.crt -days 365 -sha256 `
+  -extfile <(printf "basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=clientAuth")
+
+openssl pkcs12 -export -out client.p12 -inkey client.key -in client.crt -certfile ca.crt -passout pass:changeit
+```
+
+#### Client & Browser Usage:
+- **Browsers:**
+  - Double-click `client.p12` to install it into Windows "Personal Certificates".
+  - Navigate to `https://localhost:8443` in Chrome/Edge. The browser displays a **certificate selection popup** allowing you to authenticate as `client-app-01`.
+- **Python mTLS Client:**
+  ```python
+  import requests
+
+  res = requests.get(
+      "https://localhost:8443",
+      verify="ca.crt",                       # Verify server against Root CA
+      cert=("client.crt", "client.key")      # Authenticate client
+  )
+  print(res.status_code)
+  ```
+
+---
+
+### Mode 4: mTLS Enterprise (3-Tier Suite)
+
+> **"Production PKI: Root CA -> Intermediate Issuing CA -> Server + Client."**
+
+Mirrors enterprise architectures like Let's Encrypt, Cloudflare, DigiCert, and HashiCorp Vault:
+1. **Root CA (`ca.crt`)**: Kept offline and air-gapped. Only signs Intermediate CAs.
+2. **Intermediate Issuing CA (`intermediate.crt`)**: Signed by Root with `basicConstraints=critical,CA:TRUE,pathlen:0`. Performs all active signing.
+3. **Server & Client Certs**: Signed by Intermediate CA.
+4. **Server Chain (`server-chain.pem`)**: Concatenation of `server.crt` + `intermediate.crt`.
+
+<TutorialReveal summary="Why is 3-Tier Architecture mandatory in enterprise environments?">
+  1. **Blast Radius Isolation:** If the issuing server is compromised, you only revoke the Intermediate CA (`intermediate.crt`). Your Root CA remains secure, meaning you **never need to re-distribute Root CAs across thousands of servers, client machines, and browsers**.
+  2. **Path Length Constraint (`pathlen:0`):** Guarantees that the Intermediate CA cannot spawn unauthorized subordinate CAs.
+  3. **Compliance:** Audits like SOC2, WebTrust, and ISO 27001 require root keys to remain offline with multi-party authorization.
 </TutorialReveal>
 
-This route is the starting point for the hash, checksum, MAC, KDF, and cipher lesson series.
+#### TLS Handshake with Server Chain:
+In 3-Tier setups, the server must present both the leaf and intermediate certificate together:
+```bash
+# Combine into server-chain.pem
+cat server.crt intermediate.crt > server-chain.pem
+```
+
+The web server serves `server-chain.pem` and `server.key`. Clients only need `ca.crt` (Root CA) in their trust store. The client receives the intermediate certificate during the TLS handshake, chains it back to the Root CA, and verifies the full path.
+
+---
+
+## Python Server and Client Implementations
+
+### Python HTTPS Server (`server.py`)
+```python
+import http.server
+import ssl
+
+class HelloHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"status": "ok", "message": "TLS Handshake Successful!"}\n')
+
+# Use server.crt / server.key OR server-chain.pem / server.key
+CERT_FILE = "server.crt"
+KEY_FILE = "server.key"
+CA_FILE = "ca.crt"
+
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+context.load_cert_chain(certfile=CERT_FILE, keyfile=KEY_FILE)
+
+# For mTLS (Mutual Authentication), enable client verification:
+# context.load_verify_locations(cafile=CA_FILE)
+# context.verify_mode = ssl.CERT_REQUIRED
+
+server_address = ("localhost", 8443)
+httpd = http.server.HTTPServer(server_address, HelloHandler)
+httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+
+print("Serving HTTPS on https://localhost:8443 (IPv4 & IPv6 supported)")
+httpd.serve_forever()
+```
+
+### Python Client (`client.py`)
+```python
+import requests
+import httpx
+
+CA_BUNDLE = "ca.crt" # or "certificate.crt"
+
+print("--- Testing with requests ---")
+res = requests.get("https://localhost:8443", verify=CA_BUNDLE)
+print(f"Status: {res.status_code}, Body: {res.text.strip()}")
+
+print("\n--- Testing with httpx ---")
+with httpx.Client(verify=CA_BUNDLE) as client:
+    res = client.get("https://localhost:8443")
+    print(f"Status: {res.status_code}, Body: {res.text.strip()}")
+```
+
+---
+
+## Decision Guide: Which One Should You Select?
+
+<TutorialReveal summary="Interactive Flowchart: Choosing the right mode">
+  ```text
+  Do you need Mutual Authentication (Client Certificates / mTLS)?
+  │
+  ├── NO (Standard HTTPS Server Only):
+  │   ├── Do you already have a Root/Internal CA?
+  │   │   ├── YES -> Select: [Single (CA-Signed)]
+  │   │   └── NO  -> Select: [Single (Self-Signed)]
+  │
+  └── YES (Server verifies Client + Client verifies Server):
+      ├── Is this for local/isolated development?
+      │   └── YES -> Select: [mTLS (2-Tier)]
+      └── Is this mimicking production/enterprise PKI with an offline Root?
+          └── YES -> Select: [mTLS Enterprise (3-Tier)]
+  ```
+</TutorialReveal>

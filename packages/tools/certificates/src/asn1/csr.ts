@@ -8,6 +8,7 @@ import {
 import { detectInputBytes, encodePem } from "./pem";
 import {
   formatHexColons,
+  formatIpAddress,
   parseName,
   parseSpki,
   type ParsedName,
@@ -121,8 +122,7 @@ export function parseCsr(input: Uint8Array | string): ParsedCsr {
                   else if (nameNode.tagNumber === 1) sans.push(`email:${s}`);
                   else if (nameNode.tagNumber === 6) sans.push(`URI:${s}`);
                   else if (nameNode.tagNumber === 7) {
-                    const b = nameNode.valueBytes;
-                    sans.push(b.length === 4 ? `IP:${b[0]}.${b[1]}.${b[2]}.${b[3]}` : `IP:${formatHexColons(b)}`);
+                    sans.push(`IP:${formatIpAddress(nameNode.valueBytes)}`);
                   } else {
                     sans.push(`Other:${s}`);
                   }

@@ -173,7 +173,7 @@ export async function generateMtlsSuite(opts: MtlsSuiteOptions = {}): Promise<Mt
 
   // 3. Generate Server Certificate
   const serverCommonName = opts.serverCommonName ?? "localhost";
-  const serverSan = opts.serverSan ?? "localhost, 127.0.0.1";
+  const serverSan = opts.serverSan ?? "localhost, 127.0.0.1, ::1";
   const serverSigner = await importCaSigner(issuingCertDer, issuingKeyDer, serverHashType);
   const serverResult = await createCertificate({
     commonName: serverCommonName,
@@ -235,7 +235,10 @@ export async function generateMtlsSuite(opts: MtlsSuiteOptions = {}): Promise<Mt
   });
 
   // 6. Verification & Deployment Commands
-  const opensslServer = `openssl s_server -key server.key -cert server.crt -CAfile ca.crt -Verify 1 -port 8443`;
+  const opensslServer =
+    pkiHierarchy === "3-tier"
+      ? `openssl s_server -key server.key -cert server-chain.pem -CAfile ca.crt -Verify 1 -port 8443`
+      : `openssl s_server -key server.key -cert server.crt -CAfile ca.crt -Verify 1 -port 8443`;
   const opensslClient = `openssl s_client -connect localhost:8443 -cert client.crt -key client.key -CAfile ca.crt`;
   const curlPem = `curl --cacert ca.crt --cert client.crt --key client.key https://localhost:8443/`;
   const curlP12 = `curl --cacert ca.crt --cert client.p12:${p12Password} https://localhost:8443/`;

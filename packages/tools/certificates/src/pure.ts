@@ -292,7 +292,7 @@ export function readIsCa(options: OptionValues, defaultVal = false): boolean {
   return optBool(options, OPTION_IS_CA) ?? defaultVal;
 }
 
-export function readSan(options: OptionValues, defaultVal = "localhost, 127.0.0.1"): string {
+export function readSan(options: OptionValues, defaultVal = "localhost, 127.0.0.1, ::1"): string {
   return optString(options, OPTION_SAN) ?? defaultVal;
 }
 

@@ -64,6 +64,7 @@ export interface ServerOptions {
   key: string;
   ca?: string;
   verifyClient?: boolean;
+  tlsVersion?: "tls1_1" | "tls1_2" | "tls1_3";
 }
 
 /**
@@ -88,6 +89,12 @@ export async function startOpenSslServer(opts: ServerOptions): Promise<{
   if (opts.verifyClient) {
     args.push("-Verify", "1");
   }
+  if (opts.tlsVersion) {
+    args.push(`-${opts.tlsVersion}`);
+    if (opts.tlsVersion === "tls1_1") {
+      args.push("-cipher", "DEFAULT:@SECLEVEL=0");
+    }
+  }
 
   const proc = spawn("openssl", args);
   let stderr = "";
@@ -108,6 +115,8 @@ export interface ClientOptions {
   ca: string;
   cert?: string;
   key?: string;
+  certChain?: string;
+  tlsVersion?: "tls1_1" | "tls1_2" | "tls1_3";
 }
 
 /**
@@ -123,6 +132,15 @@ export async function runOpenSslClient(opts: ClientOptions): Promise<string> {
   if (opts.cert && opts.key) {
     args.push("-cert", opts.cert, "-key", opts.key);
   }
+  if (opts.certChain) {
+    args.push("-cert_chain", opts.certChain);
+  }
+  if (opts.tlsVersion) {
+    args.push(`-${opts.tlsVersion}`);
+    if (opts.tlsVersion === "tls1_1") {
+      args.push("-cipher", "DEFAULT:@SECLEVEL=0");
+    }
+  }
 
   return new Promise<string>((resolve) => {
     const sClient = spawn("openssl", args);
@@ -137,6 +155,69 @@ export async function runOpenSslClient(opts: ClientOptions): Promise<string> {
       resolve(output);
     }, 1500);
   });
+}
+
+export interface ProtocolMatrixResult {
+  version: "tls1_1" | "tls1_2" | "tls1_3";
+  protocol: string;
+  cipher: string;
+  verified: boolean;
+}
+
+/**
+ * Tests an OpenSSL server and client across TLS 1.3, TLS 1.2, and TLS 1.1.
+ */
+export async function testTlsProtocolMatrix(opts: {
+  basePort: number;
+  cert: string;
+  key: string;
+  ca: string;
+  verifyClient?: boolean;
+  clientCert?: string;
+  clientKey?: string;
+  clientChain?: string;
+}): Promise<ProtocolMatrixResult[]> {
+  const versions: Array<"tls1_3" | "tls1_2" | "tls1_1"> = ["tls1_3", "tls1_2", "tls1_1"];
+  const results: ProtocolMatrixResult[] = [];
+
+  for (let i = 0; i < versions.length; i++) {
+    const v = versions[i];
+    const port = opts.basePort + i;
+    const srv = await startOpenSslServer({
+      port,
+      cert: opts.cert,
+      key: opts.key,
+      ca: opts.ca,
+      verifyClient: opts.verifyClient,
+      tlsVersion: v,
+    });
+
+    try {
+      const output = await runOpenSslClient({
+        port,
+        ca: opts.ca,
+        cert: opts.clientCert,
+        key: opts.clientKey,
+        certChain: opts.clientChain,
+        tlsVersion: v,
+      });
+
+      const protoMatch = output.match(/Protocol\s*:\s*([^\r\n]+)/);
+      const cipherMatch = output.match(/Cipher\s*:\s*([^\r\n]+)/);
+      const isOk = output.includes("Verification: OK") || output.includes("Verify return code: 0 (ok)");
+
+      results.push({
+        version: v,
+        protocol: protoMatch ? protoMatch[1].trim() : "Unknown",
+        cipher: cipherMatch ? cipherMatch[1].trim() : "None",
+        verified: isOk,
+      });
+    } finally {
+      srv.stop();
+    }
+  }
+
+  return results;
 }
 
 /**

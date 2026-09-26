@@ -220,6 +220,26 @@ export function formatHexColons(bytes: Uint8Array): string {
 }
 
 /**
+ * Formats an IP address byte array (4 bytes for IPv4, 16 bytes for IPv6) to string.
+ */
+export function formatIpAddress(bytes: Uint8Array): string {
+  if (bytes.length === 4) {
+    return `${bytes[0]}.${bytes[1]}.${bytes[2]}.${bytes[3]}`;
+  }
+  if (bytes.length === 16) {
+    const groups: string[] = [];
+    for (let i = 0; i < 16; i += 2) {
+      groups.push(((bytes[i]! << 8) | bytes[i + 1]!).toString(16));
+    }
+    const full = groups.join(":");
+    if (full === "0:0:0:0:0:0:0:1") return "::1";
+    if (full === "0:0:0:0:0:0:0:0") return "::";
+    return full;
+  }
+  return formatHexColons(bytes);
+}
+
+/**
  * Parses an X.509 Certificate (PEM text or DER binary).
  */
 export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
@@ -364,12 +384,7 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
                   }
                   break;
                 case 7: {
-                  const b = nameNode.valueBytes;
-                  if (b.length === 4) {
-                    sanItem = `IP:${b[0]}.${b[1]}.${b[2]}.${b[3]}`;
-                  } else {
-                    sanItem = `IP:${formatHexColons(b)}`;
-                  }
+                  sanItem = `IP:${formatIpAddress(nameNode.valueBytes)}`;
                   break;
                 }
                 default:

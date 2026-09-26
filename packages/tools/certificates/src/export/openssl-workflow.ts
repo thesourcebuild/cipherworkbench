@@ -105,6 +105,12 @@ function sanEntry(raw: string): string {
   }
   if (raw.includes("@")) return `email:${raw}`;
   if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(raw)) return `IP:${raw}`;
+  if (raw.includes(":") && !raw.includes("://")) {
+    const clean = raw.replace(/^\[|\]$/g, "");
+    if (/^[0-9a-fA-F:]+$/.test(clean) && clean.includes(":")) {
+      return `IP:${clean}`;
+    }
+  }
   if (raw.includes("://")) return `URI:${raw}`;
   return `DNS:${raw}`;
 }
@@ -136,7 +142,9 @@ function csrExtensionArgs(
   const basicConstraints = isCa ? "critical,CA:TRUE" : "CA:FALSE";
   const keyUsage = isCa
     ? "critical,digitalSignature,keyCertSign,cRLSign"
-    : "critical,digitalSignature,keyEncipherment,keyAgreement";
+    : options.keyType.startsWith("rsa-")
+      ? "critical,digitalSignature,keyEncipherment"
+      : "critical,digitalSignature";
   const extensions = [
     ...(includeBasicConstraints ? [`basicConstraints=${basicConstraints}`] : []),
     `keyUsage=${keyUsage}`,
@@ -152,6 +160,7 @@ function certificateExtensionArgs(options: OpenSslCertificateOptions): string[] 
   if (options.isCa && options.pathLenConstraint !== undefined) {
     args[0] = `-addext ${bashQuote(`basicConstraints=critical,CA:TRUE,pathlen:${options.pathLenConstraint}`)}`;
   }
+  args.push(`-addext ${bashQuote("subjectKeyIdentifier=hash")}`);
   if (options.ocspResponderUrl || options.caIssuersUrl) {
     const aia = [
       options.ocspResponderUrl ? `OCSP;URI:${options.ocspResponderUrl}` : undefined,

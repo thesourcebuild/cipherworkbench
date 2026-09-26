@@ -806,4 +806,71 @@ describe("Full mTLS Suite Generator", () => {
     }
     expect(isAvailableOn(clientAuthOpt!, mtlsTag)).toBe(true);
   });
+
+  describe("Algorithm-Aware Key Usages and Dual-Stack IPv6 SANs", () => {
+    it("emits digitalSignature-only for EC leaf certificates without keyEncipherment", async () => {
+      const created = await createCertificate({
+        commonName: "localhost",
+        san: "localhost, 127.0.0.1, ::1",
+        keyType: "ecdsa-p256",
+        hashType: "sha256",
+        validityDays: 365,
+        isCa: false,
+      });
+
+      const parsed = parseX509Certificate(created.certDer);
+      expect(parsed.extensions.keyUsages).toEqual(["digitalSignature"]);
+      expect(parsed.extensions.keyUsages).not.toContain("keyEncipherment");
+      expect(parsed.extensions.keyUsages).not.toContain("keyAgreement");
+      expect(parsed.extensions.basicConstraints?.isCa).toBe(false);
+
+      // Verify IPv6 SAN parsing
+      expect(parsed.extensions.sans).toContain("DNS:localhost");
+      expect(parsed.extensions.sans).toContain("IP:127.0.0.1");
+      expect(parsed.extensions.sans).toContain("IP:::1");
+
+      // OpenSSL workflow verification
+      expect(created.opensslCommand).toContain("keyUsage=critical,digitalSignature");
+      expect(created.opensslCommand).toContain("subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1");
+      expect(created.opensslCommand).toContain("subjectKeyIdentifier=hash");
+    });
+
+    it("emits digitalSignature and keyEncipherment for RSA leaf certificates", async () => {
+      const created = await createCertificate({
+        commonName: "rsa-leaf.local",
+        san: "rsa-leaf.local, 127.0.0.1",
+        keyType: "rsa-2048",
+        hashType: "sha256",
+        validityDays: 365,
+        isCa: false,
+      });
+
+      const parsed = parseX509Certificate(created.certDer);
+      expect(parsed.extensions.keyUsages).toContain("digitalSignature");
+      expect(parsed.extensions.keyUsages).toContain("keyEncipherment");
+      expect(parsed.extensions.basicConstraints?.isCa).toBe(false);
+
+      expect(created.opensslCommand).toContain("keyUsage=critical,digitalSignature,keyEncipherment");
+    });
+
+    it("emits keyCertSign and cRLSign for CA certificates", async () => {
+      const created = await createCertificate({
+        commonName: "Root CA",
+        san: "",
+        keyType: "ecdsa-p256",
+        hashType: "sha256",
+        validityDays: 3650,
+        isCa: true,
+      });
+
+      const parsed = parseX509Certificate(created.certDer);
+      expect(parsed.extensions.basicConstraints?.isCa).toBe(true);
+      expect(parsed.extensions.keyUsages).toContain("keyCertSign");
+      expect(parsed.extensions.keyUsages).toContain("cRLSign");
+      expect(parsed.extensions.keyUsages).toContain("digitalSignature");
+
+      expect(created.opensslCommand).toContain("basicConstraints=critical,CA:TRUE");
+      expect(created.opensslCommand).toContain("keyUsage=critical,digitalSignature,keyCertSign,cRLSign");
+    });
+  });
 });

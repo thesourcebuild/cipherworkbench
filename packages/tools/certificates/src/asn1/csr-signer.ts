@@ -173,7 +173,8 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
   );
 
   // 5b. Key Usage
-  const kuBitString = encodeKeyUsageBitString([0, 2, 4]); // digitalSignature, keyEncipherment, keyAgreement
+  const kuBits = parsedCsr.publicKey.keyType === "rsa" ? [0, 2] : [0];
+  const kuBitString = encodeKeyUsageBitString(kuBits);
   extensions.push(
     encodeDerSequence([
       encodeDerOid("2.5.29.15"),

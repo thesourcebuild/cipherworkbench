@@ -456,9 +456,9 @@ const SAN: OptionDef<CertificateOptionGroup> = {
   label: "Subject Alt Names (SAN)",
   group: "subject",
   kind: "text",
-  arg: { placeholder: "localhost, 127.0.0.1" },
+  arg: { placeholder: "localhost, 127.0.0.1, ::1" },
   summary: "Comma-separated domain names or IP addresses.",
-  detail: "Alternative identities (e.g. localhost, 127.0.0.1, example.com, admin@example.com).",
+  detail: "Alternative identities (e.g. localhost, 127.0.0.1, ::1, example.com, admin@example.com).",
   order: 15,
 };
 

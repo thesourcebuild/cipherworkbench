@@ -97,7 +97,7 @@ export async function createCsr(opts: CsrCreatorOptions): Promise<CreatedCsrResu
   }
 
   // 2b. Key Usage
-  const kuBits = [0, 2, 4]; // digitalSignature, keyEncipherment, keyAgreement
+  const kuBits = opts.keyType.startsWith("rsa-") ? [0, 2] : [0];
   const kuBitString = encodeKeyUsageBitString(kuBits);
   requestedExtensions.push(
     encodeDerSequence([

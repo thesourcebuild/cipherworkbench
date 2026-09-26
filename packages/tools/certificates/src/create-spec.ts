@@ -56,7 +56,7 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts[OPTION_ISSUANCE_MODE] = "self-signed";
     opts[OPTION_PKI_HIERARCHY] = "2-tier";
     opts["commonName"] = "localhost";
-    opts["san"] = "localhost, 127.0.0.1";
+    opts["san"] = "localhost, 127.0.0.1, ::1";
     opts["organization"] = "Cipher Workbench";
     opts["organizationalUnit"] = "Security";
     opts["country"] = "US";

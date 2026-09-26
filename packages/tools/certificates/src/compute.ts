@@ -80,7 +80,7 @@ export async function computeCertificate(
     try {
       const creatorMode = readCreatorMode(spec.options);
       const commonName = readCommonName(spec.options, "localhost");
-      const san = readSan(spec.options, "localhost, 127.0.0.1");
+      const san = readSan(spec.options, "localhost, 127.0.0.1, ::1");
       const organization = readOrganization(spec.options, "Cipher Workbench");
       const organizationalUnit = readOrgUnit(spec.options, "Security");
       const country = readCountry(spec.options, "US");
@@ -261,6 +261,7 @@ export async function computeCertificate(
           { name: "server-chain.pem", content: mtls.server.chainPem },
           { name: "client.crt", content: mtls.client.certPem },
           { name: "client.key", content: mtls.client.keyPem },
+          { name: "client-chain.pem", content: mtls.client.chainPem },
           { name: "client.p12", content: mtls.client.p12Der },
           { name: "commands.sh", content: cmdScripts.sh },
           { name: "commands.ps1", content: cmdScripts.ps1 },

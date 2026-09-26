@@ -135,7 +135,7 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(result.files).toBeDefined();
 
     const files = collectExportFiles(result, undefined, spec);
-    expect(files.length).toBe(21);
+    expect(files.length).toBe(22);
 
     const fileNames = files.map((f) => f.name);
     // Root CA
@@ -149,6 +149,7 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     // Client
     expect(fileNames).toContain("client.crt");
     expect(fileNames).toContain("client.key");
+    expect(fileNames).toContain("client-chain.pem");
     expect(fileNames).toContain("client.p12");
     // Keys & Compliance
     expect(fileNames).toContain("authorized_keys");
@@ -170,18 +171,18 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(p12File.content instanceof Uint8Array).toBe(true);
     expect((p12File.content as Uint8Array).length).toBeGreaterThan(100);
 
-    // Verify ZIP archive generation with all 21 files
+    // Verify ZIP archive generation with all 22 files
     const zipBytes = createZipArchive(files);
     expect(zipBytes.length).toBeGreaterThan(7000);
 
-    // End-of-central-directory should reflect exactly 21 entries
+    // End-of-central-directory should reflect exactly 22 entries
     const view = new DataView(zipBytes.buffer, zipBytes.byteOffset, zipBytes.byteLength);
     let foundEocd = false;
     for (let i = 0; i <= zipBytes.length - 22; i++) {
       if (view.getUint32(i, true) === 0x06054b50) {
         foundEocd = true;
-        expect(view.getUint16(i + 8, true)).toBe(21);
-        expect(view.getUint16(i + 10, true)).toBe(21);
+        expect(view.getUint16(i + 8, true)).toBe(22);
+        expect(view.getUint16(i + 10, true)).toBe(22);
         break;
       }
     }
@@ -205,7 +206,7 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(result.files).toBeDefined();
 
     const files = collectExportFiles(result, undefined, spec);
-    expect(files.length).toBe(23);
+    expect(files.length).toBe(24);
 
     const fileNames = files.map((f) => f.name);
     expect(fileNames).toContain("ca.crt");
@@ -218,6 +219,7 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(fileNames).toContain("server-chain.pem");
     expect(fileNames).toContain("client.crt");
     expect(fileNames).toContain("client.key");
+    expect(fileNames).toContain("client-chain.pem");
     expect(fileNames).toContain("client.p12");
     expect(fileNames).toContain("authorized_keys");
     expect(fileNames).toContain("jwks.json");

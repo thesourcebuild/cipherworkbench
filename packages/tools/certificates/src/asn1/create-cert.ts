@@ -90,6 +90,71 @@ function parseIpv4(ip: string): Uint8Array | null {
 }
 
 /**
+ * Parses an IPv6 address string into a 16-byte Uint8Array, or null if invalid.
+ */
+export function parseIpv6(ip: string): Uint8Array | null {
+  const cleanIp = ip.startsWith("[") && ip.endsWith("]") ? ip.slice(1, -1) : ip;
+  if (!cleanIp.includes(":")) return null;
+
+  const doubleColonCount = (cleanIp.match(/::/g) || []).length;
+  if (doubleColonCount > 1) return null;
+
+  const parts = cleanIp.split("::");
+  let leftParts: string[] = [];
+  let rightParts: string[] = [];
+
+  if (parts.length === 2) {
+    leftParts = parts[0] ? parts[0].split(":") : [];
+    rightParts = parts[1] ? parts[1].split(":") : [];
+  } else if (parts.length === 1) {
+    leftParts = parts[0]!.split(":");
+  } else {
+    return null;
+  }
+
+  let embeddedIpv4Bytes: Uint8Array | null = null;
+  const checkLast =
+    rightParts.length > 0 ? rightParts[rightParts.length - 1] : leftParts[leftParts.length - 1];
+  if (checkLast && checkLast.includes(".")) {
+    embeddedIpv4Bytes = parseIpv4(checkLast);
+    if (!embeddedIpv4Bytes) return null;
+    if (rightParts.length > 0) rightParts.pop();
+    else leftParts.pop();
+  }
+
+  const expectedParts = embeddedIpv4Bytes ? 6 : 8;
+  const totalGiven = leftParts.length + rightParts.length;
+
+  if (parts.length === 2) {
+    if (totalGiven > expectedParts) return null;
+  } else {
+    if (totalGiven !== expectedParts) return null;
+  }
+
+  const missing = expectedParts - totalGiven;
+  const allParts: string[] = [
+    ...leftParts,
+    ...Array(missing).fill("0"),
+    ...rightParts,
+  ];
+
+  const bytes = new Uint8Array(16);
+  for (let i = 0; i < expectedParts; i++) {
+    const p = allParts[i];
+    if (!p || !/^[0-9a-fA-F]{1,4}$/.test(p)) return null;
+    const num = parseInt(p, 16);
+    bytes[i * 2] = (num >> 8) & 0xff;
+    bytes[i * 2 + 1] = num & 0xff;
+  }
+
+  if (embeddedIpv4Bytes) {
+    bytes.set(embeddedIpv4Bytes, 12);
+  }
+
+  return bytes;
+}
+
+/**
  * Encodes Subject Alternative Names into DER GeneralNames sequence.
  */
 export function encodeSanExtension(sanStr: string): Uint8Array | null {
@@ -132,15 +197,25 @@ export function encodeSanExtension(sanStr: string): Uint8Array | null {
       type = "email";
     } else if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(raw)) {
       type = "ip";
+    } else if (raw.includes(":") && !raw.includes("://")) {
+      if (parseIpv6(raw)) {
+        type = "ip";
+      }
     } else if (raw.includes("://")) {
       type = "uri";
     }
 
     if (type === "ip") {
-      const ipBytes = parseIpv4(val);
-      if (ipBytes) {
-        // [7] IMPLICIT OCTET STRING
-        generalNames.push(encodeDerTlv(7, TagClass.ContextSpecific, false, ipBytes));
+      const ipv4Bytes = parseIpv4(val);
+      if (ipv4Bytes) {
+        // [7] IMPLICIT OCTET STRING (4 bytes)
+        generalNames.push(encodeDerTlv(7, TagClass.ContextSpecific, false, ipv4Bytes));
+        continue;
+      }
+      const ipv6Bytes = parseIpv6(val);
+      if (ipv6Bytes) {
+        // [7] IMPLICIT OCTET STRING (16 bytes)
+        generalNames.push(encodeDerTlv(7, TagClass.ContextSpecific, false, ipv6Bytes));
         continue;
       }
       // If parsing fails, fall back to DNS
@@ -294,7 +369,9 @@ export async function createCertificate(
   // Bits: 0: digitalSignature, 1: nonRepudiation, 2: keyEncipherment, 4: keyAgreement, 5: keyCertSign, 6: cRLSign
   const kuBits = opts.isCa
     ? [0, 5, 6] // digitalSignature, keyCertSign, cRLSign
-    : [0, 2, 4]; // digitalSignature, keyEncipherment, keyAgreement
+    : opts.keyType.startsWith("rsa-")
+      ? [0, 2] // digitalSignature, keyEncipherment
+      : [0]; // digitalSignature (for EC, Ed25519, ML-DSA)
   const kuBitString = encodeKeyUsageBitString(kuBits);
   extensions.push(
     encodeDerSequence([
