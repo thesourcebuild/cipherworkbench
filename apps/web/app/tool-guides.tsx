@@ -16,7 +16,7 @@ const TOOL_GUIDES: Record<string, ToolGuideDef> = {
     title: "X.509 Certificate Architecture & Modern PKI Guide",
     subtitle:
       "Dual-stack (IPv4 & IPv6) TLS validation, mTLS hierarchies, and deployment standards",
-    badge: "PKI Guide ↗",
+    badge: "PKI Guide",
     load: () => import("@ocs/certificates/guide"),
   },
 };

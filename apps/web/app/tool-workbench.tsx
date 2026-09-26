@@ -447,28 +447,6 @@ export function ToolWorkbench({
           label: "Settings",
           content: (
             <>
-              {guideDef && (
-                <button
-                  type="button"
-                  onClick={handleOpenGuide}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-indigo-200 bg-indigo-50/90 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-2xs hover:bg-indigo-100 hover:text-indigo-900 dark:border-indigo-900/60 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/80 transition-all mb-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
-                    >
-                      <path d="M10.75 16.82A7.462 7.462 0 0 1 15 15.5c.71 0 1.396.098 2.046.282A.75.75 0 0 0 18 15.06v-11a.75.75 0 0 0-.546-.721A9.006 9.006 0 0 0 15 3a8.963 8.963 0 0 0-4.25 1.065V16.82ZM9.25 4.065A8.963 8.963 0 0 0 5 3c-.85 0-1.673.118-2.454.339A.75.75 0 0 0 2 4.06v11a.75.75 0 0 0 .954.721A7.506 7.506 0 0 1 5 15.5c1.579 0 3.042.487 4.25 1.32V4.065Z" />
-                    </svg>
-                    <span>Guide</span>
-                  </div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-600/80 dark:text-indigo-400/80">
-                    {guideDef.badge ?? "Guide ↗"}
-                  </span>
-                </button>
-              )}
               {/*
                   First in the rail, and it has now been in three places.
 
@@ -562,6 +540,70 @@ export function ToolWorkbench({
           ),
         },
       ]
+      : []),
+    ...(guideDef
+      ? [
+          {
+            id: "guide",
+            label: "Guide",
+            content: (
+              <Panel
+                title={guideDef.badge ?? "Guide"}
+                description="Interactive guidance, RFC standards, and deployment architecture."
+              >
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-indigo-200/80 bg-gradient-to-br from-indigo-50/90 to-purple-50/50 p-3.5 dark:border-indigo-900/60 dark:bg-gradient-to-br dark:from-indigo-950/40 dark:to-purple-950/20">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-xs dark:bg-indigo-500">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          className="h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M10.75 16.82A7.462 7.462 0 0 1 15 15.5c.71 0 1.396.098 2.046.282A.75.75 0 0 0 18 15.06v-11a.75.75 0 0 0-.546-.721A9.006 9.006 0 0 0 15 3a8.963 8.963 0 0 0-4.25 1.065V16.82ZM9.25 4.065A8.963 8.963 0 0 0 5 3c-.85 0-1.673.118-2.454.339A.75.75 0 0 0 2 4.06v11a.75.75 0 0 0 .954.721A7.506 7.506 0 0 1 5 15.5c1.579 0 3.042.487 4.25 1.32V4.065Z" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                          {guideDef.title}
+                        </h4>
+                        {guideDef.subtitle && (
+                          <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                            {guideDef.subtitle}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleOpenGuide}
+                      className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 transition-colors cursor-pointer"
+                    >
+                      <span>Open {guideDef.badge ?? "Guide"}</span>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-3.5 w-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M5 11L11 5" />
+                        <path d="M6 5h5v5" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </Panel>
+            ),
+          },
+        ]
       : []),
     {
       id: "checks",
