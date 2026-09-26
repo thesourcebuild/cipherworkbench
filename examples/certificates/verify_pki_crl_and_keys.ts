@@ -49,8 +49,14 @@ async function main() {
       intermediateCommonName: "ACME Subordinate Issuing CA",
       serverCommonName: "vault.acme.internal",
       clientCommonName: "service-worker-prod",
-      keyType: "rsa-2048",
-      hashType: "sha256",
+      rootKeyType: "rsa-2048",
+      rootHashType: "sha256",
+      intermediateKeyType: "rsa-2048",
+      intermediateHashType: "sha256",
+      serverKeyType: "rsa-2048",
+      serverHashType: "sha256",
+      clientKeyType: "rsa-2048",
+      clientHashType: "sha256",
       validityDays: 180,
     });
 

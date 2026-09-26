@@ -34,7 +34,16 @@ export const DN_LONG_NAMES: Record<string, string> = {
 
 export interface SignatureAlgorithmDetails {
   name: string;
-  hash?: "SHA-256" | "SHA-384" | "SHA-512" | "SHA-224" | "SHA-1" | "MD5";
+  hash?:
+    | "SHA-256"
+    | "SHA-384"
+    | "SHA-512"
+    | "SHA-224"
+    | "SHA-1"
+    | "MD5"
+    | "SHA3-256"
+    | "SHA3-384"
+    | "SHA3-512";
   keyType: "rsa" | "ecdsa" | "ed25519" | "ed448" | "dsa" | "ml-dsa-44" | "ml-dsa-65" | "ml-dsa-87";
 }
 
@@ -48,12 +57,22 @@ export const SIGNATURE_ALGORITHMS: Record<string, SignatureAlgorithmDetails> = {
   "1.2.840.113549.1.1.4": { name: "md5WithRSAEncryption", hash: "MD5", keyType: "rsa" },
   "1.2.840.113549.1.1.10": { name: "RSASSA-PSS", keyType: "rsa" },
 
+  // RSA PKCS#1 v1.5 with SHA-3 (NIST CSOR)
+  "2.16.840.1.101.3.4.3.14": { name: "sha3-256WithRSAEncryption", hash: "SHA3-256", keyType: "rsa" },
+  "2.16.840.1.101.3.4.3.15": { name: "sha3-384WithRSAEncryption", hash: "SHA3-384", keyType: "rsa" },
+  "2.16.840.1.101.3.4.3.16": { name: "sha3-512WithRSAEncryption", hash: "SHA3-512", keyType: "rsa" },
+
   // ECDSA
   "1.2.840.10045.4.3.2": { name: "ecdsa-with-SHA256", hash: "SHA-256", keyType: "ecdsa" },
   "1.2.840.10045.4.3.3": { name: "ecdsa-with-SHA384", hash: "SHA-384", keyType: "ecdsa" },
   "1.2.840.10045.4.3.4": { name: "ecdsa-with-SHA512", hash: "SHA-512", keyType: "ecdsa" },
   "1.2.840.10045.4.3.1": { name: "ecdsa-with-SHA224", hash: "SHA-224", keyType: "ecdsa" },
   "1.2.840.10045.4.1": { name: "ecdsa-with-SHA1", hash: "SHA-1", keyType: "ecdsa" },
+
+  // ECDSA with SHA-3 (NIST CSOR)
+  "2.16.840.1.101.3.4.3.10": { name: "ecdsa-with-SHA3-256", hash: "SHA3-256", keyType: "ecdsa" },
+  "2.16.840.1.101.3.4.3.11": { name: "ecdsa-with-SHA3-384", hash: "SHA3-384", keyType: "ecdsa" },
+  "2.16.840.1.101.3.4.3.12": { name: "ecdsa-with-SHA3-512", hash: "SHA3-512", keyType: "ecdsa" },
 
   // EdDSA
   "1.3.101.112": { name: "Ed25519", keyType: "ed25519" },

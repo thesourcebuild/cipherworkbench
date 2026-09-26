@@ -35,6 +35,14 @@ import {
   readLocality,
   readKeyType,
   readHashType,
+  readRootKeyType,
+  readRootHashType,
+  readIntermediateKeyType,
+  readIntermediateHashType,
+  readServerKeyType,
+  readServerHashType,
+  readClientKeyType,
+  readClientHashType,
   readValidityDays,
   readIsCa,
   readSan,
@@ -47,6 +55,7 @@ import {
   readIssuanceMode,
   readCaCert,
   readCaPrivateKey,
+  readCaCommonName,
   readClientCommonName,
   readMtlsP12Password,
   readPkiHierarchy,
@@ -76,19 +85,29 @@ export async function computeCertificate(
       const country = readCountry(spec.options, "US");
       const state = readState(spec.options, "California");
       const locality = readLocality(spec.options, "San Francisco");
-      const keyType = readKeyType(spec.options, "ecdsa-p256");
-      const hashType = readHashType(spec.options, "sha256");
       const validityDays = readValidityDays(spec.options, 365);
 
       if (creatorMode === "mtls-suite") {
         const pkiHierarchy = readPkiHierarchy(spec.options);
-        const intermediateCommonName = readIntermediateCommonName(spec.options, "Internal Issuing CA");
+        const caCommonName = readCaCommonName(spec.options, "Internal Root CA");
+        const intermediateCommonName = readIntermediateCommonName(
+          spec.options,
+          "Internal Issuing CA",
+        );
         const clientCommonName = readClientCommonName(spec.options, "client-app-01");
         const p12Password = readMtlsP12Password(spec.options, "changeit");
+        const rootKeyType = readRootKeyType(spec.options);
+        const rootHashType = readRootHashType(spec.options);
+        const intermediateKeyType = readIntermediateKeyType(spec.options);
+        const intermediateHashType = readIntermediateHashType(spec.options);
+        const serverKeyType = readServerKeyType(spec.options);
+        const serverHashType = readServerHashType(spec.options);
+        const clientKeyType = readClientKeyType(spec.options);
+        const clientHashType = readClientHashType(spec.options);
 
         const mtls = await generateMtlsSuite({
           pkiHierarchy,
-          caCommonName: "Internal Root CA",
+          caCommonName,
           intermediateCommonName,
           organization,
           organizationalUnit,
@@ -98,15 +117,25 @@ export async function computeCertificate(
           serverCommonName: commonName,
           serverSan: san,
           clientCommonName,
-          keyType,
-          hashType,
+          rootKeyType,
+          rootHashType,
+          intermediateKeyType,
+          intermediateHashType,
+          serverKeyType,
+          serverHashType,
+          clientKeyType,
+          clientHashType,
           validityDays,
           p12Password,
         });
 
         const fields: ToolResultField[] = [
           { label: "Suite Mode", value: `Full mTLS Hierarchy (${pkiHierarchy.toUpperCase()})` },
-          { label: "Root CA", value: mtls.ca.subjectDn, hint: `SHA-256: ${mtls.ca.fingerprint}` },
+          {
+            label: "Root CA",
+            value: mtls.ca.subjectDn,
+            hint: `SHA-256: ${mtls.ca.fingerprint}`,
+          },
         ];
 
         if (mtls.intermediate) {
@@ -118,10 +147,32 @@ export async function computeCertificate(
         }
 
         fields.push(
-          { label: "Server Certificate", value: `${mtls.server.subjectDn} (SANs: ${mtls.server.san})` },
+          {
+            label: "Server Certificate",
+            value: `${mtls.server.subjectDn} (SANs: ${mtls.server.san})`,
+          },
           { label: "Client Certificate", value: `${mtls.client.subjectDn} (Client Auth)` },
           { label: "Client PKCS#12", value: `Protected (.p12) - Password: ${p12Password}` },
-          { label: "Key Algorithm", value: keyType.toUpperCase() },
+          {
+            label: "Root Algorithms",
+            value: `${rootKeyType.toUpperCase()} / ${rootHashType.toUpperCase()}`,
+          },
+          ...(mtls.intermediate
+            ? [
+                {
+                  label: "Intermediate Algorithms",
+                  value: `${intermediateKeyType.toUpperCase()} / ${intermediateHashType.toUpperCase()}`,
+                },
+              ]
+            : []),
+          {
+            label: "Server Algorithms",
+            value: `${serverKeyType.toUpperCase()} / ${serverHashType.toUpperCase()}`,
+          },
+          {
+            label: "Client Algorithms",
+            value: `${clientKeyType.toUpperCase()} / ${clientHashType.toUpperCase()}`,
+          },
           { label: "Validity", value: `${validityDays} days` },
         );
 
@@ -130,6 +181,7 @@ export async function computeCertificate(
           "",
           "#### 1. Root Certificate Authority (`ca.crt`)",
           `- **Subject**: ${mtls.ca.subjectDn}`,
+          `- **Key / Signature Hash**: ${rootKeyType.toUpperCase()} / ${rootHashType.toUpperCase()}`,
           `- **SHA-256 Fingerprint**: ${mtls.ca.fingerprint}`,
           "",
         ];
@@ -139,6 +191,7 @@ export async function computeCertificate(
             "#### 2. Intermediate Issuing CA (`intermediate.crt`)",
             `- **Subject**: ${mtls.intermediate.subjectDn}`,
             `- **Issuer**: ${mtls.intermediate.issuerDn}`,
+            `- **Key / Signature Hash**: ${intermediateKeyType.toUpperCase()} / ${intermediateHashType.toUpperCase()}`,
             `- **SHA-256 Fingerprint**: ${mtls.intermediate.fingerprint}`,
             "",
           );
@@ -149,11 +202,13 @@ export async function computeCertificate(
           `- **Subject**: ${mtls.server.subjectDn}`,
           `- **SANs**: ${mtls.server.san}`,
           `- **Issuer**: ${mtls.server.issuerDn}`,
+          `- **Key / Signature Hash**: ${serverKeyType.toUpperCase()} / ${serverHashType.toUpperCase()}`,
           `- **EKU**: TLS Web Server Authentication (id-kp-serverAuth)`,
           "",
           `#### ${mtls.intermediate ? "4" : "3"}. Client Certificate (\`client.crt\`) & PKCS#12 (\`client.p12\`)`,
           `- **Subject**: ${mtls.client.subjectDn}`,
           `- **Issuer**: ${mtls.client.issuerDn}`,
+          `- **Key / Signature Hash**: ${clientKeyType.toUpperCase()} / ${clientHashType.toUpperCase()}`,
           `- **EKU**: TLS Web Client Authentication (id-kp-clientAuth)`,
           `- **PKCS#12 Password**: \`${p12Password}\``,
           "",
@@ -232,7 +287,9 @@ export async function computeCertificate(
               "",
               "Certificates:",
               "- ca.crt / ca.key: Root CA certificate & key",
-              ...(mtls.intermediate ? ["- intermediate.crt / intermediate.key: Intermediate CA certificate & key"] : []),
+              ...(mtls.intermediate
+                ? ["- intermediate.crt / intermediate.key: Intermediate CA certificate & key"]
+                : []),
               "- server.crt / server.key: Server certificate & key",
               "- server-chain.pem: Server certificate + CA chain",
               "- client.crt / client.key: Client certificate & key",
@@ -267,6 +324,8 @@ export async function computeCertificate(
       }
 
       // Single Certificate Mode
+      const keyType = readKeyType(spec.options, "ecdsa-p256");
+      const hashType = readHashType(spec.options, "sha256");
       const isCa = readIsCa(spec.options, false);
       const serverAuth = readServerAuth(spec.options, true);
       const clientAuth = readClientAuth(spec.options, true);
@@ -300,14 +359,21 @@ export async function computeCertificate(
         {
           label: "Issuer",
           value: created.issuerDn,
-          hint: issuanceMode === "ca-signed" ? "Signed by CA Authority" : "Issuer Distinguished Name (Self-Signed)",
+          hint:
+            created.issuanceMode === "ca-signed"
+              ? "Signed by CA Authority"
+              : "Issuer Distinguished Name (Self-Signed)",
         },
         {
           label: "Validity",
           value: `${created.notBefore.toISOString().split("T")[0]} to ${created.notAfter.toISOString().split("T")[0]} (Active, ${validityDays} days)`,
           hint: "Validity period",
         },
-        { label: "Serial Number", value: created.serialNumberHex, hint: "Certificate serial number (hex)" },
+        {
+          label: "Serial Number",
+          value: created.serialNumberHex,
+          hint: "Certificate serial number (hex)",
+        },
         { label: "Key Algorithm", value: keyType.toUpperCase() },
         { label: "SHA-256 Fingerprint", value: created.fingerprintSha256 },
       ];
@@ -323,7 +389,7 @@ export async function computeCertificate(
       const working = [
         "### Generated X.509 v3 Certificate",
         `**Subject**: ${created.subjectDn}`,
-        `**Issuer**: ${created.issuerDn} (${issuanceMode === "ca-signed" ? "CA-Signed" : "Self-Signed"})`,
+        `**Issuer**: ${created.issuerDn} (${created.issuanceMode === "ca-signed" ? "CA-Signed" : "Self-Signed"})`,
         `**Key Type**: ${keyType.toUpperCase()} | **Hash**: ${hashType.toUpperCase()}`,
         `**Serial**: 0x${created.serialNumberHex}`,
         `**Validity**: ${created.notBefore.toISOString()} -> ${created.notAfter.toISOString()} (${validityDays} days)`,
@@ -343,11 +409,13 @@ export async function computeCertificate(
               "",
             ].join("\n")
           : "",
-        "#### OpenSSL Command Equivalent:",
+        "#### Equivalent OpenSSL Workflow:",
         "```bash",
         created.opensslCommand,
         "```",
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       const cmdScripts = generateCertCommandScripts({
         certFile: "certificate.crt",
@@ -366,7 +434,8 @@ export async function computeCertificate(
         { name: "commands.bat", content: cmdScripts.bat },
         {
           name: "authorized_keys",
-          content: spkiToOpenSsh(created.keyBundle.spkiBytes, keyType, commonName).authorizedKeysLine,
+          content: spkiToOpenSsh(created.keyBundle.spkiBytes, keyType, commonName)
+            .authorizedKeysLine,
         },
         {
           name: "jwk.json",
@@ -374,17 +443,25 @@ export async function computeCertificate(
         },
         {
           name: "main.tf",
-          content: generateTerraformConfig({ certFilename: "cert.crt", keyFilename: "cert.key", caFilename: "ca.crt" }),
+          content: generateTerraformConfig({
+            certFilename: "cert.crt",
+            keyFilename: "cert.key",
+            caFilename: "ca.crt",
+          }),
         },
         {
           name: "deploy-playbook.yaml",
-          content: generateAnsiblePlaybook({ certFilename: "cert.crt", keyFilename: "cert.key", caFilename: "ca.crt" }),
+          content: generateAnsiblePlaybook({
+            certFilename: "cert.crt",
+            keyFilename: "cert.key",
+            caFilename: "ca.crt",
+          }),
         },
         {
           name: "cert-info.txt",
           content: [
             `Subject: ${created.subjectDn}`,
-            `Issuer:  ${created.issuerDn} (${issuanceMode === "ca-signed" ? "CA-Signed" : "Self-Signed"})`,
+            `Issuer:  ${created.issuerDn} (${created.issuanceMode === "ca-signed" ? "CA-Signed" : "Self-Signed"})`,
             `Serial:  0x${created.serialNumberHex}`,
             `SHA-256 Fingerprint: ${created.fingerprintSha256}`,
             `Validity: ${created.notBefore.toISOString()} -> ${created.notAfter.toISOString()} (${validityDays} days)`,
@@ -463,7 +540,7 @@ export async function computeCertificate(
         created.privateKeyPem,
         "```",
         "",
-        "#### OpenSSL Command Equivalent:",
+        "#### Equivalent OpenSSL Workflow:",
         "```bash",
         created.opensslCommand,
         "```",
@@ -500,7 +577,8 @@ export async function computeCertificate(
 
   if (input.length === 0) {
     return {
-      error: "No certificate data provided. Paste a PEM certificate or upload a certificate file.",
+      error:
+        "No certificate data provided. Paste a PEM certificate or upload a certificate file.",
     };
   }
 
@@ -566,13 +644,19 @@ export async function computeCertificate(
         `- **Cryptographic Challenge**: ${res.details.probeVerified ? "Passed (Real signature challenge verified)" : "Failed"}`,
         `- **Cert/CSR SPKI SHA-256**: \`${res.fingerprints.certOrCsrPublicKeySha256}\``,
         ...(res.fingerprints.privateKeyDerivedPublicKeySha256
-          ? [`- **Private Key Derived SPKI SHA-256**: \`${res.fingerprints.privateKeyDerivedPublicKeySha256}\``]
+          ? [
+              `- **Private Key Derived SPKI SHA-256**: \`${res.fingerprints.privateKeyDerivedPublicKeySha256}\``,
+            ]
           : []),
         ...(res.details.subjectDn ? [`- **Subject**: ${res.details.subjectDn}`] : []),
-        ...(res.details.serialNumber ? [`- **Serial**: \`0x${res.details.serialNumber}\``] : []),
+        ...(res.details.serialNumber
+          ? [`- **Serial**: \`0x${res.details.serialNumber}\``]
+          : []),
         ...(res.details.notAfter ? [`- **Expiry**: ${res.details.notAfter}`] : []),
         "",
-        ...(res.errors.length > 0 ? ["#### Diagnostics / Errors", ...res.errors.map((e) => `- ${e}`)] : []),
+        ...(res.errors.length > 0
+          ? ["#### Diagnostics / Errors", ...res.errors.map((e) => `- ${e}`)]
+          : []),
       ].join("\n");
 
       return {
@@ -657,6 +741,7 @@ export async function computeCertificate(
       const serverAuth = readServerAuth(spec.options);
       const clientAuth = readClientAuth(spec.options);
       const codeSigning = readCodeSigning(spec.options);
+      const hashType = readHashType(spec.options, "sha256");
 
       const res = await signCsr({
         csrInput: input,
@@ -668,6 +753,7 @@ export async function computeCertificate(
         serverAuth,
         clientAuth,
         codeSigning,
+        hashType,
       });
 
       const fields: ToolResultField[] = [
@@ -726,11 +812,19 @@ export async function computeCertificate(
         ...res.exportFiles,
         {
           name: "main.tf",
-          content: generateTerraformConfig({ certFilename: "cert.crt", keyFilename: "cert.key", caFilename: "ca.crt" }),
+          content: generateTerraformConfig({
+            certFilename: "cert.crt",
+            keyFilename: "cert.key",
+            caFilename: "ca.crt",
+          }),
         },
         {
           name: "deploy-playbook.yaml",
-          content: generateAnsiblePlaybook({ certFilename: "cert.crt", keyFilename: "cert.key", caFilename: "ca.crt" }),
+          content: generateAnsiblePlaybook({
+            certFilename: "cert.crt",
+            keyFilename: "cert.key",
+            caFilename: "ca.crt",
+          }),
         },
       ];
 
@@ -755,7 +849,8 @@ export async function computeCertificate(
         const issuerPem = readIssuerCert(spec.options);
         if (!issuerPem || issuerPem.trim().length === 0) {
           return {
-            error: "Building an OCSP Request requires the Issuer CA Certificate. Provide the issuer CA certificate in the options.",
+            error:
+              "Building an OCSP Request requires the Issuer CA Certificate. Provide the issuer CA certificate in the options.",
           };
         }
         const req = buildOcspRequest({
@@ -800,7 +895,9 @@ export async function computeCertificate(
         const issuerPem = readIssuerCert(spec.options);
         const staple = createMockOcspResponse({
           targetCertDer: detectInputBytes(input).der,
-          issuerCertDer: issuerPem ? detectInputBytes(issuerPem).der : detectInputBytes(input).der,
+          issuerCertDer: issuerPem
+            ? detectInputBytes(issuerPem).der
+            : detectInputBytes(input).der,
           certStatus: "good",
           validityHours: 48,
         });
@@ -815,7 +912,8 @@ export async function computeCertificate(
           text: staple.b64,
           bytes: staple.der,
           fields,
-          working: "### Offline OCSP Staple Generated\n\nUse this binary DER bundle for Web Server TLS Stapling (e.g. `ssl_stapling_file` in Nginx).",
+          working:
+            "### Offline OCSP Staple Generated\n\nUse this binary DER bundle for Web Server TLS Stapling (e.g. `ssl_stapling_file` in Nginx).",
         };
       }
 
@@ -855,7 +953,9 @@ export async function computeCertificate(
           `- **Serial Number**: \`0x${r.serialNumberHex}\``,
           `- **This Update**: ${r.thisUpdate.toISOString()}`,
           ...(r.nextUpdate ? [`- **Next Update**: ${r.nextUpdate.toISOString()}`] : []),
-          ...(r.revocationTime ? [`- **Revocation Time**: ${r.revocationTime.toISOString()}`] : []),
+          ...(r.revocationTime
+            ? [`- **Revocation Time**: ${r.revocationTime.toISOString()}`]
+            : []),
           ...(r.revocationReason ? [`- **Revocation Reason**: ${r.revocationReason}`] : []),
           "",
         );
@@ -891,7 +991,10 @@ export async function computeCertificate(
         if (inputText) {
           if (!token && /^[0-9a-zA-Z_-]{16,}$/.test(inputText)) {
             token = inputText;
-          } else if (!accountKey && (inputText.includes("BEGIN") || inputText.startsWith("{"))) {
+          } else if (
+            !accountKey &&
+            (inputText.includes("BEGIN") || inputText.startsWith("{"))
+          ) {
             accountKey = inputText;
           }
         }
@@ -1002,9 +1105,16 @@ export async function computeCertificate(
             value: `${cert.validity.notBefore.toISOString().split("T")[0]} to ${cert.validity.notAfter.toISOString().split("T")[0]} (${cert.validity.statusLabel})`,
             hint: "Validity period and active status",
           },
-          { label: "Serial Number", value: cert.serialNumber, hint: "Certificate serial number (hex)" },
+          {
+            label: "Serial Number",
+            value: cert.serialNumber,
+            hint: "Certificate serial number (hex)",
+          },
           { label: "Signature Algorithm", value: cert.signatureAlgorithmName },
-          { label: "Public Key", value: `${cert.publicKey.algorithmName} (${cert.publicKey.details})` },
+          {
+            label: "Public Key",
+            value: `${cert.publicKey.algorithmName} (${cert.publicKey.details})`,
+          },
         ];
 
         if (cert.extensions.sans.length > 0) {
@@ -1096,10 +1206,21 @@ export async function computeCertificate(
         }
 
         const fields: ToolResultField[] = [
-          { label: "Subject", value: csr.subject.dn, hint: "Requested Subject Distinguished Name" },
-          { label: "Public Key", value: `${csr.publicKey.algorithmName} (${csr.publicKey.details})` },
+          {
+            label: "Subject",
+            value: csr.subject.dn,
+            hint: "Requested Subject Distinguished Name",
+          },
+          {
+            label: "Public Key",
+            value: `${csr.publicKey.algorithmName} (${csr.publicKey.details})`,
+          },
           { label: "Signature Algorithm", value: csr.signatureAlgorithmName },
-          { label: "Self-Signature", value: verificationStatus, hint: "Proof-of-possession of the private key" },
+          {
+            label: "Self-Signature",
+            value: verificationStatus,
+            hint: "Proof-of-possession of the private key",
+          },
         ];
 
         if (csr.requestedExtensions.sans.length > 0) {
@@ -1205,7 +1326,10 @@ export async function computeCertificate(
         const fields: ToolResultField[] = [
           { label: "Issuer", value: parsed.issuerDn, hint: "CA that issued this CRL" },
           { label: "Version", value: `X.509 v${parsed.version} CRL` },
-          { label: "Revoked Certificates", value: `${parsed.revokedCertificates.length} certificates` },
+          {
+            label: "Revoked Certificates",
+            value: `${parsed.revokedCertificates.length} certificates`,
+          },
           {
             label: "This Update",
             value: parsed.thisUpdate.toISOString().replace("T", " ").replace(/\..+/, " UTC"),
@@ -1242,7 +1366,9 @@ export async function computeCertificate(
           `- **Version**: v${parsed.version}`,
           `- **Issuer**: ${parsed.issuerDn}`,
           `- **This Update**: ${parsed.thisUpdate.toISOString()}`,
-          ...(parsed.nextUpdate ? [`- **Next Update**: ${parsed.nextUpdate.toISOString()}`] : []),
+          ...(parsed.nextUpdate
+            ? [`- **Next Update**: ${parsed.nextUpdate.toISOString()}`]
+            : []),
           `- **Signature Algorithm**: ${parsed.signatureAlgorithmName}`,
           ...(parsed.crlNumber !== undefined ? [`- **CRL Number**: ${parsed.crlNumber}`] : []),
           "",
@@ -1278,13 +1404,21 @@ export async function computeCertificate(
         const fields: ToolResultField[] = [
           {
             label: "Chain Verification",
-            value: result.isValid ? "Valid (Trust Path & Signatures Verified)" : "Verification Failed",
+            value: result.isValid
+              ? "Valid (Trust Path & Signatures Verified)"
+              : "Verification Failed",
             hint: result.summary,
           },
-          { label: "Chain Depth", value: `${result.chainDepth} Certificate${result.chainDepth === 1 ? "" : "s"}` },
+          {
+            label: "Chain Depth",
+            value: `${result.chainDepth} Certificate${result.chainDepth === 1 ? "" : "s"}`,
+          },
           { label: "Target / Leaf", value: result.leafSubject },
           { label: "Root / Trust Anchor", value: result.rootSubject },
-          { label: "Root Self-Signed", value: result.isSelfSignedRoot ? "Yes (Self-Signed Anchor)" : "No" },
+          {
+            label: "Root Self-Signed",
+            value: result.isSelfSignedRoot ? "Yes (Self-Signed Anchor)" : "No",
+          },
         ];
 
         const workingLines = [
@@ -1308,7 +1442,9 @@ export async function computeCertificate(
             `- **Serial**: \`0x${node.serialNumber}\``,
             `- **Validity Status**: ${node.datesMessage}`,
             `- **Digital Signature**: ${node.signatureValid ? "VALID" : `FAILED (${node.signatureError})`}`,
-            ...(node.akiSkiMatch !== undefined ? [`- **AKI / SKI Match**: ${node.akiSkiMatch ? "MATCHED" : "MISMATCH"}`] : []),
+            ...(node.akiSkiMatch !== undefined
+              ? [`- **AKI / SKI Match**: ${node.akiSkiMatch ? "MATCHED" : "MISMATCH"}`]
+              : []),
           );
           if (node.errors.length > 0) {
             workingLines.push(`- **Errors**: ${node.errors.join("; ")}`);
@@ -1369,7 +1505,8 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Audited Properties",
-          value: "Subject DN, Issuer DN, Serial Number, Effective & Expiry Dates, SANs, Key Usages, SPKI Fingerprint",
+          value:
+            "Subject DN, Issuer DN, Serial Number, Effective & Expiry Dates, SANs, Key Usages, SPKI Fingerprint",
         },
         {
           label: "Renewal Assessment",
@@ -1382,6 +1519,7 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
     case "cert-creator": {
       const mode = readCreatorMode(spec.options);
       const issuance = readIssuanceMode(spec.options);
+      const hierarchy = readPkiHierarchy(spec.options);
       const isCa = readIsCa(spec.options);
       const keyType = readKeyType(spec.options);
       const hash = readHashType(spec.options);
@@ -1397,6 +1535,20 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
       if (clientAuth) ekus.push("TLS Client");
       if (codeSign) ekus.push("Code Signing");
 
+      const keyAndSignature =
+        mode === "mtls-suite"
+          ? [
+              `Root: ${readRootKeyType(spec.options).toUpperCase()} / ${readRootHashType(spec.options).toUpperCase()}`,
+              ...(hierarchy === "3-tier"
+                ? [
+                    `Intermediate: ${readIntermediateKeyType(spec.options).toUpperCase()} / ${readIntermediateHashType(spec.options).toUpperCase()}`,
+                  ]
+                : []),
+              `Server: ${readServerKeyType(spec.options).toUpperCase()} / ${readServerHashType(spec.options).toUpperCase()}`,
+              `Client: ${readClientKeyType(spec.options).toUpperCase()} / ${readClientHashType(spec.options).toUpperCase()}`,
+            ].join("; ")
+          : `${keyType.toUpperCase()} with ${hash.toUpperCase()} signature`;
+
       fields.push(
         {
           label: "Certificate Type",
@@ -1409,11 +1561,16 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Issuance Hierarchy",
-          value: issuance === "self-signed" ? "Self-Signed Trust Anchor" : "Signed by Specified CA Keypair",
+          value:
+            mode === "mtls-suite"
+              ? `${hierarchy.toUpperCase()} mTLS hierarchy`
+              : issuance === "self-signed"
+                ? "Self-Signed Trust Anchor"
+                : "Signed by Specified CA Keypair",
         },
         {
           label: "Key & Signature",
-          value: `${keyType.toUpperCase()} with ${hash.toUpperCase()} signature`,
+          value: keyAndSignature,
         },
         {
           label: "Validity Period",
@@ -1424,7 +1581,9 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
           value: cn,
         },
         ...(san ? [{ label: "Subject Alternative Names", value: san }] : []),
-        ...(ekus.length > 0 ? [{ label: "Extended Key Usage (EKU)", value: ekus.join(", ") }] : []),
+        ...(ekus.length > 0
+          ? [{ label: "Extended Key Usage (EKU)", value: ekus.join(", ") }]
+          : []),
       );
       break;
     }
@@ -1495,7 +1654,10 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Input Format",
-          value: format === "auto" ? "Auto-Detect (PEM ASCII armor or raw DER binary)" : format.toUpperCase(),
+          value:
+            format === "auto"
+              ? "Auto-Detect (PEM ASCII armor or raw DER binary)"
+              : format.toUpperCase(),
         },
         {
           label: "Inspection Depth",
@@ -1521,11 +1683,16 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Input Format",
-          value: format === "auto" ? "Auto-Detect (PEM ASCII armor or raw DER binary)" : format.toUpperCase(),
+          value:
+            format === "auto"
+              ? "Auto-Detect (PEM ASCII armor or raw DER binary)"
+              : format.toUpperCase(),
         },
         {
           label: "Proof of Possession",
-          value: verifySig ? "Signature verification enabled" : "Signature verification skipped",
+          value: verifySig
+            ? "Signature verification enabled"
+            : "Signature verification skipped",
           hint: "Cryptographically verifies the CSR's embedded self-signature against its SPKI public key.",
         },
         {
@@ -1548,7 +1715,8 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Revocation Verification",
-          value: "Serial lookup, CRL extensions (AKI, CRL Number), and Authority Digital Signature",
+          value:
+            "Serial lookup, CRL extensions (AKI, CRL Number), and Authority Digital Signature",
         },
       );
       break;
@@ -1594,7 +1762,8 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Path Checks",
-          value: "Signatures, Validity Periods, AKI/SKI Linkages, Basic Constraints (isCA & pathlen)",
+          value:
+            "Signatures, Validity Periods, AKI/SKI Linkages, Basic Constraints (isCA & pathlen)",
         },
         {
           label: "Trust Anchors",
@@ -1614,7 +1783,10 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Operation",
-          value: op === "inspect-response" ? "Inspect Signed OCSP Response" : "Build OCSP Status Request",
+          value:
+            op === "inspect-response"
+              ? "Inspect Signed OCSP Response"
+              : "Build OCSP Status Request",
         },
         {
           label: "Status Scope",
@@ -1639,7 +1811,8 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Supported Challenges",
-          value: "HTTP-01 (Path: /.well-known/acme-challenge/) & DNS-01 (TXT: _acme-challenge.<domain>)",
+          value:
+            "HTTP-01 (Path: /.well-known/acme-challenge/) & DNS-01 (TXT: _acme-challenge.<domain>)",
         },
         {
           label: "Key Authorization",

@@ -17,6 +17,32 @@ export {
   OPTION_PKI_HIERARCHY,
   OPTION_CA_CERT,
   OPTION_CA_PRIVATE_KEY,
+  OPTION_CA_COMMON_NAME,
+  OPTION_COMMON_NAME,
+  OPTION_SAN,
+  OPTION_ORGANIZATION,
+  OPTION_ORG_UNIT,
+  OPTION_COUNTRY,
+  OPTION_STATE,
+  OPTION_LOCALITY,
+  OPTION_KEY_TYPE,
+  OPTION_HASH_TYPE,
+  OPTION_ROOT_KEY_TYPE,
+  OPTION_ROOT_HASH_TYPE,
+  OPTION_INTERMEDIATE_KEY_TYPE,
+  OPTION_INTERMEDIATE_HASH_TYPE,
+  OPTION_SERVER_KEY_TYPE,
+  OPTION_SERVER_HASH_TYPE,
+  OPTION_CLIENT_KEY_TYPE,
+  OPTION_CLIENT_HASH_TYPE,
+  OPTION_VALIDITY_DAYS,
+  OPTION_IS_CA,
+  OPTION_SERVER_AUTH,
+  OPTION_CLIENT_AUTH,
+  OPTION_CODE_SIGNING,
+  OPTION_CLIENT_COMMON_NAME,
+  OPTION_MTLS_P12_PASSWORD,
+  OPTION_INTERMEDIATE_COMMON_NAME,
   readInputFormat,
   readDetailLevel,
   readVerifyCsrSig,
@@ -27,6 +53,15 @@ export {
   readPkiHierarchy,
   readCaCert,
   readCaPrivateKey,
+  readCaCommonName,
+  readRootKeyType,
+  readRootHashType,
+  readIntermediateKeyType,
+  readIntermediateHashType,
+  readServerKeyType,
+  readServerHashType,
+  readClientKeyType,
+  readClientHashType,
   type WorkflowLayoutOption,
   type CreatorModeOption,
   type IssuanceModeOption,
@@ -42,6 +77,13 @@ export { encodePkcs7CertBundle, decodePkcs7CertBundle } from "./asn1/pkcs7";
 export { encodePkcs12Archive, decodePkcs12Archive } from "./asn1/pkcs12";
 export { createCertificate } from "./asn1/create-cert";
 export { createCsr } from "./asn1/create-csr";
+export { signCsr } from "./asn1/csr-signer";
+export {
+  verifyCertificateChain,
+  verifyCertificateSignature,
+  buildCertificateChain,
+  type ChainVerificationResult,
+} from "./asn1/chain-verifier";
 export { generateMtlsSuite } from "./asn1/mtls";
 export { parseAsn1, TagClass, UniversalTag } from "./asn1/asn1";
 export {

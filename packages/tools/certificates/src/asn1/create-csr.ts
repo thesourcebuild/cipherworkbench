@@ -19,17 +19,18 @@ import {
 import { encodePem } from "./pem";
 import { encodeSanExtension, encodeKeyUsageBitString } from "./create-cert";
 import { parseCsr, type ParsedCsr } from "./csr";
+import { buildCsrOpenSslWorkflow } from "../export/openssl-workflow";
 
 export interface CsrCreatorOptions {
   commonName: string;
-  organization: string;
-  organizationalUnit: string;
-  country: string;
-  state: string;
-  locality: string;
+  organization?: string;
+  organizationalUnit?: string;
+  country?: string;
+  state?: string;
+  locality?: string;
   keyType: KeyAlgorithmType;
   hashType: HashAlgorithmType;
-  san: string;
+  san?: string;
   serverAuth?: boolean;
   clientAuth?: boolean;
   codeSigning?: boolean;
@@ -57,7 +58,11 @@ export async function createCsr(opts: CsrCreatorOptions): Promise<CreatedCsrResu
 
   // 1. Subject DN
   const rdnEntries: RdnEntry[] = [
-    { oid: "2.5.4.6", value: (opts.country ?? "").slice(0, 2).toUpperCase(), isPrintable: true }, // C
+    {
+      oid: "2.5.4.6",
+      value: (opts.country ?? "").slice(0, 2).toUpperCase(),
+      isPrintable: true,
+    }, // C
     { oid: "2.5.4.8", value: opts.state ?? "" }, // ST
     { oid: "2.5.4.7", value: opts.locality ?? "" }, // L
     { oid: "2.5.4.10", value: opts.organization ?? "" }, // O
@@ -87,10 +92,7 @@ export async function createCsr(opts: CsrCreatorOptions): Promise<CreatedCsrResu
   const sanDer = encodeSanExtension(opts.san || opts.commonName);
   if (sanDer) {
     requestedExtensions.push(
-      encodeDerSequence([
-        encodeDerOid("2.5.29.17"),
-        encodeDerOctetString(sanDer),
-      ]),
+      encodeDerSequence([encodeDerOid("2.5.29.17"), encodeDerOctetString(sanDer)]),
     );
   }
 
@@ -158,14 +160,8 @@ export async function createCsr(opts: CsrCreatorOptions): Promise<CreatedCsrResu
   const parsedCsr = parseCsr(csrDer);
   const verifyResult = await parsedCsr.verifySelfSignature();
 
-  // 7. OpenSSL Command reproduction
-  let opensslKeyOpt = "-newkey ec -pkeyopt ec_paramgen_curve:prime256v1";
-  if (opts.keyType === "rsa-2048") opensslKeyOpt = "-newkey rsa:2048";
-  else if (opts.keyType === "rsa-4096") opensslKeyOpt = "-newkey rsa:4096";
-  else if (opts.keyType === "ecdsa-p384") opensslKeyOpt = "-newkey ec -pkeyopt ec_paramgen_curve:secp384r1";
-  else if (opts.keyType === "ed25519") opensslKeyOpt = "-newkey ed25519";
-
-  const opensslCommand = `openssl req -new ${opensslKeyOpt} -keyout key.pem -out request.csr -nodes -subj "/CN=${opts.commonName}"`;
+  // An equivalent CLI workflow, not the command used here: generation remains entirely in-process.
+  const opensslCommand = buildCsrOpenSslWorkflow(opts);
 
   return {
     csrPem,

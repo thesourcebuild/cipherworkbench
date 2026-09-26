@@ -31,7 +31,6 @@ function encodePemDirect(label: string, bytes: Uint8Array): string {
 import { DiagnosticsPanel } from "./diagnostics-panel";
 import { InputPanel } from "./input-panel";
 import { CertCreatorWorkbench } from "./cert-creator-workbench";
-import { readWorkflowLayout } from "@ocs/certificates";
 import { isInputBlank, type InputState } from "./input-state";
 import { OptionsForm, visibleOptionGroups } from "./options-form";
 import { ProgressReadout } from "./progress-readout";
@@ -390,10 +389,7 @@ export function ToolWorkbench({
    * spec, which a once-per-tool catalogue cannot say. Both the hint and the validity check read it.
    */
   const acceptedByteLengths = (optionId: string) => tool.acceptedByteLengths?.(spec, optionId);
-  const certCreatorLayout =
-    tool?.id === "cert-creator"
-      ? readWorkflowLayout(spec?.options ?? {}, "wizard")
-      : undefined;
+  const isCertCreator = tool?.id === "cert-creator";
   const hasSettings =
     visibleOptionGroups(tool.catalogue, tool.groups, tag, "settings").length > 0;
   /**
@@ -473,13 +469,13 @@ export function ToolWorkbench({
                   <Panel
                     title="Settings"
                     description={
-                      certCreatorLayout && certCreatorLayout !== "classic"
-                        ? "Workflow layout"
+                      isCertCreator
+                        ? "Workspace configuration"
                         : `${tool.label} options`
                     }
                     collapsible
                   >
-                    {certCreatorLayout && certCreatorLayout !== "classic" ? (
+                    {isCertCreator ? (
                       <div className="space-y-3">
                         <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-950 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200">
                           <div className="font-semibold flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
@@ -487,9 +483,7 @@ export function ToolWorkbench({
                             <span>Main Workspace Active</span>
                           </div>
                           <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
-                            Certificate parameters are configured step-by-step in the main canvas (
-                            {certCreatorLayout === "wizard" ? "Step-by-Step Wizard" : "All Panels"}
-                            ).
+                            Certificate parameters and PKI hierarchy are configured directly in the main canvas panels.
                           </p>
                         </div>
                         <OptionsForm
@@ -505,21 +499,6 @@ export function ToolWorkbench({
                           onChange={setOptionValue}
                         />
                       </div>
-                    ) : certCreatorLayout === "classic" ? (
-                      /* Classic sidebar for cert-creator: exclude "ca" group — those fields live in Step 3 canvas */
-                      <OptionsForm
-                        catalogue={tool.catalogue}
-                        groups={tool.groups}
-                        options={spec.options}
-                        tag={tag}
-                        scope="settings"
-                        groupIds={visibleOptionGroups(tool.catalogue, tool.groups, tag, "settings")
-                          .map((g) => g.group.id)
-                          .filter((id) => id !== "ca")}
-                        generateLength={generateLength}
-                        acceptedByteLengths={acceptedByteLengths}
-                        onChange={setOptionValue}
-                      />
                     ) : (
                       <OptionsForm
                         catalogue={tool.catalogue}

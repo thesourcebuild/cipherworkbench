@@ -46,7 +46,7 @@ function buildBashScript(spec: VerificationScriptSpec): string {
     actionCases.push(
       [
         "  reproduce)",
-        '    echo "=== Original Generation Command ==="',
+        '    echo "=== Equivalent OpenSSL Workflow ==="',
         `    echo "${spec.reproduceCommand.replace(/"/g, '\\"')}"`,
         "    ;;",
       ].join("\n"),
@@ -59,7 +59,7 @@ function buildBashScript(spec: VerificationScriptSpec): string {
     '    echo "Available actions:"',
     ...spec.actions.map((a) => `    echo "  - ${a.id}: ${a.description}"`),
     ...(spec.reproduceCommand
-      ? ['    echo "  - reproduce: Print the OpenSSL CLI command used to create this artifact"']
+      ? ['    echo "  - reproduce: Print an equivalent OpenSSL CLI workflow"']
       : []),
   ];
 
@@ -134,7 +134,7 @@ function buildPowerShellScript(spec: VerificationScriptSpec): string {
     actionCases.push(
       [
         '    "reproduce" {',
-        '        Write-Host "=== Original Generation Command ===" -ForegroundColor Cyan',
+        '        Write-Host "=== Equivalent OpenSSL Workflow ===" -ForegroundColor Cyan',
         `        Write-Host "${spec.reproduceCommand.replace(/"/g, '`"')}"`,
         "    }",
       ].join("\r\n"),
@@ -147,7 +147,7 @@ function buildPowerShellScript(spec: VerificationScriptSpec): string {
     '        Write-Host "Available actions:"',
     ...spec.actions.map((a) => `        Write-Host "  - ${a.id}: ${a.description}"`),
     ...(spec.reproduceCommand
-      ? ['        Write-Host "  - reproduce: Print the OpenSSL CLI command used to create this artifact"']
+      ? ['        Write-Host "  - reproduce: Print an equivalent OpenSSL CLI workflow"']
       : []),
   ];
 
@@ -287,21 +287,23 @@ export function generateMtlsCommandScripts(opts: {
 }): CommandScripts {
   const { pkiHierarchy, opensslServer, curlPem, curlP12 } = opts;
 
-  const verifyCommands = pkiHierarchy === "3-tier"
-    ? [
-        'openssl verify -CAfile ca.crt -untrusted intermediate.crt server.crt',
-        'openssl verify -CAfile ca.crt -untrusted intermediate.crt client.crt',
-        'openssl crl -in ca.crl -noout -text',
-      ]
-    : [
-        'openssl verify -CAfile ca.crt server.crt',
-        'openssl verify -CAfile ca.crt client.crt',
-        'openssl crl -in ca.crl -noout -text',
-      ];
+  const verifyCommands =
+    pkiHierarchy === "3-tier"
+      ? [
+          "openssl verify -CAfile ca.crt -untrusted intermediate.crt server.crt",
+          "openssl verify -CAfile ca.crt -untrusted intermediate.crt client.crt",
+          "openssl crl -in ca.crl -noout -text",
+        ]
+      : [
+          "openssl verify -CAfile ca.crt server.crt",
+          "openssl verify -CAfile ca.crt client.crt",
+          "openssl crl -in ca.crl -noout -text",
+        ];
 
   return buildVerificationScripts({
     title: "mTLS PKI Suite Verification & Testing",
-    description: "Verify certificate chains, CRLs, and execute mock TLS client/server handshakes.",
+    description:
+      "Verify certificate chains, CRLs, and execute mock TLS client/server handshakes.",
     actions: [
       {
         id: "verify",
@@ -310,7 +312,8 @@ export function generateMtlsCommandScripts(opts: {
       },
       {
         id: "server",
-        description: "Start OpenSSL Mock TLS Server on port 8443 (requiring client certificate)",
+        description:
+          "Start OpenSSL Mock TLS Server on port 8443 (requiring client certificate)",
         commands: [opensslServer],
       },
       {

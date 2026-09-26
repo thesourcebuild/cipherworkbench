@@ -13,6 +13,7 @@ import {
   type ParsedName,
   type PublicKeyDetails,
 } from "./x509";
+import { verifyRsaPkcs1Sha3, verifyEcdsaSha3 } from "../crypto/keys";
 
 export interface ParsedCsrAttribute {
   oid: string;
@@ -43,7 +44,7 @@ export interface ParsedCsr {
 /**
  * Parses a PKCS#10 Certificate Signing Request (PEM text or DER binary).
  */
-export function parseCsr(input: Uint8Array): ParsedCsr {
+export function parseCsr(input: Uint8Array | string): ParsedCsr {
   const der = detectInputBytes(input).der;
   const root = parseAsn1(der);
   if (root.tagNumber !== UniversalTag.Sequence || root.children.length < 3) {
@@ -212,6 +213,29 @@ export function parseCsr(input: Uint8Array): ParsedCsr {
 
     try {
       const dataToVerify = criRaw;
+
+      if (publicKey.algorithmOid === "1.2.840.113549.1.1.1" && sigAlgMeta?.hash?.startsWith("SHA3-")) {
+        const hashId =
+          sigAlgMeta.hash === "SHA3-512"
+            ? "sha3-512"
+            : sigAlgMeta.hash === "SHA3-384"
+              ? "sha3-384"
+              : "sha3-256";
+        const isValid = verifyRsaPkcs1Sha3(publicKey.spkiDer, hashId, dataToVerify, signatureBytes);
+        return { valid: isValid, error: isValid ? undefined : "CSR RSA digital signature mismatch" };
+      }
+
+      if (publicKey.algorithmOid === "1.2.840.10045.2.1" && sigAlgMeta?.hash?.startsWith("SHA3-")) {
+        const hashId =
+          sigAlgMeta.hash === "SHA3-512"
+            ? "sha3-512"
+            : sigAlgMeta.hash === "SHA3-384"
+              ? "sha3-384"
+              : "sha3-256";
+        const isValid = verifyEcdsaSha3(publicKey.spkiDer, publicKey.curveName, hashId, dataToVerify, signatureBytes);
+        return { valid: isValid, error: isValid ? undefined : "CSR ECDSA digital signature mismatch" };
+      }
+
       let webCryptoAlg: RsaHashedImportParams | EcKeyImportParams | AlgorithmIdentifier;
 
       if (publicKey.algorithmOid === "1.2.840.113549.1.1.1") {

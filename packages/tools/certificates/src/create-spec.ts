@@ -2,10 +2,10 @@ import { requireCertificateTool } from "./catalogue/tool-meta";
 import {
   OPTION_CONVERTER_OP,
   OPTION_CREATOR_MODE,
-  OPTION_WORKFLOW_LAYOUT,
   OPTION_DETAIL_LEVEL,
   OPTION_INPUT_FORMAT,
   OPTION_ISSUANCE_MODE,
+  OPTION_HASH_TYPE,
   OPTION_PKI_HIERARCHY,
   OPTION_VERIFY_CSR_SIG,
   OPTION_CA_MODE,
@@ -15,6 +15,14 @@ import {
   OPTION_ACME_ACCOUNT_KEY,
   OPTION_PRIVATE_KEY,
   OPTION_COMPARISON_CERT,
+  OPTION_ROOT_KEY_TYPE,
+  OPTION_ROOT_HASH_TYPE,
+  OPTION_INTERMEDIATE_KEY_TYPE,
+  OPTION_INTERMEDIATE_HASH_TYPE,
+  OPTION_SERVER_KEY_TYPE,
+  OPTION_SERVER_HASH_TYPE,
+  OPTION_CLIENT_KEY_TYPE,
+  OPTION_CLIENT_HASH_TYPE,
   SPEC_VERSION,
 } from "./pure";
 import { RSA_CERTIFICATE_PEM, RSA_PRIVATE_KEY_PEM } from "./samples";
@@ -43,7 +51,6 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts[OPTION_INPUT_FORMAT] = "auto";
     opts[OPTION_DETAIL_LEVEL] = "summary";
   } else if (variant === "cert-creator") {
-    opts[OPTION_WORKFLOW_LAYOUT] = "wizard";
     opts[OPTION_CREATOR_MODE] = "single-cert";
     opts[OPTION_ISSUANCE_MODE] = "self-signed";
     opts[OPTION_PKI_HIERARCHY] = "2-tier";
@@ -56,6 +63,14 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts["locality"] = "San Francisco";
     opts["keyType"] = "ecdsa-p256";
     opts["hashType"] = "sha256";
+    opts[OPTION_ROOT_KEY_TYPE] = "ecdsa-p256";
+    opts[OPTION_ROOT_HASH_TYPE] = "sha256";
+    opts[OPTION_INTERMEDIATE_KEY_TYPE] = "ecdsa-p256";
+    opts[OPTION_INTERMEDIATE_HASH_TYPE] = "sha256";
+    opts[OPTION_SERVER_KEY_TYPE] = "ecdsa-p256";
+    opts[OPTION_SERVER_HASH_TYPE] = "sha256";
+    opts[OPTION_CLIENT_KEY_TYPE] = "ecdsa-p256";
+    opts[OPTION_CLIENT_HASH_TYPE] = "sha256";
     opts["validityDays"] = "365";
     opts["isCa"] = false;
     opts["serverAuth"] = true;
@@ -76,6 +91,7 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts["codeSigning"] = false;
   } else if (variant === "csr-signer") {
     opts[OPTION_CA_MODE] = "ephemeral-ca";
+    opts[OPTION_HASH_TYPE] = "sha256";
     opts["validityDays"] = "365";
     opts["serverAuth"] = true;
     opts["clientAuth"] = true;

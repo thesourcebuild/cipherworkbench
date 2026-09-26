@@ -4,7 +4,7 @@ import { type ToolExportFile } from "@ocs/engine";
 import { parseCsr } from "./csr";
 import { createCertificate, encodeSanExtension, encodeKeyUsageBitString } from "./create-cert";
 import { detectInputBytes, encodePem } from "./pem";
-import { importCaSigner, type CaSigner } from "../crypto/keys";
+import { importCaSigner, type CaSigner, type HashAlgorithmType } from "../crypto/keys";
 import {
   encodeDerBitString,
   encodeDerBoolean,
@@ -30,6 +30,7 @@ export interface SignCsrOptions {
   serverAuth?: boolean;
   clientAuth?: boolean;
   codeSigning?: boolean;
+  hashType?: HashAlgorithmType;
 }
 
 export interface SignCsrResult {
@@ -84,7 +85,7 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
   ) {
     const caCertDer = detectInputBytes(opts.caCertPem).der;
     const caKeyDer = detectInputBytes(opts.caPrivateKeyPem).der;
-    caSigner = await importCaSigner(caCertDer, caKeyDer);
+    caSigner = await importCaSigner(caCertDer, caKeyDer, opts.hashType);
     caCertPem = opts.caCertPem.trim();
     caPrivateKeyPem = opts.caPrivateKeyPem.trim();
   } else {
@@ -97,7 +98,7 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
       state: "California",
       locality: "San Francisco",
       keyType: "ecdsa-p256",
-      hashType: "sha256",
+      hashType: opts.hashType ?? "sha256",
       validityDays: 3650,
       isCa: true,
       customSerialHex: "01CA0001",
@@ -105,7 +106,7 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
 
     caCertPem = caCertResult.certPem;
     caPrivateKeyPem = caCertResult.privateKeyPem;
-    caSigner = await importCaSigner(caCertResult.certDer, caCertResult.privateKeyDer);
+    caSigner = await importCaSigner(caCertResult.certDer, caCertResult.privateKeyDer, opts.hashType);
   }
 
   // 2. Resolve Serial Number (positive 128-bit integer)

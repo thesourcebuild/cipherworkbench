@@ -101,6 +101,10 @@ export interface OptionsFormProps {
    */
   groupIds?: readonly string[];
   /**
+   * Render only these specific options, filtering out all others.
+   */
+  optionIds?: readonly string[];
+  /**
    * Set false where the surrounding container already names the group -- a panel titled "Custom
    * parameters" does not need "CUSTOM PARAMETERS" as its first line.
    */
@@ -142,6 +146,7 @@ export function visibleOptionGroups(
   tag: string | readonly string[] | undefined,
   scope: OptionScope,
   groupIds?: readonly string[],
+  optionIds?: readonly string[],
 ): { group: OptionGroupMeta; options: OptionDef[] }[] {
   return orderedGroups(groups)
     .filter((group) => {
@@ -163,6 +168,7 @@ export function visibleOptionGroups(
       options: catalogue
         .inGroup(group.id)
         .filter((o) => isAvailableOn(o, tag))
+        .filter((o) => (!optionIds || optionIds.includes(o.id)))
         .map((o) => withAvailableChoices(o, tag)),
     }))
     .filter((entry) => entry.options.length > 0);
@@ -186,6 +192,7 @@ export function OptionsForm({
   tag,
   scope = "all",
   groupIds,
+  optionIds,
   headings = true,
   inputMode,
   inputEncoding,
@@ -203,7 +210,7 @@ export function OptionsForm({
     .map((o) => o.id);
   const redundant = redundantOptionIds(catalogue, active);
 
-  const visibleGroups = visibleOptionGroups(catalogue, groups, tag, scope, groupIds);
+  const visibleGroups = visibleOptionGroups(catalogue, groups, tag, scope, groupIds, optionIds);
 
   if (visibleGroups.length === 0) {
     // Nothing to say about an empty section the workbench has already decided not to wrap in a

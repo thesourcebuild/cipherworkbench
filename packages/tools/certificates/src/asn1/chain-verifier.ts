@@ -3,6 +3,7 @@ import { parseAsn1 } from "./asn1";
 import { parseX509Certificate, type ParsedX509Certificate } from "./x509";
 import { SIGNATURE_ALGORITHMS } from "./oids";
 import { verifyWithPqc, OID_TO_PQC_ALGORITHM } from "../crypto/pqc";
+import { verifyRsaPkcs1Sha3, verifyEcdsaSha3 } from "../crypto/keys";
 
 export interface ChainNodeVerification {
   index: number;
@@ -82,6 +83,22 @@ export async function verifyCertificateSignature(
   // 2. RSA
   if (parent.publicKey.keyType === "rsa") {
     try {
+      if (sigAlgMeta?.hash?.startsWith("SHA3-")) {
+        const hashId =
+          sigAlgMeta.hash === "SHA3-512"
+            ? "sha3-512"
+            : sigAlgMeta.hash === "SHA3-384"
+              ? "sha3-384"
+              : "sha3-256";
+        const valid = verifyRsaPkcs1Sha3(
+          parent.publicKey.spkiDer,
+          hashId,
+          child.tbsRaw,
+          child.signatureBytes,
+        );
+        return { valid, error: valid ? undefined : "RSA digital signature mismatch" };
+      }
+
       const hash = sigAlgMeta?.hash ?? "SHA-256";
       const cryptoKey = await subtle.importKey(
         "spki",
@@ -107,6 +124,23 @@ export async function verifyCertificateSignature(
   // 3. ECDSA
   if (parent.publicKey.keyType === "ec") {
     try {
+      if (sigAlgMeta?.hash?.startsWith("SHA3-")) {
+        const hashId =
+          sigAlgMeta.hash === "SHA3-512"
+            ? "sha3-512"
+            : sigAlgMeta.hash === "SHA3-384"
+              ? "sha3-384"
+              : "sha3-256";
+        const valid = verifyEcdsaSha3(
+          parent.publicKey.spkiDer,
+          parent.publicKey.curveName,
+          hashId,
+          child.tbsRaw,
+          child.signatureBytes,
+        );
+        return { valid, error: valid ? undefined : "ECDSA digital signature mismatch" };
+      }
+
       const namedCurve =
         parent.publicKey.curveName?.includes("P-384") ? "P-384"
         : parent.publicKey.curveName?.includes("P-521") ? "P-521"

@@ -17,8 +17,14 @@ export interface MtlsSuiteOptions {
   serverCommonName?: string;
   serverSan?: string;
   clientCommonName?: string;
-  keyType?: KeyAlgorithmType;
-  hashType?: HashAlgorithmType;
+  rootKeyType?: KeyAlgorithmType;
+  rootHashType?: HashAlgorithmType;
+  intermediateKeyType?: KeyAlgorithmType;
+  intermediateHashType?: HashAlgorithmType;
+  serverKeyType?: KeyAlgorithmType;
+  serverHashType?: HashAlgorithmType;
+  clientKeyType?: KeyAlgorithmType;
+  clientHashType?: HashAlgorithmType;
   validityDays?: number;
   p12Password?: string;
 }
@@ -31,6 +37,8 @@ export interface MtlsSuiteEntity {
   fingerprint: string;
   subjectDn: string;
   issuerDn: string;
+  keyType: KeyAlgorithmType;
+  signatureHash: HashAlgorithmType;
 }
 
 export interface MtlsSuiteResult {
@@ -72,17 +80,21 @@ export interface MtlsSuiteResult {
  * - Password-encrypted Client PKCS#12 (.p12) container
  * - Turnkey verification and cloud deployment configs (NGINX, K8s, Caddy, Traefik, HAProxy, Envoy)
  */
-export async function generateMtlsSuite(
-  opts: MtlsSuiteOptions = {},
-): Promise<MtlsSuiteResult> {
+export async function generateMtlsSuite(opts: MtlsSuiteOptions = {}): Promise<MtlsSuiteResult> {
   const pkiHierarchy = opts.pkiHierarchy ?? "2-tier";
   const org = opts.organization ?? "Cipher Workbench";
   const ou = opts.organizationalUnit ?? "Security";
   const country = opts.country ?? "US";
   const state = opts.state ?? "California";
   const locality = opts.locality ?? "San Francisco";
-  const keyType = opts.keyType ?? "ecdsa-p256";
-  const hashType = opts.hashType ?? "sha256";
+  const rootKeyType = opts.rootKeyType ?? "ecdsa-p256";
+  const rootHashType = opts.rootHashType ?? "sha256";
+  const intermediateKeyType = opts.intermediateKeyType ?? "ecdsa-p256";
+  const intermediateHashType = opts.intermediateHashType ?? "sha256";
+  const serverKeyType = opts.serverKeyType ?? "ecdsa-p256";
+  const serverHashType = opts.serverHashType ?? "sha256";
+  const clientKeyType = opts.clientKeyType ?? "ecdsa-p256";
+  const clientHashType = opts.clientHashType ?? "sha256";
   const validityDays = opts.validityDays ?? 365;
   const p12Password = opts.p12Password ?? "changeit";
 
@@ -96,8 +108,8 @@ export async function generateMtlsSuite(
     country,
     state,
     locality,
-    keyType,
-    hashType,
+    keyType: rootKeyType,
+    hashType: rootHashType,
     validityDays: caValidityDays,
     isCa: true,
     san: "",
@@ -105,18 +117,22 @@ export async function generateMtlsSuite(
     clientAuth: false,
   });
 
-  const rootCaSigner = await importCaSigner(caResult.certDer, caResult.keyBundle.pkcs8Bytes);
-
   let rawIntermediate: CreatedCertificateResult | undefined;
   let intermediateEntity: MtlsSuiteEntity | undefined;
-  let issuingSigner = rootCaSigner;
   let issuingCertPem = caResult.certPem;
+  let issuingCertDer = caResult.certDer;
+  let issuingKeyDer = caResult.keyBundle.pkcs8Bytes;
   let caCertChainForClient = [caResult.certDer];
 
   // 2. Optional: Generate Intermediate CA (3-tier mode)
   if (pkiHierarchy === "3-tier") {
     const intermediateCommonName = opts.intermediateCommonName ?? "Internal Issuing CA";
     const intermediateValidityDays = Math.max(validityDays * 2, 1825); // 5 years
+    const rootCaSigner = await importCaSigner(
+      caResult.certDer,
+      caResult.keyBundle.pkcs8Bytes,
+      intermediateHashType,
+    );
     rawIntermediate = await createCertificate({
       commonName: intermediateCommonName,
       organization: org,
@@ -124,8 +140,8 @@ export async function generateMtlsSuite(
       country,
       state,
       locality,
-      keyType,
-      hashType,
+      keyType: intermediateKeyType,
+      hashType: intermediateHashType,
       validityDays: intermediateValidityDays,
       isCa: true,
       pathLenConstraint: 0, // Cannot issue further CAs, only leaf certs
@@ -137,8 +153,9 @@ export async function generateMtlsSuite(
       caCertPem: caResult.certPem,
     });
 
-    issuingSigner = await importCaSigner(rawIntermediate.certDer, rawIntermediate.keyBundle.pkcs8Bytes);
     issuingCertPem = rawIntermediate.certPem;
+    issuingCertDer = rawIntermediate.certDer;
+    issuingKeyDer = rawIntermediate.keyBundle.pkcs8Bytes;
     caCertChainForClient = [rawIntermediate.certDer, caResult.certDer];
 
     intermediateEntity = {
@@ -149,12 +166,15 @@ export async function generateMtlsSuite(
       fingerprint: rawIntermediate.fingerprintSha256,
       subjectDn: rawIntermediate.subjectDn,
       issuerDn: rawIntermediate.issuerDn,
+      keyType: intermediateKeyType,
+      signatureHash: intermediateHashType,
     };
   }
 
   // 3. Generate Server Certificate
   const serverCommonName = opts.serverCommonName ?? "localhost";
   const serverSan = opts.serverSan ?? "localhost, 127.0.0.1";
+  const serverSigner = await importCaSigner(issuingCertDer, issuingKeyDer, serverHashType);
   const serverResult = await createCertificate({
     commonName: serverCommonName,
     organization: org,
@@ -162,24 +182,26 @@ export async function generateMtlsSuite(
     country,
     state,
     locality,
-    keyType,
-    hashType,
+    keyType: serverKeyType,
+    hashType: serverHashType,
     validityDays,
     isCa: false,
     san: serverSan,
     serverAuth: true,
     clientAuth: false,
     issuanceMode: "ca-signed",
-    caSigner: issuingSigner,
+    caSigner: serverSigner,
     caCertPem: issuingCertPem,
   });
 
-  const serverChainPem = pkiHierarchy === "3-tier" && rawIntermediate
-    ? `${serverResult.certPem}\n${rawIntermediate.certPem}\n${caResult.certPem}`
-    : `${serverResult.certPem}\n${caResult.certPem}`;
+  const serverChainPem =
+    pkiHierarchy === "3-tier" && rawIntermediate
+      ? `${serverResult.certPem}\n${rawIntermediate.certPem}\n${caResult.certPem}`
+      : `${serverResult.certPem}\n${caResult.certPem}`;
 
   // 4. Generate Client Certificate
   const clientCommonName = opts.clientCommonName ?? "client-app-01";
+  const clientSigner = await importCaSigner(issuingCertDer, issuingKeyDer, clientHashType);
   const clientResult = await createCertificate({
     commonName: clientCommonName,
     organization: org,
@@ -187,21 +209,22 @@ export async function generateMtlsSuite(
     country,
     state,
     locality,
-    keyType,
-    hashType,
+    keyType: clientKeyType,
+    hashType: clientHashType,
     validityDays,
     isCa: false,
     san: "",
     serverAuth: false,
     clientAuth: true,
     issuanceMode: "ca-signed",
-    caSigner: issuingSigner,
+    caSigner: clientSigner,
     caCertPem: issuingCertPem,
   });
 
-  const clientChainPem = pkiHierarchy === "3-tier" && rawIntermediate
-    ? `${clientResult.certPem}\n${rawIntermediate.certPem}\n${caResult.certPem}`
-    : `${clientResult.certPem}\n${caResult.certPem}`;
+  const clientChainPem =
+    pkiHierarchy === "3-tier" && rawIntermediate
+      ? `${clientResult.certPem}\n${rawIntermediate.certPem}\n${caResult.certPem}`
+      : `${clientResult.certPem}\n${caResult.certPem}`;
 
   // 5. Package Client Certificate + Private Key + CAs into PKCS#12 (.p12) container
   const p12Export = await encodePkcs12Archive({
@@ -396,7 +419,11 @@ backend app_servers
   );
 
   // 6. Generate RFC 5280 X.509 v2 CRL for the Root CA
-  const crlSigner = await importCaSigner(caResult.certDer, caResult.keyBundle.pkcs8Bytes);
+  const crlSigner = await importCaSigner(
+    caResult.certDer,
+    caResult.keyBundle.pkcs8Bytes,
+    rootHashType,
+  );
   const crlResult = await createCrl({
     signer: crlSigner,
     crlNumber: 1,
@@ -410,16 +437,20 @@ backend app_servers
   });
 
   // 7. Generate OpenSSH and JWK/JWKS representations
-  const clientSsh = spkiToOpenSsh(clientResult.keyBundle.spkiBytes, keyType, clientCommonName);
-  const jwksList: Jwk[] = [
-    spkiToJwk(caResult.keyBundle.spkiBytes, keyType, "ca-root"),
-  ];
+  const clientSsh = spkiToOpenSsh(
+    clientResult.keyBundle.spkiBytes,
+    clientKeyType,
+    clientCommonName,
+  );
+  const jwksList: Jwk[] = [spkiToJwk(caResult.keyBundle.spkiBytes, rootKeyType, "ca-root")];
   if (rawIntermediate) {
-    jwksList.push(spkiToJwk(rawIntermediate.keyBundle.spkiBytes, keyType, "intermediate-ca"));
+    jwksList.push(
+      spkiToJwk(rawIntermediate.keyBundle.spkiBytes, intermediateKeyType, "intermediate-ca"),
+    );
   }
   jwksList.push(
-    spkiToJwk(serverResult.keyBundle.spkiBytes, keyType, "server-tls"),
-    spkiToJwk(clientResult.keyBundle.spkiBytes, keyType, "client-app"),
+    spkiToJwk(serverResult.keyBundle.spkiBytes, serverKeyType, "server-tls"),
+    spkiToJwk(clientResult.keyBundle.spkiBytes, clientKeyType, "client-app"),
   );
   const jwksJson = formatJwks(jwksList);
 
@@ -436,6 +467,8 @@ backend app_servers
       fingerprint: caResult.fingerprintSha256,
       subjectDn: caResult.subjectDn,
       issuerDn: caResult.issuerDn,
+      keyType: rootKeyType,
+      signatureHash: rootHashType,
     },
     intermediate: intermediateEntity,
     server: {
@@ -446,6 +479,8 @@ backend app_servers
       fingerprint: serverResult.fingerprintSha256,
       subjectDn: serverResult.subjectDn,
       issuerDn: serverResult.issuerDn,
+      keyType: serverKeyType,
+      signatureHash: serverHashType,
       san: serverSan,
     },
     client: {
@@ -456,6 +491,8 @@ backend app_servers
       fingerprint: clientResult.fingerprintSha256,
       subjectDn: clientResult.subjectDn,
       issuerDn: clientResult.issuerDn,
+      keyType: clientKeyType,
+      signatureHash: clientHashType,
       p12Der: p12Export.der,
       p12Base64: p12Export.base64,
       p12Password,

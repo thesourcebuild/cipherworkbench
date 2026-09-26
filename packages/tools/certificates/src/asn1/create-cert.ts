@@ -1,4 +1,5 @@
-import { TagClass } from "./asn1";
+import { parseAsn1, TagClass } from "./asn1";
+import { SIGNATURE_ALGORITHMS } from "./oids";
 import {
   encodeDerBitString,
   encodeDerBoolean,
@@ -23,6 +24,7 @@ import {
 import { detectInputBytes, encodePem } from "./pem";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { buildCertificateOpenSslWorkflow } from "../export/openssl-workflow";
 
 export interface CertificateCreatorOptions {
   commonName: string;
@@ -61,10 +63,12 @@ export interface CreatedCertificateResult {
   serialNumberHex: string;
   subjectDn: string;
   issuerDn: string;
+  signatureAlgorithm: string;
   notBefore: Date;
   notAfter: Date;
   fingerprintSha256: string;
   opensslCommand: string;
+  issuanceMode: "self-signed" | "ca-signed";
   keyBundle: GeneratedKeyBundle;
 }
 
@@ -144,13 +148,19 @@ export function encodeSanExtension(sanStr: string): Uint8Array | null {
 
     if (type === "email") {
       // [1] IMPLICIT IA5String
-      generalNames.push(encodeDerTlv(1, TagClass.ContextSpecific, false, new TextEncoder().encode(val)));
+      generalNames.push(
+        encodeDerTlv(1, TagClass.ContextSpecific, false, new TextEncoder().encode(val)),
+      );
     } else if (type === "uri") {
       // [6] IMPLICIT IA5String
-      generalNames.push(encodeDerTlv(6, TagClass.ContextSpecific, false, new TextEncoder().encode(val)));
+      generalNames.push(
+        encodeDerTlv(6, TagClass.ContextSpecific, false, new TextEncoder().encode(val)),
+      );
     } else {
       // [2] IMPLICIT IA5String (dNSName)
-      generalNames.push(encodeDerTlv(2, TagClass.ContextSpecific, false, new TextEncoder().encode(val)));
+      generalNames.push(
+        encodeDerTlv(2, TagClass.ContextSpecific, false, new TextEncoder().encode(val)),
+      );
     }
   }
 
@@ -191,11 +201,33 @@ export function encodeKeyUsageBitString(bits: number[]): Uint8Array {
 export async function createCertificate(
   opts: CertificateCreatorOptions,
 ): Promise<CreatedCertificateResult> {
+  const caCertProvided = Boolean(opts.caCertPem?.trim());
+  const caKeyProvided = Boolean(opts.caPrivateKeyPem?.trim());
+  if (opts.issuanceMode === "ca-signed" && !opts.caSigner) {
+    if (!caCertProvided && !caKeyProvided) {
+      throw new Error(
+        "CA-signed issuance requires both a CA certificate and its matching private key.",
+      );
+    }
+    if (!caCertProvided) {
+      throw new Error("CA-signed issuance requires the issuing CA certificate.");
+    }
+    if (!caKeyProvided) {
+      throw new Error("CA-signed issuance requires the issuing CA private key.");
+    }
+  }
+
+  const issuanceMode =
+    opts.issuanceMode === "ca-signed" || opts.caSigner ? "ca-signed" : "self-signed";
   const keyBundle = await generateKeyBundle(opts.keyType, opts.hashType);
 
   // 1. Subject DN
   const rdnEntries: RdnEntry[] = [
-    { oid: "2.5.4.6", value: opts.country ? opts.country.slice(0, 2).toUpperCase() : "", isPrintable: true }, // C
+    {
+      oid: "2.5.4.6",
+      value: opts.country ? opts.country.slice(0, 2).toUpperCase() : "",
+      isPrintable: true,
+    }, // C
     { oid: "2.5.4.8", value: opts.state ?? "" }, // ST
     { oid: "2.5.4.7", value: opts.locality ?? "" }, // L
     { oid: "2.5.4.10", value: opts.organization ?? "" }, // O
@@ -246,9 +278,9 @@ export async function createCertificate(
 
   // 4a. Basic Constraints (OID 2.5.29.19)
   const basicConstraintsDer = opts.isCa
-    ? (opts.pathLenConstraint !== undefined
-        ? encodeDerSequence([encodeDerBoolean(true), encodeDerInteger(opts.pathLenConstraint)])
-        : encodeDerSequence([encodeDerBoolean(true)]))
+    ? opts.pathLenConstraint !== undefined
+      ? encodeDerSequence([encodeDerBoolean(true), encodeDerInteger(opts.pathLenConstraint)])
+      : encodeDerSequence([encodeDerBoolean(true)])
     : encodeDerSequence([encodeDerBoolean(false)]);
   extensions.push(
     encodeDerSequence([
@@ -283,10 +315,7 @@ export async function createCertificate(
     if (ekuOids.length > 0) {
       const ekuSequence = encodeDerSequence(ekuOids);
       extensions.push(
-        encodeDerSequence([
-          encodeDerOid("2.5.29.37"),
-          encodeDerOctetString(ekuSequence),
-        ]),
+        encodeDerSequence([encodeDerOid("2.5.29.37"), encodeDerOctetString(ekuSequence)]),
       );
     }
   }
@@ -295,10 +324,7 @@ export async function createCertificate(
   const sanDer = encodeSanExtension(opts.san || opts.commonName);
   if (sanDer) {
     extensions.push(
-      encodeDerSequence([
-        encodeDerOid("2.5.29.17"),
-        encodeDerOctetString(sanDer),
-      ]),
+      encodeDerSequence([encodeDerOid("2.5.29.17"), encodeDerOctetString(sanDer)]),
     );
   }
 
@@ -313,6 +339,7 @@ export async function createCertificate(
   // 4f. Authority Key Identifier (OID 2.5.29.35)
   // Resolve issuing signer: either provided CA signer, parsed CA PEMs, or self-signed
   let signer: {
+    algorithmType: KeyAlgorithmType;
     issuerDnDer: Uint8Array;
     issuerSki: Uint8Array;
     signatureAlgorithmDer: Uint8Array;
@@ -322,12 +349,13 @@ export async function createCertificate(
 
   if (opts.caSigner) {
     signer = opts.caSigner;
-  } else if (opts.issuanceMode === "ca-signed" && opts.caCertPem && opts.caPrivateKeyPem) {
+  } else if (issuanceMode === "ca-signed" && opts.caCertPem && opts.caPrivateKeyPem) {
     const caCertDer = detectInputBytes(new TextEncoder().encode(opts.caCertPem)).der;
     const caKeyDer = detectInputBytes(new TextEncoder().encode(opts.caPrivateKeyPem)).der;
-    signer = await importCaSigner(caCertDer, caKeyDer);
+    signer = await importCaSigner(caCertDer, caKeyDer, opts.hashType);
   } else {
     signer = {
+      algorithmType: keyBundle.algorithmType,
       issuerDnDer: subjectDnDer,
       issuerSki: keyBundle.ski,
       signatureAlgorithmDer: keyBundle.signatureAlgorithmDer,
@@ -336,14 +364,9 @@ export async function createCertificate(
     };
   }
 
-  const akiInner = encodeDerSequence([
-    encodeDerContext(0, signer.issuerSki, false),
-  ]);
+  const akiInner = encodeDerSequence([encodeDerContext(0, signer.issuerSki, false)]);
   extensions.push(
-    encodeDerSequence([
-      encodeDerOid("2.5.29.35"),
-      encodeDerOctetString(akiInner),
-    ]),
+    encodeDerSequence([encodeDerOid("2.5.29.35"), encodeDerOctetString(akiInner)]),
   );
 
   // 4g. Authority Information Access (AIA, OID 1.3.6.1.5.5.7.1.1)
@@ -387,10 +410,7 @@ export async function createCertificate(
     const crlDpSeq = encodeDerSequence([dp]);
 
     extensions.push(
-      encodeDerSequence([
-        encodeDerOid("2.5.29.31"),
-        encodeDerOctetString(crlDpSeq),
-      ]),
+      encodeDerSequence([encodeDerOid("2.5.29.31"), encodeDerOctetString(crlDpSeq)]),
     );
   }
 
@@ -426,20 +446,24 @@ export async function createCertificate(
   ]);
 
   const certPem = encodePem("CERTIFICATE", certDer);
-  const fingerprintSha256 = bytesToHex(sha256(certDer)).toUpperCase().match(/../g)?.join(":") ?? "";
-  const chainPem = opts.caCertPem ? `${certPem}\n${opts.caCertPem.trim()}` : undefined;
+  const fingerprintSha256 =
+    bytesToHex(sha256(certDer)).toUpperCase().match(/../g)?.join(":") ?? "";
+  const chainPem =
+    issuanceMode === "ca-signed" && opts.caCertPem
+      ? `${certPem}\n${opts.caCertPem.trim()}`
+      : undefined;
 
-  // 8. OpenSSL Command reproduction
-  let opensslKeyOpt = "-newkey ec -pkeyopt ec_paramgen_curve:prime256v1";
-  if (opts.keyType === "rsa-2048") opensslKeyOpt = "-newkey rsa:2048";
-  else if (opts.keyType === "rsa-4096") opensslKeyOpt = "-newkey rsa:4096";
-  else if (opts.keyType === "ecdsa-p384") opensslKeyOpt = "-newkey ec -pkeyopt ec_paramgen_curve:secp384r1";
-  else if (opts.keyType === "ed25519") opensslKeyOpt = "-newkey ed25519";
+  // An equivalent CLI workflow, not the command used here: generation remains entirely in-process.
+  const opensslCommand = buildCertificateOpenSslWorkflow({
+    ...opts,
+    issuanceMode,
+    signingKeyType: signer.algorithmType,
+  });
 
-  let opensslCommand = `openssl req -x509 ${opensslKeyOpt} -keyout key.pem -out cert.pem -days ${opts.validityDays} -nodes -subj "/CN=${opts.commonName}"`;
-  if (opts.issuanceMode === "ca-signed" || opts.caSigner) {
-    opensslCommand = `openssl req -new ${opensslKeyOpt} -keyout key.pem -out req.csr -nodes -subj "/CN=${opts.commonName}"\nopenssl x509 -req -in req.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out cert.pem -days ${opts.validityDays}`;
-  }
+  const sigAlgOid =
+    parseAsn1(signer.signatureAlgorithmDer).children[0]?.asOid() ??
+    keyBundle.signatureAlgorithmOid;
+  const signatureAlgorithm = SIGNATURE_ALGORITHMS[sigAlgOid]?.name ?? sigAlgOid;
 
   return {
     certPem,
@@ -451,10 +475,12 @@ export async function createCertificate(
     serialNumberHex,
     subjectDn: subjectDnStr,
     issuerDn: signer.issuerDnString,
+    signatureAlgorithm,
     notBefore,
     notAfter,
     fingerprintSha256,
     opensslCommand,
+    issuanceMode,
     keyBundle,
   };
 }

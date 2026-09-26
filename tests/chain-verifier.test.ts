@@ -12,8 +12,12 @@ describe("Certificate Chain Verifier (Phase 6)", () => {
       caCommonName: "Company Root CA",
       serverCommonName: "api.company.com",
       clientCommonName: "client.company.com",
-      keyType: "rsa-2048",
-      hashType: "sha256",
+      rootKeyType: "rsa-2048",
+      rootHashType: "sha256",
+      serverKeyType: "rsa-2048",
+      serverHashType: "sha256",
+      clientKeyType: "rsa-2048",
+      clientHashType: "sha256",
       validityDays: 90,
     });
 
@@ -41,8 +45,14 @@ describe("Certificate Chain Verifier (Phase 6)", () => {
       intermediateCommonName: "Enterprise Issuing CA",
       serverCommonName: "internal.vault.corp",
       clientCommonName: "worker-01.corp",
-      keyType: "ecdsa-p256",
-      hashType: "sha256",
+      rootKeyType: "ecdsa-p256",
+      rootHashType: "sha256",
+      intermediateKeyType: "ecdsa-p256",
+      intermediateHashType: "sha256",
+      serverKeyType: "ecdsa-p256",
+      serverHashType: "sha256",
+      clientKeyType: "ecdsa-p256",
+      clientHashType: "sha256",
       validityDays: 180,
     });
 
@@ -66,8 +76,12 @@ describe("Certificate Chain Verifier (Phase 6)", () => {
       caCommonName: "Secure CA",
       serverCommonName: "server.com",
       clientCommonName: "client.com",
-      keyType: "ecdsa-p256",
-      hashType: "sha256",
+      rootKeyType: "ecdsa-p256",
+      rootHashType: "sha256",
+      serverKeyType: "ecdsa-p256",
+      serverHashType: "sha256",
+      clientKeyType: "ecdsa-p256",
+      clientHashType: "sha256",
     });
 
     const certs = splitPemCertificates(suite.server.chainPem);

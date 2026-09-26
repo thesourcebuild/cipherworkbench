@@ -1,8 +1,4 @@
-import {
-  createOptionCatalogue,
-  type OptionCatalogue,
-  type OptionDef,
-} from "@ocs/engine";
+import { createOptionCatalogue, type OptionCatalogue, type OptionDef } from "@ocs/engine";
 import {
   OPTION_CONVERTER_OP,
   OPTION_DETAIL_LEVEL,
@@ -16,6 +12,14 @@ import {
   OPTION_LOCALITY,
   OPTION_KEY_TYPE,
   OPTION_HASH_TYPE,
+  OPTION_ROOT_KEY_TYPE,
+  OPTION_ROOT_HASH_TYPE,
+  OPTION_INTERMEDIATE_KEY_TYPE,
+  OPTION_INTERMEDIATE_HASH_TYPE,
+  OPTION_SERVER_KEY_TYPE,
+  OPTION_SERVER_HASH_TYPE,
+  OPTION_CLIENT_KEY_TYPE,
+  OPTION_CLIENT_HASH_TYPE,
   OPTION_VALIDITY_DAYS,
   OPTION_IS_CA,
   OPTION_SAN,
@@ -23,12 +27,12 @@ import {
   OPTION_CLIENT_AUTH,
   OPTION_CODE_SIGNING,
   OPTION_CREATOR_MODE,
-  OPTION_WORKFLOW_LAYOUT,
   OPTION_ISSUANCE_MODE,
   OPTION_PKI_HIERARCHY,
   OPTION_INTERMEDIATE_COMMON_NAME,
   OPTION_CA_CERT,
   OPTION_CA_PRIVATE_KEY,
+  OPTION_CA_COMMON_NAME,
   OPTION_CLIENT_COMMON_NAME,
   OPTION_MTLS_P12_PASSWORD,
   OPTION_PASSWORD,
@@ -50,7 +54,11 @@ const INPUT_FORMAT: OptionDef<CertificateOptionGroup> = {
   group: "format",
   kind: "enum",
   choices: [
-    { value: "auto", label: "Auto-detect", summary: "Detects PEM, hex or binary DER automatically" },
+    {
+      value: "auto",
+      label: "Auto-detect",
+      summary: "Detects PEM, hex or binary DER automatically",
+    },
     { value: "pem", label: "PEM", summary: "Base64 encoded text block with BEGIN/END header" },
     { value: "der", label: "DER", summary: "Raw binary ASN.1 DER" },
     { value: "hex", label: "Hex", summary: "Hex-encoded DER bytes" },
@@ -67,8 +75,16 @@ const DETAIL_LEVEL: OptionDef<CertificateOptionGroup> = {
   group: "format",
   kind: "enum",
   choices: [
-    { value: "summary", label: "Standard", summary: "Parsed fields, extensions and OpenSSL text dump" },
-    { value: "full-dump", label: "ASN.1 Tree", summary: "Detailed hierarchical ASN.1 TLV structure dump" },
+    {
+      value: "summary",
+      label: "Standard",
+      summary: "Parsed fields, extensions and OpenSSL text dump",
+    },
+    {
+      value: "full-dump",
+      label: "ASN.1 Tree",
+      summary: "Detailed hierarchical ASN.1 TLV structure dump",
+    },
   ],
   summary: "How deeply to inspect the certificate data.",
   detail:
@@ -93,19 +109,71 @@ const CONVERTER_OP: OptionDef<CertificateOptionGroup> = {
   group: "convert",
   kind: "enum",
   choices: [
-    { value: "auto", label: "Auto Convert (PEM ↔ DER)", summary: "Converts PEM to DER or DER to PEM automatically" },
-    { value: "pem-to-der", label: "PEM to DER", summary: "Decodes PEM text into raw binary DER" },
-    { value: "der-to-pem", label: "DER to PEM", summary: "Encodes binary DER into formatted PEM text" },
-    { value: "pem-to-cer", label: "PEM to CER", summary: "Exports certificate as binary DER (.cer)" },
-    { value: "cer-to-pem", label: "CER to PEM", summary: "Encodes .cer certificate into PEM text" },
-    { value: "pem-to-pkcs7", label: "PEM to PKCS#7 (.p7b)", summary: "Packages certificate(s) into PKCS#7 / P7B bundle" },
-    { value: "pkcs7-to-pem", label: "PKCS#7 to PEM", summary: "Extracts certificates from PKCS#7 / P7B bundle into PEM" },
-    { value: "pem-to-pkcs12", label: "PEM to PKCS#12 (.pfx / .p12)", summary: "Packages certificate + private key into PKCS#12 archive" },
-    { value: "pkcs12-to-pem", label: "PKCS#12 to PEM", summary: "Extracts certificate and private key from PKCS#12 (.pfx) archive" },
-    { value: "pkcs12-inspect", label: "Inspect PKCS#12 (.pfx)", summary: "Inspects SafeBags, attributes, and MAC of PKCS#12 container" },
-    { value: "pem-to-ppk", label: "Private Key to PuTTY (.ppk v3)", summary: "Converts RSA, ECDSA, or Ed25519 key to PuTTY v3 format" },
-    { value: "extract-public-key", label: "Extract Public Key", summary: "Extracts SubjectPublicKeyInfo (SPKI) as PEM" },
-    { value: "split-chain", label: "Split Chain / Bundle", summary: "Splits multiple concatenated PEM certs into separate blocks" },
+    {
+      value: "auto",
+      label: "Auto Convert (PEM ↔ DER)",
+      summary: "Converts PEM to DER or DER to PEM automatically",
+    },
+    {
+      value: "pem-to-der",
+      label: "PEM to DER",
+      summary: "Decodes PEM text into raw binary DER",
+    },
+    {
+      value: "der-to-pem",
+      label: "DER to PEM",
+      summary: "Encodes binary DER into formatted PEM text",
+    },
+    {
+      value: "pem-to-cer",
+      label: "PEM to CER",
+      summary: "Exports certificate as binary DER (.cer)",
+    },
+    {
+      value: "cer-to-pem",
+      label: "CER to PEM",
+      summary: "Encodes .cer certificate into PEM text",
+    },
+    {
+      value: "pem-to-pkcs7",
+      label: "PEM to PKCS#7 (.p7b)",
+      summary: "Packages certificate(s) into PKCS#7 / P7B bundle",
+    },
+    {
+      value: "pkcs7-to-pem",
+      label: "PKCS#7 to PEM",
+      summary: "Extracts certificates from PKCS#7 / P7B bundle into PEM",
+    },
+    {
+      value: "pem-to-pkcs12",
+      label: "PEM to PKCS#12 (.pfx / .p12)",
+      summary: "Packages certificate + private key into PKCS#12 archive",
+    },
+    {
+      value: "pkcs12-to-pem",
+      label: "PKCS#12 to PEM",
+      summary: "Extracts certificate and private key from PKCS#12 (.pfx) archive",
+    },
+    {
+      value: "pkcs12-inspect",
+      label: "Inspect PKCS#12 (.pfx)",
+      summary: "Inspects SafeBags, attributes, and MAC of PKCS#12 container",
+    },
+    {
+      value: "pem-to-ppk",
+      label: "Private Key to PuTTY (.ppk v3)",
+      summary: "Converts RSA, ECDSA, or Ed25519 key to PuTTY v3 format",
+    },
+    {
+      value: "extract-public-key",
+      label: "Extract Public Key",
+      summary: "Extracts SubjectPublicKeyInfo (SPKI) as PEM",
+    },
+    {
+      value: "split-chain",
+      label: "Split Chain / Bundle",
+      summary: "Splits multiple concatenated PEM certs into separate blocks",
+    },
   ],
   summary: "Which conversion or extraction transformation to perform.",
   detail:
@@ -121,7 +189,8 @@ const PASSWORD: OptionDef<CertificateOptionGroup> = {
   secret: true,
   arg: { placeholder: "PKCS#12 password (optional)" },
   summary: "Password used to encrypt or decrypt PKCS#12 (.pfx / .p12) archives.",
-  detail: "When exporting PKCS#12, encrypts the private key with PBES2 (AES-256-CBC). When importing, decrypts the archive.",
+  detail:
+    "When exporting PKCS#12, encrypts the private key with PBES2 (AES-256-CBC). When importing, decrypts the archive.",
   order: 20,
 };
 
@@ -133,7 +202,8 @@ const PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
   secret: true,
   arg: { placeholder: "-----BEGIN PRIVATE KEY----- ...", multiline: true, rows: 10 },
   summary: "Matching private key to check against the certificate or CSR above.",
-  detail: "Paste the private key (PKCS#8, PKCS#1 RSA, SEC1 EC, or OpenSSH) to verify whether it matches the certificate or CSR.",
+  detail:
+    "Paste the private key (PKCS#8, PKCS#1 RSA, SEC1 EC, or OpenSSH) to verify whether it matches the certificate or CSR.",
   order: 10,
 };
 
@@ -144,7 +214,8 @@ const COMPARISON_CERT: OptionDef<CertificateOptionGroup> = {
   kind: "text",
   arg: { placeholder: "-----BEGIN CERTIFICATE----- ...", multiline: true, rows: 10 },
   summary: "Second certificate to compare side-by-side against the certificate above.",
-  detail: "Paste the new or renewed certificate to highlight differences in dates, SANs, serial numbers, and keys.",
+  detail:
+    "Paste the new or renewed certificate to highlight differences in dates, SANs, serial numbers, and keys.",
   order: 10,
 };
 
@@ -221,17 +292,42 @@ const KEY_TYPE: OptionDef<CertificateOptionGroup> = {
   group: "key",
   kind: "enum",
   choices: [
-    { value: "ecdsa-p256", label: "ECDSA P-256", summary: "NIST P-256 (secp256r1) - Modern standard TLS default" },
-    { value: "ecdsa-p384", label: "ECDSA P-384", summary: "NIST P-384 (secp384r1) - High security curve" },
+    {
+      value: "ecdsa-p256",
+      label: "ECDSA P-256",
+      summary: "NIST P-256 (secp256r1) - Modern standard TLS default",
+    },
+    {
+      value: "ecdsa-p384",
+      label: "ECDSA P-384",
+      summary: "NIST P-384 (secp384r1) - High security curve",
+    },
     { value: "rsa-2048", label: "RSA 2048", summary: "RSA 2048-bit with PKCS#1 v1.5 padding" },
     { value: "rsa-4096", label: "RSA 4096", summary: "RSA 4096-bit - Extended security RSA" },
-    { value: "ed25519", label: "Ed25519", summary: "Edwards-curve Ed25519 signature algorithm (RFC 8410)" },
-    { value: "ml-dsa-44", label: "ML-DSA-44 (Post-Quantum FIPS 204)", summary: "NIST Security Level 2 lattice-based signature scheme" },
-    { value: "ml-dsa-65", label: "ML-DSA-65 (Post-Quantum FIPS 204)", summary: "NIST Security Level 3 lattice-based signature scheme" },
-    { value: "ml-dsa-87", label: "ML-DSA-87 (Post-Quantum FIPS 204)", summary: "NIST Security Level 5 lattice-based signature scheme" },
+    {
+      value: "ed25519",
+      label: "Ed25519",
+      summary: "Edwards-curve Ed25519 signature algorithm (RFC 8410)",
+    },
+    {
+      value: "ml-dsa-44",
+      label: "ML-DSA-44 (Post-Quantum FIPS 204)",
+      summary: "NIST Security Level 2 lattice-based signature scheme",
+    },
+    {
+      value: "ml-dsa-65",
+      label: "ML-DSA-65 (Post-Quantum FIPS 204)",
+      summary: "NIST Security Level 3 lattice-based signature scheme",
+    },
+    {
+      value: "ml-dsa-87",
+      label: "ML-DSA-87 (Post-Quantum FIPS 204)",
+      summary: "NIST Security Level 5 lattice-based signature scheme",
+    },
   ],
   summary: "Cryptographic algorithm and key size.",
-  detail: "Select ECDSA, RSA, Ed25519, or FIPS 204 ML-DSA for key pair generation and digital signatures.",
+  detail:
+    "Select ECDSA, RSA, Ed25519, or FIPS 204 ML-DSA for key pair generation and digital signatures.",
   order: 10,
 };
 
@@ -244,10 +340,80 @@ const HASH_TYPE: OptionDef<CertificateOptionGroup> = {
     { value: "sha256", label: "SHA-256", summary: "Standard SHA-256 cryptographic digest" },
     { value: "sha384", label: "SHA-384", summary: "High security SHA-384 digest" },
     { value: "sha512", label: "SHA-512", summary: "SHA-512 digest" },
+    { value: "sha3-256", label: "SHA3-256", summary: "NIST FIPS 202 SHA3-256 Keccak digest" },
+    { value: "sha3-384", label: "SHA3-384", summary: "NIST FIPS 202 SHA3-384 Keccak digest" },
+    { value: "sha3-512", label: "SHA3-512", summary: "NIST FIPS 202 SHA3-512 Keccak digest" },
   ],
   summary: "Cryptographic digest used for signing the certificate or request.",
   detail: "Hash algorithm paired with the key to produce the digital signature.",
   order: 20,
+};
+
+const ROOT_KEY_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...KEY_TYPE,
+  id: OPTION_ROOT_KEY_TYPE,
+  label: "Root Key Algorithm",
+  availableOn: ["mtls-suite"],
+  order: 30,
+};
+
+const ROOT_HASH_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...HASH_TYPE,
+  id: OPTION_ROOT_HASH_TYPE,
+  label: "Root Self-Sign Hash",
+  availableOn: ["mtls-suite"],
+  order: 40,
+};
+
+const INTERMEDIATE_KEY_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...KEY_TYPE,
+  id: OPTION_INTERMEDIATE_KEY_TYPE,
+  label: "Intermediate Key Algorithm",
+  availableOn: ["mtls-suite"],
+  order: 50,
+};
+
+const INTERMEDIATE_HASH_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...HASH_TYPE,
+  id: OPTION_INTERMEDIATE_HASH_TYPE,
+  label: "Intermediate Certificate Hash",
+  summary: "Digest used by the Root CA when signing the Intermediate CA certificate.",
+  availableOn: ["mtls-suite"],
+  order: 60,
+};
+
+const SERVER_KEY_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...KEY_TYPE,
+  id: OPTION_SERVER_KEY_TYPE,
+  label: "Server Key Algorithm",
+  availableOn: ["mtls-suite"],
+  order: 70,
+};
+
+const SERVER_HASH_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...HASH_TYPE,
+  id: OPTION_SERVER_HASH_TYPE,
+  label: "Server Certificate Hash",
+  summary: "Digest used by the issuing CA when signing the Server certificate.",
+  availableOn: ["mtls-suite"],
+  order: 80,
+};
+
+const CLIENT_KEY_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...KEY_TYPE,
+  id: OPTION_CLIENT_KEY_TYPE,
+  label: "Client Key Algorithm",
+  availableOn: ["mtls-suite"],
+  order: 90,
+};
+
+const CLIENT_HASH_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...HASH_TYPE,
+  id: OPTION_CLIENT_HASH_TYPE,
+  label: "Client Certificate Hash",
+  summary: "Digest used by the issuing CA when signing the Client certificate.",
+  availableOn: ["mtls-suite"],
+  order: 100,
 };
 
 const VALIDITY_DAYS: OptionDef<CertificateOptionGroup> = {
@@ -312,32 +478,26 @@ const CODE_SIGNING: OptionDef<CertificateOptionGroup> = {
   order: 60,
 };
 
-const WORKFLOW_LAYOUT: OptionDef<CertificateOptionGroup> = {
-  id: OPTION_WORKFLOW_LAYOUT,
-  label: "Workflow Layout",
-  group: "mode",
-  kind: "enum",
-  choices: [
-    { value: "wizard", label: "Step-by-Step Wizard", summary: "Interactive guided steps in the main workbench canvas" },
-    { value: "panels", label: "All Panels (Overview)", summary: "All creation settings laid out as panels in the main section" },
-    { value: "classic", label: "Sidebar Only (Classic)", summary: "Traditional layout with all options placed in the right sidebar" },
-  ],
-  summary: "Display layout in the main workspace: Step-by-Step Wizard, All Panels, or Classic Sidebar.",
-  detail: "Choose between an interactive step-by-step wizard, full canvas panels, or sidebar-only controls.",
-  order: 5,
-};
-
 const CREATOR_MODE: OptionDef<CertificateOptionGroup> = {
   id: OPTION_CREATOR_MODE,
   label: "Creation Mode",
   group: "mode",
   kind: "enum",
   choices: [
-    { value: "single-cert", label: "Single Certificate", summary: "Generate an individual certificate (Self-Signed or CA-Signed)" },
-    { value: "mtls-suite", label: "Full mTLS Suite", summary: "Generate complete Root CA + Server Cert + Client Cert + PKCS#12 bundle" },
+    {
+      value: "single-cert",
+      label: "Single Certificate",
+      summary: "Generate an individual certificate (Self-Signed or CA-Signed)",
+    },
+    {
+      value: "mtls-suite",
+      label: "Full mTLS Suite",
+      summary: "Generate complete Root CA + Server Cert + Client Cert + PKCS#12 bundle",
+    },
   ],
   summary: "Select whether to generate a single certificate or a complete mTLS hierarchy.",
-  detail: "In Full mTLS Suite mode, produces Root CA, Server Certificate with SANs, Client Certificate, and Client PKCS#12 bundle in one operation.",
+  detail:
+    "In Full mTLS Suite mode, produces Root CA, Server Certificate with SANs, Client Certificate, and Client PKCS#12 bundle in one operation.",
   order: 10,
 };
 
@@ -348,11 +508,20 @@ const ISSUANCE_MODE: OptionDef<CertificateOptionGroup> = {
   kind: "enum",
   availableOn: ["single-cert"],
   choices: [
-    { value: "self-signed", label: "Self-Signed", summary: "Certificate signs itself (or serves as Root CA)" },
-    { value: "ca-signed", label: "CA-Signed", summary: "Sign child certificate using an existing CA certificate and private key" },
+    {
+      value: "self-signed",
+      label: "Self-Signed",
+      summary: "Certificate signs itself (or serves as Root CA)",
+    },
+    {
+      value: "ca-signed",
+      label: "CA-Signed",
+      summary: "Sign child certificate using an existing CA certificate and private key",
+    },
   ],
   summary: "Issue a self-signed certificate or sign with an existing CA authority.",
-  detail: "When CA-Signed is selected, provide the issuing CA certificate and private key in the CA Signing Authority section below.",
+  detail:
+    "When CA-Signed is selected, provide the issuing CA certificate and private key in the CA Signing Authority section below.",
   order: 20,
 };
 
@@ -362,11 +531,20 @@ const CA_MODE: OptionDef<CertificateOptionGroup> = {
   group: "ca",
   kind: "enum",
   choices: [
-    { value: "ephemeral-ca", label: "Ephemeral Micro-CA", summary: "Automatically generate a fresh Root CA to sign this CSR" },
-    { value: "custom-ca", label: "Custom CA", summary: "Use provided CA certificate and CA private key" },
+    {
+      value: "ephemeral-ca",
+      label: "Ephemeral Micro-CA",
+      summary: "Automatically generate a fresh Root CA to sign this CSR",
+    },
+    {
+      value: "custom-ca",
+      label: "Custom CA",
+      summary: "Use provided CA certificate and CA private key",
+    },
   ],
   summary: "How the CSR is signed.",
-  detail: "Select whether to use an ephemeral in-browser Root CA or sign with an existing custom CA.",
+  detail:
+    "Select whether to use an ephemeral in-browser Root CA or sign with an existing custom CA.",
   order: 5,
 };
 
@@ -376,12 +554,25 @@ const OCSP_OP: OptionDef<CertificateOptionGroup> = {
   group: "format",
   kind: "enum",
   choices: [
-    { value: "inspect-response", label: "Inspect Response", summary: "Parse and decode an RFC 6960 OCSP Response or Staple" },
-    { value: "build-request", label: "Build OCSP Request", summary: "Construct an OCSP query and CertID from a certificate and its issuer" },
-    { value: "generate-staple", label: "Generate OCSP Staple", summary: "Produce an authentic offline OCSP Staple response bundle" },
+    {
+      value: "inspect-response",
+      label: "Inspect Response",
+      summary: "Parse and decode an RFC 6960 OCSP Response or Staple",
+    },
+    {
+      value: "build-request",
+      label: "Build OCSP Request",
+      summary: "Construct an OCSP query and CertID from a certificate and its issuer",
+    },
+    {
+      value: "generate-staple",
+      label: "Generate OCSP Staple",
+      summary: "Produce an authentic offline OCSP Staple response bundle",
+    },
   ],
   summary: "Action to perform on OCSP data.",
-  detail: "Select whether to inspect an existing OCSP revocation response, generate a query for an OCSP responder, or build an offline staple.",
+  detail:
+    "Select whether to inspect an existing OCSP revocation response, generate a query for an OCSP responder, or build an offline staple.",
   order: 5,
 };
 
@@ -392,7 +583,8 @@ const ISSUER_CERT: OptionDef<CertificateOptionGroup> = {
   kind: "text",
   arg: { placeholder: "-----BEGIN CERTIFICATE-----\n...", multiline: true },
   summary: "Issuing CA certificate required to compute RFC 6960 CertID hashes.",
-  detail: "The issuing Certificate Authority certificate needed to hash issuer Name and Key for OCSP requests.",
+  detail:
+    "The issuing Certificate Authority certificate needed to hash issuer Name and Key for OCSP requests.",
   order: 15,
 };
 
@@ -403,7 +595,8 @@ const ACME_DOMAIN: OptionDef<CertificateOptionGroup> = {
   kind: "text",
   arg: { placeholder: "example.com" },
   summary: "Target fully qualified domain name (FQDN) for ACME validation.",
-  detail: "The domain name being certified (e.g. example.com or *.example.com). Wildcard prefix is automatically stripped for DNS-01 TXT record calculation.",
+  detail:
+    "The domain name being certified (e.g. example.com or *.example.com). Wildcard prefix is automatically stripped for DNS-01 TXT record calculation.",
   order: 1,
 };
 
@@ -414,7 +607,8 @@ const ACME_TOKEN: OptionDef<CertificateOptionGroup> = {
   kind: "text",
   arg: { placeholder: "evaGxfADs6pSRb2LAv9IZf17Dt3juxGJ-PCt92wr-oA" },
   summary: "Challenge token provided by the ACME server.",
-  detail: "The random challenge token issued by the ACME directory server (e.g., Let's Encrypt / ZeroSSL) for HTTP-01 or DNS-01 validation.",
+  detail:
+    "The random challenge token issued by the ACME directory server (e.g., Let's Encrypt / ZeroSSL) for HTTP-01 or DNS-01 validation.",
   order: 2,
 };
 
@@ -423,9 +617,13 @@ const ACME_ACCOUNT_KEY: OptionDef<CertificateOptionGroup> = {
   label: "Account Key or Thumbprint",
   group: "key",
   kind: "text",
-  arg: { placeholder: "PEM Private/Public Key, JWK JSON, or 43-char Thumbprint", multiline: true },
+  arg: {
+    placeholder: "PEM Private/Public Key, JWK JSON, or 43-char Thumbprint",
+    multiline: true,
+  },
   summary: "ACME Account Key or RFC 7638 JWK Thumbprint.",
-  detail: "Your ACME account private key (PEM), public key, JWK JSON object, or a precomputed 43-character Base64URL JWK thumbprint.",
+  detail:
+    "Your ACME account private key (PEM), public key, JWK JSON object, or a precomputed 43-character Base64URL JWK thumbprint.",
   order: 3,
 };
 
@@ -469,13 +667,26 @@ const PKI_HIERARCHY: OptionDef<CertificateOptionGroup> = {
     {
       value: "3-tier",
       label: "3-Tier (Root CA ➔ Intermediate CA ➔ Leaf)",
-      summary: "Root CA signs an Intermediate Issuing CA, which signs Server and Client certificates.",
+      summary:
+        "Root CA signs an Intermediate Issuing CA, which signs Server and Client certificates.",
     },
   ],
   summary: "PKI hierarchy depth: 2-tier simple or 3-tier enterprise with Intermediate CA.",
   detail:
     "In 3-tier enterprise PKI, the offline Root CA delegates issuance to an Intermediate Issuing CA with path length constraints, and the server chain bundles the intermediate.",
   order: 5,
+};
+
+const CA_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CA_COMMON_NAME,
+  label: "Root CA Common Name (CN)",
+  group: "mtls",
+  kind: "text",
+  availableOn: ["mtls-suite"],
+  arg: { placeholder: "Internal Root CA" },
+  summary: "Subject Common Name for the Root Certificate Authority trust anchor.",
+  detail: "Identity of the Root CA (e.g. MyPrivateRootCA or Internal Root CA).",
+  order: 6,
 };
 
 const INTERMEDIATE_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
@@ -486,7 +697,8 @@ const INTERMEDIATE_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
   availableOn: ["mtls-suite"],
   arg: { placeholder: "Internal Issuing CA" },
   summary: "Common Name for the Intermediate Certificate Authority in 3-tier PKI mode.",
-  detail: "The Subject Common Name (CN) for the issuing CA that directly signs server and client certificates.",
+  detail:
+    "The Subject Common Name (CN) for the issuing CA that directly signs server and client certificates.",
   order: 12,
 };
 
@@ -498,7 +710,8 @@ const CLIENT_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
   availableOn: ["mtls-suite"],
   arg: { placeholder: "client-app-01" },
   summary: "Subject Common Name for the mTLS client certificate.",
-  detail: "Identity of the connecting client (e.g. client-service, username, or client-app-01).",
+  detail:
+    "Identity of the connecting client (e.g. client-service, username, or client-app-01).",
   order: 15,
 };
 
@@ -511,7 +724,8 @@ const MTLS_P12_PASSWORD: OptionDef<CertificateOptionGroup> = {
   availableOn: ["mtls-suite"],
   arg: { placeholder: "e.g. changeit" },
   summary: "Password used to encrypt the client.p12 PKCS#12 archive with PBES2 AES-256-CBC.",
-  detail: "Required by browsers, Postman, and OS keychains to import the client certificate and private key.",
+  detail:
+    "Required by browsers, Postman, and OS keychains to import the client certificate and private key.",
   order: 20,
 };
 
@@ -522,10 +736,10 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   CONVERTER_OP,
   PASSWORD,
   PRIVATE_KEY,
-  WORKFLOW_LAYOUT,
   CREATOR_MODE,
   ISSUANCE_MODE,
   PKI_HIERARCHY,
+  CA_COMMON_NAME,
   INTERMEDIATE_COMMON_NAME,
   COMMON_NAME,
   ORGANIZATION,
@@ -535,6 +749,14 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   LOCALITY,
   KEY_TYPE,
   HASH_TYPE,
+  ROOT_KEY_TYPE,
+  ROOT_HASH_TYPE,
+  INTERMEDIATE_KEY_TYPE,
+  INTERMEDIATE_HASH_TYPE,
+  SERVER_KEY_TYPE,
+  SERVER_HASH_TYPE,
+  CLIENT_KEY_TYPE,
+  CLIENT_HASH_TYPE,
   VALIDITY_DAYS,
   IS_CA,
   SAN,
@@ -565,10 +787,10 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
     options.push(CONVERTER_OP, INPUT_FORMAT, PASSWORD, PRIVATE_KEY);
   } else if (meta.id === "cert-creator") {
     options.push(
-      WORKFLOW_LAYOUT,
       CREATOR_MODE,
       ISSUANCE_MODE,
       PKI_HIERARCHY,
+      CA_COMMON_NAME,
       INTERMEDIATE_COMMON_NAME,
       COMMON_NAME,
       SAN,
@@ -579,6 +801,14 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
       LOCALITY,
       KEY_TYPE,
       HASH_TYPE,
+      ROOT_KEY_TYPE,
+      ROOT_HASH_TYPE,
+      INTERMEDIATE_KEY_TYPE,
+      INTERMEDIATE_HASH_TYPE,
+      SERVER_KEY_TYPE,
+      SERVER_HASH_TYPE,
+      CLIENT_KEY_TYPE,
+      CLIENT_HASH_TYPE,
       VALIDITY_DAYS,
       IS_CA,
       SERVER_AUTH,
@@ -613,6 +843,7 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
       CA_MODE,
       CA_CERT,
       CA_PRIVATE_KEY,
+      HASH_TYPE,
       VALIDITY_DAYS,
       SAN,
       SERVER_AUTH,
@@ -627,4 +858,3 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
 
   return createOptionCatalogue(options);
 }
-

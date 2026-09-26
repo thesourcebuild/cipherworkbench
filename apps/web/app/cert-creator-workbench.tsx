@@ -1,9 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { OptionValue } from "@ocs/contracts";
+import type { OptionValue, OptionValues } from "@ocs/contracts";
 import type { ToolDefinition, ToolSpecBase } from "@ocs/engine";
-import { Button, CopyIconButton, SecretField, cn } from "@ocs/ui";
+import {
+  Button,
+  CopyIconButton,
+  SecretField,
+  ShellCommandBlock,
+  cn,
+  type CommandShell,
+  type ShellCommand,
+  type ShellCommandVariants,
+} from "@ocs/ui";
 import { OptionsForm } from "./options-form";
 import type { ComputeState } from "./use-compute";
 import {
@@ -13,14 +22,37 @@ import {
   OPTION_CREATOR_MODE,
   OPTION_ISSUANCE_MODE,
   OPTION_PKI_HIERARCHY,
-  OPTION_WORKFLOW_LAYOUT,
+  OPTION_CA_COMMON_NAME,
+  OPTION_COMMON_NAME,
+  OPTION_SAN,
+  OPTION_ORGANIZATION,
+  OPTION_ORG_UNIT,
+  OPTION_COUNTRY,
+  OPTION_STATE,
+  OPTION_LOCALITY,
+  OPTION_KEY_TYPE,
+  OPTION_HASH_TYPE,
+  OPTION_ROOT_KEY_TYPE,
+  OPTION_ROOT_HASH_TYPE,
+  OPTION_INTERMEDIATE_KEY_TYPE,
+  OPTION_INTERMEDIATE_HASH_TYPE,
+  OPTION_SERVER_KEY_TYPE,
+  OPTION_SERVER_HASH_TYPE,
+  OPTION_CLIENT_KEY_TYPE,
+  OPTION_CLIENT_HASH_TYPE,
+  OPTION_VALIDITY_DAYS,
+  OPTION_IS_CA,
+  OPTION_SERVER_AUTH,
+  OPTION_CLIENT_AUTH,
+  OPTION_CODE_SIGNING,
+  OPTION_CLIENT_COMMON_NAME,
+  OPTION_MTLS_P12_PASSWORD,
+  OPTION_INTERMEDIATE_COMMON_NAME,
   readCaCert,
   readCaPrivateKey,
   readCreatorMode,
   readIssuanceMode,
   readPkiHierarchy,
-  readWorkflowLayout,
-  type WorkflowLayoutOption,
 } from "@ocs/certificates";
 
 export interface CertCreatorWorkbenchProps {
@@ -43,8 +75,24 @@ interface StepDefinition {
   fileProduced: string;
   purpose: string;
   groups?: readonly string[];
+  optionIds?: readonly string[];
   isCaStep?: boolean;
-  guideKind?: "deploy" | "trust" | "trust-ca" | "server-csr" | "server-sign" | "inter-sign" | "server-chain" | "mtls-trust" | "3tier-deploy";
+  guideKind?:
+    | "deploy"
+    | "trust"
+    | "trust-ca"
+    | "single-key"
+    | "single-csr"
+    | "single-sign"
+    | "mtls-root-ca"
+    | "mtls-server-csr"
+    | "mtls-server-sign"
+    | "mtls-client-sign"
+    | "mtls-trust"
+    | "inter-csr"
+    | "inter-sign"
+    | "server-chain"
+    | "3tier-deploy";
 }
 
 function CodeSnippet({ code, title }: { code: string; title: string }) {
@@ -71,6 +119,210 @@ function CodeSnippet({ code, title }: { code: string; title: string }) {
   );
 }
 
+interface CertificateCommandOptions {
+  commonName: string;
+  organization: string;
+  organizationalUnit: string;
+  country: string;
+  state: string;
+  locality: string;
+  keyType: string;
+  hashType: string;
+  rootKeyType: string;
+  rootHashType: string;
+  intermediateKeyType: string;
+  intermediateHashType: string;
+  serverKeyType: string;
+  serverHashType: string;
+  clientKeyType: string;
+  clientHashType: string;
+  validityDays: number;
+  san: string;
+  isCa: boolean;
+  serverAuth: boolean;
+  clientAuth: boolean;
+  codeSigning: boolean;
+  caCommonName: string;
+  intermediateCommonName: string;
+  clientCommonName: string;
+  p12Password: string;
+}
+
+function optionString(options: OptionValues, id: string, fallback: string): string {
+  const value = options[id];
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
+}
+
+function optionBoolean(options: OptionValues, id: string, fallback: boolean): boolean {
+  const value = options[id];
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function readCommandOptions(options: OptionValues): CertificateCommandOptions {
+  const validity = Number.parseInt(optionString(options, OPTION_VALIDITY_DAYS, "365"), 10);
+  return {
+    commonName: optionString(options, OPTION_COMMON_NAME, "localhost"),
+    organization: optionString(options, OPTION_ORGANIZATION, "Cipher Workbench"),
+    organizationalUnit: optionString(options, OPTION_ORG_UNIT, "Security"),
+    country: optionString(options, OPTION_COUNTRY, "US"),
+    state: optionString(options, OPTION_STATE, "California"),
+    locality: optionString(options, OPTION_LOCALITY, "San Francisco"),
+    keyType: optionString(options, OPTION_KEY_TYPE, "ecdsa-p256"),
+    hashType: optionString(options, OPTION_HASH_TYPE, "sha256"),
+    rootKeyType: optionString(options, OPTION_ROOT_KEY_TYPE, "ecdsa-p256"),
+    rootHashType: optionString(options, OPTION_ROOT_HASH_TYPE, "sha256"),
+    intermediateKeyType: optionString(options, OPTION_INTERMEDIATE_KEY_TYPE, "ecdsa-p256"),
+    intermediateHashType: optionString(options, OPTION_INTERMEDIATE_HASH_TYPE, "sha256"),
+    serverKeyType: optionString(options, OPTION_SERVER_KEY_TYPE, "ecdsa-p256"),
+    serverHashType: optionString(options, OPTION_SERVER_HASH_TYPE, "sha256"),
+    clientKeyType: optionString(options, OPTION_CLIENT_KEY_TYPE, "ecdsa-p256"),
+    clientHashType: optionString(options, OPTION_CLIENT_HASH_TYPE, "sha256"),
+    validityDays: Number.isFinite(validity) && validity > 0 ? validity : 365,
+    san: optionString(options, OPTION_SAN, "localhost, 127.0.0.1"),
+    isCa: optionBoolean(options, OPTION_IS_CA, false),
+    serverAuth: optionBoolean(options, OPTION_SERVER_AUTH, true),
+    clientAuth: optionBoolean(options, OPTION_CLIENT_AUTH, true),
+    codeSigning: optionBoolean(options, OPTION_CODE_SIGNING, false),
+    caCommonName: optionString(options, OPTION_CA_COMMON_NAME, "Internal Root CA"),
+    intermediateCommonName: optionString(
+      options,
+      OPTION_INTERMEDIATE_COMMON_NAME,
+      "Internal Issuing CA",
+    ),
+    clientCommonName: optionString(options, OPTION_CLIENT_COMMON_NAME, "client-app-01"),
+    p12Password: optionString(options, OPTION_MTLS_P12_PASSWORD, "changeit"),
+  };
+}
+
+function shellQuote(value: string, shell: CommandShell): string {
+  if (shell === "powershell") return `'${value.replaceAll("'", "''")}'`;
+  if (shell === "cmd") return `"${value.replaceAll('"', '""')}"`;
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function shellVariants(
+  build: (shell: CommandShell) => readonly ShellCommand[],
+): ShellCommandVariants {
+  return {
+    bash: build("bash"),
+    powershell: build("powershell"),
+    cmd: build("cmd"),
+  };
+}
+
+function keyCommand(file: string, keyType: string, comment: string): ShellCommand {
+  if (keyType === "rsa-2048" || keyType === "rsa-4096") {
+    const bits = keyType.slice(4);
+    return {
+      comment,
+      parts: [
+        "openssl genpkey -algorithm RSA",
+        `-pkeyopt rsa_keygen_bits:${bits}`,
+        `-out ${file}`,
+      ],
+    };
+  }
+  if (keyType === "ecdsa-p384") {
+    return {
+      comment,
+      parts: [
+        "openssl genpkey -algorithm EC",
+        "-pkeyopt ec_paramgen_curve:secp384r1",
+        `-out ${file}`,
+      ],
+    };
+  }
+  if (keyType === "ed25519") {
+    return { comment, parts: [`openssl genpkey -algorithm ED25519 -out ${file}`] };
+  }
+  if (keyType.startsWith("ml-dsa-")) {
+    return {
+      comment,
+      parts: [`openssl genpkey -algorithm ${keyType.toUpperCase()} -out ${file}`],
+    };
+  }
+  return {
+    comment,
+    parts: [
+      "openssl genpkey -algorithm EC",
+      "-pkeyopt ec_paramgen_curve:prime256v1",
+      `-out ${file}`,
+    ],
+  };
+}
+
+function digestFlag(keyType: string, hashType: string): string | undefined {
+  if (keyType === "ed25519" || keyType.startsWith("ml-dsa-")) return undefined;
+  return `-${hashType}`;
+}
+
+function digestArgs(keyType: string, hashType: string): string[] {
+  const digest = digestFlag(keyType, hashType);
+  return digest ? [digest] : [];
+}
+
+function opensslDnValue(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("/", "\\/");
+}
+
+function subject(options: CertificateCommandOptions, commonName: string): string {
+  return [
+    ["C", options.country],
+    ["ST", options.state],
+    ["L", options.locality],
+    ["O", options.organization],
+    ["OU", options.organizationalUnit],
+    ["CN", commonName],
+  ]
+    .map(([key, value]) => `/${key}=${opensslDnValue(value!)}`)
+    .join("");
+}
+
+function sanExtension(value: string): string {
+  const entries = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      if (entry.includes("@")) return `email:${entry}`;
+      if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(entry) || entry.includes(":")) return `IP:${entry}`;
+      return `DNS:${entry}`;
+    });
+  return entries.join(",");
+}
+
+function ekuExtension(options: CertificateCommandOptions, clientOnly = false): string {
+  const usages = clientOnly
+    ? options.clientAuth
+      ? ["clientAuth"]
+      : []
+    : [
+        options.serverAuth ? "serverAuth" : undefined,
+        options.clientAuth ? "clientAuth" : undefined,
+        options.codeSigning ? "codeSigning" : undefined,
+      ].filter((usage): usage is string => usage !== undefined);
+  return usages.join(",");
+}
+
+function passwordEnvironmentCommand(password: string, shell: CommandShell): ShellCommand {
+  if (shell === "powershell") {
+    return {
+      comment: "Keep the PKCS#12 password out of the OpenSSL process arguments",
+      parts: [`$env:CLIENT_P12_PASSWORD = ${shellQuote(password, shell)}`],
+    };
+  }
+  if (shell === "cmd") {
+    return {
+      comment: "Keep the PKCS#12 password out of the OpenSSL process arguments",
+      parts: [`set "CLIENT_P12_PASSWORD=${password.replaceAll('"', '""')}"`],
+    };
+  }
+  return {
+    comment: "Keep the PKCS#12 password out of the OpenSSL process arguments",
+    parts: [`export CLIENT_P12_PASSWORD=${shellQuote(password, shell)}`],
+  };
+}
+
 export function CertCreatorWorkbench({
   tool,
   spec,
@@ -82,18 +334,21 @@ export function CertCreatorWorkbench({
   generateLength,
   acceptedByteLengths,
 }: CertCreatorWorkbenchProps) {
-  const layout = readWorkflowLayout(spec.options, "wizard");
   const creatorMode = readCreatorMode(spec.options);
   const issuanceMode = readIssuanceMode(spec.options);
   const pkiHierarchy = readPkiHierarchy(spec.options);
+  const commandOptions = readCommandOptions(spec.options);
+  const rootPrefix =
+    creatorMode === "mtls-suite" && pkiHierarchy === "3-tier" ? "root-ca" : "ca";
 
-  const [activeStep, setActiveStep] = useState(0);
   const [isGeneratingCa, setIsGeneratingCa] = useState(false);
 
   const caCertVal = readCaCert(spec.options);
   const caKeyVal = readCaPrivateKey(spec.options);
   const hasCaCert = Boolean(caCertVal && caCertVal.trim().length > 0);
   const hasCaKey = Boolean(caKeyVal && caKeyVal.trim().length > 0);
+  const missingCaCredentials =
+    creatorMode === "single-cert" && issuanceMode === "ca-signed" && (!hasCaCert || !hasCaKey);
 
   // Generate a test CA certificate & private key pair
   const handleGenerateTestCa = async () => {
@@ -151,8 +406,17 @@ export function CertCreatorWorkbench({
             label: "1. Root CA",
             title: "Step 1: Create Root CA",
             fileProduced: "root-ca.key, root-ca.crt",
-            purpose: "Offline trust anchor with CA:TRUE and pathLenConstraint: 1.",
-            groups: ["subject", "key"],
+            purpose:
+              "Generate offline root key and self-signed root certificate (CA:TRUE, pathlen:1) acting as top-level trust anchor.",
+            optionIds: [
+              OPTION_PKI_HIERARCHY,
+              OPTION_CA_COMMON_NAME,
+              OPTION_ORGANIZATION,
+              OPTION_COUNTRY,
+              OPTION_ROOT_KEY_TYPE,
+              OPTION_ROOT_HASH_TYPE,
+            ],
+            guideKind: "mtls-root-ca",
           },
           {
             id: "step-inter-csr",
@@ -160,8 +424,9 @@ export function CertCreatorWorkbench({
             label: "2. Intermediate CSR",
             title: "Step 2: Generate Intermediate Key & CSR",
             fileProduced: "intermediate.key, intermediate.csr",
-            purpose: "Identity for the online issuing authority.",
-            groups: ["mtls"],
+            purpose: "Generate keypair and CSR for the operational issuing authority.",
+            optionIds: [OPTION_INTERMEDIATE_COMMON_NAME, OPTION_INTERMEDIATE_KEY_TYPE],
+            guideKind: "inter-csr",
           },
           {
             id: "step-inter-sign",
@@ -169,7 +434,9 @@ export function CertCreatorWorkbench({
             label: "3. Sign Intermediate",
             title: "Step 3: Sign Intermediate with Root CA",
             fileProduced: "intermediate.crt",
-            purpose: "Root CA delegates signing authority (CA:TRUE, keyCertSign, cRLSign). Root key can now go offline.",
+            purpose:
+              "Root CA delegates signing authority (CA:TRUE, keyCertSign, cRLSign). Root key can now go offline.",
+            optionIds: [OPTION_INTERMEDIATE_HASH_TYPE],
             guideKind: "inter-sign",
           },
           {
@@ -178,7 +445,16 @@ export function CertCreatorWorkbench({
             label: "4. Server Cert & Chain",
             title: "Step 4: Generate & Sign Server Cert",
             fileProduced: "server.key, server.crt, server-chain.pem",
-            purpose: "Intermediate CA signs the server cert (serverAuth). Server chain bundles server.crt + intermediate.crt.",
+            purpose:
+              "Intermediate CA signs the server cert (serverAuth). Server chain bundles server.crt + intermediate.crt.",
+            optionIds: [
+              OPTION_COMMON_NAME,
+              OPTION_SAN,
+              OPTION_VALIDITY_DAYS,
+              OPTION_SERVER_AUTH,
+              OPTION_SERVER_KEY_TYPE,
+              OPTION_SERVER_HASH_TYPE,
+            ],
             guideKind: "server-chain",
           },
           {
@@ -187,8 +463,16 @@ export function CertCreatorWorkbench({
             label: "5. Client Cert & P12",
             title: "Step 5: Generate & Sign Client Cert",
             fileProduced: "client.key, client.crt, client.p12",
-            purpose: "Intermediate CA signs the client cert (clientAuth). Packaged with intermediate.crt into .p12.",
-            groups: ["mtls"],
+            purpose:
+              "Intermediate CA signs the client cert (clientAuth). Packaged with intermediate.crt into .p12.",
+            optionIds: [
+              OPTION_CLIENT_COMMON_NAME,
+              OPTION_CLIENT_AUTH,
+              OPTION_MTLS_P12_PASSWORD,
+              OPTION_CLIENT_KEY_TYPE,
+              OPTION_CLIENT_HASH_TYPE,
+            ],
+            guideKind: "mtls-client-sign",
           },
           {
             id: "step-deploy-chains",
@@ -196,7 +480,8 @@ export function CertCreatorWorkbench({
             label: "6. Deploy Chains & Test",
             title: "Step 6: Deploy Chains & Truststores",
             fileProduced: "Deploy chains & root-ca.crt",
-            purpose: "Server serves server-chain.pem; Client & Server trust root-ca.crt to validate the full chain.",
+            purpose:
+              "Server serves server-chain.pem; Client & Server trust root-ca.crt to validate the full chain.",
             guideKind: "3tier-deploy",
           },
         ];
@@ -208,94 +493,197 @@ export function CertCreatorWorkbench({
           id: "step-root-ca",
           stepNum: 1,
           label: "1. Root CA",
-          title: "Step 1: Create Root CA",
+          title: "Step 1: Create a Root CA",
           fileProduced: "ca.key, ca.crt",
-          purpose: "Shared trust anchor with Basic Constraints CA:TRUE.",
-          groups: ["subject", "key"],
+          purpose:
+            "Generate a private key and a self-signed root certificate (ca.pem or ca.crt). This acts as your trust anchor. Both the server and the client will trust this CA to verify each other.",
+          optionIds: [
+            OPTION_PKI_HIERARCHY,
+            OPTION_CA_COMMON_NAME,
+            OPTION_ORGANIZATION,
+            OPTION_ORG_UNIT,
+            OPTION_COUNTRY,
+            OPTION_STATE,
+            OPTION_LOCALITY,
+            OPTION_ROOT_KEY_TYPE,
+            OPTION_ROOT_HASH_TYPE,
+          ],
+          guideKind: "mtls-root-ca",
         },
         {
           id: "step-server-csr",
           stepNum: 2,
           label: "2. Server Key & CSR",
-          title: "Step 2: Generate Server Key & CSR",
+          title: "Step 2: Generate the Server Key and CSR",
           fileProduced: "server.key, server.csr",
-          purpose: "Server identity specifying domains/IPs in Subject Alternative Names (SANs).",
-          guideKind: "server-csr",
+          purpose:
+            "Create a private key for your server and a Certificate Signing Request (CSR) with your server's domain name or IP address.",
+          optionIds: [OPTION_COMMON_NAME, OPTION_SAN, OPTION_SERVER_KEY_TYPE],
+          guideKind: "mtls-server-csr",
         },
         {
           id: "step-server-sign",
           stepNum: 3,
           label: "3. Sign Server Cert",
-          title: "Step 3: Sign Server Certificate",
+          title: "Step 3: Sign the Server Certificate",
           fileProduced: "server.crt",
-          purpose: "Root CA signs the server CSR with id-kp-serverAuth EKU.",
-          guideKind: "server-sign",
-        },
-        {
-          id: "step-client-csr",
-          stepNum: 4,
-          label: "4. Client Key & CSR",
-          title: "Step 4: Generate Client Key & CSR",
-          fileProduced: "client.key, client.csr",
-          purpose: "Client identity (e.g., service name, user ID, or machine name).",
-          groups: ["mtls"],
+          purpose:
+            "Use your Root CA key and certificate to sign the server's CSR, producing the official server certificate (server.crt).",
+          optionIds: [OPTION_VALIDITY_DAYS, OPTION_SERVER_AUTH, OPTION_SERVER_HASH_TYPE],
+          guideKind: "mtls-server-sign",
         },
         {
           id: "step-client-sign",
-          stepNum: 5,
-          label: "5. Sign Client Cert & P12",
-          title: "Step 5: Sign Client Certificate & PKCS#12 Bundle",
-          fileProduced: "client.crt, client.p12",
-          purpose: "Root CA signs the client CSR with id-kp-clientAuth EKU; optionally packages into PKCS#12 bundle.",
-          groups: ["mtls"],
+          stepNum: 4,
+          label: "4. Client Certificate",
+          title: "Step 4: Generate and Sign the Client Certificate",
+          fileProduced: "client.key, client.csr, client.crt, client.p12",
+          purpose:
+            "Create a separate private key and CSR for the client, then sign it with your Root CA to produce the client certificate (client.crt) configured for client authentication.",
+          optionIds: [
+            OPTION_CLIENT_COMMON_NAME,
+            OPTION_CLIENT_AUTH,
+            OPTION_CLIENT_KEY_TYPE,
+            OPTION_CLIENT_HASH_TYPE,
+            OPTION_MTLS_P12_PASSWORD,
+          ],
+          guideKind: "mtls-client-sign",
         },
         {
           id: "step-truststores",
-          stepNum: 6,
-          label: "6. Truststores & Test",
-          title: "Step 6: Configure Truststores & Generate Suite",
+          stepNum: 5,
+          label: "5. Truststores & Test",
+          title: "Step 5: Configure Server and Client Truststores",
           fileProduced: "Distribute ca.crt",
-          purpose: "Client trusts ca.crt to verify the server; Server trusts ca.crt to verify the client.",
+          purpose:
+            "Install the Root CA public certificate into the server's truststore (so it trusts the client) and into the client's truststore (so it trusts the server).",
           guideKind: "mtls-trust",
         },
       ];
     }
 
-    // Table 1: Single Certificate (Self-Signed or CA-Signed)
+    // Table 1: Single Certificate (CA-Signed or Self-Signed)
+    if (issuanceMode === "ca-signed") {
+      return [
+        {
+          id: "step-root-ca",
+          stepNum: 1,
+          label: "1. Root CA",
+          title: "Step 1: Create a Root CA",
+          fileProduced: "ca.key, ca.crt",
+          purpose:
+            "Generate a private key and a self-signed root certificate (ca.pem or ca.crt). This acts as your trust anchor.",
+          isCaStep: true,
+          guideKind: "mtls-root-ca",
+        },
+        {
+          id: "step-server-csr",
+          stepNum: 2,
+          label: "2. Server Key & CSR",
+          title: "Step 2: Generate the Server Key and CSR",
+          fileProduced: "server.key, server.csr",
+          purpose:
+            "Create a private key for your server and a Certificate Signing Request (CSR) with your server's domain name or IP address.",
+          optionIds: [
+            OPTION_COMMON_NAME,
+            OPTION_SAN,
+            OPTION_ORGANIZATION,
+            OPTION_ORG_UNIT,
+            OPTION_COUNTRY,
+            OPTION_STATE,
+            OPTION_LOCALITY,
+            OPTION_KEY_TYPE,
+          ],
+          guideKind: "mtls-server-csr",
+        },
+        {
+          id: "step-server-sign",
+          stepNum: 3,
+          label: "3. Sign Server Cert",
+          title: "Step 3: Sign the Server Certificate",
+          fileProduced: "server.crt",
+          purpose:
+            "Use your Root CA key and certificate to sign the server's CSR, producing the official server certificate (server.crt).",
+          optionIds: [
+            OPTION_VALIDITY_DAYS,
+            OPTION_SERVER_AUTH,
+            OPTION_CLIENT_AUTH,
+            OPTION_CODE_SIGNING,
+            OPTION_HASH_TYPE,
+          ],
+          guideKind: "mtls-server-sign",
+        },
+        {
+          id: "step-deploy",
+          stepNum: 4,
+          label: "4. Deploy Certificate",
+          title: "Step 4: Deploy the CA-Signed Certificate",
+          fileProduced: "cert.key, cert.crt, ca.crt",
+          purpose:
+            "Configure the service with the generated private key and CA-signed certificate. Include the issuing chain where required.",
+          guideKind: "deploy",
+        },
+        {
+          id: "step-trust",
+          stepNum: 5,
+          label: "5. Trust & Verify",
+          title: "Step 5: Trust the Issuing CA and Verify",
+          fileProduced: "Install ca.crt",
+          purpose:
+            "Install the issuing CA certificate in client truststores and verify the deployed certificate chain.",
+          guideKind: "trust-ca",
+        },
+      ];
+    }
+
     return [
       {
-        id: "step-key",
+        id: "step-root-ca",
         stepNum: 1,
-        label: "1. Private Key",
-        title: "Step 1: Generate Private Key",
-        fileProduced: "cert.key",
-        purpose: "Private cryptographic key for the host/service (RSA or ECDSA).",
-        groups: ["key"],
-      },
-      {
-        id: "step-identity",
-        stepNum: 2,
-        label: "2. Identity & SANs",
-        title: "Step 2: Generate CSR / Identity",
-        fileProduced: "cert.csr (optional)",
-        purpose: "Specifies Subject DN, Hostname/IP in SANs, and key usages.",
-        groups: ["subject"],
-      },
-      {
-        id: "step-sign",
-        stepNum: 3,
-        label: issuanceMode === "ca-signed" ? "3. CA Signing" : "3. Self-Sign Cert",
-        title:
-          issuanceMode === "ca-signed"
-            ? "Step 3: CA Signing Authority & Extensions"
-            : "Step 3: Self-Sign the Certificate",
-        fileProduced: issuanceMode === "ca-signed" ? "ca.crt, ca.key, cert.crt" : "cert.crt",
+        label: "1. Root CA / Mode",
+        title: "Step 1: Create a Root CA / Authority Mode",
+        fileProduced: "Self-Signed Trust Anchor",
         purpose:
-          issuanceMode === "ca-signed"
-            ? "Configure CA Authority (Manual Entry or 1-Click Generate) and validity/extensions."
-            : "Signs the certificate using its own private key (Issuer = Subject).",
-        groups: ["extensions"],
+          "Generate a private key and self-signed certificate that acts as its own root trust anchor, or switch to CA-Signed mode.",
         isCaStep: true,
+        guideKind: "single-key",
+      },
+      {
+        id: "step-server-csr",
+        stepNum: 2,
+        label: "2. Server Key & CSR",
+        title: "Step 2: Generate the Server Key and CSR",
+        fileProduced: "server.key, server.csr",
+        purpose:
+          "Create a private key for your server and a Certificate Signing Request (CSR) with your server's domain name or IP address.",
+        optionIds: [
+          OPTION_COMMON_NAME,
+          OPTION_SAN,
+          OPTION_ORGANIZATION,
+          OPTION_ORG_UNIT,
+          OPTION_COUNTRY,
+          OPTION_STATE,
+          OPTION_LOCALITY,
+          OPTION_KEY_TYPE,
+        ],
+        guideKind: "mtls-server-csr",
+      },
+      {
+        id: "step-server-sign",
+        stepNum: 3,
+        label: "3. Self-Sign Cert",
+        title: "Step 3: Self-Sign the Certificate",
+        fileProduced: "server.crt",
+        purpose: "Signs the certificate using its own private key (Issuer = Subject).",
+        optionIds: [
+          OPTION_VALIDITY_DAYS,
+          OPTION_IS_CA,
+          OPTION_SERVER_AUTH,
+          OPTION_CLIENT_AUTH,
+          OPTION_CODE_SIGNING,
+          OPTION_HASH_TYPE,
+        ],
+        guideKind: "single-sign",
       },
       {
         id: "step-deploy",
@@ -303,34 +691,21 @@ export function CertCreatorWorkbench({
         label: "4. Deploy Key & Cert",
         title: "Step 4: Deploy Key & Cert",
         fileProduced: "Deploy to service",
-        purpose: "Configure the service (e.g. Nginx, Node.js) with cert.crt and cert.key.",
+        purpose: "Configure the service (e.g. Nginx, Node.js) with server.crt and server.key.",
         guideKind: "deploy",
       },
       {
         id: "step-trust",
         stepNum: 5,
         label: "5. Trust & Generate",
-        title:
-          issuanceMode === "ca-signed"
-            ? "Step 5: Trust CA on Client Side & Generate"
-            : "Step 5: Trust on Client Side & Generate",
-        fileProduced: issuanceMode === "ca-signed" ? "Import ca.crt" : "Import cert.crt",
+        title: "Step 5: Trust on Client Side & Generate",
+        fileProduced: "Import cert.crt",
         purpose:
-          issuanceMode === "ca-signed"
-            ? "Since this cert is CA-signed, clients/browsers trust ca.crt to validate all child certs."
-            : "Since there is no CA, clients/browsers must manually trust cert.crt to avoid security warnings.",
-        guideKind: issuanceMode === "ca-signed" ? "trust-ca" : "trust",
+          "Since there is no external CA, clients/browsers must manually trust cert.crt to avoid security warnings.",
+        guideKind: "trust",
       },
     ];
   }, [creatorMode, issuanceMode, pkiHierarchy]);
-
-  // Adjust active step if out of bounds
-  const currentStepIndex = Math.min(activeStep, wizardSteps.length - 1);
-  const currentStep = wizardSteps[currentStepIndex]!;
-
-  const handleLayoutChange = (nextLayout: WorkflowLayoutOption) => {
-    setOptionValue(OPTION_WORKFLOW_LAYOUT, nextLayout);
-  };
 
   const isComputing = state.status === "computing";
 
@@ -344,7 +719,9 @@ export function CertCreatorWorkbench({
             Signing Authority Mode
           </span>
           <span className="text-[11px] text-slate-500 dark:text-slate-400">
-            {issuanceMode === "self-signed" ? "Self-signed certificate" : "CA-signed certificate"}
+            {issuanceMode === "self-signed"
+              ? "Self-signed certificate"
+              : "CA-signed certificate"}
           </span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -380,7 +757,8 @@ export function CertCreatorWorkbench({
               <span>🏛️</span> CA-Signed (Manual &amp; Generate)
             </span>
             <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Sign using an Issuing CA. Supports manual PEM paste, file upload, or 1-click test CA generation.
+              Sign using an Issuing CA. Supports manual PEM paste, file upload, or 1-click test
+              CA generation.
             </span>
           </button>
         </div>
@@ -399,7 +777,8 @@ export function CertCreatorWorkbench({
                 </span>
               </h4>
               <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">
-                Paste or upload your CA certificate &amp; private key manually below, or click below to generate a matching test CA pair.
+                Paste or upload your CA certificate &amp; private key manually below, or click
+                below to generate a matching test CA pair.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -410,7 +789,7 @@ export function CertCreatorWorkbench({
                 disabled={isGeneratingCa}
                 className="gap-1.5 font-semibold shadow-xs"
               >
-                {isGeneratingCa ? "Generating..." : "⚡ Generate Test CA (Key & Cert)"}
+                {isGeneratingCa ? "Generating..." : "⚡ Generate CA (Key & Cert)"}
               </Button>
               <Button
                 size="sm"
@@ -453,7 +832,6 @@ export function CertCreatorWorkbench({
               Format: X.509 PEM / PKCS#8
             </span>
           </div>
-
 
           {/* CA Certificate PEM — plain resizable textarea */}
           <div className="space-y-1">
@@ -511,7 +889,8 @@ export function CertCreatorWorkbench({
             <span>Self-Signed Mode Active</span>
           </div>
           <p className="mt-1 text-[11px]">
-            The certificate will be signed directly by the private key generated in Step 1. Issuer DN will match Subject DN. No external CA certificate is required.
+            The certificate will be signed directly by the private key generated in Step 1.
+            Issuer DN will match Subject DN. No external CA certificate is required.
           </p>
         </div>
       )}
@@ -525,13 +904,14 @@ export function CertCreatorWorkbench({
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Install the generated certificate and private key in your web server or application runtime:
+              Install the generated certificate and private key in your web server or
+              application runtime:
             </p>
             <CodeSnippet
               title="Nginx TLS Configuration"
               code={`server {
     listen 443 ssl http2;
-    server_name localhost;
+    server_name ${commandOptions.commonName};
 
     ssl_certificate     /etc/ssl/certs/cert.crt;
     ssl_certificate_key /etc/ssl/private/cert.key;
@@ -561,25 +941,47 @@ https.createServer(options, app).listen(8443, () => {
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Since self-signed certificates lack an established Certificate Authority, trust the certificate on client machines:
+              Since self-signed certificates lack an established Certificate Authority, trust
+              the certificate on client machines:
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-              <CodeSnippet
-                title="macOS System Keychain"
-                code={`sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain cert.crt`}
+              <ShellCommandBlock
+                title="Install in the System Trust Store"
+                commands={{
+                  bash: [
+                    {
+                      comment: "Linux (Ubuntu / Debian)",
+                      parts: ["sudo cp cert.crt /usr/local/share/ca-certificates/"],
+                    },
+                    { parts: ["sudo update-ca-certificates"] },
+                    {
+                      comment: "macOS",
+                      parts: [
+                        "sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain cert.crt",
+                      ],
+                    },
+                  ],
+                  powershell: [
+                    {
+                      parts: [
+                        "Import-Certificate -FilePath cert.crt -CertStoreLocation Cert:\\LocalMachine\\Root",
+                      ],
+                    },
+                  ],
+                  cmd: [{ parts: ['certutil -addstore -f "Root" cert.crt'] }],
+                }}
               />
-              <CodeSnippet
-                title="Windows Certificate Store"
-                code={`certutil -addstore -f "Root" cert.crt`}
-              />
-              <CodeSnippet
-                title="Linux (Ubuntu / Debian)"
-                code={`sudo cp cert.crt /usr/local/share/ca-certificates/
-sudo update-ca-certificates`}
-              />
-              <CodeSnippet
+              <ShellCommandBlock
                 title="cURL with Custom Certificate"
-                code={`curl --cacert cert.crt https://localhost:8443`}
+                commands={[
+                  {
+                    parts: [
+                      "curl",
+                      "--cacert cert.crt",
+                      `https://${commandOptions.commonName}:8443`,
+                    ],
+                  },
+                ]}
               />
             </div>
           </div>
@@ -589,55 +991,359 @@ sudo update-ca-certificates`}
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Since this certificate was signed by your Certificate Authority, install the Root CA certificate (`ca.crt`) in client truststores to validate all certificates issued by it:
+              Since this certificate was signed by your Certificate Authority, install the Root
+              CA certificate (`ca.crt`) in client truststores to validate all certificates
+              issued by it:
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-              <CodeSnippet
+              <ShellCommandBlock
                 title="cURL with CA Certificate"
-                code={`curl --cacert ca.crt https://localhost:8443`}
+                commands={[
+                  {
+                    parts: [
+                      "curl",
+                      "--cacert ca.crt",
+                      `https://${commandOptions.commonName}:8443`,
+                    ],
+                  },
+                ]}
               />
-              <CodeSnippet
-                title="Windows Root Store"
-                code={`certutil -addstore -f "Root" ca.crt`}
-              />
-              <CodeSnippet
-                title="macOS Root Store"
-                code={`sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt`}
-              />
-              <CodeSnippet
-                title="Linux CA Certificates"
-                code={`sudo cp ca.crt /usr/local/share/ca-certificates/
-sudo update-ca-certificates`}
+              <ShellCommandBlock
+                title="Install CA in the System Trust Store"
+                commands={{
+                  bash: [
+                    {
+                      comment: "Linux (Ubuntu / Debian)",
+                      parts: ["sudo cp ca.crt /usr/local/share/ca-certificates/"],
+                    },
+                    { parts: ["sudo update-ca-certificates"] },
+                    {
+                      comment: "macOS",
+                      parts: [
+                        "sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt",
+                      ],
+                    },
+                  ],
+                  powershell: [
+                    {
+                      parts: [
+                        "Import-Certificate -FilePath ca.crt -CertStoreLocation Cert:\\LocalMachine\\Root",
+                      ],
+                    },
+                  ],
+                  cmd: [{ parts: ['certutil -addstore -f "Root" ca.crt'] }],
+                }}
               />
             </div>
           </div>
         );
 
-      case "server-csr":
+      case "single-key":
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              The server certificate requires domain names and IP addresses configured in Subject Alternative Names (SANs) so TLS clients verify host authenticity.
+              Generate the private key for the certificate using RSA or ECDSA:
             </p>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
-              <span className="font-semibold text-slate-900 dark:text-slate-100">Files Produced:</span>
-              <ul className="mt-1 space-y-1 list-disc list-inside text-slate-600 dark:text-slate-400">
-                <li><code className="text-indigo-600 dark:text-indigo-400">server.key</code> — Private key for the server</li>
-                <li><code className="text-indigo-600 dark:text-indigo-400">server.csr</code> — Certificate signing request with SANs</li>
-              </ul>
-            </div>
+            <ShellCommandBlock
+              title="OpenSSL — Step 1: Generate Private Key"
+              commands={[
+                keyCommand(
+                  "cert.key",
+                  commandOptions.keyType,
+                  `Generate the selected ${commandOptions.keyType} private key`,
+                ),
+              ]}
+            />
           </div>
         );
 
-      case "server-sign":
+      case "single-csr":
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              The Root CA signs the server CSR with Extended Key Usage <code className="font-mono text-indigo-600 dark:text-indigo-400">id-kp-serverAuth (1.3.6.1.5.5.7.3.1)</code>.
+              Generate the Certificate Signing Request (CSR) specifying Subject DN and identity:
             </p>
-            <CodeSnippet
-              title="OpenSSL Signing Reference"
-              code={`openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365 -sha256`}
+            <ShellCommandBlock
+              title="OpenSSL — Step 2: Generate CSR"
+              commands={shellVariants((shell) => [
+                {
+                  parts: [
+                    "openssl req -new",
+                    "-key cert.key",
+                    "-out cert.csr",
+                    `-subj ${shellQuote(subject(commandOptions, commandOptions.commonName), shell)}`,
+                    `-addext ${shellQuote(`subjectAltName=${sanExtension(commandOptions.san)}`, shell)}`,
+                  ],
+                },
+              ])}
+            />
+          </div>
+        );
+
+      case "single-sign":
+        return (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              {issuanceMode === "ca-signed"
+                ? "Sign the CSR using your issuing Certificate Authority (Root or Intermediate CA):"
+                : "Self-sign the certificate using its own private key:"}
+            </p>
+            <ShellCommandBlock
+              title={
+                issuanceMode === "ca-signed"
+                  ? "OpenSSL — Step 3: Sign CSR with CA"
+                  : "OpenSSL — Step 3: Self-Sign Certificate"
+              }
+              commands={shellVariants((shell) => {
+                const digest = digestFlag(commandOptions.keyType, commandOptions.hashType);
+                const eku = ekuExtension(commandOptions);
+                return issuanceMode === "ca-signed"
+                  ? [
+                      {
+                        parts: [
+                          "openssl x509 -req",
+                          "-in cert.csr",
+                          "-CA ca.crt",
+                          "-CAkey ca.key",
+                          "-CAcreateserial",
+                          "-copy_extensions copy",
+                          "-out cert.crt",
+                          `-days ${commandOptions.validityDays}`,
+                          ...(digest ? [digest] : []),
+                        ],
+                      },
+                    ]
+                  : [
+                      {
+                        parts: [
+                          "openssl req -x509 -new",
+                          "-key cert.key",
+                          ...(digest ? [digest] : []),
+                          `-days ${commandOptions.validityDays}`,
+                          "-out cert.crt",
+                          `-subj ${shellQuote(subject(commandOptions, commandOptions.commonName), shell)}`,
+                          `-addext ${shellQuote(`subjectAltName=${sanExtension(commandOptions.san)}`, shell)}`,
+                          `-addext ${shellQuote(`basicConstraints=critical,CA:${commandOptions.isCa ? "TRUE" : "FALSE"}`, shell)}`,
+                          ...(eku
+                            ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`]
+                            : []),
+                        ],
+                      },
+                    ];
+              })}
+            />
+          </div>
+        );
+
+      case "mtls-root-ca":
+        return (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              The Root CA acts as your private certificate provider. Both the server and the
+              client will trust this CA to verify each other:
+            </p>
+            <ShellCommandBlock
+              title="OpenSSL — Step 1: Create the Root Certificate Authority (CA)"
+              commands={shellVariants((shell) => {
+                const digest = digestFlag(
+                  commandOptions.rootKeyType,
+                  commandOptions.rootHashType,
+                );
+                return [
+                  keyCommand(
+                    `${rootPrefix}.key`,
+                    commandOptions.rootKeyType,
+                    "Generate the Root CA private key",
+                  ),
+                  {
+                    comment: "Generate the self-signed Root CA certificate",
+                    parts: [
+                      "openssl req -x509 -new",
+                      `-key ${rootPrefix}.key`,
+                      ...(digest ? [digest] : []),
+                      `-days ${commandOptions.validityDays}`,
+                      `-out ${rootPrefix}.crt`,
+                      `-subj ${shellQuote(subject(commandOptions, commandOptions.caCommonName), shell)}`,
+                      `-addext ${shellQuote(`basicConstraints=critical,CA:TRUE,pathlen:${pkiHierarchy === "3-tier" ? 1 : 0}`, shell)}`,
+                      `-addext ${shellQuote("keyUsage=critical,keyCertSign,cRLSign", shell)}`,
+                    ],
+                  },
+                ];
+              })}
+            />
+          </div>
+        );
+
+      case "mtls-server-csr":
+        return (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              The server needs its own identity. Create a private key and a Certificate Signing
+              Request (CSR):
+            </p>
+            <ShellCommandBlock
+              title="OpenSSL — Step 2: Generate the Server Key and CSR"
+              commands={shellVariants((shell) => {
+                const eku = ekuExtension(commandOptions);
+                return [
+                  keyCommand(
+                    "server.key",
+                    commandOptions.serverKeyType,
+                    "Generate the Server private key",
+                  ),
+                  {
+                    comment: "Generate the Server Certificate Signing Request (CSR)",
+                    parts: [
+                      "openssl req -new",
+                      "-key server.key",
+                      "-out server.csr",
+                      `-subj ${shellQuote(subject(commandOptions, commandOptions.commonName), shell)}`,
+                      `-addext ${shellQuote(`subjectAltName=${sanExtension(commandOptions.san)}`, shell)}`,
+                      ...(eku
+                        ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`]
+                        : []),
+                    ],
+                  },
+                ];
+              })}
+            />
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              The subject and SAN values above update from this step&apos;s current options.
+            </p>
+          </div>
+        );
+
+      case "mtls-server-sign":
+        return (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Use the Root CA (
+              <code className="font-mono text-indigo-600 dark:text-indigo-400">ca.key</code> and{" "}
+              <code className="font-mono text-indigo-600 dark:text-indigo-400">ca.crt</code>) to
+              sign the server&apos;s CSR, turning it into a valid server certificate (
+              <code className="font-mono text-indigo-600 dark:text-indigo-400">server.crt</code>
+              ):
+            </p>
+            <ShellCommandBlock
+              title="OpenSSL — Step 3: Sign the Server Certificate"
+              commands={[
+                {
+                  parts: [
+                    "openssl x509 -req",
+                    "-in server.csr",
+                    `-CA ${pkiHierarchy === "3-tier" ? "intermediate.crt" : "ca.crt"}`,
+                    `-CAkey ${pkiHierarchy === "3-tier" ? "intermediate.key" : "ca.key"}`,
+                    "-CAcreateserial",
+                    "-copy_extensions copy",
+                    "-out server.crt",
+                    `-days ${commandOptions.validityDays}`,
+                    ...digestArgs(
+                      pkiHierarchy === "3-tier"
+                        ? commandOptions.intermediateKeyType
+                        : commandOptions.rootKeyType,
+                      commandOptions.serverHashType,
+                    ),
+                  ],
+                },
+              ]}
+            />
+          </div>
+        );
+
+      case "mtls-client-sign":
+        return (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Just like the server, the client needs its own keypair to authenticate itself back
+              to the server. Sign the client CSR with the Root CA:
+            </p>
+            <ShellCommandBlock
+              title="OpenSSL — Step 4: Generate and Sign the Client Certificate"
+              commands={shellVariants((shell) => {
+                const issuer = pkiHierarchy === "3-tier" ? "intermediate" : "ca";
+                const digest = digestFlag(
+                  pkiHierarchy === "3-tier"
+                    ? commandOptions.intermediateKeyType
+                    : commandOptions.rootKeyType,
+                  commandOptions.clientHashType,
+                );
+                const eku = ekuExtension(commandOptions, true);
+                return [
+                  keyCommand(
+                    "client.key",
+                    commandOptions.clientKeyType,
+                    "Generate the Client private key",
+                  ),
+                  {
+                    comment: "Generate the Client CSR",
+                    parts: [
+                      "openssl req -new",
+                      "-key client.key",
+                      "-out client.csr",
+                      `-subj ${shellQuote(subject(commandOptions, commandOptions.clientCommonName), shell)}`,
+                      ...(eku
+                        ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`]
+                        : []),
+                    ],
+                  },
+                  {
+                    comment: `Sign the Client CSR using the ${pkiHierarchy === "3-tier" ? "Intermediate" : "Root"} CA`,
+                    parts: [
+                      "openssl x509 -req",
+                      "-in client.csr",
+                      `-CA ${issuer}.crt`,
+                      `-CAkey ${issuer}.key`,
+                      "-CAcreateserial",
+                      "-copy_extensions copy",
+                      "-out client.crt",
+                      `-days ${commandOptions.validityDays}`,
+                      ...(digest ? [digest] : []),
+                    ],
+                  },
+                  passwordEnvironmentCommand(commandOptions.p12Password, shell),
+                  {
+                    comment: "Export the Client key and certificate as PKCS#12",
+                    parts: [
+                      "openssl pkcs12 -export",
+                      "-out client.p12",
+                      "-inkey client.key",
+                      "-in client.crt",
+                      `-certfile ${issuer}.crt`,
+                      "-passout env:CLIENT_P12_PASSWORD",
+                    ],
+                  },
+                ];
+              })}
+            />
+          </div>
+        );
+
+      case "inter-csr":
+        return (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Generate private key and CSR for the Intermediate Issuing Certificate Authority:
+            </p>
+            <ShellCommandBlock
+              title="OpenSSL — Step 2: Generate Intermediate Key & CSR"
+              commands={shellVariants((shell) => [
+                keyCommand(
+                  "intermediate.key",
+                  commandOptions.intermediateKeyType,
+                  "Generate the Intermediate CA private key",
+                ),
+                {
+                  comment: "Generate the Intermediate CA CSR",
+                  parts: [
+                    "openssl req -new",
+                    "-key intermediate.key",
+                    "-out intermediate.csr",
+                    `-subj ${shellQuote(subject(commandOptions, commandOptions.intermediateCommonName), shell)}`,
+                    `-addext ${shellQuote("basicConstraints=critical,CA:TRUE,pathlen:0", shell)}`,
+                    `-addext ${shellQuote("keyUsage=critical,keyCertSign,cRLSign", shell)}`,
+                  ],
+                },
+              ])}
             />
           </div>
         );
@@ -646,11 +1352,32 @@ sudo update-ca-certificates`}
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              The Root CA delegates signing authority with <code className="font-mono text-indigo-600 dark:text-indigo-400">CA:TRUE, pathlen:0</code> so the Root CA private key can be securely stored offline.
+              The Root CA delegates signing authority with{" "}
+              <code className="font-mono text-indigo-600 dark:text-indigo-400">
+                CA:TRUE, pathlen:0
+              </code>{" "}
+              so the Root CA private key can be securely stored offline.
             </p>
-            <CodeSnippet
+            <ShellCommandBlock
               title="OpenSSL Intermediate Delegation Reference"
-              code={`openssl x509 -req -in intermediate.csr -CA root-ca.crt -CAkey root-ca.key -CAcreateserial -out intermediate.crt -days 1825 -extfile intermediate.cnf`}
+              commands={[
+                {
+                  parts: [
+                    "openssl x509 -req",
+                    "-in intermediate.csr",
+                    "-CA root-ca.crt",
+                    "-CAkey root-ca.key",
+                    "-CAcreateserial",
+                    "-copy_extensions copy",
+                    "-out intermediate.crt",
+                    `-days ${commandOptions.validityDays}`,
+                    ...digestArgs(
+                      commandOptions.rootKeyType,
+                      commandOptions.intermediateHashType,
+                    ),
+                  ],
+                },
+              ]}
             />
           </div>
         );
@@ -659,11 +1386,60 @@ sudo update-ca-certificates`}
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              The Intermediate CA signs the server certificate. The resulting bundle contains both the leaf certificate and the issuing intermediate certificate:
+              The Intermediate CA signs the server certificate. The resulting bundle contains
+              both the leaf certificate and the issuing intermediate certificate:
             </p>
-            <CodeSnippet
-              title="Concatenated Server Certificate Chain"
-              code={`cat server.crt intermediate.crt > server-chain.pem`}
+            <ShellCommandBlock
+              title="OpenSSL — Generate and Sign the Server Chain"
+              commands={shellVariants((shell) => {
+                const digest = digestFlag(
+                  commandOptions.intermediateKeyType,
+                  commandOptions.serverHashType,
+                );
+                const eku = ekuExtension(commandOptions);
+                const chainCommand =
+                  shell === "powershell"
+                    ? "Get-Content server.crt, intermediate.crt | Set-Content server-chain.pem"
+                    : shell === "cmd"
+                      ? "type server.crt intermediate.crt > server-chain.pem"
+                      : "cat server.crt intermediate.crt > server-chain.pem";
+                return [
+                  keyCommand(
+                    "server.key",
+                    commandOptions.serverKeyType,
+                    "Generate the Server private key",
+                  ),
+                  {
+                    comment:
+                      "Generate the Server CSR with the selected identity and extensions",
+                    parts: [
+                      "openssl req -new",
+                      "-key server.key",
+                      "-out server.csr",
+                      `-subj ${shellQuote(subject(commandOptions, commandOptions.commonName), shell)}`,
+                      `-addext ${shellQuote(`subjectAltName=${sanExtension(commandOptions.san)}`, shell)}`,
+                      ...(eku
+                        ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`]
+                        : []),
+                    ],
+                  },
+                  {
+                    comment: "Sign the Server CSR with the Intermediate CA",
+                    parts: [
+                      "openssl x509 -req",
+                      "-in server.csr",
+                      "-CA intermediate.crt",
+                      "-CAkey intermediate.key",
+                      "-CAcreateserial",
+                      "-copy_extensions copy",
+                      "-out server.crt",
+                      `-days ${commandOptions.validityDays}`,
+                      ...(digest ? [digest] : []),
+                    ],
+                  },
+                  { comment: "Build the deployable certificate chain", parts: [chainCommand] },
+                ];
+              })}
             />
           </div>
         );
@@ -672,25 +1448,93 @@ sudo update-ca-certificates`}
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Mutual authentication test commands. Both parties verify each other against the shared trust anchor:
+              Install the Root CA into both the server and client truststores so they mutually
+              authenticate each other:
             </p>
             <div className="space-y-2">
-              <CodeSnippet
-                title="cURL mTLS Client Test"
-                code={`curl --cacert ca.crt --cert client.crt --key client.key https://localhost:8443`}
+              <ShellCommandBlock
+                title="cURL mTLS Client Test Command"
+                commands={[
+                  {
+                    parts: [
+                      "curl",
+                      "--cacert ca.crt",
+                      "--cert client.crt",
+                      "--key client.key",
+                      `https://${commandOptions.commonName}:8443`,
+                    ],
+                  },
+                ]}
               />
               <CodeSnippet
-                title="Nginx mTLS Verification Directives"
-                code={`ssl_client_certificate /etc/ssl/certs/ca.crt;
-ssl_verify_client       on;
-ssl_verify_depth        2;`}
+                title="Nginx mTLS Server Block (/etc/nginx/conf.d/mtls.conf)"
+                code={`server {
+    listen 8443 ssl;
+    server_name ${commandOptions.commonName};
+
+    ssl_certificate        /etc/ssl/certs/server.crt;
+    ssl_certificate_key    /etc/ssl/private/server.key;
+
+    # Require and verify client certificate against Root CA
+    ssl_client_certificate /etc/ssl/certs/ca.crt;
+    ssl_verify_client      on;
+    ssl_verify_depth       2;
+}`}
               />
               <CodeSnippet
+                title="Node.js mTLS HTTPS Server"
+                code={`const https = require('https');
+const fs = require('fs');
+
+https.createServer({
+  key: fs.readFileSync('server.key'),
+  cert: fs.readFileSync('server.crt'),
+  ca: fs.readFileSync('ca.crt'),
+  requestCert: true,
+  rejectUnauthorized: true,
+}, (req, res) => {
+  res.writeHead(200);
+  res.end('mTLS connection verified! Client CN: ' + req.socket.getPeerCertificate().subject.CN);
+}).listen(8443);`}
+              />
+              <ShellCommandBlock
+                title="Install Root CA into OS Truststores"
+                commands={{
+                  bash: [
+                    {
+                      comment: "Linux (Debian / Ubuntu)",
+                      parts: ["sudo cp ca.crt /usr/local/share/ca-certificates/ca.crt"],
+                    },
+                    { parts: ["sudo update-ca-certificates"] },
+                    {
+                      comment: "macOS",
+                      parts: [
+                        "sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ca.crt",
+                      ],
+                    },
+                  ],
+                  powershell: [
+                    {
+                      parts: [
+                        "Import-Certificate -FilePath ca.crt -CertStoreLocation Cert:\\LocalMachine\\Root",
+                      ],
+                    },
+                  ],
+                  cmd: [{ parts: ['certutil -addstore -f "Root" ca.crt'] }],
+                }}
+              />
+              <ShellCommandBlock
                 title="Kubernetes Generic Secret"
-                code={`kubectl create secret generic mtls-certs \\
-  --from-file=ca.crt=ca.crt \\
-  --from-file=server.crt=server.crt \\
-  --from-file=server.key=server.key`}
+                commands={[
+                  {
+                    parts: [
+                      "kubectl create secret generic mtls-certs",
+                      "--from-file=ca.crt=ca.crt",
+                      "--from-file=server.crt=server.crt",
+                      "--from-file=server.key=server.key",
+                    ],
+                  },
+                ]}
               />
             </div>
           </div>
@@ -700,12 +1544,22 @@ ssl_verify_depth        2;`}
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Enterprise 3-Tier verification and deployment. Clients and servers establish cryptographic trust via the Root CA:
+              Enterprise 3-Tier verification and deployment. Clients and servers establish
+              cryptographic trust via the Root CA:
             </p>
             <div className="space-y-2">
-              <CodeSnippet
+              <ShellCommandBlock
                 title="Verify Complete Certificate Chain"
-                code={`openssl verify -CAfile root-ca.crt -untrusted intermediate.crt server.crt`}
+                commands={[
+                  {
+                    parts: [
+                      "openssl verify",
+                      "-CAfile root-ca.crt",
+                      "-untrusted intermediate.crt",
+                      "server.crt",
+                    ],
+                  },
+                ]}
               />
               <CodeSnippet
                 title="Nginx Enterprise Chain Deployment"
@@ -759,7 +1613,7 @@ ssl_verify_client       on;`}
                   "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
                   creatorMode === "single-cert" && issuanceMode === "self-signed"
                     ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 font-semibold"
-                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
                 )}
               >
                 Single (Self-Signed)
@@ -775,7 +1629,7 @@ ssl_verify_client       on;`}
                   "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
                   creatorMode === "single-cert" && issuanceMode === "ca-signed"
                     ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 font-semibold"
-                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
                 )}
               >
                 Single (CA-Signed)
@@ -791,7 +1645,7 @@ ssl_verify_client       on;`}
                   "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
                   creatorMode === "mtls-suite" && pkiHierarchy === "2-tier"
                     ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 font-semibold"
-                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
                 )}
               >
                 mTLS (2-Tier)
@@ -807,7 +1661,7 @@ ssl_verify_client       on;`}
                   "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
                   creatorMode === "mtls-suite" && pkiHierarchy === "3-tier"
                     ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 font-semibold"
-                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
                 )}
               >
                 mTLS Enterprise (3-Tier)
@@ -815,121 +1669,41 @@ ssl_verify_client       on;`}
             </div>
           </div>
         </div>
-
-        {/* Layout Switcher Pill */}
-        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100/90 p-1 dark:border-slate-800 dark:bg-slate-950/80">
-          <button
-            type="button"
-            onClick={() => handleLayoutChange("wizard")}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
-              layout === "wizard"
-                ? "bg-white text-indigo-600 shadow-xs dark:bg-slate-800 dark:text-indigo-400"
-                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
-            )}
-          >
-            <span>🧙</span>
-            <span>Step Wizard</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleLayoutChange("panels")}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
-              layout === "panels"
-                ? "bg-white text-indigo-600 shadow-xs dark:bg-slate-800 dark:text-indigo-400"
-                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
-            )}
-          >
-            <span>📋</span>
-            <span>All Panels</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleLayoutChange("classic")}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
-              layout === "classic"
-                ? "bg-white text-indigo-600 shadow-xs dark:bg-slate-800 dark:text-indigo-400"
-                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
-            )}
-          >
-            <span>⚙️</span>
-            <span>Classic</span>
-          </button>
-        </div>
       </div>
 
-      {/* 1. STEP-BY-STEP WIZARD LAYOUT */}
-      {layout === "wizard" && (
-        <div className="space-y-4">
-          {/* Stepper Progress Bar */}
-          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between gap-1 overflow-x-auto pb-1">
-              {wizardSteps.map((step, idx) => {
-                const isActive = idx === currentStepIndex;
-                const isCompleted = idx < currentStepIndex;
-                return (
-                  <button
-                    key={step.id}
-                    type="button"
-                    onClick={() => setActiveStep(idx)}
-                    className={cn(
-                      "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-                      isActive
-                        ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500/20 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-400/30"
-                        : isCompleted
-                          ? "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
-                          : "text-slate-400 hover:bg-slate-50 dark:text-slate-500 dark:hover:bg-slate-800/40",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold",
-                        isActive
-                          ? "bg-indigo-600 text-white dark:bg-indigo-500"
-                          : isCompleted
-                            ? "bg-emerald-600 text-white dark:bg-emerald-500"
-                            : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
-                      )}
-                    >
-                      {isCompleted ? "✓" : idx + 1}
-                    </span>
-                    <span>{step.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Active Step Content */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-            {/* Step Header */}
-            <div className="mb-4 border-b border-slate-100 pb-3 dark:border-slate-800">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                  {currentStep.title}
-                </span>
-                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  Produces: {currentStep.fileProduced}
-                </span>
+      <div className="space-y-4">
+        {wizardSteps.map((step) => (
+          <div
+            key={step.id}
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900"
+          >
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2 dark:border-slate-800">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                  {step.title}
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">{step.purpose}</p>
               </div>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {currentStep.purpose}
-              </p>
+              <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                Produces: {step.fileProduced}
+              </span>
             </div>
 
-            {/* CA Authority Section for Step 3 (single-cert only) — full manual + generate UI */}
-            {currentStep.isCaStep && creatorMode !== "mtls-suite" && renderCaAuthoritySection()}
+            {/* CA Authority Section for CA panel (single-cert only) — full manual + generate UI */}
+            {step.isCaStep && creatorMode !== "mtls-suite" && renderCaAuthoritySection()}
 
-            {/* Extensions/Validity controls always shown on isCaStep too */}
-            {currentStep.groups && currentStep.groups.length > 0 && (
+            {/* Options Form — render either if step has groups or optionIds */}
+            {((step.groups &&
+              step.groups.length > 0 &&
+              step.groups.filter((g) => g !== "ca").length > 0) ||
+              (step.optionIds && step.optionIds.length > 0)) && (
               <OptionsForm
                 catalogue={tool.catalogue}
                 groups={tool.groups}
                 options={spec.options}
                 tag={tag}
-                groupIds={currentStep.groups.filter((g) => g !== "ca")}
+                groupIds={step.groups?.filter((g) => g !== "ca")}
+                optionIds={step.optionIds}
                 headings={false}
                 generateLength={generateLength}
                 acceptedByteLengths={acceptedByteLengths}
@@ -937,203 +1711,50 @@ ssl_verify_client       on;`}
               />
             )}
 
-            {/* Step Guide / Snippets */}
-            {currentStep.guideKind && renderStepGuide(currentStep.guideKind)}
-
-
-            {/* Final Step Action Banner */}
-            {currentStepIndex === wizardSteps.length - 1 && (
-              <div className="mt-5 flex flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4 dark:border-slate-800 dark:from-slate-900 dark:to-slate-950">
-                <Button
-                  size="md"
-                  variant="primary"
-                  disabled={!canRecompute || isComputing}
-                  onClick={recompute}
-                  className="w-full max-w-sm gap-2 font-semibold shadow-md"
-                >
-                  {isComputing ? (
-                    <>
-                      <span className="inline-block animate-spin">⟳</span>
-                      <span>Generating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>⚡</span>
-                      <span>
-                        {creatorMode === "mtls-suite"
-                          ? `Generate ${pkiHierarchy.toUpperCase()} mTLS Suite`
-                          : issuanceMode === "ca-signed"
-                            ? "Generate CA-Signed Certificate"
-                            : "Generate Certificate & Key"}
-                      </span>
-                    </>
-                  )}
-                </Button>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Outputs complete PEM and DER artifacts with zero external dependencies.
-                </p>
-              </div>
-            )}
-
-            {/* Stepper Navigation */}
-            <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={currentStepIndex === 0}
-                onClick={() => setActiveStep((prev) => Math.max(0, prev - 1))}
-              >
-                ← Back
-              </Button>
-
-              <div className="text-xs text-slate-400">
-                Step {currentStepIndex + 1} of {wizardSteps.length}
-              </div>
-
-              {currentStepIndex < wizardSteps.length - 1 ? (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => setActiveStep((prev) => Math.min(wizardSteps.length - 1, prev + 1))}
-                >
-                  Next →
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  disabled={!canRecompute || isComputing}
-                  onClick={recompute}
-                >
-                  {isComputing ? "Generating..." : "Generate Now"}
-                </Button>
-              )}
-            </div>
+            {step.guideKind && renderStepGuide(step.guideKind)}
           </div>
-        </div>
-      )}
+        ))}
 
-      {/* 2. ALL PANELS LAYOUT */}
-      {layout === "panels" && (
-        <div className="space-y-4">
-          {wizardSteps.map((step) => (
-            <div
-              key={step.id}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900"
-            >
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2 dark:border-slate-800">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                    {step.title}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {step.purpose}
-                  </p>
-                </div>
-                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  Produces: {step.fileProduced}
-                </span>
-              </div>
-
-              {/* CA Authority Section for CA panel (single-cert only) — full manual + generate UI */}
-              {step.isCaStep && creatorMode !== "mtls-suite" && renderCaAuthoritySection()}
-
-              {/* Options Form — exclude 'ca' group since renderCaAuthoritySection handles it */}
-              {step.groups && step.groups.length > 0 && step.groups.filter((g) => g !== "ca").length > 0 && (
-                <OptionsForm
-                  catalogue={tool.catalogue}
-                  groups={tool.groups}
-                  options={spec.options}
-                  tag={tag}
-                  groupIds={step.groups.filter((g) => g !== "ca")}
-                  headings={false}
-                  generateLength={generateLength}
-                  acceptedByteLengths={acceptedByteLengths}
-                  onChange={setOptionValue}
-                />
-              )}
-
-              {step.guideKind && renderStepGuide(step.guideKind)}
-            </div>
-          ))}
-
-          {/* Sticky Bottom Action Card */}
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-            <div>
-              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                Ready to Generate
-              </span>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {creatorMode === "mtls-suite"
-                  ? `Generate complete ${pkiHierarchy.toUpperCase()} mTLS suite (Root CA, Leaf certs, and client PKCS#12 bundle)`
+        {/* Sticky Bottom Action Card */}
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+              {missingCaCredentials ? "CA Credentials Required" : "Ready to Generate"}
+            </span>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {creatorMode === "mtls-suite"
+                ? `Generate complete ${pkiHierarchy.toUpperCase()} mTLS suite (Root CA, Leaf certs, and client PKCS#12 bundle)`
+                : missingCaCredentials
+                  ? "Provide both the issuing CA certificate and its matching private key."
                   : issuanceMode === "ca-signed"
                     ? "Generate CA-signed certificate and private key"
                     : "Generate self-signed certificate and private key with all configured parameters"}
-              </p>
-            </div>
-            <Button
-              size="md"
-              variant="primary"
-              disabled={!canRecompute || isComputing}
-              onClick={recompute}
-              className="gap-2 font-semibold shadow-xs"
-            >
-              {isComputing ? (
-                "Generating..."
-              ) : (
-                <>
-                  <span>⚡</span>
-                  <span>
-                    {creatorMode === "mtls-suite"
-                      ? "Generate mTLS Suite"
-                      : issuanceMode === "ca-signed"
-                        ? "Generate CA-Signed Cert"
-                        : "Generate Certificate"}
-                  </span>
-                </>
-              )}
-            </Button>
+            </p>
           </div>
+          <Button
+            size="md"
+            variant="primary"
+            disabled={!canRecompute || isComputing || missingCaCredentials}
+            onClick={recompute}
+            className="gap-2 font-semibold shadow-xs"
+          >
+            {isComputing ? (
+              "Generating..."
+            ) : (
+              <>
+                <span>⚡</span>
+                <span>
+                  {creatorMode === "mtls-suite"
+                    ? "Generate mTLS Suite"
+                    : issuanceMode === "ca-signed"
+                      ? "Generate CA-Signed Cert"
+                      : "Generate Certificate"}
+                </span>
+              </>
+            )}
+          </Button>
         </div>
-      )}
-
-      {/* 3. CLASSIC LAYOUT */}
-      {layout === "classic" && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                Generate Certificate
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                All certificate options and parameters are managed in the right sidebar Settings panel.
-              </p>
-            </div>
-            <Button
-              size="md"
-              variant="primary"
-              disabled={!canRecompute || isComputing}
-              onClick={recompute}
-              className="gap-2 font-semibold shadow-xs"
-            >
-              {isComputing ? (
-                "Generating..."
-              ) : (
-                <>
-                  <span>⚡</span>
-                  <span>
-                    {creatorMode === "mtls-suite"
-                      ? "Generate mTLS Suite"
-                      : issuanceMode === "ca-signed"
-                        ? "Generate CA-Signed Cert"
-                        : "Generate Certificate"}
-                  </span>
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -130,14 +130,20 @@ describe("PKCS#10 CSR Parser & Verification", () => {
 
 describe("Certificate Format Converter", () => {
   it("converts PEM to DER binary", async () => {
-    const res = await convertCertificate(new TextEncoder().encode(RSA_CERTIFICATE_PEM), "pem-to-der");
+    const res = await convertCertificate(
+      new TextEncoder().encode(RSA_CERTIFICATE_PEM),
+      "pem-to-der",
+    );
     expect(res.operation).toBe("pem-to-der");
     expect(res.bytes).toBeDefined();
     expect(res.bytes![0]).toBe(0x30); // ASN.1 SEQUENCE
   });
 
   it("converts DER binary to PEM", async () => {
-    const derRes = await convertCertificate(new TextEncoder().encode(RSA_CERTIFICATE_PEM), "pem-to-der");
+    const derRes = await convertCertificate(
+      new TextEncoder().encode(RSA_CERTIFICATE_PEM),
+      "pem-to-der",
+    );
     const der = derRes.bytes!;
     const res = await convertCertificate(der, "der-to-pem");
     expect(res.operation).toBe("der-to-pem");
@@ -145,7 +151,10 @@ describe("Certificate Format Converter", () => {
   });
 
   it("converts PEM to CER and CER to PEM", async () => {
-    const cerRes = await convertCertificate(new TextEncoder().encode(RSA_CERTIFICATE_PEM), "pem-to-cer");
+    const cerRes = await convertCertificate(
+      new TextEncoder().encode(RSA_CERTIFICATE_PEM),
+      "pem-to-cer",
+    );
     expect(cerRes.operation).toBe("pem-to-cer");
     expect(cerRes.bytes).toBeDefined();
 
@@ -155,7 +164,10 @@ describe("Certificate Format Converter", () => {
   });
 
   it("packages certificates into PKCS#7 (.p7b) and extracts them back", async () => {
-    const p7b = await convertCertificate(new TextEncoder().encode(CERTIFICATE_CHAIN_PEM), "pem-to-pkcs7");
+    const p7b = await convertCertificate(
+      new TextEncoder().encode(CERTIFICATE_CHAIN_PEM),
+      "pem-to-pkcs7",
+    );
     expect(p7b.operation).toBe("pem-to-pkcs7");
     expect(p7b.text).toContain("-----BEGIN PKCS7-----");
     expect(p7b.bytes).toBeDefined();
@@ -197,24 +209,26 @@ describe("Certificate Format Converter", () => {
     expect(pfx.bytes).toBeDefined();
 
     // Unpack from PKCS#12
-    const unpacked = await convertCertificate(
-      pfx.bytes!,
-      "pkcs12-to-pem",
-      { password },
-    );
+    const unpacked = await convertCertificate(pfx.bytes!, "pkcs12-to-pem", { password });
     expect(unpacked.operation).toBe("pkcs12-to-pem");
     expect(unpacked.text).toContain("-----BEGIN CERTIFICATE-----");
     expect(unpacked.text).toContain("-----BEGIN PRIVATE KEY-----");
   });
 
   it("extracts public key from certificate", async () => {
-    const res = await convertCertificate(new TextEncoder().encode(RSA_CERTIFICATE_PEM), "extract-public-key");
+    const res = await convertCertificate(
+      new TextEncoder().encode(RSA_CERTIFICATE_PEM),
+      "extract-public-key",
+    );
     expect(res.operation).toBe("extract-public-key");
     expect(res.text).toContain("-----BEGIN PUBLIC KEY-----");
   });
 
   it("splits multi-certificate chain bundle", async () => {
-    const res = await convertCertificate(new TextEncoder().encode(CERTIFICATE_CHAIN_PEM), "split-chain");
+    const res = await convertCertificate(
+      new TextEncoder().encode(CERTIFICATE_CHAIN_PEM),
+      "split-chain",
+    );
     expect(res.operation).toBe("split-chain");
     expect(res.blocks?.length).toBe(2);
     expect(res.blocks![0]!.subject).toContain("workbench.local");
@@ -237,7 +251,9 @@ describe("Tool Execution via Registry", () => {
     const spec = tool.createSpec();
     const result = await tool.compute(spec, new TextEncoder().encode(ECDSA_CSR_PEM));
     expect(result.error).toBeUndefined();
-    expect(result.fields?.some((f) => f.label === "Self-Signature" && f.value.includes("Verified"))).toBe(true);
+    expect(
+      result.fields?.some((f) => f.label === "Self-Signature" && f.value.includes("Verified")),
+    ).toBe(true);
   });
 
   it("computes Certificate Converter tool", async () => {
@@ -272,7 +288,9 @@ describe("Tool Execution via Registry", () => {
     expect(result.error).toBeUndefined();
     expect(result.text).toContain("-----BEGIN CERTIFICATE REQUEST-----");
     expect(result.working).toContain("-----BEGIN PRIVATE KEY-----");
-    expect(result.fields?.some((f) => f.label === "Self-Signature" && f.value.includes("Verified"))).toBe(true);
+    expect(
+      result.fields?.some((f) => f.label === "Self-Signature" && f.value.includes("Verified")),
+    ).toBe(true);
   });
 });
 
@@ -326,6 +344,16 @@ describe("Certificate and CSR Creation", () => {
     expect(parsed.subject.commonName).toBe("rsa.workbench");
     expect(parsed.publicKey.algorithmName).toBe("RSA");
     expect(parsed.extensions.basicConstraints?.isCa).toBe(true);
+    expect(created.issuanceMode).toBe("self-signed");
+    expect(created.opensslCommand).toContain(
+      "openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.key",
+    );
+    expect(created.opensslCommand).toContain(
+      "-subj '/C=US/ST=California/L=San Francisco/O=RSA Test/OU=Lab/CN=rsa.workbench'",
+    );
+    expect(created.opensslCommand).toContain("-addext 'subjectAltName=DNS:rsa.workbench'");
+    expect(created.opensslCommand).toContain("-out certificate.crt");
+    expect(created.opensslCommand).not.toContain("key.pem");
   });
 
   it("generates a valid self-signed Ed25519 certificate", async () => {
@@ -369,6 +397,13 @@ describe("Certificate and CSR Creation", () => {
     const parsed = parseCsr(created.csrDer);
     expect(parsed.subject.commonName).toBe("api.example.com");
     expect(parsed.requestedExtensions.sans).toContain("DNS:api.example.com");
+    expect(created.opensslCommand).toContain(
+      "-subj '/C=US/ST=California/L=San Francisco/O=Example Corp/OU=DevOps/CN=api.example.com'",
+    );
+    expect(created.opensslCommand).toContain(
+      "-addext 'subjectAltName=DNS:api.example.com,DNS:www.example.com'",
+    );
+    expect(created.opensslCommand).toContain("-out request.csr");
     const verification = await parsed.verifySelfSignature();
     expect(verification.valid).toBe(true);
   });
@@ -409,6 +444,27 @@ describe("Certificate and CSR Creation", () => {
 });
 
 describe("CA-Signed Certificate Issuance", () => {
+  it("refuses CA-signed issuance without a complete CA keypair", async () => {
+    const options = {
+      commonName: "child.internal",
+      keyType: "ecdsa-p256" as const,
+      hashType: "sha256" as const,
+      validityDays: 365,
+      isCa: false,
+      issuanceMode: "ca-signed" as const,
+    };
+
+    await expect(createCertificate(options)).rejects.toThrow(
+      "CA-signed issuance requires both a CA certificate and its matching private key.",
+    );
+    await expect(createCertificate({ ...options, caCertPem: "certificate" })).rejects.toThrow(
+      "CA-signed issuance requires the issuing CA private key.",
+    );
+    await expect(createCertificate({ ...options, caPrivateKeyPem: "key" })).rejects.toThrow(
+      "CA-signed issuance requires the issuing CA certificate.",
+    );
+  });
+
   it("generates a Root CA and issues a child certificate signed by that CA", async () => {
     // 1. Generate Root CA
     const ca = await createCertificate({
@@ -459,19 +515,71 @@ describe("CA-Signed Certificate Issuance", () => {
     expect(parsedChild.extensions.basicConstraints?.isCa).toBe(false);
     expect(parsedChild.extensions.sans).toContain("DNS:child.internal");
     expect(parsedChild.extensions.sans).toContain("IP:10.0.0.1");
-    expect(parsedChild.extensions.extendedKeyUsages.some((u) => u.includes("TLS Web Server Authentication"))).toBe(true);
-    expect(parsedChild.extensions.authorityKeyIdentifier).toBe(parsedCa.extensions.subjectKeyIdentifier);
+    expect(
+      parsedChild.extensions.extendedKeyUsages.some((u) =>
+        u.includes("TLS Web Server Authentication"),
+      ),
+    ).toBe(true);
+    expect(parsedChild.extensions.authorityKeyIdentifier).toBe(
+      parsedCa.extensions.subjectKeyIdentifier,
+    );
+    expect(child.issuanceMode).toBe("ca-signed");
+    expect(child.opensslCommand).toContain("openssl req -new -key private.key");
+    expect(child.opensslCommand).toContain(
+      "-addext 'subjectAltName=DNS:child.internal,IP:10.0.0.1'",
+    );
+    expect(child.opensslCommand).toContain("-addext 'extendedKeyUsage=serverAuth'");
+    expect(child.opensslCommand).toContain("-copy_extensions copy");
+    expect(child.opensslCommand).toContain("-out certificate.crt");
   });
 });
 
 describe("Full mTLS Suite Generator", () => {
+  it("defaults Certificate Creator to a valid self-signed workflow", async () => {
+    const def = await loadTool("cert-creator");
+    const spec = def.createSpec();
+
+    expect(spec.options.issuanceMode).toBe("self-signed");
+    expect(spec.options).toMatchObject({
+      rootKeyType: "ecdsa-p256",
+      rootHashType: "sha256",
+      intermediateKeyType: "ecdsa-p256",
+      intermediateHashType: "sha256",
+      serverKeyType: "ecdsa-p256",
+      serverHashType: "sha256",
+      clientKeyType: "ecdsa-p256",
+      clientHashType: "sha256",
+    });
+    const result = await def.compute(spec, new Uint8Array(0));
+    expect(result.error).toBeUndefined();
+    expect(result.working).toContain("(Self-Signed)");
+    expect(result.working).toContain("#### Equivalent OpenSSL Workflow:");
+  });
+
+  it("does not label an incomplete CA-signed request as a generated certificate", async () => {
+    const def = await loadTool("cert-creator");
+    const spec = def.createSpec();
+    spec.options = { ...spec.options, issuanceMode: "ca-signed" };
+
+    const result = await def.compute(spec, new Uint8Array(0));
+    expect(result.text).toBeUndefined();
+    expect(result.error).toContain(
+      "CA-signed issuance requires both a CA certificate and its matching private key.",
+    );
+  });
+
   it("generates complete 3-tier mTLS suite with Root CA, Server Cert, Client Cert, and PKCS#12 archive", async () => {
     const mtls = await generateMtlsSuite({
       caCommonName: "mTLS Root CA",
       serverCommonName: "secure.internal",
       serverSan: "secure.internal, 192.168.1.100",
       clientCommonName: "client-alice",
-      keyType: "ecdsa-p256",
+      rootKeyType: "ecdsa-p256",
+      rootHashType: "sha256",
+      serverKeyType: "ecdsa-p256",
+      serverHashType: "sha256",
+      clientKeyType: "ecdsa-p256",
+      clientHashType: "sha256",
       validityDays: 365,
       p12Password: "mtls-secret-pass",
     });
@@ -488,13 +596,21 @@ describe("Full mTLS Suite Generator", () => {
     expect(parsedServer.issuer.commonName).toBe("mTLS Root CA");
     expect(parsedServer.extensions.sans).toContain("DNS:secure.internal");
     expect(parsedServer.extensions.sans).toContain("IP:192.168.1.100");
-    expect(parsedServer.extensions.extendedKeyUsages.some((u) => u.includes("TLS Web Server Authentication"))).toBe(true);
+    expect(
+      parsedServer.extensions.extendedKeyUsages.some((u) =>
+        u.includes("TLS Web Server Authentication"),
+      ),
+    ).toBe(true);
 
     // 3. Client Certificate
     const parsedClient = parseX509Certificate(mtls.client.certDer);
     expect(parsedClient.subject.commonName).toBe("client-alice");
     expect(parsedClient.issuer.commonName).toBe("mTLS Root CA");
-    expect(parsedClient.extensions.extendedKeyUsages.some((u) => u.includes("TLS Web Client Authentication"))).toBe(true);
+    expect(
+      parsedClient.extensions.extendedKeyUsages.some((u) =>
+        u.includes("TLS Web Client Authentication"),
+      ),
+    ).toBe(true);
 
     // 4. Client PKCS#12 archive decodes with password
     const p12Decoded = await decodePkcs12Archive(mtls.client.p12Der, "mtls-secret-pass");
@@ -503,7 +619,9 @@ describe("Full mTLS Suite Generator", () => {
     expect(p12Decoded.privateKey?.pem).toBe(mtls.client.keyPem);
 
     // 5. Verification Commands
-    expect(mtls.commands.curlPem).toContain("--cacert ca.crt --cert client.crt --key client.key");
+    expect(mtls.commands.curlPem).toContain(
+      "--cacert ca.crt --cert client.crt --key client.key",
+    );
     expect(mtls.commands.curlP12).toContain("client.p12:mtls-secret-pass");
     expect(mtls.commands.opensslServer).toContain("-Verify 1");
     expect(mtls.commands.nginxConfig).toContain("ssl_verify_client       on;");
@@ -513,6 +631,45 @@ describe("Full mTLS Suite Generator", () => {
     expect(mtls.allInOneText).toContain("SERVER CERTIFICATE");
     expect(mtls.allInOneText).toContain("CLIENT CERTIFICATE");
     expect(mtls.allInOneText).toContain("CLIENT PKCS#12 ARCHIVE");
+  });
+
+  it("uses independent key algorithms and signature hashes across an mTLS hierarchy", async () => {
+    const mtls = await generateMtlsSuite({
+      pkiHierarchy: "3-tier",
+      rootKeyType: "ecdsa-p256",
+      rootHashType: "sha256",
+      intermediateKeyType: "rsa-2048",
+      intermediateHashType: "sha384",
+      serverKeyType: "ed25519",
+      serverHashType: "sha256",
+      clientKeyType: "ecdsa-p384",
+      clientHashType: "sha512",
+    });
+
+    const root = parseX509Certificate(mtls.ca.certDer);
+    const intermediate = parseX509Certificate(mtls.intermediate!.certDer);
+    const server = parseX509Certificate(mtls.server.certDer);
+    const client = parseX509Certificate(mtls.client.certDer);
+
+    expect(root.publicKey.curveName).toContain("P-256");
+    expect(root.signatureAlgorithmName).toBe("ecdsa-with-SHA256");
+    expect(intermediate.publicKey.keyType).toBe("rsa");
+    expect(intermediate.signatureAlgorithmName).toBe("ecdsa-with-SHA384");
+    expect(server.publicKey.keyType).toBe("ed25519");
+    expect(server.signatureAlgorithmName).toBe("sha256WithRSAEncryption");
+    expect(client.publicKey.curveName).toContain("P-384");
+    expect(client.signatureAlgorithmName).toBe("sha512WithRSAEncryption");
+
+    expect(mtls.ca).toMatchObject({ keyType: "ecdsa-p256", signatureHash: "sha256" });
+    expect(mtls.intermediate).toMatchObject({
+      keyType: "rsa-2048",
+      signatureHash: "sha384",
+    });
+    expect(mtls.server).toMatchObject({ keyType: "ed25519", signatureHash: "sha256" });
+    expect(mtls.client).toMatchObject({ keyType: "ecdsa-p384", signatureHash: "sha512" });
+    expect(mtls.rawServer.opensslCommand).toContain("openssl x509 -req");
+    expect(mtls.rawServer.opensslCommand).toContain("-sha256");
+    expect(mtls.rawClient.opensslCommand).toContain("-sha512");
   });
 
   it("computes mTLS suite through Certificate Creator tool definition", async () => {
@@ -554,15 +711,23 @@ describe("Full mTLS Suite Generator", () => {
 
       // Verify tool-specific fields are present rather than generic placeholders
       if (toolId === "cert-matcher") {
-        expect(fields.some((f) => f.label === "Operation" && f.value.includes("Keypair Matcher"))).toBe(true);
+        expect(
+          fields.some((f) => f.label === "Operation" && f.value.includes("Keypair Matcher")),
+        ).toBe(true);
       } else if (toolId === "cert-diff") {
-        expect(fields.some((f) => f.label === "Operation" && f.value.includes("Diff"))).toBe(true);
+        expect(fields.some((f) => f.label === "Operation" && f.value.includes("Diff"))).toBe(
+          true,
+        );
       } else if (toolId === "cert-creator") {
         expect(fields.some((f) => f.label === "Certificate Type")).toBe(true);
       } else if (toolId === "x509") {
-        expect(fields.some((f) => f.label === "Standard" && f.value.includes("X.509"))).toBe(true);
+        expect(fields.some((f) => f.label === "Standard" && f.value.includes("X.509"))).toBe(
+          true,
+        );
       } else if (toolId === "acme") {
-        expect(fields.some((f) => f.label === "Standard" && f.value.includes("ACME"))).toBe(true);
+        expect(fields.some((f) => f.label === "Standard" && f.value.includes("ACME"))).toBe(
+          true,
+        );
       }
     }
   });
@@ -573,9 +738,13 @@ describe("Full mTLS Suite Generator", () => {
     expect(def).toBeDefined();
     expect(def.variantTag).toBeDefined();
 
-    // 1. Single Certificate Mode (Default)
+    // 1. Single Certificate Mode (Self-Signed)
     const singleSpec = def.createSpec();
-    singleSpec.options = { ...singleSpec.options, creatorMode: "single-cert" };
+    singleSpec.options = {
+      ...singleSpec.options,
+      creatorMode: "single-cert",
+      issuanceMode: "self-signed",
+    };
     const singleTag = def.variantTag!(singleSpec);
     expect(singleTag).toEqual(["single-cert"]);
 
@@ -586,7 +755,9 @@ describe("Full mTLS Suite Generator", () => {
     }
 
     // Client Auth extension must remain visible in single-cert mode
-    const clientAuthOpt = def.catalogue.inGroup("extensions").find((o) => o.id === "clientAuth");
+    const clientAuthOpt = def.catalogue
+      .inGroup("extensions")
+      .find((o) => o.id === "clientAuth");
     expect(clientAuthOpt).toBeDefined();
     expect(isAvailableOn(clientAuthOpt!, singleTag)).toBe(true);
 
@@ -602,4 +773,3 @@ describe("Full mTLS Suite Generator", () => {
     expect(isAvailableOn(clientAuthOpt!, mtlsTag)).toBe(true);
   });
 });
-

@@ -17,6 +17,14 @@ export const OPTION_STATE = "state";
 export const OPTION_LOCALITY = "locality";
 export const OPTION_KEY_TYPE = "keyType";
 export const OPTION_HASH_TYPE = "hashType";
+export const OPTION_ROOT_KEY_TYPE = "rootKeyType";
+export const OPTION_ROOT_HASH_TYPE = "rootHashType";
+export const OPTION_INTERMEDIATE_KEY_TYPE = "intermediateKeyType";
+export const OPTION_INTERMEDIATE_HASH_TYPE = "intermediateHashType";
+export const OPTION_SERVER_KEY_TYPE = "serverKeyType";
+export const OPTION_SERVER_HASH_TYPE = "serverHashType";
+export const OPTION_CLIENT_KEY_TYPE = "clientKeyType";
+export const OPTION_CLIENT_HASH_TYPE = "clientHashType";
 export const OPTION_VALIDITY_DAYS = "validityDays";
 export const OPTION_IS_CA = "isCa";
 export const OPTION_SAN = "san";
@@ -32,6 +40,7 @@ export const OPTION_INTERMEDIATE_COMMON_NAME = "intermediateCommonName";
 export const OPTION_CA_CERT = "caCert";
 export const OPTION_CA_PRIVATE_KEY = "caPrivateKey";
 export const OPTION_CLIENT_COMMON_NAME = "clientCommonName";
+export const OPTION_CA_COMMON_NAME = "caCommonName";
 export const OPTION_MTLS_P12_PASSWORD = "mtlsP12Password";
 
 export const OPTION_PASSWORD = "password";
@@ -39,17 +48,15 @@ export const OPTION_PRIVATE_KEY = "privateKey";
 export const OPTION_COMPARISON_CERT = "comparisonCert";
 
 export type CreatorModeOption = "single-cert" | "mtls-suite";
-export type WorkflowLayoutOption = "wizard" | "panels" | "classic";
+export type WorkflowLayoutOption = "panels";
 export type IssuanceModeOption = "self-signed" | "ca-signed";
 export type PkiHierarchyOption = "2-tier" | "3-tier";
 
 export function readWorkflowLayout(
-  options: OptionValues,
-  fallback: WorkflowLayoutOption = "wizard",
+  _options?: OptionValues,
+  _fallback: WorkflowLayoutOption = "panels",
 ): WorkflowLayoutOption {
-  const val = optString(options, OPTION_WORKFLOW_LAYOUT);
-  if (val === "wizard" || val === "panels" || val === "classic") return val;
-  return fallback;
+  return "panels";
 }
 
 export type InputFormatOption = "auto" | "pem" | "der" | "hex";
@@ -79,7 +86,8 @@ export type KeyTypeOption =
   | "ml-dsa-65"
   | "ml-dsa-87";
 
-export type HashTypeOption = "sha256" | "sha384" | "sha512";
+export type HashTypeOption =
+  "sha256" | "sha384" | "sha512" | "sha3-256" | "sha3-384" | "sha3-512";
 
 export function readInputFormat(options: OptionValues): InputFormatOption {
   const val = optString(options, OPTION_INPUT_FORMAT);
@@ -130,7 +138,10 @@ export function readCommonName(options: OptionValues, defaultVal = "localhost"):
   return optString(options, OPTION_COMMON_NAME) ?? defaultVal;
 }
 
-export function readOrganization(options: OptionValues, defaultVal = "Cipher Workbench"): string {
+export function readOrganization(
+  options: OptionValues,
+  defaultVal = "Cipher Workbench",
+): string {
   return optString(options, OPTION_ORGANIZATION) ?? defaultVal;
 }
 
@@ -150,8 +161,12 @@ export function readLocality(options: OptionValues, defaultVal = "San Francisco"
   return optString(options, OPTION_LOCALITY) ?? defaultVal;
 }
 
-export function readKeyType(options: OptionValues, defaultVal: KeyTypeOption = "ecdsa-p256"): KeyTypeOption {
-  const val = optString(options, OPTION_KEY_TYPE);
+function readKeyTypeOption(
+  options: OptionValues,
+  optionId: string,
+  defaultVal: KeyTypeOption,
+): KeyTypeOption {
+  const val = optString(options, optionId);
   if (
     val === "ecdsa-p256" ||
     val === "ecdsa-p384" ||
@@ -167,10 +182,93 @@ export function readKeyType(options: OptionValues, defaultVal: KeyTypeOption = "
   return defaultVal;
 }
 
-export function readHashType(options: OptionValues, defaultVal: HashTypeOption = "sha256"): HashTypeOption {
-  const val = optString(options, OPTION_HASH_TYPE);
-  if (val === "sha256" || val === "sha384" || val === "sha512") return val;
+function readHashTypeOption(
+  options: OptionValues,
+  optionId: string,
+  defaultVal: HashTypeOption,
+): HashTypeOption {
+  const val = optString(options, optionId);
+  if (
+    val === "sha256" ||
+    val === "sha384" ||
+    val === "sha512" ||
+    val === "sha3-256" ||
+    val === "sha3-384" ||
+    val === "sha3-512"
+  ) {
+    return val;
+  }
   return defaultVal;
+}
+
+export function readKeyType(
+  options: OptionValues,
+  defaultVal: KeyTypeOption = "ecdsa-p256",
+): KeyTypeOption {
+  return readKeyTypeOption(options, OPTION_KEY_TYPE, defaultVal);
+}
+
+export function readHashType(
+  options: OptionValues,
+  defaultVal: HashTypeOption = "sha256",
+): HashTypeOption {
+  return readHashTypeOption(options, OPTION_HASH_TYPE, defaultVal);
+}
+
+export function readRootKeyType(
+  options: OptionValues,
+  defaultVal: KeyTypeOption = "ecdsa-p256",
+): KeyTypeOption {
+  return readKeyTypeOption(options, OPTION_ROOT_KEY_TYPE, defaultVal);
+}
+
+export function readRootHashType(
+  options: OptionValues,
+  defaultVal: HashTypeOption = "sha256",
+): HashTypeOption {
+  return readHashTypeOption(options, OPTION_ROOT_HASH_TYPE, defaultVal);
+}
+
+export function readIntermediateKeyType(
+  options: OptionValues,
+  defaultVal: KeyTypeOption = "ecdsa-p256",
+): KeyTypeOption {
+  return readKeyTypeOption(options, OPTION_INTERMEDIATE_KEY_TYPE, defaultVal);
+}
+
+export function readIntermediateHashType(
+  options: OptionValues,
+  defaultVal: HashTypeOption = "sha256",
+): HashTypeOption {
+  return readHashTypeOption(options, OPTION_INTERMEDIATE_HASH_TYPE, defaultVal);
+}
+
+export function readServerKeyType(
+  options: OptionValues,
+  defaultVal: KeyTypeOption = "ecdsa-p256",
+): KeyTypeOption {
+  return readKeyTypeOption(options, OPTION_SERVER_KEY_TYPE, defaultVal);
+}
+
+export function readServerHashType(
+  options: OptionValues,
+  defaultVal: HashTypeOption = "sha256",
+): HashTypeOption {
+  return readHashTypeOption(options, OPTION_SERVER_HASH_TYPE, defaultVal);
+}
+
+export function readClientKeyType(
+  options: OptionValues,
+  defaultVal: KeyTypeOption = "ecdsa-p256",
+): KeyTypeOption {
+  return readKeyTypeOption(options, OPTION_CLIENT_KEY_TYPE, defaultVal);
+}
+
+export function readClientHashType(
+  options: OptionValues,
+  defaultVal: HashTypeOption = "sha256",
+): HashTypeOption {
+  return readHashTypeOption(options, OPTION_CLIENT_HASH_TYPE, defaultVal);
 }
 
 export function readValidityDays(options: OptionValues, defaultVal = 365): number {
@@ -222,8 +320,18 @@ export function readCaPrivateKey(options: OptionValues): string {
   return optString(options, OPTION_CA_PRIVATE_KEY) ?? "";
 }
 
-export function readClientCommonName(options: OptionValues, defaultVal = "client-app-01"): string {
+export function readClientCommonName(
+  options: OptionValues,
+  defaultVal = "client-app-01",
+): string {
   return optString(options, OPTION_CLIENT_COMMON_NAME) ?? defaultVal;
+}
+
+export function readCaCommonName(
+  options: OptionValues,
+  defaultVal = "Internal Root CA",
+): string {
+  return optString(options, OPTION_CA_COMMON_NAME) ?? defaultVal;
 }
 
 export function readMtlsP12Password(options: OptionValues, defaultVal = "changeit"): string {
@@ -236,7 +344,10 @@ export function readPkiHierarchy(options: OptionValues): PkiHierarchyOption {
   return "2-tier";
 }
 
-export function readIntermediateCommonName(options: OptionValues, defaultVal = "Internal Issuing CA"): string {
+export function readIntermediateCommonName(
+  options: OptionValues,
+  defaultVal = "Internal Issuing CA",
+): string {
   return optString(options, OPTION_INTERMEDIATE_COMMON_NAME) ?? defaultVal;
 }
 
@@ -282,5 +393,3 @@ export const OPTION_ACME_ACCOUNT_KEY = "acmeAccountKey";
 export function readAcmeAccountKey(options: OptionValues): string {
   return optString(options, OPTION_ACME_ACCOUNT_KEY) ?? "";
 }
-
-
