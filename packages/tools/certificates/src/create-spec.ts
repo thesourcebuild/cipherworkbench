@@ -9,6 +9,7 @@ import {
   OPTION_PKI_HIERARCHY,
   OPTION_VERIFY_CSR_SIG,
   OPTION_CA_MODE,
+  OPTION_CA_KEY_TYPE,
   OPTION_OCSP_OP,
   OPTION_ACME_DOMAIN,
   OPTION_ACME_TOKEN,
@@ -91,6 +92,7 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts["codeSigning"] = false;
   } else if (variant === "csr-signer") {
     opts[OPTION_CA_MODE] = "ephemeral-ca";
+    opts[OPTION_CA_KEY_TYPE] = "ecdsa-p256";
     opts[OPTION_HASH_TYPE] = "sha256";
     opts["validityDays"] = "365";
     opts["serverAuth"] = true;

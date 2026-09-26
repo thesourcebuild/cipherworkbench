@@ -17,6 +17,7 @@ export const OPTION_STATE = "state";
 export const OPTION_LOCALITY = "locality";
 export const OPTION_KEY_TYPE = "keyType";
 export const OPTION_HASH_TYPE = "hashType";
+export const OPTION_CA_KEY_TYPE = "caKeyType";
 export const OPTION_ROOT_KEY_TYPE = "rootKeyType";
 export const OPTION_ROOT_HASH_TYPE = "rootHashType";
 export const OPTION_INTERMEDIATE_KEY_TYPE = "intermediateKeyType";
@@ -213,6 +214,13 @@ export function readHashType(
   defaultVal: HashTypeOption = "sha256",
 ): HashTypeOption {
   return readHashTypeOption(options, OPTION_HASH_TYPE, defaultVal);
+}
+
+export function readCaKeyType(
+  options: OptionValues,
+  defaultVal: KeyTypeOption = "ecdsa-p256",
+): KeyTypeOption {
+  return readKeyTypeOption(options, OPTION_CA_KEY_TYPE, defaultVal);
 }
 
 export function readRootKeyType(

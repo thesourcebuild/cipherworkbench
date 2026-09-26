@@ -4,7 +4,12 @@ import { type ToolExportFile } from "@ocs/engine";
 import { parseCsr } from "./csr";
 import { createCertificate, encodeSanExtension, encodeKeyUsageBitString } from "./create-cert";
 import { detectInputBytes, encodePem } from "./pem";
-import { importCaSigner, type CaSigner, type HashAlgorithmType } from "../crypto/keys";
+import {
+  importCaSigner,
+  type CaSigner,
+  type HashAlgorithmType,
+  type KeyAlgorithmType,
+} from "../crypto/keys";
 import {
   encodeDerBitString,
   encodeDerBoolean,
@@ -21,6 +26,7 @@ import { buildVerificationScripts, type CommandScripts } from "../export/command
 export interface SignCsrOptions {
   csrInput: string | Uint8Array;
   caMode?: "ephemeral-ca" | "custom-ca";
+  caKeyType?: KeyAlgorithmType;
   caCertPem?: string;
   caPrivateKeyPem?: string;
   validityDays?: number;
@@ -41,6 +47,8 @@ export interface SignCsrResult {
   bundlePem: string;
   subjectDn: string;
   issuerDn: string;
+  applicantKeyAlgorithm: string;
+  caKeyType: KeyAlgorithmType;
   serialNumberHex: string;
   validityDays: number;
   notBefore: Date;
@@ -59,12 +67,12 @@ export interface SignCsrResult {
  */
 export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
   const csrBytes =
-    typeof opts.csrInput === "string"
-      ? detectInputBytes(opts.csrInput).der
-      : opts.csrInput;
+    typeof opts.csrInput === "string" ? detectInputBytes(opts.csrInput).der : opts.csrInput;
 
   if (csrBytes.length === 0) {
-    throw new Error("CSR input is empty. Paste a PKCS#10 Certificate Signing Request (PEM or DER).");
+    throw new Error(
+      "CSR input is empty. Paste a PKCS#10 Certificate Signing Request (PEM or DER).",
+    );
   }
 
   const parsedCsr = parseCsr(csrBytes);
@@ -76,13 +84,12 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
   let caCertPem: string;
   let caPrivateKeyPem: string | undefined;
 
-  if (
-    opts.caMode === "custom-ca" &&
-    opts.caCertPem &&
-    opts.caCertPem.trim().length > 0 &&
-    opts.caPrivateKeyPem &&
-    opts.caPrivateKeyPem.trim().length > 0
-  ) {
+  if (opts.caMode === "custom-ca") {
+    if (!opts.caCertPem?.trim() || !opts.caPrivateKeyPem?.trim()) {
+      throw new Error(
+        "Custom CA signing requires both a CA certificate and its matching private key.",
+      );
+    }
     const caCertDer = detectInputBytes(opts.caCertPem).der;
     const caKeyDer = detectInputBytes(opts.caPrivateKeyPem).der;
     caSigner = await importCaSigner(caCertDer, caKeyDer, opts.hashType);
@@ -97,7 +104,7 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
       country: "US",
       state: "California",
       locality: "San Francisco",
-      keyType: "ecdsa-p256",
+      keyType: opts.caKeyType ?? "ecdsa-p256",
       hashType: opts.hashType ?? "sha256",
       validityDays: 3650,
       isCa: true,
@@ -106,7 +113,11 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
 
     caCertPem = caCertResult.certPem;
     caPrivateKeyPem = caCertResult.privateKeyPem;
-    caSigner = await importCaSigner(caCertResult.certDer, caCertResult.privateKeyDer, opts.hashType);
+    caSigner = await importCaSigner(
+      caCertResult.certDer,
+      caCertResult.privateKeyDer,
+      opts.hashType,
+    );
   }
 
   // 2. Resolve Serial Number (positive 128-bit integer)
@@ -138,7 +149,10 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
     for (const s of parsedCsr.requestedExtensions.sans) sansSet.add(s);
   }
   if (opts.overrideSan && opts.overrideSan.trim().length > 0) {
-    const overrideParts = opts.overrideSan.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+    const overrideParts = opts.overrideSan
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
     for (const part of overrideParts) sansSet.add(part);
   }
   if (sansSet.size === 0 && parsedCsr.subject.commonName) {
@@ -187,10 +201,7 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
     const sanDer = encodeSanExtension(finalSans.join(", "));
     if (sanDer) {
       extensions.push(
-        encodeDerSequence([
-          encodeDerOid("2.5.29.17"),
-          encodeDerOctetString(sanDer),
-        ]),
+        encodeDerSequence([encodeDerOid("2.5.29.17"), encodeDerOctetString(sanDer)]),
       );
     }
   }
@@ -198,10 +209,7 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
   // 5e. Authority Key Identifier (AKI)
   const akiInner = encodeDerSequence([encodeDerContext(0, caSigner.issuerSki, false)]);
   extensions.push(
-    encodeDerSequence([
-      encodeDerOid("2.5.29.35"),
-      encodeDerOctetString(akiInner),
-    ]),
+    encodeDerSequence([encodeDerOid("2.5.29.35"), encodeDerOctetString(akiInner)]),
   );
 
   // Extensions container: [3] EXPLICIT Extensions
@@ -215,7 +223,9 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
     caSigner.issuerDnDer,
     validityDer,
     parsedCsr.subject.rawDer ??
-      encodeDistinguishedName(parsedCsr.subject.attributes.map((a) => ({ oid: a.oid, value: a.value }))),
+      encodeDistinguishedName(
+        parsedCsr.subject.attributes.map((a) => ({ oid: a.oid, value: a.value })),
+      ),
     applicantSpki,
     extensionsContainer,
   ]);
@@ -225,17 +235,27 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
   const signatureBitString = encodeDerBitString(signatureBytes);
 
   // 8. Assemble Complete Certificate
-  const certDer = encodeDerSequence([tbsSequence, caSigner.signatureAlgorithmDer, signatureBitString]);
+  const certDer = encodeDerSequence([
+    tbsSequence,
+    caSigner.signatureAlgorithmDer,
+    signatureBitString,
+  ]);
   const certPem = encodePem("CERTIFICATE", certDer);
   const bundlePem = `${certPem}\n${caCertPem}`;
 
-  const certFingerprint = bytesToHex(sha256(certDer)).toUpperCase().match(/../g)?.join(":") ?? "";
-  const caFingerprint = bytesToHex(sha256(detectInputBytes(caCertPem).der)).toUpperCase().match(/../g)?.join(":") ?? "";
+  const certFingerprint =
+    bytesToHex(sha256(certDer)).toUpperCase().match(/../g)?.join(":") ?? "";
+  const caFingerprint =
+    bytesToHex(sha256(detectInputBytes(caCertPem).der))
+      .toUpperCase()
+      .match(/../g)
+      ?.join(":") ?? "";
 
   // 9. Cross-Platform Verification Scripts
   const commands = buildVerificationScripts({
     title: "CSR Signer & Micro-CA Verification",
-    description: "Verify the issued certificate against the issuing CA and inspect certificate details.",
+    description:
+      "Verify the issued certificate against the issuing CA and inspect certificate details.",
     actions: [
       {
         id: "verify",
@@ -295,6 +315,9 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
     bundlePem,
     subjectDn: applicantSubjectDn,
     issuerDn: caSigner.issuerDnString,
+    applicantKeyAlgorithm: parsedCsr.publicKey.algorithmName,
+    caKeyType:
+      opts.caMode === "custom-ca" ? caSigner.algorithmType : (opts.caKeyType ?? "ecdsa-p256"),
     serialNumberHex,
     validityDays,
     notBefore,

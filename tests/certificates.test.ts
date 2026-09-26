@@ -8,12 +8,17 @@ import {
   decodePkcs12Archive,
   ECDSA_CSR_PEM,
   generateMtlsSuite,
+  OPTION_CA_CERT,
+  OPTION_CA_KEY_TYPE,
+  OPTION_CA_PRIVATE_KEY,
+  OPTION_KEY_TYPE,
   parseAsn1,
   parseCsr,
   parseX509Certificate,
   RSA_CERTIFICATE_PEM,
   UniversalTag,
 } from "@ocs/certificates";
+import { isAvailableOn } from "@ocs/engine";
 import { loadTool } from "@ocs/registry";
 
 describe("ASN.1 DER Parser", () => {
@@ -237,6 +242,35 @@ describe("Certificate Format Converter", () => {
 });
 
 describe("Tool Execution via Registry", () => {
+  it("shows custom CA credentials only when CSR Signer selects Custom CA", async () => {
+    const tool = await loadTool("csr-signer");
+    const spec = tool.createSpec();
+    const caCertificate = tool.catalogue.get(OPTION_CA_CERT)!;
+    const caKeyType = tool.catalogue.get(OPTION_CA_KEY_TYPE)!;
+    const caPrivateKey = tool.catalogue.get(OPTION_CA_PRIVATE_KEY)!;
+
+    expect(isAvailableOn(caCertificate, tool.variantTag?.(spec))).toBe(false);
+    expect(isAvailableOn(caPrivateKey, tool.variantTag?.(spec))).toBe(false);
+    expect(isAvailableOn(caKeyType, tool.variantTag?.(spec))).toBe(true);
+
+    const customCaSpec = {
+      ...spec,
+      options: { ...spec.options, caMode: "custom-ca" },
+    };
+    expect(isAvailableOn(caCertificate, tool.variantTag?.(customCaSpec))).toBe(true);
+    expect(isAvailableOn(caPrivateKey, tool.variantTag?.(customCaSpec))).toBe(true);
+    expect(isAvailableOn(caKeyType, tool.variantTag?.(customCaSpec))).toBe(false);
+  });
+
+  it("keeps the applicant key algorithm available in CSR Creator", async () => {
+    const tool = await loadTool("csr-creator");
+    const spec = tool.createSpec();
+    const keyType = tool.catalogue.get(OPTION_KEY_TYPE)!;
+
+    expect(isAvailableOn(keyType, tool.variantTag?.(spec))).toBe(true);
+    expect(spec.options[OPTION_KEY_TYPE]).toBe("ecdsa-p256");
+  });
+
   it("computes X.509 certificate tool", async () => {
     const tool = await loadTool("x509");
     const spec = tool.createSpec();

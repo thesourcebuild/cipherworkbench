@@ -12,6 +12,7 @@ import {
   OPTION_LOCALITY,
   OPTION_KEY_TYPE,
   OPTION_HASH_TYPE,
+  OPTION_CA_KEY_TYPE,
   OPTION_ROOT_KEY_TYPE,
   OPTION_ROOT_HASH_TYPE,
   OPTION_INTERMEDIATE_KEY_TYPE,
@@ -349,6 +350,19 @@ const HASH_TYPE: OptionDef<CertificateOptionGroup> = {
   order: 20,
 };
 
+const CA_KEY_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...KEY_TYPE,
+  id: OPTION_CA_KEY_TYPE,
+  label: "Micro-CA Key Algorithm",
+  group: "ca",
+  choices: KEY_TYPE.choices?.filter((choice) => !choice.value.startsWith("ml-dsa-")),
+  summary: "Key algorithm used by the generated ephemeral Micro-CA.",
+  detail:
+    "This controls the issuing CA key, not the applicant key embedded in the CSR. A custom CA uses the algorithm of its imported private key.",
+  availableOn: ["ephemeral-ca"],
+  order: 7,
+};
+
 const ROOT_KEY_TYPE: OptionDef<CertificateOptionGroup> = {
   ...KEY_TYPE,
   id: OPTION_ROOT_KEY_TYPE,
@@ -632,7 +646,7 @@ const CA_CERT: OptionDef<CertificateOptionGroup> = {
   label: "CA Certificate (PEM)",
   group: "ca",
   kind: "text",
-  availableOn: ["ca-signed"],
+  availableOn: ["ca-signed", "custom-ca"],
   arg: { placeholder: "-----BEGIN CERTIFICATE-----\n...", multiline: true },
   summary: "Issuing CA certificate in PEM format.",
   detail: "The CA certificate whose Subject DN and SKI will be used as Issuer and AKI.",
@@ -645,7 +659,7 @@ const CA_PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
   group: "ca",
   kind: "password",
   secret: true,
-  availableOn: ["ca-signed"],
+  availableOn: ["ca-signed", "custom-ca"],
   arg: { placeholder: "-----BEGIN PRIVATE KEY-----\n...", multiline: true },
   summary: "Issuing CA's private key to sign the child certificate.",
   detail: "The private key corresponding to the CA certificate (PKCS#8 PEM format).",
@@ -749,6 +763,7 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   LOCALITY,
   KEY_TYPE,
   HASH_TYPE,
+  CA_KEY_TYPE,
   ROOT_KEY_TYPE,
   ROOT_HASH_TYPE,
   INTERMEDIATE_KEY_TYPE,
@@ -841,6 +856,7 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
   } else if (meta.id === "csr-signer") {
     options.push(
       CA_MODE,
+      CA_KEY_TYPE,
       CA_CERT,
       CA_PRIVATE_KEY,
       HASH_TYPE,

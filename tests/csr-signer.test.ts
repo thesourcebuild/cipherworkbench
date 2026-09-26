@@ -5,6 +5,15 @@ import { parseX509Certificate } from "../packages/tools/certificates/src/asn1/x5
 import { ECDSA_CSR_PEM } from "../packages/tools/certificates/src/samples";
 
 describe("CSR Signer & Micro-CA", () => {
+  it("requires both custom CA credentials instead of falling back to an ephemeral CA", async () => {
+    await expect(
+      signCsr({
+        csrInput: ECDSA_CSR_PEM,
+        caMode: "custom-ca",
+      }),
+    ).rejects.toThrow("Custom CA signing requires both a CA certificate");
+  });
+
   it("signs a CSR with an ephemeral Micro-CA and produces a cryptographically verifiable chain", async () => {
     const result = await signCsr({
       csrInput: ECDSA_CSR_PEM,
@@ -33,6 +42,19 @@ describe("CSR Signer & Micro-CA", () => {
     expect(chainVerification.nodes).toHaveLength(2);
     expect(chainVerification.nodes[0]?.signatureValid).toBe(true);
     expect(chainVerification.nodes[1]?.signatureValid).toBe(true);
+  });
+
+  it("uses the selected ephemeral Micro-CA key algorithm", async () => {
+    const result = await signCsr({
+      csrInput: ECDSA_CSR_PEM,
+      caMode: "ephemeral-ca",
+      caKeyType: "ecdsa-p384",
+    });
+
+    expect(result.applicantKeyAlgorithm).toContain("Elliptic Curve");
+    expect(result.caKeyType).toBe("ecdsa-p384");
+    const verification = await verifyCertificateChain(result.bundlePem);
+    expect(verification.isValid, JSON.stringify(verification)).toBe(true);
   });
 
   it("generates cross-platform verification scripts (sh, ps1, bat)", async () => {

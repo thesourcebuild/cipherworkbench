@@ -247,7 +247,7 @@ export async function generateKeyBundle(
       ? "SHA-256"
       : hashType === "sha512"
         ? "SHA-512"
-        : hashType === "sha384" || keyType === "ecdsa-p384"
+        : hashType === "sha384"
           ? "SHA-384"
           : "SHA-256";
 
@@ -498,9 +498,11 @@ export async function importCaSigner(
       ? "SHA-256"
       : hashType === "sha512"
         ? "SHA-512"
-        : hashType === "sha384" || namedCurve === "P-384"
+        : hashType === "sha384" || (!hashType && namedCurve === "P-384")
           ? "SHA-384"
-          : "SHA-256";
+          : !hashType && namedCurve === "P-521"
+            ? "SHA-512"
+            : "SHA-256";
 
     const privKey = await subtle.importKey(
       "pkcs8",

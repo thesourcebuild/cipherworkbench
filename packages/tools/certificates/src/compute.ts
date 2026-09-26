@@ -54,6 +54,7 @@ import {
   readCreatorMode,
   readIssuanceMode,
   readCaCert,
+  readCaKeyType,
   readCaPrivateKey,
   readCaCommonName,
   readClientCommonName,
@@ -734,6 +735,7 @@ export async function computeCertificate(
   if (spec.variant === "csr-signer") {
     try {
       const caMode = readCaMode(spec.options);
+      const caKeyType = readCaKeyType(spec.options);
       const caCertPem = readCaCert(spec.options);
       const caPrivateKeyPem = readCaPrivateKey(spec.options);
       const validityDays = readValidityDays(spec.options, 365);
@@ -746,6 +748,7 @@ export async function computeCertificate(
       const res = await signCsr({
         csrInput: input,
         caMode,
+        caKeyType,
         caCertPem,
         caPrivateKeyPem,
         validityDays,
@@ -763,7 +766,9 @@ export async function computeCertificate(
           hint: `Signed by ${caMode === "custom-ca" ? "Custom CA" : "Ephemeral Micro-CA"}`,
         },
         { label: "Subject", value: res.subjectDn, hint: "Subject DN preserved from CSR" },
+        { label: "Applicant Key Algorithm", value: res.applicantKeyAlgorithm },
         { label: "Issuer", value: res.issuerDn, hint: "Signing Certificate Authority" },
+        { label: "CA Key Algorithm", value: res.caKeyType.toUpperCase() },
         { label: "Serial Number", value: `0x${res.serialNumberHex}` },
         {
           label: "Validity",
@@ -786,10 +791,12 @@ export async function computeCertificate(
       const working = [
         "### Certificate Signing Request (CSR) Signed Successfully",
         "",
-        `**CA Mode**: ${caMode === "custom-ca" ? "Custom Certificate Authority" : "Ephemeral In-Browser Micro-CA (ECDSA P-256)"}`,
+        `**CA Mode**: ${caMode === "custom-ca" ? "Custom Certificate Authority" : "Ephemeral In-Browser Micro-CA"}`,
         "",
         `- **Subject**: ${res.subjectDn}`,
+        `- **Applicant Key Algorithm**: ${res.applicantKeyAlgorithm}`,
         `- **Issuer**: ${res.issuerDn}`,
+        `- **CA Key Algorithm**: ${res.caKeyType.toUpperCase()}`,
         `- **Serial**: \`0x${res.serialNumberHex}\``,
         `- **Validity Period**: ${validityDays} days`,
         `- **Effective**: ${res.notBefore.toISOString()}`,
@@ -1619,6 +1626,7 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
 
     case "csr-signer": {
       const caMode = readCaMode(spec.options);
+      const caKeyType = readCaKeyType(spec.options);
       const days = readValidityDays(spec.options);
 
       fields.push(
@@ -1633,6 +1641,10 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
             caMode === "ephemeral-ca"
               ? "Ephemeral In-Browser Root CA (Auto-Generated)"
               : "Custom Imported CA Certificate & Private Key",
+        },
+        {
+          label: "CA Key Algorithm",
+          value: caMode === "ephemeral-ca" ? caKeyType.toUpperCase() : "From imported CA key",
         },
         {
           label: "Issued Validity",

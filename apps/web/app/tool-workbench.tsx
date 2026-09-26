@@ -31,6 +31,7 @@ function encodePemDirect(label: string, bytes: Uint8Array): string {
 import { DiagnosticsPanel } from "./diagnostics-panel";
 import { InputPanel } from "./input-panel";
 import { CertCreatorWorkbench } from "./cert-creator-workbench";
+import { CsrWorkbench } from "./csr-workbench";
 import { isInputBlank, type InputState } from "./input-state";
 import { OptionsForm, visibleOptionGroups } from "./options-form";
 import { ProgressReadout } from "./progress-readout";
@@ -152,9 +153,7 @@ export function ToolWorkbench({
 
   const secondaryOptionDef = useMemo(() => {
     if (!tool || !spec) return undefined;
-    return tool.catalogue
-      .inGroup("pair")
-      .find((o) => isAvailableOn(o, tag));
+    return tool.catalogue.inGroup("pair").find((o) => isAvailableOn(o, tag));
   }, [tool, spec, tag]);
 
   const hasInputMaterial = useMemo(() => {
@@ -355,14 +354,15 @@ export function ToolWorkbench({
    */
   const tables = useMemo(() => (tool && spec ? (tool.tables?.(spec) ?? []) : []), [tool, spec]);
 
-  const infoFields = useMemo(() => (tool && spec ? (tool.info?.(spec) ?? []) : []), [tool, spec]);
+  const infoFields = useMemo(
+    () => (tool && spec ? (tool.info?.(spec) ?? []) : []),
+    [tool, spec],
+  );
 
   const lintResult = useMemo(
     () => (tool && spec ? lint(spec, tool.lintRules) : undefined),
     [tool, spec],
   );
-
-
 
   if (loadError) {
     return (
@@ -389,7 +389,9 @@ export function ToolWorkbench({
    * spec, which a once-per-tool catalogue cannot say. Both the hint and the validity check read it.
    */
   const acceptedByteLengths = (optionId: string) => tool.acceptedByteLengths?.(spec, optionId);
-  const isCertCreator = tool?.id === "cert-creator";
+  const isCertCreator = tool.id === "cert-creator";
+  const isCsrWorkbench = tool.id === "csr-creator" || tool.id === "csr-signer";
+  const usesCertificateStudio = isCertCreator || isCsrWorkbench;
   const hasSettings =
     visibleOptionGroups(tool.catalogue, tool.groups, tag, "settings").length > 0;
   /**
@@ -469,13 +471,13 @@ export function ToolWorkbench({
                   <Panel
                     title="Settings"
                     description={
-                      isCertCreator
+                      usesCertificateStudio
                         ? "Workspace configuration"
                         : `${tool.label} options`
                     }
                     collapsible
                   >
-                    {isCertCreator ? (
+                    {usesCertificateStudio ? (
                       <div className="space-y-3">
                         <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-950 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200">
                           <div className="font-semibold flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
@@ -483,21 +485,25 @@ export function ToolWorkbench({
                             <span>Main Workspace Active</span>
                           </div>
                           <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
-                            Certificate parameters and PKI hierarchy are configured directly in the main canvas panels.
+                            {isCertCreator
+                              ? "Certificate parameters and PKI hierarchy are configured directly in the main canvas panels."
+                              : "CSR identity, algorithms, extensions, and issuance policy are configured directly in the main canvas steps."}
                           </p>
                         </div>
-                        <OptionsForm
-                          catalogue={tool.catalogue}
-                          groups={tool.groups}
-                          options={spec.options}
-                          tag={tag}
-                          scope="settings"
-                          groupIds={["mode"]}
-                          headings={false}
-                          generateLength={generateLength}
-                          acceptedByteLengths={acceptedByteLengths}
-                          onChange={setOptionValue}
-                        />
+                        {isCertCreator && (
+                          <OptionsForm
+                            catalogue={tool.catalogue}
+                            groups={tool.groups}
+                            options={spec.options}
+                            tag={tag}
+                            scope="settings"
+                            groupIds={["mode"]}
+                            headings={false}
+                            generateLength={generateLength}
+                            acceptedByteLengths={acceptedByteLengths}
+                            onChange={setOptionValue}
+                          />
+                        )}
                       </div>
                     ) : (
                       <OptionsForm
@@ -617,6 +623,37 @@ export function ToolWorkbench({
             tag={tag}
             generateLength={generateLength}
             acceptedByteLengths={acceptedByteLengths}
+          />
+        ) : isCsrWorkbench ? (
+          <CsrWorkbench
+            tool={tool}
+            spec={spec}
+            setOptionValue={setOptionValue}
+            recompute={recompute}
+            canRecompute={canRecompute}
+            state={state}
+            tag={tag}
+            generateLength={generateLength}
+            acceptedByteLengths={acceptedByteLengths}
+            inputStep={
+              tool.id === "csr-signer" ? (
+                <InputPanel
+                  title="CSR Input (PEM or DER)"
+                  description="Paste a PKCS#10 request or upload a CSR file. The signer verifies its proof-of-possession signature before issuance."
+                  input={input}
+                  onChange={onInputChange}
+                  readsInput={effectiveReadsInput}
+                  generates={false}
+                  supportsFile={tool.supportsFile}
+                  buffersWholeFile={tool.supportsFile && !tool.streaming}
+                  byteLength={state.inputByteLength}
+                  problem={inputProblem ?? (state.status === "error" ? state.error : undefined)}
+                  autoUpdate={effectiveAutoUpdate}
+                  onAutoUpdateChange={onAutoUpdateChange}
+                  showAutoUpdate={true}
+                />
+              ) : undefined
+            }
           />
         ) : (
           <InputPanel

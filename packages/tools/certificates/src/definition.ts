@@ -7,7 +7,7 @@ import { createSpec } from "./create-spec";
 import { describeSpec } from "./explain/describe";
 import { RULES } from "./lint/rules";
 import { CERTIFICATES_MANIFESTS } from "./manifest";
-import { OPTION_CREATOR_MODE, OPTION_ISSUANCE_MODE } from "./pure";
+import { OPTION_CA_MODE, OPTION_CREATOR_MODE, OPTION_ISSUANCE_MODE } from "./pure";
 import { samplesFor } from "./samples";
 import { CertificateSpec } from "./spec";
 
@@ -38,6 +38,9 @@ export function certificatesToolDefinition(toolId: string): ToolDefinition<Certi
           return ["single-cert", "ca-signed"];
         }
         return ["single-cert"];
+      }
+      if (toolId === "csr-signer") {
+        return [String(spec.options[OPTION_CA_MODE] ?? "ephemeral-ca")];
       }
       return undefined;
     },
