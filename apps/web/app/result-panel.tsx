@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import type { OutputEncoding } from "@ocs/contracts";
 import { OUTPUT_ENCODING_LABEL } from "@ocs/contracts";
-import { encodeOutput, type ToolManifest, type ToolResult, type ToolResultField, type ToolSpecBase } from "@ocs/engine";
+import {
+  encodeOutput,
+  type ToolManifest,
+  type ToolResult,
+  type ToolResultField,
+  type ToolSpecBase,
+} from "@ocs/engine";
 import { Button, CopyButton, MonoBlock, Panel, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
 import { buildExportPayload, downloadJsonFile } from "./export-json";
@@ -11,6 +17,7 @@ import { collectExportFiles, exportFilesToFolder } from "./export-folder";
 import { FieldTable } from "./field-table";
 import { KeypairResultView } from "./keypair-result-view";
 import { CertDiffResultView } from "./cert-diff-result-view";
+import { WorkingView } from "./working-view";
 import type { InputState } from "./input-state";
 import type { ComputeState } from "./use-compute";
 
@@ -83,8 +90,7 @@ export function ResultPanel({
    */
   const [hexPrefix, setHexPrefix] = useState<HexPrefix>("");
 
-  const isKeygen =
-    manifest?.family === "asymmetric" && spec?.options?.operation === "generate";
+  const isKeygen = manifest?.family === "asymmetric" && spec?.options?.operation === "generate";
 
   const isCertDiff = Boolean(state.result?.tableRows?.length);
 
@@ -221,7 +227,9 @@ export function ResultPanel({
               size="sm"
               variant="secondary"
               disabled={primary === "" && !state.result?.error}
-              onClick={() => downloadJsonFile(`${manifest?.id ?? "tool"}-export`, exportPayload)}
+              onClick={() =>
+                downloadJsonFile(`${manifest?.id ?? "tool"}-export`, exportPayload)
+              }
               title="Download computation JSON file"
             >
               Save JSON
@@ -231,7 +239,9 @@ export function ResultPanel({
             <Button
               size="sm"
               variant="secondary"
-              disabled={exporting === "saving" || (primary === "" && !state.result?.files?.length)}
+              disabled={
+                exporting === "saving" || (primary === "" && !state.result?.files?.length)
+              }
               onClick={handleExportFolder}
               title={
                 exportFiles.length > 1
@@ -240,7 +250,11 @@ export function ResultPanel({
               }
               data-ocs-export-folder=""
             >
-              {exporting === "saving" ? "Exporting..." : exporting === "done" ? "Exported!" : "Export"}
+              {exporting === "saving"
+                ? "Exporting..."
+                : exporting === "done"
+                  ? "Exported!"
+                  : "Export"}
             </Button>
           )}
         </div>
@@ -289,7 +303,9 @@ export function ResultPanel({
               data-ocs-result=""
               data-ocs-status={state.status}
               value={primary}
-              groupSize={outputEncoding === "hex" || outputEncoding === "hex-upper" ? 8 : undefined}
+              groupSize={
+                outputEncoding === "hex" || outputEncoding === "hex-upper" ? 8 : undefined
+              }
               placeholder={primary === ""}
               className={cn((stale || pending) && "opacity-50")}
             />
@@ -336,21 +352,13 @@ export function ResultPanel({
           The tool's working, below the summary rather than above it.
           
           The fields answer "what is it" in two rows and this answers "why" in as many rows as there
-          are input bytes, so this is the half you scroll to. `MonoBlock` gives it the bounded height
-          and the no-wrap treatment its columns need -- see the note there on choosing the mode from
-          the value, which is what keeps a table's alignment intact while a digest still wraps.
+          are input bytes, so this is the half you scroll to. The rendered view makes prose and tables
+          readable; the raw view preserves the source when exact Markdown or column alignment matters.
 
           Headed, because an unlabelled second monospace block under the first reads as a continuation
           of the result rather than as an explanation of it.
         */}
-        {!isCertDiff && state.result?.working && (
-          <div className="space-y-1">
-            <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
-              Working
-            </p>
-            <MonoBlock data-ocs-working="" value={state.result.working} />
-          </div>
-        )}
+        {!isCertDiff && state.result?.working && <WorkingView value={state.result.working} />}
       </div>
     </Panel>
   );
