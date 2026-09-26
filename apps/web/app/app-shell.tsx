@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { ByteSourceMode, TextEncoding } from "@ocs/contracts";
 import { DEFAULT_TOOL_ID, getManifest, presentFamilies, TOOL_MANIFESTS } from "@ocs/registry";
 import { getDesktopBridge, platform } from "@ocs/platform";
@@ -245,26 +244,18 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/tutorials/"
-            className="rounded-md px-2 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
-          >
-            Tutorials
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              setSettingsCategory("appearance");
-              setSettingsOpen(true);
-            }}
-            aria-label="Settings"
-            title="Settings"
-            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-          >
-            <GearIcon />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setSettingsCategory("appearance");
+            setSettingsOpen(true);
+          }}
+          aria-label="Settings"
+          title="Settings"
+          className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+        >
+          <GearIcon />
+        </button>
       </header>
 
       <SettingsOverlay

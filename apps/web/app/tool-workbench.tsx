@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentType, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { OptionValue, OutputEncoding } from "@ocs/contracts";
 import { OutputEncoding as OutputEncodingSchema, setOption } from "@ocs/contracts";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@ocs/engine";
 import { loadTool } from "@ocs/registry";
 import { platform } from "@ocs/platform";
-import { Button, MonoBlock, Panel, cn } from "@ocs/ui";
+import { Button, GuideOverlay, MonoBlock, Panel, cn } from "@ocs/ui";
 
 function encodePemDirect(label: string, bytes: Uint8Array): string {
   let binary = "";
@@ -30,8 +30,8 @@ function encodePemDirect(label: string, bytes: Uint8Array): string {
 }
 import { DiagnosticsPanel } from "./diagnostics-panel";
 import { InputPanel } from "./input-panel";
-import { CertCreatorWorkbench } from "./cert-creator-workbench";
-import { CsrWorkbench } from "./csr-workbench";
+import { getCustomWorkbench } from "./custom-workbenches";
+import { getToolGuide } from "./tool-guides";
 import { isInputBlank, type InputState } from "./input-state";
 import { OptionsForm, visibleOptionGroups } from "./options-form";
 import { ProgressReadout } from "./progress-readout";
@@ -93,6 +93,23 @@ export function ToolWorkbench({
   const [outputEncoding, setOutputEncoding] = useState<OutputEncoding>("hex-upper");
   const [expected, setExpected] = useState("");
   const [loadError, setLoadError] = useState<string | undefined>();
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [GuideContent, setGuideContent] = useState<ComponentType | undefined>();
+
+  const guideDef = useMemo(() => getToolGuide(toolId), [toolId]);
+
+  const handleOpenGuide = useCallback(async () => {
+    if (!guideDef) return;
+    setGuideOpen(true);
+    if (!GuideContent) {
+      try {
+        const mod = await guideDef.load();
+        setGuideContent(() => mod.default);
+      } catch (err) {
+        console.error("Failed to load tool guide:", err);
+      }
+    }
+  }, [guideDef, GuideContent]);
 
   // Load the tool and build its starting spec. Keyed on toolId, so switching tools
   // discards the previous spec rather than trying to carry options across
@@ -102,6 +119,8 @@ export function ToolWorkbench({
     setTool(undefined);
     setSpec(undefined);
     setLoadError(undefined);
+    setGuideContent(undefined);
+    setGuideOpen(false);
 
     void loadTool(toolId)
       .then((loaded) => {
@@ -389,9 +408,8 @@ export function ToolWorkbench({
    * spec, which a once-per-tool catalogue cannot say. Both the hint and the validity check read it.
    */
   const acceptedByteLengths = (optionId: string) => tool.acceptedByteLengths?.(spec, optionId);
-  const isCertCreator = tool.id === "cert-creator";
-  const isCsrWorkbench = tool.id === "csr-creator" || tool.id === "csr-signer";
-  const usesCertificateStudio = isCertCreator || isCsrWorkbench;
+  const CustomWorkbench = tool ? getCustomWorkbench(tool.id) : undefined;
+
   const hasSettings =
     visibleOptionGroups(tool.catalogue, tool.groups, tag, "settings").length > 0;
   /**
@@ -424,12 +442,34 @@ export function ToolWorkbench({
      */
     ...(hasSettings || info.length > 0 || effectiveReadsInput
       ? [
-          {
-            id: "settings",
-            label: "Settings",
-            content: (
-              <>
-                {/*
+        {
+          id: "settings",
+          label: "Settings",
+          content: (
+            <>
+              {guideDef && (
+                <button
+                  type="button"
+                  onClick={handleOpenGuide}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-indigo-200 bg-indigo-50/90 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-2xs hover:bg-indigo-100 hover:text-indigo-900 dark:border-indigo-900/60 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/80 transition-all mb-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                    >
+                      <path d="M10.75 16.82A7.462 7.462 0 0 1 15 15.5c.71 0 1.396.098 2.046.282A.75.75 0 0 0 18 15.06v-11a.75.75 0 0 0-.546-.721A9.006 9.006 0 0 0 15 3a8.963 8.963 0 0 0-4.25 1.065V16.82ZM9.25 4.065A8.963 8.963 0 0 0 5 3c-.85 0-1.673.118-2.454.339A.75.75 0 0 0 2 4.06v11a.75.75 0 0 0 .954.721A7.506 7.506 0 0 1 5 15.5c1.579 0 3.042.487 4.25 1.32V4.065Z" />
+                    </svg>
+                    <span>Guide</span>
+                  </div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-600/80 dark:text-indigo-400/80">
+                    {guideDef.badge ?? "Guide ↗"}
+                  </span>
+                </button>
+              )}
+              {/*
                   First in the rail, and it has now been in three places.
 
                   It started in the Input panel's controls row, next to Source, Encoding and Clear --
@@ -445,116 +485,100 @@ export function ToolWorkbench({
                   a block cipher contributes a dozen controls -- so anything under it starts below the
                   fold on a short window, which is the wrong place for the thing you want first.
                 */}
-                {/* Absent for a generator: there is no box to load anything into. */}
-                {effectiveReadsInput && (
-                  <Panel
-                    title="Test input"
-                    description="Load a known string into the box."
-                    collapsible
-                  >
-                    <TestInputPicker
-                      input={input}
-                      samples={tool.samples}
-                      onChange={onInputChange}
-                    />
-                  </Panel>
-                )}
-                {hasSettings && (
-                  /**
-                   * Collapsible, like the two panels around it, and for the same reason each of them
-                   * is: this is the tallest thing in the rail on most tools -- AES contributes a mode,
-                   * a padding, a key size and a tag length -- so folding it is what lets the Info
-                   * table below it be on screen at the same time.
-                   *
-                   * Open by default. The whole point of the tab is these controls.
-                   */
-                  <Panel
-                    title="Settings"
-                    description={
-                      usesCertificateStudio
-                        ? "Workspace configuration"
-                        : `${tool.label} options`
-                    }
-                    collapsible
-                  >
-                    {usesCertificateStudio ? (
-                      <div className="space-y-3">
-                        <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-950 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200">
-                          <div className="font-semibold flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
-                            <span>✓</span>
-                            <span>Main Workspace Active</span>
-                          </div>
-                          <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
-                            {isCertCreator
-                              ? "Certificate parameters and PKI hierarchy are configured directly in the main canvas panels."
-                              : "CSR identity, algorithms, extensions, and issuance policy are configured directly in the main canvas steps."}
-                          </p>
+              {/* Absent for a generator: there is no box to load anything into. */}
+              {effectiveReadsInput && (
+                <Panel
+                  title="Test input"
+                  description="Load a known string into the box."
+                  collapsible
+                >
+                  <TestInputPicker
+                    input={input}
+                    samples={tool.samples}
+                    onChange={onInputChange}
+                  />
+                </Panel>
+              )}
+              {hasSettings && (
+                /**
+                 * Collapsible, like the two panels around it, and for the same reason each of them
+                 * is: this is the tallest thing in the rail on most tools -- AES contributes a mode,
+                 * a padding, a key size and a tag length -- so folding it is what lets the Info
+                 * table below it be on screen at the same time.
+                 *
+                 * Open by default. The whole point of the tab is these controls.
+                 */
+                <Panel
+                  title="Settings"
+                  description={
+                    CustomWorkbench
+                      ? "Interactive workspace"
+                      : `${tool.label} options`
+                  }
+                  collapsible
+                >
+                  {CustomWorkbench ? (
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-950 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200">
+                        <div className="font-semibold flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
+                          <span>✓</span>
+                          <span>Interactive Studio Active</span>
                         </div>
-                        {isCertCreator && (
-                          <OptionsForm
-                            catalogue={tool.catalogue}
-                            groups={tool.groups}
-                            options={spec.options}
-                            tag={tag}
-                            scope="settings"
-                            groupIds={["mode"]}
-                            headings={false}
-                            generateLength={generateLength}
-                            acceptedByteLengths={acceptedByteLengths}
-                            onChange={setOptionValue}
-                          />
-                        )}
+                        <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                          Workflow parameters, keys, and commands are configured directly in the main interactive canvas.
+                        </p>
                       </div>
-                    ) : (
-                      <OptionsForm
-                        catalogue={tool.catalogue}
-                        groups={tool.groups}
-                        options={spec.options}
-                        tag={tag}
-                        scope="settings"
-                        generateLength={generateLength}
-                        acceptedByteLengths={acceptedByteLengths}
-                        onChange={setOptionValue}
-                      />
-                    )}
-                  </Panel>
-                )}
-                {info.length > 0 && (
-                  /**
-                   * Collapsible, and open. It is the longest *fixed* thing in the rail -- a CRC
-                   * contributes nine rows -- so being able to fold it away is worth a chevron.
-                   *
-                   * Open by default, unlike the Table panel. Both are spec-derived reference
-                   * material, but these are the parameters the tool is *running with*, and someone
-                   * comparing a CRC against another implementation is reading the polynomial and
-                   * the init value while they work. A 256-cell grid is something you go and look
-                   * for; nine labelled values are something you glance at.
-                   */
-                  <Panel title="Info" description="What these settings are." collapsible>
-                    <FieldTable fields={info} />
-                  </Panel>
-                )}
-              </>
-            ),
-          },
-        ]
+                    </div>
+                  ) : (
+                    <OptionsForm
+                      catalogue={tool.catalogue}
+                      groups={tool.groups}
+                      options={spec.options}
+                      tag={tag}
+                      scope="settings"
+                      generateLength={generateLength}
+                      acceptedByteLengths={acceptedByteLengths}
+                      onChange={setOptionValue}
+                    />
+                  )}
+                </Panel>
+              )}
+              {info.length > 0 && (
+                /**
+                 * Collapsible, and open. It is the longest *fixed* thing in the rail -- a CRC
+                 * contributes nine rows -- so being able to fold it away is worth a chevron.
+                 *
+                 * Open by default, unlike the Table panel. Both are spec-derived reference
+                 * material, but these are the parameters the tool is *running with*, and someone
+                 * comparing a CRC against another implementation is reading the polynomial and
+                 * the init value while they work. A 256-cell grid is something you go and look
+                 * for; nine labelled values are something you glance at.
+                 */
+                <Panel title="Info" description="What these settings are." collapsible>
+                  <FieldTable fields={info} />
+                </Panel>
+              )}
+            </>
+          ),
+        },
+      ]
       : []),
     {
       id: "checks",
       label: "Checks",
       ...(lintResult.diagnostics.length > 0
         ? {
-            badge: {
-              text: String(lintResult.diagnostics.length),
-              tone: lintResult.hasErrors
-                ? ("error" as const)
-                : lintResult.isInsecure
-                  ? ("insecure" as const)
-                  : lintResult.counts.warning > 0
-                    ? ("warning" as const)
-                    : ("neutral" as const),
-            },
-          }
+          badge: {
+            text: String(lintResult.diagnostics.length),
+            tone: lintResult.hasErrors
+              ? ("error" as const)
+              : lintResult.isInsecure
+                ? ("insecure" as const)
+                : lintResult.counts.warning > 0
+                  ? ("warning" as const)
+                  : ("neutral" as const),
+          },
+        }
         : {}),
       content: (
         <>
@@ -612,20 +636,8 @@ export function ToolWorkbench({
       <div className="min-w-0 flex-1 space-y-4 w-full">
         <ToolHeader manifest={tool} description={tool.describe(spec)} />
 
-        {tool.id === "cert-creator" ? (
-          <CertCreatorWorkbench
-            tool={tool}
-            spec={spec}
-            setOptionValue={setOptionValue}
-            recompute={recompute}
-            canRecompute={canRecompute}
-            state={state}
-            tag={tag}
-            generateLength={generateLength}
-            acceptedByteLengths={acceptedByteLengths}
-          />
-        ) : isCsrWorkbench ? (
-          <CsrWorkbench
+        {CustomWorkbench ? (
+          <CustomWorkbench
             tool={tool}
             spec={spec}
             setOptionValue={setOptionValue}
@@ -636,10 +648,10 @@ export function ToolWorkbench({
             generateLength={generateLength}
             acceptedByteLengths={acceptedByteLengths}
             inputStep={
-              tool.id === "csr-signer" ? (
+              effectiveReadsInput ? (
                 <InputPanel
-                  title="CSR Input (PEM or DER)"
-                  description="Paste a PKCS#10 request or upload a CSR file. The signer verifies its proof-of-possession signature before issuance."
+                  title="Input (PEM or DER)"
+                  description="Paste input or upload a file. The tool verifies its contents before processing."
                   input={input}
                   onChange={onInputChange}
                   readsInput={effectiveReadsInput}
@@ -811,6 +823,23 @@ export function ToolWorkbench({
       </div>
 
       <RightSidebar tabs={tabs} />
+
+      {guideDef && (
+        <GuideOverlay
+          open={guideOpen}
+          onClose={() => setGuideOpen(false)}
+          title={guideDef.title}
+          subtitle={guideDef.subtitle}
+        >
+          {GuideContent ? (
+            <GuideContent />
+          ) : (
+            <div className="flex h-48 items-center justify-center text-sm text-slate-500">
+              Loading guide...
+            </div>
+          )}
+        </GuideOverlay>
+      )}
     </div>
   );
 }

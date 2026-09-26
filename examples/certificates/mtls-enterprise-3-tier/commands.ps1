@@ -48,12 +48,7 @@ switch ($Action) {
     }
     "test-tls" {
         Write-Host "=== Verifying 3-Tier Enterprise mTLS across TLS 1.3, TLS 1.2, and TLS 1.1 ===" -ForegroundColor Cyan
-        npx tsx -e "
-import { testTlsProtocolMatrix } from '../tls_test_harness.ts';
-testTlsProtocolMatrix({ basePort: 9564, cert: './server-chain.pem', key: './server.key', ca: './ca-chain.pem', verifyClient: true, clientCert: './client.crt', clientKey: './client.key', clientChain: './intermediate.crt' }).then(res => {
-  for (const r of res) console.log('  ✓ ' + r.version.toUpperCase() + ': ' + r.protocol + ' | ' + r.cipher + ' | MutualAuth=' + (r.verified ? 'OK' : 'FAIL'));
-});
-"
+        python .\client.py --tls-version all
     }
     "trust-root" {
         Write-Host "=== Importing Root CA to Windows 'Trusted Root Certification Authorities' ===" -ForegroundColor Cyan

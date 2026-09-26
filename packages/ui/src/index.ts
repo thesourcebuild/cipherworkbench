@@ -18,3 +18,4 @@ export {
 export { StringListEditor, type StringListEditorProps } from "./string-list-editor";
 export { Toggle, type ToggleProps } from "./toggle";
 export { useCopy, type UseCopyOptions, type UseCopyResult } from "./use-copy";
+export { GuideOverlay, type GuideOverlayProps } from "./guide-overlay";

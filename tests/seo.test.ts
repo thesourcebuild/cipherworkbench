@@ -47,10 +47,10 @@ import {
 describe("the sitemap", () => {
   const entries = sitemap();
 
-  it("lists the home page, tutorials, and every tool, and nothing else", () => {
+  it("lists the home page, guides, and every tool, and nothing else", () => {
     const urls = entries.map((e) => e.url);
     expect(urls[0]).toBe(`${SITE_URL}/`);
-    expect(urls[1]).toBe(`${SITE_URL}/tutorials/`);
+    expect(urls[1]).toBe(`${SITE_URL}/guides/`);
     expect(urls.slice(2)).toEqual(TOOL_MANIFESTS.map((m) => toolUrl(m.id)));
     // One per tool plus the two index pages: derived, so adding a tool cannot leave it unlisted.
     expect(entries).toHaveLength(TOOL_MANIFESTS.length + 2);

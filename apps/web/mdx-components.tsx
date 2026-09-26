@@ -1,22 +1,43 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import type { MDXComponents } from "mdx/types";
-import { TutorialCallout, TutorialReveal } from "./app/tutorials/tutorial-components";
+import { CodeBlock } from "./app/guides/code-block";
+import {
+  GuideCallout,
+  GuideReveal,
+  StatusBadge,
+  TutorialCallout,
+  TutorialReveal,
+} from "./app/guides/guide-components";
+
+function extractText(node: ReactNode): string {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (!node) return "";
+  if (Array.isArray(node)) return node.map(extractText).join("");
+  if (
+    typeof node === "object" &&
+    "props" in node &&
+    (node as { props: { children?: ReactNode } }).props
+  ) {
+    return extractText((node as { props: { children?: ReactNode } }).props.children);
+  }
+  return "";
+}
+
+function slugify(node: ReactNode): string {
+  const text = extractText(node);
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
 
 function MdxLayout({ children }: { children?: ReactNode }) {
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-800 dark:bg-slate-950 dark:text-slate-200 sm:px-6 sm:py-12">
-      <article className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white px-5 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:px-9 sm:py-10">
-        <nav className="mb-8 border-b border-slate-200 pb-4 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600 dark:border-slate-800 dark:text-indigo-400">
-          <Link href="/">Cipher Workbench</Link>
-          <span aria-hidden="true" className="px-2 text-slate-300 dark:text-slate-700">
-            /
-          </span>
-          Tutorials
-        </nav>
-        {children}
-      </article>
-    </main>
+    <article className="space-y-6 text-slate-800 dark:text-slate-200">
+      {children}
+    </article>
   );
 }
 
@@ -29,7 +50,7 @@ function MdxLink({ href = "#", children, title }: ComponentProps<"a">) {
       title={title}
       target="_blank"
       rel="noreferrer"
-      className="font-medium text-indigo-600 underline decoration-indigo-300 underline-offset-2 dark:text-indigo-400"
+      className="font-medium text-indigo-600 underline decoration-indigo-300 underline-offset-4 hover:text-indigo-700 dark:text-indigo-400 dark:decoration-indigo-700 dark:hover:text-indigo-300 transition-colors"
     >
       {children}
     </a>
@@ -37,7 +58,7 @@ function MdxLink({ href = "#", children, title }: ComponentProps<"a">) {
     <Link
       href={href}
       title={title}
-      className="font-medium text-indigo-600 underline decoration-indigo-300 underline-offset-2 dark:text-indigo-400"
+      className="font-medium text-indigo-600 underline decoration-indigo-300 underline-offset-4 hover:text-indigo-700 dark:text-indigo-400 dark:decoration-indigo-700 dark:hover:text-indigo-300 transition-colors"
     >
       {children}
     </Link>
@@ -47,57 +68,127 @@ function MdxLink({ href = "#", children, title }: ComponentProps<"a">) {
 const components = {
   wrapper: MdxLayout,
   h1: ({ children }) => (
-    <h1 className="mb-5 text-3xl font-bold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
+    <div className="mb-8">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 font-mono text-[11px] font-semibold uppercase tracking-wider text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/50 dark:text-indigo-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
+        PKI Architecture & TLS Guide
+      </span>
+      <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-4xl lg:text-5xl leading-tight">
+        {children}
+      </h1>
+    </div>
+  ),
+  h2: ({ children }) => {
+    const slug = slugify(children);
+    return (
+      <h2
+        id={slug}
+        className="group mt-12 mb-4 flex items-center justify-between border-b border-slate-200 pb-3 text-2xl font-bold tracking-tight text-slate-900 dark:border-slate-800 dark:text-white scroll-mt-24"
+      >
+        <span>{children}</span>
+        <a
+          href={`#${slug}`}
+          aria-label={`Link to section: ${extractText(children)}`}
+          className="text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-opacity font-mono font-normal text-lg"
+        >
+          #
+        </a>
+      </h2>
+    );
+  },
+  h3: ({ children }) => {
+    const slug = slugify(children);
+    return (
+      <h3
+        id={slug}
+        className="group mt-8 mb-3 flex items-center justify-between text-lg font-bold text-slate-900 dark:text-white scroll-mt-24"
+      >
+        <span>{children}</span>
+        <a
+          href={`#${slug}`}
+          aria-label={`Link to subsection: ${extractText(children)}`}
+          className="text-xs text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-opacity font-mono font-normal"
+        >
+          #
+        </a>
+      </h3>
+    );
+  },
+  h4: ({ children }) => (
+    <h4 className="mt-6 mb-2 text-base font-semibold text-slate-800 dark:text-slate-200">
       {children}
-    </h1>
+    </h4>
   ),
-  h2: ({ children }) => (
-    <h2 className="mb-3 mt-9 text-xl font-bold text-slate-950 dark:text-white">{children}</h2>
-  ),
-  h3: ({ children }) => (
-    <h3 className="mb-2 mt-7 text-base font-semibold text-slate-950 dark:text-white">
+  p: ({ children }) => (
+    <p className="my-4 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
       {children}
-    </h3>
+    </p>
   ),
-  p: ({ children }) => <p className="my-4 leading-7">{children}</p>,
   a: MdxLink,
   strong: ({ children }) => (
     <strong className="font-semibold text-slate-950 dark:text-white">{children}</strong>
   ),
-  ul: ({ children }) => <ul className="my-4 list-disc space-y-2 pl-6">{children}</ul>,
-  ol: ({ children }) => <ol className="my-4 list-decimal space-y-2 pl-6">{children}</ol>,
+  ul: ({ children }) => (
+    <ul className="my-4 list-disc space-y-2.5 pl-6 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
+      {children}
+    </ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="my-4 list-decimal space-y-2.5 pl-6 text-[15px] leading-7 text-slate-600 dark:text-slate-300">
+      {children}
+    </ol>
+  ),
   blockquote: ({ children }) => (
-    <blockquote className="my-6 border-l-2 border-indigo-400 pl-4 text-slate-600 dark:text-slate-400">
+    <blockquote className="my-6 rounded-r-xl border-l-4 border-indigo-500 bg-slate-100/70 py-3.5 pl-5 pr-4 text-[15px] italic text-slate-700 dark:bg-slate-900/60 dark:text-slate-300 font-medium">
       {children}
     </blockquote>
   ),
-  code: ({ children }) => (
-    <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.9em] text-slate-900 dark:bg-slate-800 dark:text-slate-100">
-      {children}
-    </code>
-  ),
-  pre: ({ children }) => (
-    <pre className="my-6 overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-4 font-mono text-sm leading-6 text-slate-100 [&_code]:bg-transparent [&_code]:p-0">
-      {children}
-    </pre>
+  code: ({ children, className, ...props }: ComponentProps<"code">) => {
+    const isCodeBlock = Boolean(className && className.includes("language-"));
+    if (isCodeBlock) {
+      return (
+        <code className="border-0 bg-transparent p-0 font-mono text-[13px] text-slate-100 dark:text-slate-100" {...props}>
+          {children}
+        </code>
+      );
+    }
+    return (
+      <code
+        className="rounded-md border border-slate-200/80 bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] font-medium text-indigo-700 dark:border-slate-700/60 dark:bg-slate-800 dark:text-indigo-300"
+        {...props}
+      >
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+  hr: () => (
+    <hr className="my-10 border-0 h-px bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-800 to-transparent" />
   ),
   table: ({ children }) => (
-    <div className="my-6 overflow-x-auto">
-      <table className="w-full border-collapse text-left text-sm">{children}</table>
+    <div className="my-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900/60">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+          {children}
+        </table>
+      </div>
     </div>
   ),
   th: ({ children }) => (
-    <th className="border border-slate-300 bg-slate-100 px-3 py-2 font-semibold dark:border-slate-700 dark:bg-slate-800">
+    <th className="border-b border-slate-200 bg-slate-100/90 px-4 py-3.5 text-xs font-bold uppercase tracking-wider text-slate-700 dark:border-slate-800 dark:bg-slate-800/80 dark:text-slate-200">
       {children}
     </th>
   ),
   td: ({ children }) => (
-    <td className="border border-slate-300 px-3 py-2 align-top dark:border-slate-700">
+    <td className="border-b border-slate-100 px-4 py-3 align-middle text-xs sm:text-sm text-slate-700 dark:border-slate-800/60 dark:text-slate-300">
       {children}
     </td>
   ),
+  GuideCallout,
+  GuideReveal,
   TutorialCallout,
   TutorialReveal,
+  StatusBadge,
 } satisfies MDXComponents;
 
 export function useMDXComponents(): MDXComponents {

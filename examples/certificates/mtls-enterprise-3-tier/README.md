@@ -47,34 +47,36 @@ python examples/certificates/mtls-enterprise-3-tier/client.py --tls-version 1.1
 python examples/certificates/mtls-enterprise-3-tier/client.py --tls-version all
 ```
 
-### 4. Windows PowerShell Helper:
+### 4. Turnkey CLI Scripts (PowerShell, Windows CMD & Linux/macOS Bash):
 ```powershell
-# Run automated generation & TLS matrix test:
-.\commands.ps1 run
-
-# Verify 3-tier chains:
+# Windows PowerShell:
 .\commands.ps1 verify
-
-# Test 3-tier enterprise mTLS across TLS 1.3, 1.2, and 1.1:
 .\commands.ps1 test-tls
-
-# Start Python 3-tier enterprise mTLS server:
 .\commands.ps1 server
-
-# Run Python 3-tier enterprise mTLS client:
 .\commands.ps1 client
-
-# Test 3-tier mTLS with cURL (PEM chain):
 .\commands.ps1 client-pem
-
-# Test 3-tier mTLS with cURL (PKCS#12 container):
 .\commands.ps1 client-p12
-
-# Trust Root CA in Windows:
 .\commands.ps1 trust-root
-
-# Install Client Certificate in Windows Personal Store:
 .\commands.ps1 install-client
+```
+```cmd
+REM Windows CMD / Batch:
+commands.bat verify
+commands.bat test-tls
+commands.bat server
+commands.bat client
+commands.bat client-pem
+commands.bat client-p12
+```
+```bash
+# Linux / macOS Bash:
+chmod +x ./commands.sh
+./commands.sh verify
+./commands.sh test-tls
+./commands.sh server
+./commands.sh client
+./commands.sh client-pem
+./commands.sh client-p12
 ```
 
 ---

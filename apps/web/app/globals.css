@@ -5,4 +5,5 @@
  * Tailwind v4 only scans upward from this file, so the shared packages have to be
  * pointed at explicitly or their utility classes get tree-shaken away.
  */
+@source "..";
 @source "../../../packages/ui/src";

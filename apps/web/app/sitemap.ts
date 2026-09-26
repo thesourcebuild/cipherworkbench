@@ -29,7 +29,7 @@ export const dynamic = "force-static";
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
-    { url: `${SITE_URL}/tutorials/`, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${SITE_URL}/guides/`, changeFrequency: "monthly", priority: 0.7 },
     ...ALL_TOOLS.map((manifest) => ({
       url: toolUrl(manifest.id),
       changeFrequency: "monthly" as const,

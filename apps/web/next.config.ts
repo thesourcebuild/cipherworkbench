@@ -63,6 +63,7 @@ const config: NextConfig = {
   transpilePackages: [
     "@ocs/algos",
     "@ocs/asymmetric",
+    "@ocs/certificates",
     "@ocs/checksum",
     "@ocs/cipher",
     "@ocs/classical",

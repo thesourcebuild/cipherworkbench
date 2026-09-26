@@ -42,25 +42,29 @@ python examples/certificates/single-self-signed/client.py --tls-version 1.1
 python examples/certificates/single-self-signed/client.py --tls-version all
 ```
 
-### 4. Windows PowerShell Helper:
+### 4. Turnkey CLI Scripts (PowerShell, Windows CMD & Linux/macOS Bash):
 ```powershell
-# Run automated generation & TLS matrix test:
-.\commands.ps1 run
-
-# Inspect extensions:
+# Windows PowerShell:
 .\commands.ps1 info
-
-# Verify TLS 1.3, TLS 1.2, and TLS 1.1 support:
 .\commands.ps1 test-tls
-
-# Start Python HTTPS server:
 .\commands.ps1 server
-
-# Run Python client:
 .\commands.ps1 client
-
-# Import to Windows "Trusted People" store (for Chrome/Edge local trust):
 .\commands.ps1 trust
+```
+```cmd
+REM Windows CMD / Batch:
+commands.bat info
+commands.bat test-tls
+commands.bat server
+commands.bat client
+```
+```bash
+# Linux / macOS Bash:
+chmod +x ./commands.sh
+./commands.sh info
+./commands.sh test-tls
+./commands.sh server
+./commands.sh client
 ```
 
 ---

@@ -41,13 +41,8 @@ switch ($Action) {
         python .\client.py --tls-version $TlsVersion
     }
     "test-tls" {
-        Write-Host "=== Verifying TLS 1.3, TLS 1.2, and TLS 1.1 Support via OpenSSL ===" -ForegroundColor Cyan
-        npx tsx -e "
-import { testTlsProtocolMatrix } from '../tls_test_harness.ts';
-testTlsProtocolMatrix({ basePort: 9554, cert: './server.crt', key: './server.key', ca: './ca.crt' }).then(res => {
-  for (const r of res) console.log('  ✓ ' + r.version.toUpperCase() + ': ' + r.protocol + ' | ' + r.cipher + ' | ' + (r.verified ? 'OK' : 'FAIL'));
-});
-"
+        Write-Host "=== Verifying TLS 1.3, TLS 1.2, and TLS 1.1 Support via Python Client ===" -ForegroundColor Cyan
+        python .\client.py --tls-version all
     }
     "trust" {
         Write-Host "=== Importing Root CA to Windows 'Trusted Root Certification Authorities' ===" -ForegroundColor Cyan

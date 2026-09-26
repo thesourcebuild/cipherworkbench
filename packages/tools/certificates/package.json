@@ -1,6 +1,6 @@
 {
   "name": "@ocs/certificates",
-  "version": "0.13.5",
+  "version": "0.13.6",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./pure": "./src/pure.ts",
     "./manifests": "./src/manifest.ts",
-    "./definition": "./src/definition.ts"
+    "./definition": "./src/definition.ts",
+    "./guide": "./guide/guide.mdx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -10,8 +10,10 @@ Each PKI architecture model has its own self-contained folder containing:
 1. `run.ts`: End-to-end automated generation & live OpenSSL test harness.
 2. `server.py`: Python HTTPS / mTLS server with certificate validation.
 3. `client.py`: Python HTTPS / mTLS client with mutual auth and rejection tests.
-4. `commands.ps1`: Turnkey Windows PowerShell management script (`run`, `verify`, `server`, `client`, `trust`).
-5. `README.md`: Architecture guide, exact OpenSSL CLI recipes, and trust store instructions.
+4. `commands.ps1`: Turnkey Windows PowerShell management script (`run`, `verify`, `server`, `client`, `test-tls`, `trust`).
+5. `commands.bat`: Windows Command Prompt (CMD) wrapper forwarding to PowerShell / OpenSSL.
+6. `commands.sh`: POSIX Bash script for Linux & macOS (`run`, `verify`, `server`, `client`, `test-tls`, `trust`).
+7. `README.md`: Architecture guide, exact OpenSSL CLI recipes, and trust store instructions.
 
 | Architecture Folder | Hierarchy | Target Environments |
 | :--- | :--- | :--- |

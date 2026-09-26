@@ -2,12 +2,12 @@
 
 A comprehensive guide to self-signed certificates, certificate authorities, mTLS hierarchies, and dual-stack (IPv4 & IPv6) TLS validation across Python and modern web browsers.
 
-<TutorialCallout title="Why a Single Certificate Cannot Seamlessly Be Both Root CA and Server Leaf">
+<GuideCallout title="Why a Single Certificate Cannot Seamlessly Be Both Root CA and Server Leaf" type="security">
   Under **RFC 5280** and CA/Browser Forum rules, a single certificate cannot cleanly serve both purposes without security warnings:
   - **In Browsers (Chrome, Edge, Safari):** The OS Root Store requires a trusted root to have `basicConstraints: critical,CA:TRUE` and `keyUsage: critical,keyCertSign,cRLSign`. However, during the TLS handshake, modern Chromium and Safari enforce strict rules: a server presenting a certificate that has `CA:TRUE` directly as its leaf will trigger `ERR_CERT_COMMON_NAME_INVALID` or `ERR_CERT_AUTHORITY_INVALID`.
   - **In Windows Certificate Manager:** A leaf certificate (`CA:FALSE`) cannot be imported into "Trusted Root Certification Authorities" because Windows warns that the certificate is not a valid CA.
   - **The Solution:** A 2-Tier hierarchy (Root CA with `CA:TRUE` + Leaf Server with `CA:FALSE`) is the industry standard that works cleanly in both environments.
-</TutorialCallout>
+</GuideCallout>
 
 ---
 
@@ -68,12 +68,12 @@ openssl req -x509 -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
   import requests
   res = requests.get("https://localhost:8443", verify="certificate.crt")
   ```
-- **Windows / Chrome:**
-  Because `CA:FALSE` cannot be installed into Root CAs, import it into the Windows **"Trusted People"** store:
+- **Windows / Chrome / Edge:**
+  Because `CA:FALSE` cannot be imported into Root CAs, import it into the Windows **"Trusted People"** store:
   ```powershell
   Import-Certificate -FilePath .\certificate.crt -CertStoreLocation Cert:\CurrentUser\TrustedPeople
   ```
-  *(Or enable `chrome://flags/#allow-insecure-localhost` in Chrome for local development).*
+  *(Note: Chrome 119+ removed `#allow-insecure-localhost`; to test without certificate warnings, install the cert into the store above or use `chrome://flags/#unsafely-treat-insecure-origin-as-secure` with `https://localhost:8443`).*
 
 ---
 
@@ -146,14 +146,23 @@ openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial `
 ```
 
 #### Step 3d: Sign Client Certificate & Bundle PKCS#12
+Create extension file `client_ext.cnf`:
+```ini
+basicConstraints = CA:FALSE
+keyUsage = critical, digitalSignature
+extendedKeyUsage = clientAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid, issuer
+```
+
+Sign the client certificate and export PKCS#12:
 ```powershell
 openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
   -keyout client.key -out client.csr `
   -subj "/C=US/ST=California/L=San Francisco/O=Cipher Workbench/OU=Clients/CN=client-app-01"
 
 openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial `
-  -out client.crt -days 365 -sha256 `
-  -extfile <(printf "basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=clientAuth")
+  -out client.crt -days 365 -sha256 -extfile client_ext.cnf
 
 openssl pkcs12 -export -out client.p12 -inkey client.key -in client.crt -certfile ca.crt -passout pass:changeit
 ```
@@ -186,11 +195,11 @@ Mirrors enterprise architectures like Let's Encrypt, Cloudflare, DigiCert, and H
 3. **Server & Client Certs**: Signed by Intermediate CA.
 4. **Server Chain (`server-chain.pem`)**: Concatenation of `server.crt` + `intermediate.crt`.
 
-<TutorialReveal summary="Why is 3-Tier Architecture mandatory in enterprise environments?">
+<GuideReveal summary="Why is 3-Tier Architecture mandatory in enterprise environments?">
   1. **Blast Radius Isolation:** If the issuing server is compromised, you only revoke the Intermediate CA (`intermediate.crt`). Your Root CA remains secure, meaning you **never need to re-distribute Root CAs across thousands of servers, client machines, and browsers**.
   2. **Path Length Constraint (`pathlen:0`):** Guarantees that the Intermediate CA cannot spawn unauthorized subordinate CAs.
   3. **Compliance:** Audits like SOC2, WebTrust, and ISO 27001 require root keys to remain offline with multi-party authorization.
-</TutorialReveal>
+</GuideReveal>
 
 #### TLS Handshake with Server Chain:
 In 3-Tier setups, the server must present both the leaf and intermediate certificate together:
@@ -208,6 +217,7 @@ The web server serves `server-chain.pem` and `server.key`. Clients only need `ca
 ### Python HTTPS Server (`server.py`)
 ```python
 import http.server
+import socket
 import ssl
 
 class HelloHandler(http.server.SimpleHTTPRequestHandler):
@@ -216,6 +226,9 @@ class HelloHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-type", "application/json")
         self.end_headers()
         self.wfile.write(b'{"status": "ok", "message": "TLS Handshake Successful!"}\n')
+
+class DualStackServer(http.server.HTTPServer):
+    address_family = socket.AF_INET6
 
 # Use server.crt / server.key OR server-chain.pem / server.key
 CERT_FILE = "server.crt"
@@ -229,11 +242,12 @@ context.load_cert_chain(certfile=CERT_FILE, keyfile=KEY_FILE)
 # context.load_verify_locations(cafile=CA_FILE)
 # context.verify_mode = ssl.CERT_REQUIRED
 
-server_address = ("localhost", 8443)
-httpd = http.server.HTTPServer(server_address, HelloHandler)
+# Bind to "::" to support both IPv4 (127.0.0.1) and IPv6 (::1) localhost resolution
+server_address = ("::", 8443)
+httpd = DualStackServer(server_address, HelloHandler)
 httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
 
-print("Serving HTTPS on https://localhost:8443 (IPv4 & IPv6 supported)")
+print("Serving HTTPS on https://localhost:8443 (Dual-Stack IPv4 & IPv6 supported)")
 httpd.serve_forever()
 ```
 
@@ -258,7 +272,7 @@ with httpx.Client(verify=CA_BUNDLE) as client:
 
 ## Decision Guide: Which One Should You Select?
 
-<TutorialReveal summary="Interactive Flowchart: Choosing the right mode">
+<GuideReveal summary="PKI Architecture Decision Tree">
   ```text
   Do you need Mutual Authentication (Client Certificates / mTLS)?
   │
@@ -273,4 +287,4 @@ with httpx.Client(verify=CA_BUNDLE) as client:
       └── Is this mimicking production/enterprise PKI with an offline Root?
           └── YES -> Select: [mTLS Enterprise (3-Tier)]
   ```
-</TutorialReveal>
+</GuideReveal>

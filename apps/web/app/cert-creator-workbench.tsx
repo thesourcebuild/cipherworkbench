@@ -718,11 +718,13 @@ export function CertCreatorWorkbench({
           <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
             Signing Authority Mode
           </span>
-          <span className="text-[11px] text-slate-500 dark:text-slate-400">
-            {issuanceMode === "self-signed"
-              ? "Self-signed certificate"
-              : "CA-signed certificate"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              {issuanceMode === "self-signed"
+                ? "Self-signed certificate"
+                : "CA-signed certificate"}
+            </span>
+          </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <button
