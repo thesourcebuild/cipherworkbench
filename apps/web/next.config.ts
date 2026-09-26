@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import createMDX from "@next/mdx";
 import type { NextConfig } from "next";
+import remarkGfm from "remark-gfm";
 
 /**
  * The root `version` file is the single source of truth for the project version.
@@ -45,6 +47,7 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 const config: NextConfig = {
   output: "export",
+  pageExtensions: ["js", "jsx", "mdx", "ts", "tsx"],
   reactStrictMode: true,
   /**
    * Directory-style URLs, which is what a static host serves without rewrites.
@@ -92,4 +95,10 @@ const config: NextConfig = {
   agentRules: false,
 };
 
-export default config;
+const withMDX = createMDX({
+  options: {
+    remarkPlugins: [remarkGfm],
+  },
+});
+
+export default withMDX(config);

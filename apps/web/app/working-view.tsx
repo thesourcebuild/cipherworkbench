@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Markdown, MonoBlock } from "@ocs/ui";
+import dynamic from "next/dynamic";
+import { MonoBlock } from "@ocs/ui";
 
 export type WorkingViewMode = "rendered" | "raw";
+
+const Markdown = dynamic(() => import("@ocs/ui/markdown"), {
+  ssr: false,
+});
 
 export function WorkingView({ value }: { value: string }) {
   const [mode, setMode] = useState<WorkingViewMode>("rendered");
@@ -34,3 +39,4 @@ export function WorkingView({ value }: { value: string }) {
     </div>
   );
 }
+

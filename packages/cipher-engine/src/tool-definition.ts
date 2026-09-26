@@ -169,6 +169,8 @@ export interface ToolExportFile {
   mimeType?: string;
 }
 
+export type ToolWorkingFormat = "monospace" | "markdown";
+
 export interface ToolResult {
   /** The primary output, spelled by the result panel using the chosen `OutputEncoding`. */
   bytes?: Uint8Array;
@@ -177,9 +179,14 @@ export interface ToolResult {
   /** Secondary labelled values: IV, auth tag, salt, derived key parameters, JWT claims. */
   fields?: readonly ToolResultField[];
   /**
-   * The tool's working: a monospace block showing how the answer was arrived at, per unit.
+   * The tool's working: a monospace block or formatted explanation showing how the answer was arrived at.
    */
   working?: string;
+  /**
+   * Format of the working content. Defaults to "monospace".
+   * When set to "markdown", the UI renders the working content using the rich Markdown viewer.
+   */
+  workingFormat?: ToolWorkingFormat;
   /**
    * Set when the tool ran and could not produce a result.
    */

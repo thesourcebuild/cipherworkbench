@@ -352,13 +352,26 @@ export function ResultPanel({
           The tool's working, below the summary rather than above it.
           
           The fields answer "what is it" in two rows and this answers "why" in as many rows as there
-          are input bytes, so this is the half you scroll to. The rendered view makes prose and tables
-          readable; the raw view preserves the source when exact Markdown or column alignment matters.
+          are input bytes, so this is the half you scroll to. For tools with markdown working (like
+          certificates), the rendered view provides rich formatted prose and tables. For algorithms
+          with columnar monospace working (like Caesar and Parity), a standard MonoBlock preserves
+          exact tabular alignment and DOM line structure.
 
           Headed, because an unlabelled second monospace block under the first reads as a continuation
           of the result rather than as an explanation of it.
         */}
-        {!isCertDiff && state.result?.working && <WorkingView value={state.result.working} />}
+        {!isCertDiff && state.result?.working && (
+          state.result.workingFormat === "markdown" ? (
+            <WorkingView key={manifest?.id ?? "working"} value={state.result.working} />
+          ) : (
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Working
+              </p>
+              <MonoBlock data-ocs-working="" value={state.result.working} />
+            </div>
+          )
+        )}
       </div>
     </Panel>
   );

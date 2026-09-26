@@ -100,3 +100,5 @@ export function Markdown({ value, className, ...props }: MarkdownProps) {
     </div>
   );
 }
+
+export default Markdown;

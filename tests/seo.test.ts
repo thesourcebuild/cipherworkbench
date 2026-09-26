@@ -47,12 +47,13 @@ import {
 describe("the sitemap", () => {
   const entries = sitemap();
 
-  it("lists the home page and every tool, and nothing else", () => {
+  it("lists the home page, tutorials, and every tool, and nothing else", () => {
     const urls = entries.map((e) => e.url);
     expect(urls[0]).toBe(`${SITE_URL}/`);
-    expect(urls.slice(1)).toEqual(TOOL_MANIFESTS.map((m) => toolUrl(m.id)));
-    // One per tool plus the home page: derived, so adding a tool cannot leave it unlisted.
-    expect(entries).toHaveLength(TOOL_MANIFESTS.length + 1);
+    expect(urls[1]).toBe(`${SITE_URL}/tutorials/`);
+    expect(urls.slice(2)).toEqual(TOOL_MANIFESTS.map((m) => toolUrl(m.id)));
+    // One per tool plus the two index pages: derived, so adding a tool cannot leave it unlisted.
+    expect(entries).toHaveLength(TOOL_MANIFESTS.length + 2);
   });
 
   it("has no duplicate URLs", () => {
@@ -218,8 +219,10 @@ describe("the site constants", () => {
      */
     const labels = new Set(ALL_TOOLS.map((m) => m.label.toLowerCase()));
     const restated = SITE_KEYWORDS.filter((k) => labels.has(k.toLowerCase()));
-    expect(restated.length, `site keywords restating tool labels: ${restated.join(", ")}`)
-      .toBeLessThanOrEqual(3);
+    expect(
+      restated.length,
+      `site keywords restating tool labels: ${restated.join(", ")}`,
+    ).toBeLessThanOrEqual(3);
   });
 });
 
@@ -242,7 +245,10 @@ describe("open graph and social preview cards", () => {
 describe("breadcrumbs and family labels", () => {
   it("provides a human-readable display label for every tool family", () => {
     for (const manifest of ALL_TOOLS) {
-      expect(FAMILY_LABEL[manifest.family], `Missing family label for ${manifest.family}`).toBeDefined();
+      expect(
+        FAMILY_LABEL[manifest.family],
+        `Missing family label for ${manifest.family}`,
+      ).toBeDefined();
       expect(FAMILY_LABEL[manifest.family]!.length).toBeGreaterThan(0);
     }
   });

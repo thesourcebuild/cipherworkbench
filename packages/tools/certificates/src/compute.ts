@@ -320,6 +320,7 @@ export async function computeCertificate(
           bytes: mtls.client.p12Der,
           fields,
           working: working.join("\n"),
+          workingFormat: "markdown",
           files,
         };
       }
@@ -475,6 +476,7 @@ export async function computeCertificate(
         bytes: created.certDer,
         fields,
         working,
+        workingFormat: "markdown",
         files,
       };
     } catch (err) {
@@ -567,6 +569,7 @@ export async function computeCertificate(
         bytes: created.csrDer,
         fields,
         working,
+        workingFormat: "markdown",
         files,
       };
     } catch (err) {
@@ -664,6 +667,7 @@ export async function computeCertificate(
         text: res.summary,
         fields,
         working,
+        workingFormat: "markdown",
       };
     } catch (err) {
       return {
@@ -839,6 +843,7 @@ export async function computeCertificate(
         text: res.certPem,
         fields,
         working,
+        workingFormat: "markdown",
         files: exportFiles,
       };
     } catch (err) {
@@ -895,6 +900,7 @@ export async function computeCertificate(
           bytes: req.requestDer,
           fields,
           working,
+          workingFormat: "markdown",
         };
       }
 
@@ -921,6 +927,7 @@ export async function computeCertificate(
           fields,
           working:
             "### Offline OCSP Staple Generated\n\nUse this binary DER bundle for Web Server TLS Stapling (e.g. `ssl_stapling_file` in Nginx).",
+          workingFormat: "markdown",
         };
       }
 
@@ -973,6 +980,7 @@ export async function computeCertificate(
         bytes: res.rawDer,
         fields,
         working: workingLines.join("\n"),
+        workingFormat: "markdown",
       };
     } catch (err) {
       return {
@@ -1078,6 +1086,7 @@ export async function computeCertificate(
         text: res.dns01.recordValue,
         fields,
         working: workingLines.join("\n"),
+        workingFormat: "markdown",
         files: res.exportFiles,
       };
     } catch (err) {
@@ -1318,6 +1327,7 @@ export async function computeCertificate(
           bytes: result.bytes,
           fields,
           working: result.text ?? result.summary,
+          workingFormat: op === "pkcs12-inspect" ? "markdown" : undefined,
           files: files.length > 0 ? files : undefined,
         };
       } catch (err) {
@@ -1397,6 +1407,7 @@ export async function computeCertificate(
           bytes: parsed.rawDer,
           fields,
           working: workingLines.join("\n"),
+          workingFormat: "markdown",
         };
       } catch (err) {
         return {
@@ -1466,6 +1477,7 @@ export async function computeCertificate(
           text: result.summary + "\n\n" + result.treeDiagram,
           fields,
           working: workingLines.join("\n"),
+          workingFormat: "markdown",
         };
       } catch (err) {
         return {

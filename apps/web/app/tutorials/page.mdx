@@ -1,0 +1,20 @@
+# Interactive cryptography tutorials
+
+Learn why cryptographic tools behave the way they do, then test each idea directly in the browser. Tutorial components run locally alongside the workbench and never upload input data.
+
+<TutorialCallout title="MDX tutorial system ready">
+  Tutorial authors can combine normal Markdown with approved interactive React components. Add
+  new components to `mdx-components.tsx` to make them available to every lesson.
+</TutorialCallout>
+
+## First checkpoint
+
+A cryptographic hash maps an input of any length to a fixed-size digest. Changing even one input bit should produce a substantially different digest.
+
+<TutorialReveal summary="Why can two inputs still have the same digest?">
+  A fixed-size digest has finitely many possible values while the set of possible inputs is
+  unlimited, so collisions must exist. A secure hash makes finding one computationally
+  impractical.
+</TutorialReveal>
+
+This route is the starting point for the hash, checksum, MAC, KDF, and cipher lesson series.

@@ -2,7 +2,6 @@ export { cn } from "./cn";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./button";
 export { ClearButton } from "./clear-button";
 export { Dialog, type DialogProps } from "./dialog";
-export { Markdown, type MarkdownProps } from "./markdown";
 export { Panel, type PanelProps } from "./panel";
 export { CopyButton, type CopyButtonProps } from "./copy-button";
 export { CopyIconButton, type CopyIconButtonProps } from "./copy-icon-button";

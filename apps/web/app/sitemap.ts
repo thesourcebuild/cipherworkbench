@@ -11,7 +11,7 @@ import { ALL_TOOLS, SITE_URL, toolUrl } from "./site";
 export const dynamic = "force-static";
 
 /**
- * The home page and one entry per tool: 214 URLs, generated from the manifest list.
+ * The home page, tutorial index, and one entry per tool, generated from the manifest list.
  *
  * Generated rather than written, for the reason every derived list in this repo is: a tool added to
  * `TOOL_MANIFESTS` is in the sitemap the same build, and a tool removed is out of it. A hand-kept
@@ -29,6 +29,7 @@ export const dynamic = "force-static";
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: `${SITE_URL}/`, changeFrequency: "weekly", priority: 1 },
+    { url: `${SITE_URL}/tutorials/`, changeFrequency: "monthly", priority: 0.7 },
     ...ALL_TOOLS.map((manifest) => ({
       url: toolUrl(manifest.id),
       changeFrequency: "monthly" as const,

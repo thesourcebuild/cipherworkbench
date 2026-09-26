@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ByteSourceMode, TextEncoding } from "@ocs/contracts";
 import { DEFAULT_TOOL_ID, getManifest, presentFamilies, TOOL_MANIFESTS } from "@ocs/registry";
 import { getDesktopBridge, platform } from "@ocs/platform";
@@ -236,24 +237,34 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
             <MenuIcon />
           </button>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold tracking-tight leading-none">Cipher Workbench</span>
+            <span className="text-sm font-semibold tracking-tight leading-none">
+              Cipher Workbench
+            </span>
             <span className="hidden text-[11px] text-slate-500 sm:inline dark:text-slate-400 mt-1">
               Hashes, checksums, MACs and ciphers — computed and verified
             </span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setSettingsCategory("appearance");
-            setSettingsOpen(true);
-          }}
-          aria-label="Settings"
-          title="Settings"
-          className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-        >
-          <GearIcon />
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/tutorials/"
+            className="rounded-md px-2 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+          >
+            Tutorials
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setSettingsCategory("appearance");
+              setSettingsOpen(true);
+            }}
+            aria-label="Settings"
+            title="Settings"
+            className="rounded-md border border-slate-200 p-1.5 text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          >
+            <GearIcon />
+          </button>
+        </div>
       </header>
 
       <SettingsOverlay
@@ -318,7 +329,10 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
           One scroll container for the whole content area, and its scrollbar is at the window's right
           edge where a scrollbar belongs.
         */}
-        <main ref={setWorkbenchScroller} className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 min-w-0">
+        <main
+          ref={setWorkbenchScroller}
+          className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 min-w-0"
+        >
           {manifest ? (
             <div className="space-y-6">
               <ToolWorkbench
