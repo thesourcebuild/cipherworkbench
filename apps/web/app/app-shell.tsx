@@ -14,9 +14,34 @@ import { BASE_PATH } from "./site";
 import { ToolDetails } from "./tool-details";
 import { ToolWorkbench } from "./tool-workbench";
 import { cn } from "@ocs/ui";
-import { TutorialSidebar } from "./tutorials/tutorial-sidebar";
-import { TutorialViewer } from "./tutorials/tutorial-viewer";
-import { ALL_TUTORIALS } from "./tutorials/tutorials-data";
+import dynamic from "next/dynamic";
+import { TOTAL_TUTORIALS_COUNT } from "./tutorials/tutorial-constants";
+
+const TutorialSidebar = dynamic(
+  () => import("./tutorials/tutorial-sidebar").then((m) => m.TutorialSidebar),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full flex-col items-center justify-center p-8 text-xs text-slate-400">
+        <div className="mb-2 h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+        Loading curriculum...
+      </div>
+    ),
+  }
+);
+
+const TutorialViewer = dynamic(
+  () => import("./tutorials/tutorial-viewer").then((m) => m.TutorialViewer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[400px] flex-col items-center justify-center p-12 text-sm text-slate-400">
+        <div className="mb-3 h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+        Loading tutorial scenario...
+      </div>
+    ),
+  }
+);
 
 const FAMILIES = presentFamilies();
 
@@ -66,7 +91,7 @@ export interface AppShellProps {
 export function AppShell({ initialToolId }: AppShellProps = {}) {
   const [selectedId, setSelectedId] = useState(initialToolId ?? DEFAULT_TOOL_ID);
   const [viewMode, setViewMode] = useState<"tools" | "tutorials">("tools");
-  const [selectedTutorialId, setSelectedTutorialId] = useState<string>("1.1-the-locked-box");
+  const [selectedTutorialId, setSelectedTutorialId] = useState<string>("1.1-the-scratched-postcard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -304,7 +329,7 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
                   : "bg-slate-200/70 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300"
               )}
             >
-              {ALL_TUTORIALS.length}
+              {TOTAL_TUTORIALS_COUNT}
             </span>
           </button>
         </div>

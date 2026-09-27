@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ToolFamily } from "@ocs/engine";
 import { cn } from "@ocs/ui";
 import {
-  ALL_TUTORIALS,
-  TUTORIAL_CONCEPTS,
-} from "./tutorials-data";
+  ALL_TUTORIALS_META as ALL_TUTORIALS,
+  TUTORIAL_CONCEPTS_META as TUTORIAL_CONCEPTS,
+} from "./tutorials-meta";
 
 export interface TutorialSidebarProps {
   selectedId: string;

@@ -1,0 +1,1 @@
+export const TOTAL_TUTORIALS_COUNT = 16;
