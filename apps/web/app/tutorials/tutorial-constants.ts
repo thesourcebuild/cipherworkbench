@@ -1,1 +1,1 @@
-export const TOTAL_TUTORIALS_COUNT = 16;
+export { TOTAL_TUTORIALS_COUNT } from "./tutorials-meta";

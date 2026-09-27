@@ -131,6 +131,23 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Mallory"
         ],
         "summary": "Alice and Bob agree on a secret password beforehand. When Alice sends an instruction, she combines the text with their secret key using HMAC. When Mallory intercepts the text, she cannot recalculate the HMAC because she does not know the secret key! But beware: Eve can still read the message in plaintext."
+      },
+      {
+        "id": "2.3-the-forged-timestamp",
+        "number": "2.3",
+        "title": "The Forged Timestamp: Replay Attacks",
+        "subtitle": "How Mallory reuses a valid signed message without breaking any cryptography",
+        "conceptId": "authenticity",
+        "family": "mac",
+        "toolId": "hmac",
+        "difficulty": "Intermediate",
+        "readTime": "5 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Mallory"
+        ],
+        "summary": "Alice's API request is HMAC-signed and perfectly authenticated. Mallory captures it and submits it 99 more times. The HMAC passes every time — because Alice really did sign it. The primitives are fine; the protocol design is broken. How timestamps and nonces stop this."
       }
     ]
   },
@@ -192,6 +209,23 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Mallory"
         ],
         "summary": "In the early days of cryptography, developers encrypted with CBC mode and hoped for the best. Mallory exploited padding oracles and bit-flipping attacks to forge commands. Modern cryptography solved this with AEAD: encrypting AND authenticating in one unified mathematical pass."
+      },
+      {
+        "id": "3.4-the-ecb-penguin",
+        "number": "3.4",
+        "title": "The ECB Penguin: Block Cipher Modes",
+        "subtitle": "Why AES-ECB reveals patterns, and how CBC, CTR, and GCM fix it",
+        "conceptId": "symmetric-ciphers",
+        "family": "cipher",
+        "toolId": "aes",
+        "difficulty": "Intermediate",
+        "readTime": "6 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Eve"
+        ],
+        "summary": "AES is secure. But encrypting a penguin image with AES-ECB still shows the penguin outline — identical plaintext blocks produce identical ciphertext. The mode of operation is as critical as the cipher itself. A guided comparison of ECB, CBC, CTR, and GCM."
       }
     ]
   },
@@ -254,6 +288,39 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Mallory"
         ],
         "summary": "The mathematical reverse of public-key encryption! Alice wants to issue an official decree. Anyone in the world should be able to read it, but Bob needs proof that Alice really wrote it and that Mallory didn't forge Alice's name. Alice signs with her Private Key."
+      },
+      {
+        "id": "4.4-the-wax-seal-envelope",
+        "number": "4.4",
+        "title": "The Wax Seal Envelope: Hybrid Encryption",
+        "subtitle": "How PGP, S/MIME, and TLS combine RSA and AES into one fast secure system",
+        "conceptId": "asymmetric-keys",
+        "family": "asymmetric",
+        "toolId": "rsa",
+        "difficulty": "Intermediate",
+        "readTime": "6 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Eve"
+        ],
+        "summary": "RSA is mathematically secure but 1000× slower than AES for large data. The elegant solution: encrypt the 50 MB document with fast AES, then encrypt only the 32-byte AES key with RSA. PGP, S/MIME, and legacy TLS all use this exact two-step pattern."
+      },
+      {
+        "id": "4.5-the-magic-curve",
+        "number": "4.5",
+        "title": "The Magic Curve: Elliptic Curve Cryptography",
+        "subtitle": "Why a 256-bit EC key beats a 3072-bit RSA key, and what X25519 and P-256 mean",
+        "conceptId": "asymmetric-keys",
+        "family": "asymmetric",
+        "toolId": "ecdh",
+        "difficulty": "Advanced",
+        "readTime": "6 min",
+        "characters": [
+          "Alice",
+          "Bob"
+        ],
+        "summary": "Tutorial 4.1 used ECDH with a 256-bit key. Tutorial 4.2 used RSA with 2048 bits. How can 256-bit EC provide the same security as 3072-bit RSA? The answer lies in the Elliptic Curve Discrete Logarithm Problem — and why X25519 is the preferred modern curve."
       }
     ]
   },
@@ -349,6 +416,127 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Eve"
         ],
         "summary": "Eve is recording all of Alice and Bob's encrypted internet traffic today, planning to decrypt it in 10 years when quantum computers arrive ('Store Now, Decrypt Later'). Alice and Bob switch to NIST FIPS 203 (ML-KEM) to future-proof their security."
+      }
+    ]
+  },
+  {
+    "id": "attacks-defenses",
+    "title": "6. Attacks & Defences: How Cryptography Breaks in the Real World",
+    "description": "Birthday collisions, side-channel attacks, padding oracles, and protecting root CA keys.",
+    "badge": "Attacks",
+    "tutorials": [
+      {
+        "id": "6.1-the-birthday-collision",
+        "number": "6.1",
+        "title": "The Birthday Problem: Hash Collision Attacks",
+        "subtitle": "Why MD5 and SHA-1 are broken, and how the birthday paradox explains collision resistance",
+        "conceptId": "attacks-defenses",
+        "family": "hash",
+        "toolId": "sha256",
+        "difficulty": "Intermediate",
+        "readTime": "6 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Mallory"
+        ],
+        "summary": "In a room of 23 people, two share a birthday with 50% probability. Hash collisions work the same way — you do not need to match a specific hash, just any two inputs. This halves the effective security bits and is why Google's SHAttered attack broke SHA-1 in 2017."
+      },
+      {
+        "id": "6.2-the-rubber-hose",
+        "number": "6.2",
+        "title": "The Rubber Hose: Side-Channel & Timing Attacks",
+        "subtitle": "How Mallory breaks crypto by measuring time, power, and cache — without touching the math",
+        "conceptId": "attacks-defenses",
+        "family": "hash",
+        "toolId": "hmac",
+        "difficulty": "Advanced",
+        "readTime": "7 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Eve",
+          "Mallory"
+        ],
+        "summary": "Perfect cryptography, broken implementation. Mallory does not attack the algorithm — she measures Bob's response time to recover passwords byte by byte, or attaches a probe to measure power consumption and extract AES keys from smart cards. The fix: constant-time comparison."
+      },
+      {
+        "id": "6.3-the-padding-oracle",
+        "number": "6.3",
+        "title": "The Padding Oracle: How One Error Message Broke TLS",
+        "subtitle": "The BEAST and POODLE attacks: decrypting any AES-CBC ciphertext with 4096 queries",
+        "conceptId": "attacks-defenses",
+        "family": "cipher",
+        "toolId": "aes",
+        "difficulty": "Advanced",
+        "readTime": "7 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Eve",
+          "Mallory"
+        ],
+        "summary": "Bob's server returns two different error messages: 'decryption failed' vs 'invalid padding'. Mallory uses that single bit of difference as an oracle, sending 4096 crafted requests per block to decrypt Alice's session cookie without ever knowing the key. The attack behind BEAST, POODLE, and Lucky Thirteen."
+      },
+      {
+        "id": "6.4-the-key-ceremony",
+        "number": "6.4",
+        "title": "The Key Ceremony: HSMs & Root of Trust",
+        "subtitle": "Air-gapped rooms, Shamir activation, and Certificate Transparency — protecting the keys that secure the internet",
+        "conceptId": "attacks-defenses",
+        "family": "certificates",
+        "toolId": "cert-creator",
+        "difficulty": "Advanced",
+        "readTime": "7 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Mallory",
+          "Trent"
+        ],
+        "summary": "Root CA private keys secure every HTTPS connection on earth. If Mallory steals one, she can forge certificates for any website. This is how the internet protects them: Hardware Security Modules, air-gapped ceremonies, M-of-N Shamir activation, and Certificate Transparency logs."
+      }
+    ]
+  },
+  {
+    "id": "encoding-advanced",
+    "title": "7. Encoding & Advanced Concepts",
+    "description": "Encoding vs encryption, Zero-Knowledge Proofs, and the future of privacy-preserving cryptography.",
+    "badge": "Advanced",
+    "tutorials": [
+      {
+        "id": "7.1-lost-in-translation",
+        "number": "7.1",
+        "title": "Lost in Translation: Encoding vs Encryption",
+        "subtitle": "Why Base64 is not encryption, and how this mistake causes real-world breaches",
+        "conceptId": "encoding-advanced",
+        "family": "encoding",
+        "toolId": "aes",
+        "difficulty": "Beginner",
+        "readTime": "5 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Eve",
+          "Mallory"
+        ],
+        "summary": "Bob stores a password as Base64 in a config file because his colleague said it was 'encoded for security'. Mallory decodes it in 2 seconds using atob(). A clear breakdown of what encoding (Base64, Hex, UTF-8) actually is, how it differs from encryption, and why JWT payloads are public."
+      },
+      {
+        "id": "7.2-the-magic-wax",
+        "number": "7.2",
+        "title": "The Magic Wax: Zero-Knowledge Proofs",
+        "subtitle": "Proving you know a secret without revealing it — zk-SNARKs, zk-STARKs, and the cave of Ali Baba",
+        "conceptId": "encoding-advanced",
+        "family": "asymmetric",
+        "toolId": "ed25519",
+        "difficulty": "Advanced",
+        "readTime": "8 min",
+        "characters": [
+          "Alice",
+          "Bob"
+        ],
+        "summary": "Alice proves she knows where Waldo is by revealing only the exact spot through a hole in black paper — Bob sees Waldo but learns nothing about the poster layout. ZKPs apply the same logic to passwords, transactions, and age verification. The math behind zk-SNARKs, zk-STARKs, and why Zcash uses them."
       }
     ]
   }
