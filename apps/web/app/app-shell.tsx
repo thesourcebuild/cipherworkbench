@@ -13,6 +13,10 @@ import { Sidebar } from "./sidebar";
 import { BASE_PATH } from "./site";
 import { ToolDetails } from "./tool-details";
 import { ToolWorkbench } from "./tool-workbench";
+import { cn } from "@ocs/ui";
+import { TutorialSidebar } from "./tutorials/tutorial-sidebar";
+import { TutorialViewer } from "./tutorials/tutorial-viewer";
+import { ALL_TUTORIALS } from "./tutorials/tutorials-data";
 
 const FAMILIES = presentFamilies();
 
@@ -61,6 +65,8 @@ export interface AppShellProps {
 
 export function AppShell({ initialToolId }: AppShellProps = {}) {
   const [selectedId, setSelectedId] = useState(initialToolId ?? DEFAULT_TOOL_ID);
+  const [viewMode, setViewMode] = useState<"tools" | "tutorials">("tools");
+  const [selectedTutorialId, setSelectedTutorialId] = useState<string>("1.1-the-locked-box");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -220,6 +226,19 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  const handleLaunchTutorialTool = (toolId: string, sampleInput: string) => {
+    setViewMode("tools");
+    setSelectedId(toolId);
+    if (sampleInput) {
+      setInput({
+        mode: "text",
+        text: sampleInput,
+        textEncoding: "utf-8",
+      });
+      setInputIsSeeded(false);
+    }
+  };
+
   const manifest = getManifest(selectedId);
 
   return (
@@ -229,8 +248,8 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
           <button
             type="button"
             onClick={() => setMobileDrawerOpen(true)}
-            aria-label="Open tools menu"
-            title="Open tools menu"
+            aria-label={viewMode === "tools" ? "Open tools menu" : "Open tutorials menu"}
+            title={viewMode === "tools" ? "Open tools menu" : "Open tutorials menu"}
             className="lg:hidden rounded-md border border-slate-200 p-1.5 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <MenuIcon />
@@ -244,6 +263,52 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
             </span>
           </div>
         </div>
+
+        {/* View Mode Switcher: Tools vs Tutorials */}
+        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-100/90 p-0.5 dark:border-slate-800 dark:bg-slate-900/80">
+          <button
+            type="button"
+            onClick={() => setViewMode("tools")}
+            aria-label="Switch to tools view"
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all",
+              viewMode === "tools"
+                ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-white"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+            )}
+          >
+            <ToolsIcon />
+            <span>Tools</span>
+            <span className="hidden sm:inline-block rounded-full bg-slate-200/70 px-1.5 py-0.2 text-[10px] text-slate-600 dark:bg-slate-700/60 dark:text-slate-300">
+              {TOOL_MANIFESTS.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("tutorials")}
+            aria-label="Switch to tutorials view"
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all",
+              viewMode === "tutorials"
+                ? "bg-indigo-600 text-white shadow-2xs dark:bg-indigo-500"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+            )}
+          >
+            <GraduationCapIcon />
+            <span>Tutorials</span>
+            <span
+              className={cn(
+                "hidden sm:inline-block rounded-full px-1.5 py-0.2 text-[10px]",
+                viewMode === "tutorials"
+                  ? "bg-indigo-700/60 text-indigo-100 dark:bg-indigo-600/70"
+                  : "bg-slate-200/70 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300"
+              )}
+            >
+              {ALL_TUTORIALS.length}
+            </span>
+          </button>
+        </div>
+
         <button
           type="button"
           onClick={() => {
@@ -273,16 +338,27 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
             aria-hidden="true"
           />
           <div className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white shadow-2xl dark:bg-slate-900">
-            <Sidebar
-              manifests={TOOL_MANIFESTS}
-              families={FAMILIES}
-              selectedId={selectedId}
-              onSelect={(id) => {
-                setSelectedId(id);
-                setMobileDrawerOpen(false);
-              }}
-              onCollapse={() => setMobileDrawerOpen(false)}
-            />
+            {viewMode === "tools" ? (
+              <Sidebar
+                manifests={TOOL_MANIFESTS}
+                families={FAMILIES}
+                selectedId={selectedId}
+                onSelect={(id) => {
+                  setSelectedId(id);
+                  setMobileDrawerOpen(false);
+                }}
+                onCollapse={() => setMobileDrawerOpen(false)}
+              />
+            ) : (
+              <TutorialSidebar
+                selectedId={selectedTutorialId}
+                onSelect={(id) => {
+                  setSelectedTutorialId(id);
+                  setMobileDrawerOpen(false);
+                }}
+                onCollapse={() => setMobileDrawerOpen(false)}
+              />
+            )}
           </div>
         </div>
       )}
@@ -294,13 +370,21 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
           }`}
         >
           {sidebarOpen ? (
-            <Sidebar
-              manifests={TOOL_MANIFESTS}
-              families={FAMILIES}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              onCollapse={() => setSidebarOpen(false)}
-            />
+            viewMode === "tools" ? (
+              <Sidebar
+                manifests={TOOL_MANIFESTS}
+                families={FAMILIES}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onCollapse={() => setSidebarOpen(false)}
+              />
+            ) : (
+              <TutorialSidebar
+                selectedId={selectedTutorialId}
+                onSelect={setSelectedTutorialId}
+                onCollapse={() => setSidebarOpen(false)}
+              />
+            )
           ) : (
             <div className="flex h-full flex-col items-center pt-3">
               <button
@@ -324,35 +408,43 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
           ref={setWorkbenchScroller}
           className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 min-w-0"
         >
-          {manifest ? (
-            <div className="space-y-6">
-              <ToolWorkbench
-                // Remounting on tool change is deliberate: it discards the previous
-                // tool's spec, output encoding and verify field, none of which mean
-                // anything under a different algorithm.
-                key={selectedId}
-                toolId={selectedId}
-                input={input}
-                onInputChange={(next) => {
-                  setInput(next);
-                  setInputIsSeeded(false);
-                }}
-                inputIsSeeded={inputIsSeeded}
-                // Seeding leaves the flag alone, so a tool's sample is still replaceable by the next
-                // tool's. Two callbacks rather than one with a flag argument, because the two mean
-                // different things and a boolean parameter at the call site says neither.
-                onSeedInput={setInput}
-                autoUpdate={autoUpdate}
-                onAutoUpdateChange={setAutoUpdate}
-                restore={restore}
-                onRestoreConsumed={consumeRestore}
-              />
-              <ToolDetails manifest={manifest} onSelect={setSelectedId} />
-            </div>
+          {viewMode === "tools" ? (
+            manifest ? (
+              <div className="space-y-6">
+                <ToolWorkbench
+                  // Remounting on tool change is deliberate: it discards the previous
+                  // tool's spec, output encoding and verify field, none of which mean
+                  // anything under a different algorithm.
+                  key={selectedId}
+                  toolId={selectedId}
+                  input={input}
+                  onInputChange={(next) => {
+                    setInput(next);
+                    setInputIsSeeded(false);
+                  }}
+                  inputIsSeeded={inputIsSeeded}
+                  // Seeding leaves the flag alone, so a tool's sample is still replaceable by the next
+                  // tool's. Two callbacks rather than one with a flag argument, because the two mean
+                  // different things and a boolean parameter at the call site says neither.
+                  onSeedInput={setInput}
+                  autoUpdate={autoUpdate}
+                  onAutoUpdateChange={setAutoUpdate}
+                  restore={restore}
+                  onRestoreConsumed={consumeRestore}
+                />
+                <ToolDetails manifest={manifest} onSelect={setSelectedId} />
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                No such tool: {selectedId}
+              </p>
+            )
           ) : (
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              No such tool: {selectedId}
-            </p>
+            <TutorialViewer
+              tutorialId={selectedTutorialId}
+              onSelectTutorial={setSelectedTutorialId}
+              onLaunchTool={handleLaunchTutorialTool}
+            />
           )}
         </main>
       </div>
@@ -369,6 +461,43 @@ export function AppShell({ initialToolId }: AppShellProps = {}) {
   );
 }
 
+function ToolsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
+  );
+}
+
+function GraduationCapIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+      <path d="M6 12v5c3 3 9 3 12 0v-5" />
+    </svg>
+  );
+}
+
 function GearIcon() {
   return (
     <svg
@@ -382,7 +511,7 @@ function GearIcon() {
       strokeLinejoin="round"
     >
       <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }
