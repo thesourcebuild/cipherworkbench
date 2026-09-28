@@ -136,6 +136,7 @@ export function buildExportPayload(
         break;
       case "hash":
       case "checksum":
+      case "checkdigit":
       case "crc":
       case "parity":
         mode = "hash";

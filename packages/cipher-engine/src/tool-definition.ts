@@ -32,6 +32,16 @@ export type ToolFamily =
   | "hash"
   | "crc"
   | "checksum"
+  /**
+   * Separate from `checksum`, on the same reasoning that keeps `crc` and `checksum` apart.
+   *
+   * A checksum operates on arbitrary binary byte streams to catch transmission line noise and bit
+   * flips, producing an 8/16/32-bit binary digest. A check digit operates on formatted human
+   * alphanumeric strings (credit cards, barcodes, bank accounts, routing numbers) to catch human
+   * transcription mistakes (single-digit typos, adjacent swapped digits), producing a decimal digit
+   * or validation status.
+   */
+  | "checkdigit"
   | "parity"
   | "mac"
   | "kdf"

@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -19,7 +19,7 @@ const content: TutorialContent = {
         "Bob's server has two behaviours:\n\n- `200 OK` — decryption succeeded, padding was valid\n- `500 Error: Invalid Padding` — decryption succeeded, but padding bytes were wrong\n\nMallory does not need plaintext. She just needs Bob to tell her whether **her modified ciphertext decrypts to valid padding**. That single bit of information — valid or invalid — is her oracle.",
       callout: {
         type: "warning",
-        text: "POODLE (2014), BEAST (2011), Lucky Thirteen (2013), and Vaudenay's original oracle attack (2002) all exploit this exact information leak. These attacks broke TLS 1.0 in production.",
+        text: "POODLE (2014), Lucky Thirteen (2013), the ASP.NET padding oracle (2010), and Serge Vaudenay's original attack (2002) all exploit this exact information leak. (Note: BEAST from 2011 was a chosen-plaintext CBC IV prediction attack, whereas POODLE is the classic TLS padding oracle).",
       },
     },
     {
@@ -32,7 +32,7 @@ const content: TutorialContent = {
       title: "Step 4: Real-World Impact",
       speaker: "Eve",
       content:
-        "This attack was used against TLS 1.0 session cookies in the wild:\n\n- **BEAST (2011):** Browser-based MitM exploit. An attacker could steal a victim's HTTPS session cookie by injecting JavaScript that generated thousands of crafted requests.\n- **POODLE (2014):** Forced TLS downgrade to SSL 3.0, then applied the padding oracle. Caused SSL 3.0 to be disabled globally.\n- **Lucky Thirteen (2013):** A timing-based padding oracle against TLS 1.1/1.2 using the HMAC verification timing difference.",
+        "This attack was weaponized against web services and TLS in the wild:\n\n- **Vaudenay's Oracle (2002):** The seminal paper proving that error-message oracles allow full ciphertext recovery without the secret key.\n- **ASP.NET Padding Oracle (2010):** Exploited .NET custom errors to decrypt encrypted viewstate data and auth cookies across thousands of enterprise websites.\n- **POODLE (2014):** Forced browsers to downgrade from TLS to SSL 3.0, where CBC padding bytes were unauthenticated, allowing complete cookie extraction. Led to SSL 3.0 being globally retired.\n- **Lucky Thirteen (2013):** A subtle timing-based padding oracle against TLS 1.1/1.2 that measured microscopic clock differences during HMAC verification.",
     },
     {
       title: "Step 5: The Fix — Authenticated Encryption",
@@ -48,7 +48,7 @@ const content: TutorialContent = {
   takeaways: [
     "Padding oracle attacks decrypt any CBC ciphertext using only a valid/invalid padding signal.",
     "The root cause: checking padding *after* decryption leaks plaintext information through error messages.",
-    "BEAST, POODLE, and Lucky Thirteen all exploited this in production TLS deployments.",
+    "POODLE, Lucky Thirteen, and the ASP.NET oracle all exploited padding leaks in production systems.",
     "Fix: always verify authentication (HMAC/tag) **before** decrypting — never leak decryption results on auth failure.",
     "TLS 1.3 eliminated CBC entirely — use AES-GCM or ChaCha20-Poly1305 in all new systems.",
   ],

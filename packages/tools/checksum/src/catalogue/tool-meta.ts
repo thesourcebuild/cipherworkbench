@@ -27,15 +27,7 @@ export type ChecksumKind =
   | "bcc"
   | "fletcher16"
   | "fletcher32"
-  | "adler32"
-  | "verhoeff"
-  | "damm"
-  | "luhn"
-  | "isbn"
-  | "iban"
-  | "aba-routing"
-  | "cusip-isin"
-  | "sedol";
+  | "adler32";
 
 export interface ChecksumToolMeta {
   id: string;
@@ -213,102 +205,6 @@ export const CHECKSUM_TOOLS: readonly ChecksumToolMeta[] = [
     ],
     summary: "zlib's checksum from RFC 1950 — Fletcher's idea with a prime modulus.",
     check: "0x091E01DE",
-  },
-  {
-    id: "verhoeff",
-    label: "Verhoeff",
-    kind: "verhoeff",
-    category: "Check Digits",
-    width: 8,
-    exposes: [],
-    defaults: {},
-    tags: ["verhoeff", "check digit", "dihedral", "d5", "transposition", "integrity", "aadhaar"],
-    summary: "Verhoeff dihedral group D5 check digit algorithm — detects 100% of single transposition errors.",
-    check: "0x00",
-  },
-  {
-    id: "damm",
-    label: "Damm",
-    kind: "damm",
-    category: "Check Digits",
-    width: 8,
-    exposes: [],
-    defaults: {},
-    tags: ["damm", "check digit", "quasigroup", "anti-symmetric", "transposition", "integrity"],
-    summary: "Damm quasigroup check digit algorithm — detects all single and adjacent transposition errors.",
-    check: "0x04",
-  },
-  {
-    id: "luhn",
-    label: "Luhn / Mod 10",
-    kind: "luhn",
-    category: "Check Digits",
-    width: 8,
-    exposes: [],
-    defaults: {},
-    tags: ["luhn", "mod10", "mod 10", "credit card", "imei", "check digit", "iso7812"],
-    summary: "Luhn algorithm (Mod 10) with card issuer (Visa/Mastercard/Amex) and IMEI detection.",
-    check: "0x07",
-  },
-  {
-    id: "isbn",
-    label: "ISBN / EAN-13",
-    kind: "isbn",
-    category: "Check Digits",
-    width: 8,
-    exposes: [],
-    defaults: {},
-    tags: ["isbn", "isbn10", "isbn13", "ean", "ean13", "book", "barcode", "check digit"],
-    summary: "ISBN-10, ISBN-13, and EAN-13 check digit validator and bidirectional converter.",
-    check: "0x0A",
-  },
-  {
-    id: "iban",
-    label: "IBAN Validator",
-    kind: "iban",
-    category: "Check Digits",
-    width: 8,
-    exposes: [],
-    defaults: {},
-    tags: ["iban", "iso13616", "mod97", "bank", "account", "check digit", "bban", "swift"],
-    summary: "ISO 13616 International Bank Account Number MOD 97-10 generator and validator.",
-    check: "0x22",
-  },
-  {
-    id: "aba-routing",
-    label: "ABA Routing Number",
-    kind: "aba-routing",
-    category: "Check Digits",
-    width: 8,
-    exposes: [],
-    defaults: {},
-    tags: ["aba", "routing", "fedwire", "bank", "transit", "check digit", "mod10"],
-    summary: "Federal Reserve 9-digit ABA routing transit number weighted modulus 10 validator.",
-    check: "0x00",
-  },
-  {
-    id: "cusip-isin",
-    label: "CUSIP & ISIN",
-    kind: "cusip-isin",
-    category: "Check Digits",
-    width: 8,
-    exposes: [],
-    defaults: {},
-    tags: ["cusip", "isin", "iso6166", "stocks", "bonds", "securities", "check digit"],
-    summary: "CUSIP (9-digit) and ISIN (12-character) securities identification check digit calculator.",
-    check: "0x02",
-  },
-  {
-    id: "sedol",
-    label: "SEDOL Check Digit",
-    kind: "sedol",
-    category: "Check Digits",
-    width: 8,
-    exposes: [],
-    defaults: {},
-    tags: ["sedol", "lse", "london", "stock exchange", "securities", "check digit"],
-    summary: "London Stock Exchange 7-character SEDOL security identifier check digit validator.",
-    check: "0x03",
   },
 ];
 

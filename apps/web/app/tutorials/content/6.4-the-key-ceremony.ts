@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -32,7 +32,7 @@ const content: TutorialContent = {
       title: "Step 4: Certificate Transparency — Public Accountability",
       speaker: "Bob",
       content:
-        "Even with all these safeguards, a rogue or compromised CA could issue fraudulent certificates. **Certificate Transparency (CT)** is a public append-only cryptographic log of every certificate ever issued.\n\nBrowsers now require all TLS certificates to appear in at least two independent CT logs. If a certificate is issued for `google.com` without Google's knowledge, Google's monitoring systems detect it within minutes.\n\nThis is how the DigiNotar breach (2011) was caught — rogue certificates for Google appeared in the wild before the CA even realised they had been compromised.",
+        "Even with all these safeguards, a rogue or compromised CA could issue fraudulent certificates. In 2011, attackers breached Dutch CA DigiNotar and issued fraudulent wildcard certificates for Google to spy on Iranian users. The rogue certs were caught only because Chrome had experimental public-key pinning hardcoded into the browser. That near-catastrophe inspired the creation of **Certificate Transparency (CT)**: a public append-only cryptographic log (using Merkle trees) of every certificate ever issued.\n\nBrowsers now require all TLS certificates to appear in public CT logs before trusting them. If a certificate is issued for `google.com` without Google's knowledge, automated monitoring systems detect it within minutes.",
       callout: {
         type: "info",
         text: "You can inspect any website's certificate history at crt.sh — a public CT log search engine. Every certificate ever issued for your domain is permanently recorded there.",

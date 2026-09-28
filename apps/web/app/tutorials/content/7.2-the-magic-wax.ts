@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -32,17 +32,17 @@ const content: TutorialContent = {
       title: "Step 4: zk-STARKs — Post-Quantum ZKPs",
       speaker: "Bob",
       content:
-        "**zk-STARKs** (Scalable Transparent ARguments of Knowledge) are a newer ZKP system with important advantages:\n\n- **No trusted setup:** zk-SNARKs require a one-time 'ceremony' to generate system parameters — if that ceremony is compromised, all proofs are forgeable. zk-STARKs require no trusted setup.\n- **Post-quantum secure:** zk-STARKs rely only on hash functions (collision resistance), which are quantum-resistant. zk-SNARKs rely on elliptic curves, which Shor's algorithm can break.\n- **Larger proofs:** The trade-off is bigger proof sizes (tens of kilobytes vs hundreds of bytes).\n\nEthereum's Layer 2 scaling (StarkNet, zkSync) uses zk-STARKs to prove thousands of transactions are valid with a single on-chain proof.",
+        "**zk-STARKs** (Scalable Transparent ARguments of Knowledge) are a newer ZKP system with important advantages:\n\n- **No trusted setup:** zk-SNARKs require a one-time 'ceremony' to generate system parameters — if that ceremony is compromised, all proofs are forgeable. zk-STARKs require no trusted setup.\n- **Post-quantum secure:** zk-STARKs rely only on hash functions (collision resistance), which are quantum-resistant. zk-SNARKs rely on elliptic curves, which Shor's algorithm can break.\n- **Larger proofs:** The trade-off is bigger proof sizes (tens of kilobytes vs hundreds of bytes).\n\nEthereum Layer 2 scaling networks like StarkNet (using STARKs via Cairo) and Polygon Miden use zk-STARKs to prove thousands of transactions are valid with zero trusted setup.",
       callout: {
         type: "security",
-        text: "zk-SNARKs have a 'toxic waste' problem: the trusted setup ceremony produces secrets that must be permanently destroyed. Zcash's multi-party ceremony involved 6 participants — if even one destroyed their secrets, the setup is safe.",
+        text: "zk-SNARKs have a 'toxic waste' problem: the trusted setup ceremony produces secrets that must be permanently destroyed. Zcash's original 2016 Sprout ceremony involved 6 participants — if even one destroyed their secrets, the setup was safe. (The 2018 Sapling upgrade expanded this to ~200 participants).",
       },
     },
     {
       title: "Step 5: Real-World ZKP Applications Today",
       speaker: "Alice",
       content:
-        "Zero-knowledge proofs are no longer theoretical — they are deployed in production:\n\n- **Zcash (2016):** Private cryptocurrency transactions using Groth16 zk-SNARKs.\n- **Ethereum zkEVM (2023):** Prove Ethereum Virtual Machine execution correctness without re-running every computation.\n- **Proof of passport:** Prove your passport is valid and issued by a real government without revealing your name, nationality, or expiry date.\n- **FIDO2 / WebAuthn:** Contains ZKP-like properties — proves possession of a private key without transmitting it.\n- **Signal Protocol:** Zero-knowledge proofs used to verify group membership without revealing the group roster.",
+        "Zero-knowledge proofs are no longer theoretical — they are deployed in production:\n\n- **Zcash (2016–present):** Pioneered production private cryptocurrency transactions using zk-SNARKs (originally BCTV14, later upgraded to Groth16 with the 2018 Sapling upgrade).\n- **Ethereum zkEVM (2023):** Prove Ethereum Virtual Machine execution correctness without re-running every computation.\n- **Proof of passport:** Prove your passport is valid and issued by a real government without revealing your name, nationality, or expiry date.\n- **FIDO2 / WebAuthn:** Contains ZKP-like properties — proves possession of a private key without transmitting it.\n- **Signal Protocol:** Zero-knowledge proofs used to verify group membership without revealing the group roster.",
     },
   ],
   takeaways: [

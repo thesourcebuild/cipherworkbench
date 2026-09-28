@@ -57,21 +57,5 @@ export function describeSpec(spec: ChecksumSpec): string {
       )}-endian 16-bit words — 4 bytes, positional sum first.`;
     case "adler32":
       return "Runs two 16-bit sums modulo 65521, starting from a = 1 — 4 bytes, RFC 1950's Adler-32.";
-    case "verhoeff":
-      return "Computes the Verhoeff dihedral group D5 check digit — 1 byte.";
-    case "damm":
-      return "Computes the Damm quasigroup check digit — 1 byte.";
-    case "luhn":
-      return "Computes the Luhn algorithm Mod 10 check digit with card issuer detection — 1 byte.";
-    case "isbn":
-      return "Computes the ISBN-10 / ISBN-13 check digit — 1 byte.";
-    case "iban":
-      return "Validates and computes the ISO 13616 International Bank Account Number MOD 97-10 check digits — 1 byte.";
-    case "aba-routing":
-      return "Validates and computes the 9th check digit for Federal Reserve ABA routing transit numbers — 1 byte.";
-    case "cusip-isin":
-      return "Computes the check digit for 9-digit CUSIP or 12-character ISIN securities identifiers — 1 byte.";
-    case "sedol":
-      return "Computes the 7th check digit for London Stock Exchange SEDOL security identifiers — 1 byte.";
   }
 }

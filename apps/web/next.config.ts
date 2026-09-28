@@ -64,6 +64,7 @@ const config: NextConfig = {
     "@ocs/algos",
     "@ocs/asymmetric",
     "@ocs/certificates",
+    "@ocs/checkdigit",
     "@ocs/checksum",
     "@ocs/cipher",
     "@ocs/classical",

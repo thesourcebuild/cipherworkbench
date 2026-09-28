@@ -44,9 +44,9 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
         "id": "1.1-the-scratched-postcard",
         "number": "1.1",
         "title": "The Scratched Postcard: Checksums & Check Digits",
-        "subtitle": "How Bob catches single-digit typos and swapped digits with the Luhn algorithm",
+        "subtitle": "How additive checksums catch data corruption and Luhn check digits detect swapped digits",
         "conceptId": "integrity",
-        "family": "checksum",
+        "family": "checkdigit",
         "toolId": "luhn",
         "difficulty": "Beginner",
         "readTime": "4 min",
@@ -54,7 +54,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Alice",
           "Bob"
         ],
-        "summary": "Alice writes a credit card or bank account number on a postcard. If a clerk mistypes one digit or accidentally swaps two adjacent numbers, Bob catches the error immediately using a check digit."
+        "summary": "Alice writes data records and account numbers on a postcard. How do simple additive checksums detect corrupted bytes, why do they fail when adjacent numbers swap, and how do weighted check digits like Luhn catch transpositions?"
       },
       {
         "id": "1.2-the-static-on-the-wire",

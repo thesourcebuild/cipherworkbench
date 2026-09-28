@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -38,7 +38,7 @@ const content: TutorialContent = {
       title: "Step 5: Why Not Just Use RSA Everywhere?",
       speaker: "Bob",
       content:
-        "RSA still works, but has practical disadvantages:\n\n- A 4096-bit RSA key is 512 bytes. An X25519 key is 32 bytes — fits in a tweet.\n- RSA keygen is slow (must find large primes). EC keygen is instantaneous.\n- RSA-2048 is projected to be breakable by quantum computers with ~4000 logical qubits. The smaller the key, the sooner it breaks.\n- TLS 1.3 **removed** RSA key exchange entirely — only ECDH and DHE are allowed.",
+        "RSA still works, but has severe practical disadvantages for modern networks:\n\n- A 4096-bit RSA key is 512 bytes. An X25519 key is 32 bytes — fits in a tweet.\n- RSA keygen is slow (must find large primes). EC keygen is instantaneous.\n- Both RSA and Elliptic Curves are broken by Shor's algorithm on a cryptanalytically relevant quantum computer (driving the migration to Post-Quantum Cryptography like ML-KEM). But for classical security today, EC achieves 128-bit protection with a tiny fraction of the CPU and bandwidth cost.\n- TLS 1.3 **removed** static RSA key exchange entirely — only ephemeral Diffie-Hellman (ECDHE / DHE) is permitted, ensuring Forward Secrecy.",
     },
   ],
   takeaways: [

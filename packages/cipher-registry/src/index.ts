@@ -1,6 +1,7 @@
 import type { ToolDefinition, ToolFamily, ToolManifest, ToolSpecBase } from "@ocs/engine";
 import { ASYMMETRIC_MANIFESTS } from "@ocs/asymmetric/manifests";
 import { CERTIFICATES_MANIFESTS } from "@ocs/certificates/manifests";
+import { CHECKDIGIT_MANIFESTS } from "@ocs/checkdigit/manifests";
 import { CHECKSUM_MANIFESTS } from "@ocs/checksum/manifests";
 import { CRC_MANIFESTS } from "@ocs/crc/manifests";
 import { ENCODING_MANIFESTS } from "@ocs/encoding/manifests";
@@ -24,6 +25,7 @@ export const TOOL_MANIFESTS: readonly ToolManifest[] = [
   ...HASH_MANIFESTS,
   ...CRC_MANIFESTS,
   ...CHECKSUM_MANIFESTS,
+  ...CHECKDIGIT_MANIFESTS,
   ...PARITY_MANIFESTS,
   ...MAC_MANIFESTS,
   ...KDF_MANIFESTS,
@@ -62,8 +64,9 @@ export function manifestsInFamily(family: ToolFamily): ToolManifest[] {
 export const FAMILY_ORDER: readonly ToolFamily[] = [
   "crc",
   "checksum",
+  "checkdigit",
   /**
-   * Third, and the three non-cryptographic families therefore lead.
+   * Fourth, and the non-cryptographic families therefore lead.
    *
    * The order is roughly ascending in what the output can be trusted to do, and a parity bit is the
    * weakest thing in the app -- it notices an odd number of flipped bits in one unit and nothing else.
@@ -127,6 +130,10 @@ export async function loadTool(id: string): Promise<ToolDefinition<ToolSpecBase>
     case "checksum": {
       const { checksumToolDefinition } = await import("@ocs/checksum/definition");
       return checksumToolDefinition(id) as unknown as ToolDefinition<ToolSpecBase>;
+    }
+    case "checkdigit": {
+      const { checkDigitToolDefinition } = await import("@ocs/checkdigit/definition");
+      return checkDigitToolDefinition(id) as unknown as ToolDefinition<ToolSpecBase>;
     }
     case "mac": {
       const { macToolDefinition } = await import("@ocs/mac/definition");

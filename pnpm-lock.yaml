@@ -26,6 +26,9 @@ importers:
       '@ocs/certificates':
         specifier: workspace:*
         version: link:packages/tools/certificates
+      '@ocs/checkdigit':
+        specifier: workspace:*
+        version: link:packages/tools/checkdigit
       '@ocs/checksum':
         specifier: workspace:*
         version: link:packages/tools/checksum
@@ -170,6 +173,9 @@ importers:
       '@ocs/certificates':
         specifier: workspace:*
         version: link:../../packages/tools/certificates
+      '@ocs/checkdigit':
+        specifier: workspace:*
+        version: link:../../packages/tools/checkdigit
       '@ocs/checksum':
         specifier: workspace:*
         version: link:../../packages/tools/checksum
@@ -298,6 +304,9 @@ importers:
       '@ocs/certificates':
         specifier: workspace:*
         version: link:../tools/certificates
+      '@ocs/checkdigit':
+        specifier: workspace:*
+        version: link:../tools/checkdigit
       '@ocs/checksum':
         specifier: workspace:*
         version: link:../tools/checksum
@@ -437,6 +446,28 @@ importers:
       '@scure/base':
         specifier: ^1.2.6
         version: 1.2.6
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@ocs/config':
+        specifier: workspace:*
+        version: link:../../config
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/tools/checkdigit:
+    dependencies:
+      '@ocs/algos':
+        specifier: workspace:*
+        version: link:../../algos
+      '@ocs/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@ocs/engine':
+        specifier: workspace:*
+        version: link:../../cipher-engine
       zod:
         specifier: ^4.4.3
         version: 4.4.3

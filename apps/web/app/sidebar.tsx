@@ -17,6 +17,7 @@ const FAMILY_LABEL: Record<ToolFamily, string> = {
   hash: "Hashes",
   crc: "CRC",
   checksum: "Checksums",
+  checkdigit: "Check Digits",
   parity: "Parity",
   mac: "MACs",
   kdf: "Key derivation",
@@ -43,6 +44,9 @@ const FAMILY_STYLE: Record<ToolFamily, string> = {
   crc: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
   checksum:
     "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-300",
+  // Orange: distinct from cyan/teal/sky, highlighting human-oriented check digits and identifiers.
+  checkdigit:
+    "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300",
   // Teal: adjacent to the other two error-detection families and distinct from both, which is the
   // relationship -- parity, checksums and CRCs are one idea at three strengths.
   parity:
@@ -109,6 +113,7 @@ const FAMILY_BADGE: Record<ToolFamily, string> = {
   hash: "hash",
   crc: "CRC",
   checksum: "sum",
+  checkdigit: "digit",
   parity: "parity",
   mac: "MAC",
   kdf: "KDF",

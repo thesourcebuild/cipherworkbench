@@ -19,6 +19,8 @@ const FAMILY_STYLE: Record<ToolFamily, string> = {
   crc: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
   checksum:
     "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-300",
+  checkdigit:
+    "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300",
   parity:
     "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300",
   mac: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
@@ -41,6 +43,7 @@ const FAMILY_BADGE: Record<ToolFamily, string> = {
   hash: "hash",
   crc: "CRC",
   checksum: "sum",
+  checkdigit: "digit",
   parity: "parity",
   mac: "MAC",
   kdf: "KDF",

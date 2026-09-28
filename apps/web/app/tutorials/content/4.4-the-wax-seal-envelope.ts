@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -10,7 +10,7 @@ const content: TutorialContent = {
       title: "Step 1: Why Not Encrypt Everything with RSA?",
       speaker: "Alice",
       content:
-        "RSA-2048 can encrypt at most **245 bytes** per operation (due to padding overhead). Encrypting Alice's 50 MB backup with RSA would require splitting it into thousands of chunks, each requiring a separate slow modular exponentiation.\n\nIn practice, RSA encryption is **~1000× slower than AES** for bulk data. It is mathematically the wrong tool for large payloads.",
+        "RSA-2048 operates on a 256-byte modulus, but due to padding overhead, it can encrypt at most **190 bytes** per operation under modern RSA-OAEP with SHA-256 (or 214 bytes with SHA-1, and 245 bytes under deprecated PKCS#1 v1.5). Encrypting Alice's 50 MB backup with RSA would require splitting it into hundreds of thousands of chunks, each requiring an expensive modular exponentiation.\n\nIn practice, RSA encryption is **~1000× slower than AES** for bulk data. It is mathematically the wrong tool for large payloads.",
     },
     {
       title: "Step 2: Alice generates a random session key",
