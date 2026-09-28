@@ -5,19 +5,24 @@ const content: TutorialContent = {
   "problem": "Why do simple addition checksums fail when network noise flips multiple bits, and how does CRC solve telecommunication burst errors?",
   "steps": [
     {
-      "title": "Step 1: Alice transmits a packet",
+      "title": "Step 1: Alice computes and appends the CRC-32",
       "speaker": "Alice",
-      "content": "Alice transmits network packet: `\"Download packet #4096\"`. Her network card runs CRC-32 (IEEE 802.3 standard) and appends the 32-bit remainder `0x9c42a1b7` to the end of the frame."
+      "content": "Alice prepares an Ethernet packet: `\"Download packet #4096\"`. Her network interface card (NIC) calculates the standard IEEE 802.3 CRC-32 remainder: `0x7E060C31`, appending it to the tail of the frame as the 4-byte Frame Check Sequence (FCS)."
     },
     {
-      "title": "Step 2: Lightning causes burst line noise",
+      "title": "Step 2: The Valid Scenario — Bob verifies a clean packet",
       "speaker": "Bob",
-      "content": "As the packet travels down the copper wire, electrical interference flips 3 adjacent bits. In a simple addition checksum, one bit going 0→1 and another going 1→0 can cancel each other out! But CRC polynomial division treats bits as coefficients of a polynomial: errors do not cancel out."
+      "content": "The packet arrives without interference. Bob's network card calculates CRC-32 over the received payload. The result matches the transmitted FCS `0x7E060C31` perfectly! Bob confirms the data is intact and forwards the packet up to the TCP/IP stack."
     },
     {
-      "title": "Step 3: Bob detects the burst error",
+      "title": "Step 3: The Invalid Scenario — Lightning causes burst line noise",
       "speaker": "Bob",
-      "content": "Bob recalculates the CRC-32 over the received packet. The remainder doesn't match! The Ethernet card drops the packet and automatically requests a clean retransmission.",
+      "content": "In a second transmission, lightning strikes near the outdoor cabling. Electromagnetic interference flips 3 adjacent bits. In an additive checksum, compensating errors (one bit 0→1, another 1→0) could cancel out. But CRC polynomial division treats bits as Galois field coefficients—burst errors up to 32 bits wide are mathematically guaranteed to alter the remainder."
+    },
+    {
+      "title": "Step 4: Bob catches the corruption and drops the frame",
+      "speaker": "Bob",
+      "content": "Bob recalculates CRC-32 over the noisy packet. The computed remainder is completely different and fails to match `0x7E060C31`. Bob's hardware flags an FCS error, discards the damaged packet, and requests a clean retransmission.",
       "callout": {
         "type": "warning",
         "text": "CRC is strictly for accidental noise. Given any target CRC and the freedom to change a few bytes, producing data that matches it is straightforward arithmetic. It provides zero security against Mallory!"

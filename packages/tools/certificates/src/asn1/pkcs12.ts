@@ -439,6 +439,45 @@ export async function decodePkcs12Archive(
     throw new Error("Could not extract AuthenticatedSafe octet string from PKCS#12 data.");
   }
 
+  // Verify MacData if present in PFX
+  if (pfxNode.children.length >= 3) {
+    const macDataNode = pfxNode.children[2];
+    if (
+      macDataNode &&
+      macDataNode.tagNumber === UniversalTag.Sequence &&
+      macDataNode.children.length >= 2
+    ) {
+      const digestInfo = macDataNode.children[0];
+      const storedDigest = digestInfo?.children[1]?.tagNumber === UniversalTag.OctetString
+        ? digestInfo.children[1].asOctetString()
+        : digestInfo?.children[1]?.valueBytes;
+
+      const saltNode = macDataNode.children[1];
+      const macSalt = saltNode?.tagNumber === UniversalTag.OctetString
+        ? saltNode.asOctetString()
+        : saltNode?.valueBytes ?? new Uint8Array(0);
+
+      const iterNode = macDataNode.children[2];
+      const macIterations = iterNode ? iterNode.asIntegerNumber() : 1;
+
+      const algOid = digestInfo?.children[0]?.children[0]?.asOid();
+      // SHA-256 MAC (2.16.840.1.101.3.4.2.1)
+      if (algOid === "2.16.840.1.101.3.4.2.1" || !algOid) {
+        const macKey = pkcs12Kdf(3, password, macSalt, macIterations, 32);
+        const computedDigest = hmac(sha256, macKey, authSafeDer);
+        if (storedDigest) {
+          let match = storedDigest.length === computedDigest.length;
+          for (let i = 0; i < storedDigest.length; i++) {
+            if (storedDigest[i] !== computedDigest[i]) match = false;
+          }
+          if (!match) {
+            throw new Error("PKCS#12 MAC verification failed: incorrect password or corrupted archive.");
+          }
+        }
+      }
+    }
+  }
+
   const authenticatedSafeNode = parseAsn1(authSafeDer);
   const certs: Array<{ pem: string; der: Uint8Array }> = [];
   let privateKey: { pem: string; der: Uint8Array } | undefined;
@@ -483,7 +522,15 @@ export async function decodePkcs12Archive(
     let safeContentsNode: Asn1Node;
     try {
       safeContentsNode = parseAsn1(safeContentsDer);
-    } catch {
+      if (safeContentsNode.tagNumber !== UniversalTag.Sequence) {
+        throw new Error("safeContents is not an ASN.1 SEQUENCE");
+      }
+    } catch (err) {
+      if (contentType === "1.2.840.113549.1.7.6") {
+        throw new Error(
+          `Failed to parse decrypted safeContents in PKCS#12 archive: ${err instanceof Error ? err.message : String(err)} (is the password correct?)`,
+        );
+      }
       continue;
     }
 
@@ -532,6 +579,23 @@ export async function decodePkcs12Archive(
 
           try {
             const decKeyDer = await decryptPbes2(algId, encBytes, password);
+            // Verify that decrypted bytes represent a valid PKCS#8 PrivateKeyInfo SEQUENCE
+            let isValidPkcs8 = false;
+            try {
+              const keyNode = parseAsn1(decKeyDer);
+              if (
+                keyNode.tagNumber === UniversalTag.Sequence &&
+                keyNode.children.length >= 3 &&
+                keyNode.children[0]?.tagNumber === UniversalTag.Integer
+              ) {
+                isValidPkcs8 = true;
+              }
+            } catch {
+              isValidPkcs8 = false;
+            }
+            if (!isValidPkcs8) {
+              throw new Error("Invalid decrypted private key structure (incorrect password or corrupted data)");
+            }
             privateKey = {
               der: decKeyDer,
               pem: encodePem("PRIVATE KEY", decKeyDer),

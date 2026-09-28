@@ -104,8 +104,10 @@ describe("Phase 5: Key Formats & Keystores", () => {
       expect(decodedNew.certs).toHaveLength(1);
       expect(decodedNew.privateKey).toBeDefined();
 
-      // Verify old password fails
-      await expect(decodePkcs12Archive(rekeyed.der, "old-password")).rejects.toThrow();
+      // Verify wrong passwords reject deterministically
+      for (const badPass of ["old-password", "wrong", "another-pass", ""]) {
+        await expect(decodePkcs12Archive(rekeyed.der, badPass)).rejects.toThrow();
+      }
     });
   });
 });
