@@ -12,6 +12,7 @@ import {
   OPTION_CA_KEY_TYPE,
   OPTION_CA_PRIVATE_KEY,
   OPTION_KEY_TYPE,
+  OPTION_PRIVATE_KEY,
   parseAsn1,
   parseCsr,
   parseX509Certificate,
@@ -269,6 +270,22 @@ describe("Tool Execution via Registry", () => {
 
     expect(isAvailableOn(keyType, tool.variantTag?.(spec))).toBe(true);
     expect(spec.options[OPTION_KEY_TYPE]).toBe("ecdsa-p256");
+  });
+
+  it("shows secondary private key input only when Certificate Converter selects PEM to PKCS#12", async () => {
+    const tool = await loadTool("cert-converter");
+    const spec = tool.createSpec();
+    const privateKeyOpt = tool.catalogue.get(OPTION_PRIVATE_KEY)!;
+
+    // Default operation is pem-to-der; private key should not be available
+    expect(isAvailableOn(privateKeyOpt, tool.variantTag?.(spec))).toBe(false);
+
+    // Only when switched to pem-to-pkcs12 should the secondary private key input be available
+    const pkcs12Spec = {
+      ...spec,
+      options: { ...spec.options, converterOp: "pem-to-pkcs12" },
+    };
+    expect(isAvailableOn(privateKeyOpt, tool.variantTag?.(pkcs12Spec))).toBe(true);
   });
 
   it("computes X.509 certificate tool", async () => {

@@ -286,16 +286,26 @@ export function ToolWorkbench({
   const primaryTitle = useMemo(() => {
     if (toolId === "cert-diff") return "First Certificate (PEM)";
     if (toolId === "cert-matcher") return "Certificate (PEM)";
+    if (toolId === "cert-converter") {
+      const op = spec?.options?.converterOp;
+      if (op === "pem-to-pkcs12") return "Certificate (PEM)";
+      if (op === "pem-to-ppk") return "Private Key (PEM)";
+      if (op === "ppk-to-pem") return "PuTTY Private Key (.ppk)";
+      if (op === "pkcs12-to-pem" || op === "pkcs12-inspect") return "PKCS#12 Archive (.pfx / .p12)";
+      if (op === "pkcs7-to-pem") return "PKCS#7 Bundle (.p7b)";
+      if (op === "split-chain") return "Certificate Chain / Bundle (PEM)";
+      return "Certificate or Key (PEM or DER)";
+    }
     if (secondaryOptionDef) {
-      return "First Input";
+      return "Primary Input";
     }
     return undefined;
-  }, [secondaryOptionDef, toolId]);
+  }, [secondaryOptionDef, spec?.options, toolId]);
 
   const secondaryTitle = useMemo(() => {
     if (!secondaryOptionDef) return undefined;
     if (toolId === "cert-diff") return "Second Certificate (PEM)";
-    if (toolId === "cert-matcher") return "Private Key (PEM)";
+    if (toolId === "cert-matcher" || toolId === "cert-converter") return "Private Key (PEM)";
     return secondaryOptionDef.label;
   }, [secondaryOptionDef, toolId]);
 

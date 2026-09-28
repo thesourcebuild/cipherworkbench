@@ -45,6 +45,9 @@ export {
   OPTION_CLIENT_COMMON_NAME,
   OPTION_MTLS_P12_PASSWORD,
   OPTION_INTERMEDIATE_COMMON_NAME,
+  OPTION_PASSWORD,
+  OPTION_PRIVATE_KEY,
+  OPTION_COMPARISON_CERT,
   readInputFormat,
   readDetailLevel,
   readVerifyCsrSig,
@@ -109,6 +112,7 @@ export {
 export { encodePem, parseAllPem, detectInputBytes } from "./asn1/pem";
 export {
   RSA_CERTIFICATE_PEM,
+  RSA_PRIVATE_KEY_PEM,
   ECDSA_CSR_PEM,
   CA_CERTIFICATE_PEM,
   CERTIFICATE_CHAIN_PEM,
@@ -116,5 +120,9 @@ export {
   SAMPLE_2TIER_CHAIN_PEM,
   SAMPLE_3TIER_CHAIN_PEM,
   SAMPLE_CRL_PEM,
+  SAMPLE_PPK_TEXT,
+  SAMPLE_PKCS12_BASE64,
+  SAMPLE_PKCS7_PEM,
+  SAMPLE_DER_CERT_HEX,
   samplesFor,
 } from "./samples";

@@ -213,6 +213,20 @@ const PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
   order: 10,
 };
 
+const CONVERTER_PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_PRIVATE_KEY,
+  label: "Private Key (PEM)",
+  group: "pair",
+  kind: "text",
+  secret: true,
+  availableOn: ["pem-to-pkcs12"],
+  arg: { placeholder: "-----BEGIN PRIVATE KEY----- ...", multiline: true, rows: 10 },
+  summary: "Matching private key to package into the PKCS#12 (.pfx / .p12) archive.",
+  detail:
+    "If packaging a certificate into a PKCS#12 archive with its private key, paste the key here.",
+  order: 20,
+};
+
 const COMPARISON_CERT: OptionDef<CertificateOptionGroup> = {
   id: OPTION_COMPARISON_CERT,
   label: "Second Certificate (PEM)",
@@ -755,6 +769,7 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   CONVERTER_OP,
   PASSWORD,
   PRIVATE_KEY,
+  CONVERTER_PRIVATE_KEY,
   CREATOR_MODE,
   ISSUANCE_MODE,
   PKI_HIERARCHY,
@@ -804,7 +819,7 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
   } else if (meta.id === "csr") {
     options.push(INPUT_FORMAT, VERIFY_CSR_SIG, DETAIL_LEVEL);
   } else if (meta.id === "cert-converter") {
-    options.push(CONVERTER_OP, INPUT_FORMAT, PASSWORD, PRIVATE_KEY);
+    options.push(CONVERTER_OP, INPUT_FORMAT, PASSWORD, CONVERTER_PRIVATE_KEY);
   } else if (meta.id === "cert-creator") {
     options.push(
       CREATOR_MODE,
