@@ -3,7 +3,16 @@ import { hmac } from "@noble/hashes/hmac.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { base64 } from "@scure/base";
 import { parseAsn1, UniversalTag } from "../asn1/asn1";
-import { detectInputBytes } from "../asn1/pem";
+import {
+  encodeDerBitString,
+  encodeDerContext,
+  encodeDerInteger,
+  encodeDerNull,
+  encodeDerOctetString,
+  encodeDerOid,
+  encodeDerSequence,
+} from "../asn1/encoder";
+import { detectInputBytes, encodePem } from "../asn1/pem";
 import { sshString, sshMpint } from "./openssh";
 
 export interface PpkExportParams {
@@ -274,4 +283,216 @@ export function parsePpk(ppkText: string): ParsedPpkResult {
     macHex,
     isMacValid,
   };
+}
+
+/**
+ * Reader for decoding binary SSH wire protocol types (strings, mpints, uint32).
+ */
+export class SshWireReader {
+  private offset = 0;
+  constructor(private buffer: Uint8Array) {}
+
+  get remaining(): number {
+    return this.buffer.length - this.offset;
+  }
+
+  readUint32(): number {
+    if (this.offset + 4 > this.buffer.length) {
+      throw new Error("Unexpected end of SSH wire data");
+    }
+    const val =
+      ((this.buffer[this.offset]! << 24) >>> 0) |
+      (this.buffer[this.offset + 1]! << 16) |
+      (this.buffer[this.offset + 2]! << 8) |
+      this.buffer[this.offset + 3]!;
+    this.offset += 4;
+    return val;
+  }
+
+  readBytes(len: number): Uint8Array {
+    if (this.offset + len > this.buffer.length) {
+      throw new Error(`Unexpected end of SSH wire data reading ${len} bytes`);
+    }
+    const slice = this.buffer.slice(this.offset, this.offset + len);
+    this.offset += len;
+    return slice;
+  }
+
+  readString(): string {
+    const len = this.readUint32();
+    const bytes = this.readBytes(len);
+    return new TextDecoder().decode(bytes);
+  }
+
+  readStringBytes(): Uint8Array {
+    const len = this.readUint32();
+    return this.readBytes(len);
+  }
+
+  readMpint(): bigint {
+    const len = this.readUint32();
+    if (len === 0) return 0n;
+    const bytes = this.readBytes(len);
+    let hex = "";
+    for (let i = 0; i < bytes.length; i++) {
+      hex += bytes[i]!.toString(16).padStart(2, "0");
+    }
+    return BigInt("0x" + hex);
+  }
+
+  readMpintBytes(): Uint8Array {
+    const len = this.readUint32();
+    if (len === 0) return new Uint8Array(0);
+    const bytes = this.readBytes(len);
+    if (bytes[0] === 0x00 && bytes.length > 1) {
+      return bytes.slice(1);
+    }
+    return bytes;
+  }
+}
+
+export interface PpkToPemResult {
+  pkcs8Pem: string;
+  pkcs1Pem?: string;
+  keyType: string;
+  comment: string;
+  der: Uint8Array;
+}
+
+/**
+ * Converts a PuTTY private key (.ppk v2 or v3) into standard OpenSSL-compatible PKCS#8 and PKCS#1 PEM.
+ */
+export function ppkToPem(ppkInput: string | Uint8Array): PpkToPemResult {
+  const text = typeof ppkInput === "string" ? ppkInput : new TextDecoder().decode(ppkInput);
+  const parsed = parsePpk(text);
+
+  if (parsed.encryption && parsed.encryption !== "none") {
+    throw new Error(
+      `Encrypted PuTTY private keys (${parsed.encryption}) are not supported yet; please export the unencrypted key or decrypt it first.`,
+    );
+  }
+
+  if (parsed.isMacValid === false) {
+    throw new Error("PuTTY private key MAC verification failed: key file is corrupted or has been tampered with.");
+  }
+
+  // 1. RSA
+  if (parsed.keyType === "ssh-rsa") {
+    const pubReader = new SshWireReader(parsed.publicBytes);
+    const type = pubReader.readString();
+    if (type !== "ssh-rsa") {
+      throw new Error(`Mismatched public key type in PPK wire blob: expected ssh-rsa, got ${type}`);
+    }
+    const e = pubReader.readMpint();
+    const n = pubReader.readMpint();
+
+    const privReader = new SshWireReader(parsed.privateBytes);
+    const d = privReader.readMpint();
+    const p = privReader.readMpint();
+    const q = privReader.readMpint();
+    const qp = privReader.readMpint(); // iqmp (inverse of q mod p)
+
+    const dp = p > 1n ? d % (p - 1n) : 0n;
+    const dq = q > 1n ? d % (q - 1n) : 0n;
+
+    // PKCS#1 RSAPrivateKey SEQUENCE
+    const rsaPrivKeyDer = encodeDerSequence([
+      encodeDerInteger(0), // version
+      encodeDerInteger(n),
+      encodeDerInteger(e),
+      encodeDerInteger(d),
+      encodeDerInteger(p),
+      encodeDerInteger(q),
+      encodeDerInteger(dp),
+      encodeDerInteger(dq),
+      encodeDerInteger(qp),
+    ]);
+
+    // PKCS#8 PrivateKeyInfo SEQUENCE
+    const algId = encodeDerSequence([
+      encodeDerOid("1.2.840.113549.1.1.1"), // rsaEncryption
+      encodeDerNull(),
+    ]);
+    const pkcs8Der = encodeDerSequence([
+      encodeDerInteger(0),
+      algId,
+      encodeDerOctetString(rsaPrivKeyDer),
+    ]);
+
+    return {
+      pkcs8Pem: encodePem("PRIVATE KEY", pkcs8Der),
+      pkcs1Pem: encodePem("RSA PRIVATE KEY", rsaPrivKeyDer),
+      keyType: "ssh-rsa",
+      comment: parsed.comment,
+      der: pkcs8Der,
+    };
+  }
+
+  // 2. Ed25519
+  if (parsed.keyType === "ssh-ed25519") {
+    const privReader = new SshWireReader(parsed.privateBytes);
+    const seed = privReader.readStringBytes();
+    if (seed.length !== 32) {
+      throw new Error(`Invalid Ed25519 seed length in PPK: expected 32 bytes, got ${seed.length}`);
+    }
+
+    const algId = encodeDerSequence([encodeDerOid("1.3.101.112")]);
+    const privOctet = encodeDerOctetString(encodeDerOctetString(seed));
+    const pkcs8Der = encodeDerSequence([
+      encodeDerInteger(0),
+      algId,
+      privOctet,
+    ]);
+
+    return {
+      pkcs8Pem: encodePem("PRIVATE KEY", pkcs8Der),
+      keyType: "ssh-ed25519",
+      comment: parsed.comment,
+      der: pkcs8Der,
+    };
+  }
+
+  // 3. ECDSA (NIST P-256)
+  if (parsed.keyType === "ecdsa-sha2-nistp256") {
+    const pubReader = new SshWireReader(parsed.publicBytes);
+    pubReader.readString(); // "ecdsa-sha2-nistp256"
+    pubReader.readString(); // "nistp256"
+    const pubPoint = pubReader.readStringBytes(); // 65-byte uncompressed point
+
+    const privReader = new SshWireReader(parsed.privateBytes);
+    let privScalar = privReader.readMpintBytes();
+    if (privScalar.length < 32) {
+      const padded = new Uint8Array(32);
+      padded.set(privScalar, 32 - privScalar.length);
+      privScalar = padded;
+    }
+
+    const curveOid = "1.2.840.10045.3.1.7"; // secp256r1
+    const sec1 = encodeDerSequence([
+      encodeDerInteger(1),
+      encodeDerOctetString(privScalar),
+      encodeDerContext(0, encodeDerOid(curveOid), true),
+      encodeDerContext(1, encodeDerBitString(pubPoint, 0), true),
+    ]);
+
+    const algId = encodeDerSequence([
+      encodeDerOid("1.2.840.10045.2.1"),
+      encodeDerOid(curveOid),
+    ]);
+    const pkcs8Der = encodeDerSequence([
+      encodeDerInteger(0),
+      algId,
+      encodeDerOctetString(sec1),
+    ]);
+
+    return {
+      pkcs8Pem: encodePem("PRIVATE KEY", pkcs8Der),
+      pkcs1Pem: encodePem("EC PRIVATE KEY", sec1),
+      keyType: "ecdsa-sha2-nistp256",
+      comment: parsed.comment,
+      der: pkcs8Der,
+    };
+  }
+
+  throw new Error(`Unsupported PuTTY key type: ${parsed.keyType}`);
 }

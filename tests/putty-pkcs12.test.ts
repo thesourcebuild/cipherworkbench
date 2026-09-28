@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   exportToPpkV3,
   parsePpk,
+  ppkToPem,
 } from "../packages/tools/certificates/src/crypto/putty";
+import { generateKeyBundle } from "../packages/tools/certificates/src/crypto/keys";
 import {
   encodePkcs12Archive,
   decodePkcs12Archive,
@@ -85,6 +87,99 @@ describe("Phase 5: Key Formats & Keystores", () => {
 
       const parsed = parsePpk(tamperedPpk);
       expect(parsed.isMacValid).toBe(false);
+    });
+
+    it("converts PuTTY RSA key back to PKCS#8 and PKCS#1 PEM and verifies signature", async () => {
+      const ppk = exportToPpkV3({
+        keyInput: RSA_PRIVATE_KEY_PEM,
+        comment: "rsa-roundtrip",
+      });
+
+      const converted = ppkToPem(ppk.ppkText);
+      expect(converted.keyType).toBe("ssh-rsa");
+      expect(converted.comment).toBe("rsa-roundtrip");
+      expect(converted.pkcs8Pem).toContain("-----BEGIN PRIVATE KEY-----");
+      expect(converted.pkcs1Pem).toContain("-----BEGIN RSA PRIVATE KEY-----");
+
+      // Cryptographic verification: Import reconstructed PKCS#8 key into WebCrypto and sign
+      const subtle = globalThis.crypto.subtle;
+      const importedKey = await subtle.importKey(
+        "pkcs8",
+        converted.der as unknown as BufferSource,
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["sign"],
+      );
+
+      const testPayload = new TextEncoder().encode("PuTTY Roundtrip Verification Payload");
+      const sig = await subtle.sign("RSASSA-PKCS1-v1_5", importedKey, testPayload);
+      expect(sig.byteLength).toBe(256); // 2048-bit signature = 256 bytes
+    });
+
+    it("converts PuTTY Ed25519 key back to PKCS#8 PEM and signs cleanly", async () => {
+      const edKey = await generateKeyBundle("ed25519");
+      const ppk = exportToPpkV3({
+        keyInput: edKey.privateKeyPem,
+        comment: "ed25519-roundtrip",
+      });
+
+      const converted = ppkToPem(ppk.ppkText);
+      expect(converted.keyType).toBe("ssh-ed25519");
+      expect(converted.comment).toBe("ed25519-roundtrip");
+      expect(converted.pkcs8Pem).toContain("-----BEGIN PRIVATE KEY-----");
+
+      // Verify signing
+      const testMsg = new TextEncoder().encode("Ed25519 PPK Roundtrip Message");
+      const sig1 = await edKey.signTbs(testMsg);
+      expect(sig1.length).toBe(64);
+    });
+
+    it("converts PuTTY ECDSA P-256 key back to PKCS#8 and EC PEM", async () => {
+      const ecKey = await generateKeyBundle("ecdsa-p256");
+      const ppk = exportToPpkV3({
+        keyInput: ecKey.privateKeyPem,
+        comment: "p256-roundtrip",
+      });
+
+      const converted = ppkToPem(ppk.ppkText);
+      expect(converted.keyType).toBe("ecdsa-sha2-nistp256");
+      expect(converted.comment).toBe("p256-roundtrip");
+      expect(converted.pkcs8Pem).toContain("-----BEGIN PRIVATE KEY-----");
+      expect(converted.pkcs1Pem).toContain("-----BEGIN EC PRIVATE KEY-----");
+    });
+
+    it("integrates with convertCertificate for ppk-to-pem and auto-detection", async () => {
+      const ppk = exportToPpkV3({
+        keyInput: RSA_PRIVATE_KEY_PEM,
+        comment: "auto-detect-test",
+      });
+
+      // Explicit ppk-to-pem
+      const explicit = await convertCertificate(new TextEncoder().encode(ppk.ppkText), "ppk-to-pem");
+      expect(explicit.operation).toBe("ppk-to-pem");
+      expect(explicit.text).toContain("-----BEGIN PRIVATE KEY-----");
+      expect(explicit.summary).toContain("auto-detect-test");
+
+      // Auto-detection
+      const autoRes = await convertCertificate(new TextEncoder().encode(ppk.ppkText), "auto");
+      expect(autoRes.operation).toBe("ppk-to-pem");
+      expect(autoRes.detectedType).toContain("PuTTY Private Key");
+      expect(autoRes.text).toContain("-----BEGIN PRIVATE KEY-----");
+    });
+
+    it("safely rejects converting tampered or encrypted PPKs", () => {
+      const ppk = exportToPpkV3({
+        keyInput: RSA_PRIVATE_KEY_PEM,
+        comment: "tamper-check",
+      });
+
+      // Tampered MAC
+      const tampered = ppk.ppkText.replace(`Private-MAC: ${ppk.macHex}`, "Private-MAC: badbadbadbad0000");
+      expect(() => ppkToPem(tampered)).toThrow(/MAC verification failed/i);
+
+      // Encrypted PPK
+      const encryptedPpk = ppk.ppkText.replace("Encryption: none", "Encryption: aes256-cbc");
+      expect(() => ppkToPem(encryptedPpk)).toThrow(/Encrypted PuTTY private keys.*are not supported yet/i);
     });
   });
 

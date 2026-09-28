@@ -73,6 +73,7 @@ export type ConverterOpOption =
   | "pem-to-pkcs12"
   | "pkcs12-to-pem"
   | "pem-to-ppk"
+  | "ppk-to-pem"
   | "pkcs12-inspect"
   | "extract-public-key"
   | "split-chain";
@@ -118,6 +119,7 @@ export function readConverterOp(options: OptionValues): ConverterOpOption {
     val === "pem-to-pkcs12" ||
     val === "pkcs12-to-pem" ||
     val === "pem-to-ppk" ||
+    val === "ppk-to-pem" ||
     val === "pkcs12-inspect" ||
     val === "extract-public-key" ||
     val === "split-chain"

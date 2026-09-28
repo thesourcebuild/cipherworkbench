@@ -166,6 +166,11 @@ const CONVERTER_OP: OptionDef<CertificateOptionGroup> = {
       summary: "Converts RSA, ECDSA, or Ed25519 key to PuTTY v3 format",
     },
     {
+      value: "ppk-to-pem",
+      label: "PuTTY (.ppk) to PEM Private Key",
+      summary: "Extracts standard OpenSSL PKCS#8 private key from PuTTY v2/v3 PPK",
+    },
+    {
       value: "extract-public-key",
       label: "Extract Public Key",
       summary: "Extracts SubjectPublicKeyInfo (SPKI) as PEM",

@@ -78,6 +78,14 @@ export { parseCsr } from "./asn1/csr";
 export { convertCertificate } from "./asn1/converter";
 export { encodePkcs7CertBundle, decodePkcs7CertBundle } from "./asn1/pkcs7";
 export { encodePkcs12Archive, decodePkcs12Archive } from "./asn1/pkcs12";
+export {
+  exportToPpkV3,
+  parsePpk,
+  ppkToPem,
+  type PpkExportResult,
+  type ParsedPpkResult,
+  type PpkToPemResult,
+} from "./crypto/putty";
 export { createCertificate } from "./asn1/create-cert";
 export { createCsr } from "./asn1/create-csr";
 export { signCsr } from "./asn1/csr-signer";

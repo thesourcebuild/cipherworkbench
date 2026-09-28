@@ -1761,6 +1761,7 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         "pkcs12-to-pem": "Extract Certificate & Private Key from PKCS#12 (.pfx / .p12)",
         "pkcs12-inspect": "Inspect PKCS#12 (.pfx) SafeBags, attributes, and MAC",
         "pem-to-ppk": "Convert Private Key to PuTTY v3 format (.ppk)",
+        "ppk-to-pem": "Convert PuTTY v2/v3 key (.ppk) to OpenSSL PEM format",
         "extract-public-key": "Extract SubjectPublicKeyInfo (SPKI) as PEM",
         "split-chain": "Split concatenated PEM chain into separate blocks",
       };
@@ -1772,7 +1773,7 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Standards",
-          value: "RFC 7468 (PEM), RFC 5280 (DER), RFC 7292 (PKCS#12), RFC 2315 (PKCS#7)",
+          value: "RFC 7468 (PEM), RFC 5280 (DER), RFC 7292 (PKCS#12), RFC 2315 (PKCS#7), PuTTY PPK",
         },
       );
       break;

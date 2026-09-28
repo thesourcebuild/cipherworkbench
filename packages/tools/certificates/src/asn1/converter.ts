@@ -4,7 +4,7 @@ import { detectInputBytes, encodePem, parseAllPem } from "./pem";
 import { decodePkcs7CertBundle, encodePkcs7CertBundle } from "./pkcs7";
 import { decodePkcs12Archive, encodePkcs12Archive, inspectPkcs12 } from "./pkcs12";
 import { parseX509Certificate } from "./x509";
-import { exportToPpkV3 } from "../crypto/putty";
+import { exportToPpkV3, ppkToPem } from "../crypto/putty";
 
 export type ConverterOperation =
   | "auto"
@@ -17,6 +17,7 @@ export type ConverterOperation =
   | "pem-to-pkcs12"
   | "pkcs12-to-pem"
   | "pem-to-ppk"
+  | "ppk-to-pem"
   | "pkcs12-inspect"
   | "extract-public-key"
   | "split-chain";
@@ -81,6 +82,22 @@ export async function convertCertificate(
     }
   } catch {
     // Non-ASN.1
+  }
+
+  const inputText = typeof input === "string" ? input : new TextDecoder().decode(input);
+  const isPpk = inputText.includes("PuTTY-User-Key-File-");
+  if (isPpk) {
+    detectedType = "PuTTY Private Key (.ppk)";
+    if (op === "auto") {
+      const converted = ppkToPem(inputText);
+      return {
+        operation: "ppk-to-pem",
+        detectedType: `PuTTY Private Key (${converted.keyType})`,
+        text: converted.pkcs8Pem,
+        bytes: converted.der,
+        summary: `Auto-converted PuTTY Private Key (${converted.keyType}, comment: "${converted.comment}") to PKCS#8 PEM format.`,
+      };
+    }
   }
 
   // --- PKCS#7 Operations ---
@@ -192,6 +209,17 @@ export async function convertCertificate(
       detectedType: `PuTTY Private Key (${ppk.keyType})`,
       text: ppk.ppkText,
       summary: `Exported private key to PuTTY Private Key v3 format (${ppk.keyType}, comment: ${ppk.comment}).`,
+    };
+  }
+
+  if (op === "ppk-to-pem") {
+    const converted = ppkToPem(inputText);
+    return {
+      operation: "ppk-to-pem",
+      detectedType: `PuTTY Private Key (${converted.keyType})`,
+      text: converted.pkcs8Pem,
+      bytes: converted.der,
+      summary: `Converted PuTTY Private Key (${converted.keyType}, comment: "${converted.comment}") to PKCS#8 PEM format.`,
     };
   }
 
