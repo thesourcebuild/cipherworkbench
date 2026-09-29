@@ -31,6 +31,8 @@ jobs:
   # ---------------------------------------------------------------------------
   desktop:
     runs-on: windows-latest
+    env:
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
     steps:
       - uses: actions/checkout@v4
 
@@ -45,7 +47,18 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Cache Electron binary
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/electron/Cache
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('apps/desktop/package.json') }}
+          restore-keys: |
+            electron-cache-${{ runner.os }}-
+
       - run: pnpm install --frozen-lockfile
+
+      - name: Ensure Electron binary is downloaded
+        run: pnpm rebuild electron
 
       # Plain `build`, never `build:pages`. They differ by NEXT_PUBLIC_BASE_PATH, and a desktop bundle
       # built with the subpath asks for /CipherWorkbench/_next/... over app:// and loads nothing. The
