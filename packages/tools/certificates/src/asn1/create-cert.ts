@@ -1,4 +1,4 @@
-import { parseAsn1, TagClass } from "./asn1";
+import { parseAsn1, TagClass, UniversalTag } from "./asn1";
 import { SIGNATURE_ALGORITHMS } from "./oids";
 import {
   encodeDerBitString,
@@ -51,6 +51,10 @@ export interface CertificateCreatorOptions {
   ocspResponderUrl?: string;
   caIssuersUrl?: string;
   crlDistributionPoint?: string;
+  nameConstraintsPermitted?: string;
+  nameConstraintsExcluded?: string;
+  certificatePolicyOid?: string;
+  certificatePolicyCpsUrl?: string;
 }
 
 export interface CreatedCertificateResult {
@@ -488,6 +492,69 @@ export async function createCertificate(
 
     extensions.push(
       encodeDerSequence([encodeDerOid("2.5.29.31"), encodeDerOctetString(crlDpSeq)]),
+    );
+  }
+
+  // 4i. Name Constraints (OID 2.5.29.30) - Critical by RFC 5280
+  if (opts.nameConstraintsPermitted || opts.nameConstraintsExcluded) {
+    const ncParts: Uint8Array[] = [];
+    if (opts.nameConstraintsPermitted) {
+      const subtrees = opts.nameConstraintsPermitted
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const subtreeDerList = subtrees.map((dns) => {
+        const dnsBytes = new TextEncoder().encode(dns);
+        const gn = encodeDerContext(2, dnsBytes, false); // dNSName [2]
+        return encodeDerSequence([gn]);
+      });
+      if (subtreeDerList.length > 0) {
+        ncParts.push(encodeDerContext(0, encodeDerSequence(subtreeDerList), true)); // permittedSubtrees [0]
+      }
+    }
+    if (opts.nameConstraintsExcluded) {
+      const subtrees = opts.nameConstraintsExcluded
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const subtreeDerList = subtrees.map((dns) => {
+        const dnsBytes = new TextEncoder().encode(dns);
+        const gn = encodeDerContext(2, dnsBytes, false); // dNSName [2]
+        return encodeDerSequence([gn]);
+      });
+      if (subtreeDerList.length > 0) {
+        ncParts.push(encodeDerContext(1, encodeDerSequence(subtreeDerList), true)); // excludedSubtrees [1]
+      }
+    }
+    if (ncParts.length > 0) {
+      const ncSeq = encodeDerSequence(ncParts);
+      extensions.push(
+        encodeDerSequence([
+          encodeDerOid("2.5.29.30"),
+          encodeDerBoolean(true), // Name Constraints MUST be critical (RFC 5280)
+          encodeDerOctetString(ncSeq),
+        ]),
+      );
+    }
+  }
+
+  // 4j. Certificate Policies (OID 2.5.29.32)
+  if (opts.certificatePolicyOid) {
+    const policyOid = opts.certificatePolicyOid.trim();
+    const policyParts: Uint8Array[] = [encodeDerOid(policyOid)];
+    if (opts.certificatePolicyCpsUrl) {
+      const cpsUriBytes = new TextEncoder().encode(opts.certificatePolicyCpsUrl.trim());
+      // PolicyQualifierInfo: { policyQualifierId: id-qt-cps (1.3.6.1.5.5.7.2.1), qualifier: IA5String }
+      const qualifierInfo = encodeDerSequence([
+        encodeDerOid("1.3.6.1.5.5.7.2.1"),
+        encodeDerTlv(UniversalTag.IA5String, TagClass.Universal, false, cpsUriBytes),
+      ]);
+      policyParts.push(encodeDerSequence([qualifierInfo]));
+    }
+    const policyInfo = encodeDerSequence(policyParts);
+    const cpSeq = encodeDerSequence([policyInfo]);
+    extensions.push(
+      encodeDerSequence([encodeDerOid("2.5.29.32"), encodeDerOctetString(cpSeq)]),
     );
   }
 

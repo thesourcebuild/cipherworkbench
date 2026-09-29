@@ -75,6 +75,14 @@ export interface ParsedX509Certificate {
     caIssuerUrls: string[];
     crlUrls: string[];
     spiffeIds: string[];
+    nameConstraints?: {
+      permittedSubtrees: string[];
+      excludedSubtrees: string[];
+    };
+    certificatePolicies?: Array<{
+      policyOid: string;
+      cpsUrl?: string;
+    }>;
     all: ParsedExtension[];
   };
   fingerprints: {
@@ -338,6 +346,16 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
   const caIssuerUrls: string[] = [];
   const crlUrls: string[] = [];
   const spiffeIds: string[] = [];
+  let nameConstraints:
+    | {
+        permittedSubtrees: string[];
+        excludedSubtrees: string[];
+      }
+    | undefined;
+  const certificatePolicies: Array<{
+    policyOid: string;
+    cpsUrl?: string;
+  }> = [];
   const allExtensions: ParsedExtension[] = [];
 
   for (let i = tbsIdx; i < tbs.children.length; i++) {
@@ -472,6 +490,58 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
               for (const m of matches) crlUrls.push(m[0]);
             }
             parsedValStr = crlUrls.join(", ");
+          } else if (extOid === "2.5.29.30") {
+            // Name Constraints
+            const ncAsn = parseAsn1(valBytes);
+            const permitted: string[] = [];
+            const excluded: string[] = [];
+
+            const extractSubtreeStrings = (node: Asn1Node): string[] => {
+              const results: string[] = [];
+              for (const child of node.children) {
+                if (child.tagClass === TagClass.ContextSpecific && child.tagNumber === 2) {
+                  const s = child.asString();
+                  if (s) results.push(s);
+                } else if (child.children.length > 0) {
+                  results.push(...extractSubtreeStrings(child));
+                }
+              }
+              return results;
+            };
+
+            for (const child of ncAsn.children) {
+              if (child.tagClass === TagClass.ContextSpecific) {
+                const isPermitted = child.tagNumber === 0;
+                const strs = extractSubtreeStrings(child);
+                if (isPermitted) permitted.push(...strs);
+                else excluded.push(...strs);
+              }
+            }
+            nameConstraints = { permittedSubtrees: permitted, excludedSubtrees: excluded };
+            parsedValStr = [
+              ...(permitted.length > 0 ? [`Permitted: ${permitted.join(", ")}`] : []),
+              ...(excluded.length > 0 ? [`Excluded: ${excluded.join(", ")}`] : []),
+            ].join(" | ");
+          } else if (extOid === "2.5.29.32") {
+            // Certificate Policies
+            const cpAsn = parseAsn1(valBytes);
+            for (const policyInfo of cpAsn.children) {
+              const pOidNode = policyInfo.children[0];
+              if (pOidNode) {
+                const pOid = pOidNode.asOid();
+                let cpsUri: string | undefined;
+                const qualifiersNode = policyInfo.children[1];
+                if (qualifiersNode) {
+                  const dumpStr = qualifiersNode.dump();
+                  const match = dumpStr.match(/http[^\s"]+/);
+                  if (match) cpsUri = match[0];
+                }
+                certificatePolicies.push({ policyOid: pOid, cpsUrl: cpsUri });
+              }
+            }
+            parsedValStr = certificatePolicies
+              .map((cp) => `Policy: ${cp.policyOid}${cp.cpsUrl ? ` (${cp.cpsUrl})` : ""}`)
+              .join("; ");
           } else {
             parsedValStr = formatHexColons(valBytes);
           }
@@ -561,6 +631,8 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
       caIssuerUrls,
       crlUrls,
       spiffeIds,
+      nameConstraints,
+      certificatePolicies: certificatePolicies.length > 0 ? certificatePolicies : undefined,
       all: allExtensions,
     },
     fingerprints,

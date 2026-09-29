@@ -48,6 +48,14 @@ export {
   OPTION_PASSWORD,
   OPTION_PRIVATE_KEY,
   OPTION_COMPARISON_CERT,
+  OPTION_NAME_CONSTRAINTS_PERMITTED,
+  OPTION_NAME_CONSTRAINTS_EXCLUDED,
+  OPTION_CERTIFICATE_POLICY_OID,
+  OPTION_CERTIFICATE_POLICY_CPS_URL,
+  readNameConstraintsPermitted,
+  readNameConstraintsExcluded,
+  readCertificatePolicyOid,
+  readCertificatePolicyCpsUrl,
   readInputFormat,
   readDetailLevel,
   readVerifyCsrSig,
@@ -76,11 +84,39 @@ export {
 export { CertificateSpec } from "./spec";
 export { createSpec } from "./create-spec";
 export { ALL_CERTIFICATE_OPTIONS, certificateCatalogueFor } from "./catalogue/options";
+export {
+  generateTerraformConfig,
+  generateAnsiblePlaybook,
+  generateKubernetesTlsSecret,
+  generateNginxTlsConfig,
+  generateCaddyTlsConfig,
+  generateDockerComposeConfig,
+  generateApacheTlsConfig,
+  generateEnvoyTlsConfig,
+  generateHaproxyTlsConfig,
+  generateCloudImportCommands,
+  type IacTemplateParams,
+} from "./export/iac";
+export {
+  generatePkiHierarchyDiagram,
+  type PkiGraphNode,
+} from "./export/chain-graph";
 export { parseX509Certificate } from "./asn1/x509";
 export { parseCsr } from "./asn1/csr";
 export { convertCertificate } from "./asn1/converter";
 export { encodePkcs7CertBundle, decodePkcs7CertBundle } from "./asn1/pkcs7";
 export { encodePkcs12Archive, decodePkcs12Archive } from "./asn1/pkcs12";
+export {
+  createCrl,
+  parseX509Crl,
+  CrlReasonCode,
+  CRL_REASON_NAMES,
+  type CreateCrlOptions,
+  type CreatedCrl,
+  type ParsedCrl,
+  type ParsedRevokedCert,
+  type RevokedCertificateInput,
+} from "./asn1/crl";
 export {
   exportToPpkV3,
   parsePpk,
@@ -92,6 +128,7 @@ export {
 export { createCertificate } from "./asn1/create-cert";
 export { createCsr } from "./asn1/create-csr";
 export { signCsr } from "./asn1/csr-signer";
+export { importCaSigner, type CaSigner } from "./crypto/keys";
 export {
   verifyCertificateChain,
   verifyCertificateSignature,

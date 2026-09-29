@@ -135,7 +135,7 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(result.files).toBeDefined();
 
     const files = collectExportFiles(result, undefined, spec);
-    expect(files.length).toBe(22);
+    expect(files.length).toBe(27);
 
     const fileNames = files.map((f) => f.name);
     // Root CA
@@ -164,6 +164,11 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(fileNames).toContain("traefik.yaml");
     expect(fileNames).toContain("haproxy.cfg");
     expect(fileNames).toContain("envoy.yaml");
+    expect(fileNames).toContain("docker-compose.yaml");
+    expect(fileNames).toContain("httpd-ssl.conf");
+    expect(fileNames).toContain("cloud-import.sh");
+    expect(fileNames).toContain("main.tf");
+    expect(fileNames).toContain("deploy-playbook.yaml");
     expect(fileNames).toContain("README.txt");
 
     // Client PKCS#12 is binary Uint8Array
@@ -175,14 +180,14 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     const zipBytes = createZipArchive(files);
     expect(zipBytes.length).toBeGreaterThan(7000);
 
-    // End-of-central-directory should reflect exactly 22 entries
+    // End-of-central-directory should reflect exactly 27 entries
     const view = new DataView(zipBytes.buffer, zipBytes.byteOffset, zipBytes.byteLength);
     let foundEocd = false;
     for (let i = 0; i <= zipBytes.length - 22; i++) {
       if (view.getUint32(i, true) === 0x06054b50) {
         foundEocd = true;
-        expect(view.getUint16(i + 8, true)).toBe(22);
-        expect(view.getUint16(i + 10, true)).toBe(22);
+        expect(view.getUint16(i + 8, true)).toBe(27);
+        expect(view.getUint16(i + 10, true)).toBe(27);
         break;
       }
     }
@@ -206,7 +211,7 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(result.files).toBeDefined();
 
     const files = collectExportFiles(result, undefined, spec);
-    expect(files.length).toBe(24);
+    expect(files.length).toBe(29);
 
     const fileNames = files.map((f) => f.name);
     expect(fileNames).toContain("ca.crt");
@@ -226,6 +231,11 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(fileNames).toContain("commands.sh");
     expect(fileNames).toContain("commands.ps1");
     expect(fileNames).toContain("commands.bat");
+    expect(fileNames).toContain("docker-compose.yaml");
+    expect(fileNames).toContain("httpd-ssl.conf");
+    expect(fileNames).toContain("cloud-import.sh");
+    expect(fileNames).toContain("main.tf");
+    expect(fileNames).toContain("deploy-playbook.yaml");
   });
 
   it("exports individual files for CSR Creator", async () => {

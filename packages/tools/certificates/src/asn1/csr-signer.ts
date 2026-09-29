@@ -1,9 +1,11 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { type ToolExportFile } from "@ocs/engine";
+import { TagClass, UniversalTag } from "./asn1";
 import { parseCsr } from "./csr";
 import { createCertificate, encodeSanExtension, encodeKeyUsageBitString } from "./create-cert";
 import { detectInputBytes, encodePem } from "./pem";
+import { createCrl } from "./crl";
 import {
   importCaSigner,
   type CaSigner,
@@ -20,6 +22,7 @@ import {
   encodeDerSequence,
   encodeDerTime,
   encodeDistinguishedName,
+  encodeDerTlv,
 } from "./encoder";
 import { buildVerificationScripts, type CommandScripts } from "../export/commands";
 
@@ -37,6 +40,10 @@ export interface SignCsrOptions {
   clientAuth?: boolean;
   codeSigning?: boolean;
   hashType?: HashAlgorithmType;
+  nameConstraintsPermitted?: string;
+  nameConstraintsExcluded?: string;
+  certificatePolicyOid?: string;
+  certificatePolicyCpsUrl?: string;
 }
 
 export interface SignCsrResult {
@@ -44,6 +51,7 @@ export interface SignCsrResult {
   certDer: Uint8Array;
   caCertPem: string;
   caPrivateKeyPem?: string;
+  crlPem?: string;
   bundlePem: string;
   subjectDn: string;
   issuerDn: string;
@@ -213,6 +221,68 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
     encodeDerSequence([encodeDerOid("2.5.29.35"), encodeDerOctetString(akiInner)]),
   );
 
+  // 5f. Name Constraints (OID 2.5.29.30) - Critical by RFC 5280
+  if (opts.nameConstraintsPermitted || opts.nameConstraintsExcluded) {
+    const ncParts: Uint8Array[] = [];
+    if (opts.nameConstraintsPermitted) {
+      const subtrees = opts.nameConstraintsPermitted
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const subtreeDerList = subtrees.map((dns) => {
+        const dnsBytes = new TextEncoder().encode(dns);
+        const gn = encodeDerContext(2, dnsBytes, false); // dNSName [2]
+        return encodeDerSequence([gn]);
+      });
+      if (subtreeDerList.length > 0) {
+        ncParts.push(encodeDerContext(0, encodeDerSequence(subtreeDerList), true));
+      }
+    }
+    if (opts.nameConstraintsExcluded) {
+      const subtrees = opts.nameConstraintsExcluded
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const subtreeDerList = subtrees.map((dns) => {
+        const dnsBytes = new TextEncoder().encode(dns);
+        const gn = encodeDerContext(2, dnsBytes, false); // dNSName [2]
+        return encodeDerSequence([gn]);
+      });
+      if (subtreeDerList.length > 0) {
+        ncParts.push(encodeDerContext(1, encodeDerSequence(subtreeDerList), true));
+      }
+    }
+    if (ncParts.length > 0) {
+      const ncSeq = encodeDerSequence(ncParts);
+      extensions.push(
+        encodeDerSequence([
+          encodeDerOid("2.5.29.30"),
+          encodeDerBoolean(true),
+          encodeDerOctetString(ncSeq),
+        ]),
+      );
+    }
+  }
+
+  // 5g. Certificate Policies (OID 2.5.29.32)
+  if (opts.certificatePolicyOid) {
+    const policyOid = opts.certificatePolicyOid.trim();
+    const policyParts: Uint8Array[] = [encodeDerOid(policyOid)];
+    if (opts.certificatePolicyCpsUrl) {
+      const cpsUriBytes = new TextEncoder().encode(opts.certificatePolicyCpsUrl.trim());
+      const qualifierInfo = encodeDerSequence([
+        encodeDerOid("1.3.6.1.5.5.7.2.1"),
+        encodeDerTlv(UniversalTag.IA5String, TagClass.Universal, false, cpsUriBytes),
+      ]);
+      policyParts.push(encodeDerSequence([qualifierInfo]));
+    }
+    const policyInfo = encodeDerSequence(policyParts);
+    const cpSeq = encodeDerSequence([policyInfo]);
+    extensions.push(
+      encodeDerSequence([encodeDerOid("2.5.29.32"), encodeDerOctetString(cpSeq)]),
+    );
+  }
+
   // Extensions container: [3] EXPLICIT Extensions
   const extensionsContainer = encodeDerContext(3, encodeDerSequence(extensions), true);
 
@@ -308,11 +378,24 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
     });
   }
 
+  let crlPem: string | undefined;
+  try {
+    const crlRes = await createCrl({ signer: caSigner, crlNumber: 1 });
+    crlPem = crlRes.crlPem;
+    exportFiles.push({
+      name: "ca.crl",
+      content: crlRes.crlPem,
+    });
+  } catch {
+    // Non-fatal if CRL generation fails
+  }
+
   return {
     certPem,
     certDer,
     caCertPem,
     caPrivateKeyPem,
+    crlPem,
     bundlePem,
     subjectDn: applicantSubjectDn,
     issuerDn: caSigner.issuerDnString,

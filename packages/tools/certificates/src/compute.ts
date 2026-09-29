@@ -16,7 +16,17 @@ import { buildOcspRequest, parseOcspResponse, createMockOcspResponse } from "./a
 import { calculateAcmeChallenges } from "./crypto/acme";
 import { spkiToOpenSsh } from "./crypto/openssh";
 import { spkiToJwk } from "./crypto/jwk";
-import { generateTerraformConfig, generateAnsiblePlaybook } from "./export/iac";
+import {
+  generateTerraformConfig,
+  generateAnsiblePlaybook,
+  generateKubernetesTlsSecret,
+  generateNginxTlsConfig,
+  generateCaddyTlsConfig,
+  generateDockerComposeConfig,
+  generateApacheTlsConfig,
+  generateCloudImportCommands,
+} from "./export/iac";
+import { generatePkiHierarchyDiagram, type PkiGraphNode } from "./export/chain-graph";
 import {
   generateCertCommandScripts,
   generateMtlsCommandScripts,
@@ -68,6 +78,10 @@ import {
   readAcmeDomain,
   readAcmeToken,
   readAcmeAccountKey,
+  readNameConstraintsPermitted,
+  readNameConstraintsExcluded,
+  readCertificatePolicyOid,
+  readCertificatePolicyCpsUrl,
 } from "./pure";
 import type { CertificateSpec } from "./spec";
 
@@ -236,6 +250,57 @@ export async function computeCertificate(
           "```",
         );
 
+        const mtlsGraphNodes: PkiGraphNode[] = [
+          {
+            title: caCommonName,
+            role: "Root CA",
+            subjectDn: mtls.ca.subjectDn,
+            keyType: `${rootKeyType.toUpperCase()} / ${rootHashType.toUpperCase()}`,
+            fingerprintSha256: mtls.ca.fingerprint,
+            validityRange: `${validityDays} days`,
+            isCa: true,
+          },
+          ...(mtls.intermediate
+            ? [
+                {
+                  title: intermediateCommonName,
+                  role: "Intermediate CA" as const,
+                  subjectDn: mtls.intermediate.subjectDn,
+                  keyType: `${intermediateKeyType.toUpperCase()} / ${intermediateHashType.toUpperCase()}`,
+                  fingerprintSha256: mtls.intermediate.fingerprint,
+                  validityRange: `${validityDays} days`,
+                  isCa: true,
+                  pathLenConstraint: 0,
+                },
+              ]
+            : []),
+          {
+            title: "TLS Server",
+            role: "Server Leaf",
+            subjectDn: mtls.server.subjectDn,
+            keyType: `${serverKeyType.toUpperCase()} / ${serverHashType.toUpperCase()}`,
+            fingerprintSha256: mtls.server.fingerprint,
+            validityRange: `${validityDays} days`,
+            san: mtls.server.san,
+          },
+          {
+            title: "mTLS Client",
+            role: "Client Leaf",
+            subjectDn: mtls.client.subjectDn,
+            keyType: `${clientKeyType.toUpperCase()} / ${clientHashType.toUpperCase()}`,
+            fingerprintSha256: mtls.client.fingerprint,
+            validityRange: `${validityDays} days`,
+          },
+        ];
+
+        working.push(
+          "",
+          "#### Visual PKI Trust Hierarchy",
+          "```text",
+          generatePkiHierarchyDiagram(mtlsGraphNodes),
+          "```",
+        );
+
         const files: ToolExportFile[] = [
           { name: "ca.crt", content: mtls.ca.certPem },
           { name: "ca.key", content: mtls.ca.keyPem },
@@ -275,6 +340,53 @@ export async function computeCertificate(
           { name: "ca.crl", content: mtls.crl.crlPem },
           { name: "authorized_keys", content: mtls.ssh.authorizedKeysLine },
           { name: "jwks.json", content: mtls.jwksJson },
+          {
+            name: "docker-compose.yaml",
+            content: generateDockerComposeConfig({
+              certFilename: "server.crt",
+              keyFilename: "server.key",
+              caFilename: "ca.crt",
+            }),
+          },
+          {
+            name: "httpd-ssl.conf",
+            content: generateApacheTlsConfig({
+              serverName: "localhost",
+              certFilename: "server.crt",
+              keyFilename: "server.key",
+              chainFilename: mtls.intermediate ? "server-chain.pem" : undefined,
+              caFilename: "ca.crt",
+              isMtls: true,
+            }),
+          },
+          {
+            name: "cloud-import.sh",
+            content: generateCloudImportCommands({
+              certFilename: "server.crt",
+              keyFilename: "server.key",
+              chainFilename: mtls.intermediate ? "server-chain.pem" : undefined,
+              caFilename: "ca.crt",
+              p12Filename: "client.p12",
+              p12Password,
+              alias: "server-cert",
+            }),
+          },
+          {
+            name: "main.tf",
+            content: generateTerraformConfig({
+              certFilename: "server.crt",
+              keyFilename: "server.key",
+              caFilename: "ca.crt",
+            }),
+          },
+          {
+            name: "deploy-playbook.yaml",
+            content: generateAnsiblePlaybook({
+              certFilename: "server.crt",
+              keyFilename: "server.key",
+              caFilename: "ca.crt",
+            }),
+          },
           {
             name: "README.txt",
             content: [
@@ -336,6 +448,10 @@ export async function computeCertificate(
       const issuanceMode = readIssuanceMode(spec.options);
       const caCertPem = readCaCert(spec.options);
       const caPrivateKeyPem = readCaPrivateKey(spec.options);
+      const nameConstraintsPermitted = readNameConstraintsPermitted(spec.options);
+      const nameConstraintsExcluded = readNameConstraintsExcluded(spec.options);
+      const certificatePolicyOid = readCertificatePolicyOid(spec.options);
+      const certificatePolicyCpsUrl = readCertificatePolicyCpsUrl(spec.options);
 
       const created = await createCertificate({
         commonName,
@@ -355,6 +471,10 @@ export async function computeCertificate(
         issuanceMode,
         caCertPem: caCertPem || undefined,
         caPrivateKeyPem: caPrivateKeyPem || undefined,
+        nameConstraintsPermitted: nameConstraintsPermitted || undefined,
+        nameConstraintsExcluded: nameConstraintsExcluded || undefined,
+        certificatePolicyOid: certificatePolicyOid || undefined,
+        certificatePolicyCpsUrl: certificatePolicyCpsUrl || undefined,
       });
 
       const fields: ToolResultField[] = [
@@ -417,8 +537,61 @@ export async function computeCertificate(
         created.opensslCommand,
         "```",
       ]
-        .filter(Boolean)
-        .join("\n");
+        .filter(Boolean);
+
+      const singleGraphNodes: PkiGraphNode[] = [];
+      if (created.issuanceMode === "ca-signed" && caCertPem) {
+        let caKeyType = "CA";
+        let caFingerprint = "CA-SIGNER";
+        let caValidity = "Active";
+        try {
+          const caDer = detectInputBytes(new TextEncoder().encode(caCertPem)).der;
+          const parsedCa = parseX509Certificate(caDer);
+          caKeyType = parsedCa.publicKey.algorithmName || parsedCa.publicKey.keyType.toUpperCase();
+          caFingerprint = parsedCa.fingerprints.sha256;
+          caValidity = `${parsedCa.validity.notBefore.toISOString().split("T")[0]} to ${parsedCa.validity.notAfter.toISOString().split("T")[0]}`;
+        } catch {
+          // fallback to defaults if caCertPem is unparseable
+        }
+        singleGraphNodes.push({
+          title: "Signing CA",
+          role: "Root CA",
+          subjectDn: created.issuerDn,
+          keyType: caKeyType,
+          fingerprintSha256: caFingerprint,
+          validityRange: caValidity,
+          isCa: true,
+        });
+        singleGraphNodes.push({
+          title: commonName || "Leaf Certificate",
+          role: "Server Leaf",
+          subjectDn: created.subjectDn,
+          keyType: `${keyType.toUpperCase()} / ${hashType.toUpperCase()}`,
+          fingerprintSha256: created.fingerprintSha256,
+          validityRange: `${validityDays} days`,
+          san: san || undefined,
+        });
+      } else {
+        singleGraphNodes.push({
+          title: commonName || "Self-Signed Certificate",
+          role: "Self-Signed",
+          subjectDn: created.subjectDn,
+          keyType: `${keyType.toUpperCase()} / ${hashType.toUpperCase()}`,
+          fingerprintSha256: created.fingerprintSha256,
+          validityRange: `${validityDays} days`,
+          san: san || undefined,
+        });
+      }
+
+      working.push(
+        "",
+        "#### Visual Trust Hierarchy",
+        "```text",
+        generatePkiHierarchyDiagram(singleGraphNodes),
+        "```",
+      );
+
+      const workingStr = working.join("\n");
 
       const cmdScripts = generateCertCommandScripts({
         certFile: "certificate.crt",
@@ -445,18 +618,70 @@ export async function computeCertificate(
           content: JSON.stringify(spkiToJwk(created.keyBundle.spkiBytes, keyType), null, 2),
         },
         {
+          name: "k8s-tls-secret.yaml",
+          content: generateKubernetesTlsSecret({
+            certPem: created.certPem,
+            keyPem: created.privateKeyPem,
+            caPem: created.chainPem,
+            secretName: `${(commonName || "app").replace(/[^a-z0-9-]/gi, "-").toLowerCase()}-tls`,
+          }),
+        },
+        {
+          name: "nginx.conf",
+          content: generateNginxTlsConfig({
+            serverName: commonName || "localhost",
+            certFilename: "certificate.crt",
+            keyFilename: "private.key",
+            chainFilename: created.chainPem ? "chain.pem" : undefined,
+          }),
+        },
+        {
+          name: "Caddyfile",
+          content: generateCaddyTlsConfig({
+            serverName: commonName || "localhost",
+            certFilename: "certificate.crt",
+            keyFilename: "private.key",
+          }),
+        },
+        {
+          name: "docker-compose.yaml",
+          content: generateDockerComposeConfig({
+            certFilename: "certificate.crt",
+            keyFilename: "private.key",
+            caFilename: created.chainPem ? "chain.pem" : undefined,
+          }),
+        },
+        {
+          name: "httpd-ssl.conf",
+          content: generateApacheTlsConfig({
+            serverName: commonName || "localhost",
+            certFilename: "certificate.crt",
+            keyFilename: "private.key",
+            chainFilename: created.chainPem ? "chain.pem" : undefined,
+          }),
+        },
+        {
+          name: "cloud-import.sh",
+          content: generateCloudImportCommands({
+            certFilename: "certificate.crt",
+            keyFilename: "private.key",
+            chainFilename: created.chainPem ? "chain.pem" : undefined,
+            alias: commonName || "cert",
+          }),
+        },
+        {
           name: "main.tf",
           content: generateTerraformConfig({
-            certFilename: "cert.crt",
-            keyFilename: "cert.key",
+            certFilename: "certificate.crt",
+            keyFilename: "private.key",
             caFilename: "ca.crt",
           }),
         },
         {
           name: "deploy-playbook.yaml",
           content: generateAnsiblePlaybook({
-            certFilename: "cert.crt",
-            keyFilename: "cert.key",
+            certFilename: "certificate.crt",
+            keyFilename: "private.key",
             caFilename: "ca.crt",
           }),
         },
@@ -476,7 +701,7 @@ export async function computeCertificate(
         text: created.chainPem ?? created.certPem,
         bytes: created.certDer,
         fields,
-        working,
+        working: workingStr,
         workingFormat: "markdown",
         files,
       };
@@ -749,6 +974,10 @@ export async function computeCertificate(
       const clientAuth = readClientAuth(spec.options);
       const codeSigning = readCodeSigning(spec.options);
       const hashType = readHashType(spec.options, "sha256");
+      const nameConstraintsPermitted = readNameConstraintsPermitted(spec.options);
+      const nameConstraintsExcluded = readNameConstraintsExcluded(spec.options);
+      const certificatePolicyOid = readCertificatePolicyOid(spec.options);
+      const certificatePolicyCpsUrl = readCertificatePolicyCpsUrl(spec.options);
 
       const res = await signCsr({
         csrInput: input,
@@ -762,6 +991,10 @@ export async function computeCertificate(
         clientAuth,
         codeSigning,
         hashType,
+        nameConstraintsPermitted: nameConstraintsPermitted || undefined,
+        nameConstraintsExcluded: nameConstraintsExcluded || undefined,
+        certificatePolicyOid: certificatePolicyOid || undefined,
+        certificatePolicyCpsUrl: certificatePolicyCpsUrl || undefined,
       });
 
       const fields: ToolResultField[] = [
@@ -818,10 +1051,90 @@ export async function computeCertificate(
         "```bash",
         'openssl x509 -in "cert.crt" -text -noout',
         "```",
-      ].join("\n");
+      ];
+
+      const signerGraphNodes: PkiGraphNode[] = [
+        {
+          title: caMode === "custom-ca" ? "Custom CA" : "Ephemeral Micro-CA",
+          role: "Root CA",
+          subjectDn: res.issuerDn,
+          keyType: res.caKeyType.toUpperCase(),
+          fingerprintSha256: res.fingerprints.caSha256,
+          validityRange: `${validityDays} days`,
+          isCa: true,
+        },
+        {
+          title: "Signed CSR Leaf",
+          role: "Server Leaf",
+          subjectDn: res.subjectDn,
+          keyType: res.applicantKeyAlgorithm,
+          fingerprintSha256: res.fingerprints.certSha256,
+          validityRange: `${validityDays} days`,
+          san: res.sans.join(", ") || undefined,
+        },
+      ];
+
+      working.push(
+        "",
+        "#### Visual PKI Trust Hierarchy",
+        "```text",
+        generatePkiHierarchyDiagram(signerGraphNodes),
+        "```",
+      );
 
       const exportFiles = [
         ...res.exportFiles,
+        {
+          name: "k8s-tls-secret.yaml",
+          content: generateKubernetesTlsSecret({
+            certPem: res.certPem,
+            caPem: res.caCertPem,
+            secretName: "csr-signed-tls",
+          }),
+        },
+        {
+          name: "nginx.conf",
+          content: generateNginxTlsConfig({
+            serverName: res.sans[0] || "localhost",
+            certFilename: "cert.crt",
+            keyFilename: "cert.key",
+            chainFilename: "ca.crt",
+          }),
+        },
+        {
+          name: "Caddyfile",
+          content: generateCaddyTlsConfig({
+            serverName: res.sans[0] || "localhost",
+            certFilename: "cert.crt",
+            keyFilename: "cert.key",
+          }),
+        },
+        {
+          name: "docker-compose.yaml",
+          content: generateDockerComposeConfig({
+            certFilename: "cert.crt",
+            keyFilename: "cert.key",
+            caFilename: "ca.crt",
+          }),
+        },
+        {
+          name: "httpd-ssl.conf",
+          content: generateApacheTlsConfig({
+            serverName: res.sans[0] || "localhost",
+            certFilename: "cert.crt",
+            keyFilename: "cert.key",
+            chainFilename: "ca.crt",
+          }),
+        },
+        {
+          name: "cloud-import.sh",
+          content: generateCloudImportCommands({
+            certFilename: "cert.crt",
+            keyFilename: "cert.key",
+            chainFilename: "ca.crt",
+            alias: "signed-cert",
+          }),
+        },
         {
           name: "main.tf",
           content: generateTerraformConfig({
@@ -843,7 +1156,7 @@ export async function computeCertificate(
       return {
         text: res.certPem,
         fields,
-        working,
+        working: working.join("\n"),
         workingFormat: "markdown",
         files: exportFiles,
       };

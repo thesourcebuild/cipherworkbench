@@ -43,6 +43,10 @@ export const OPTION_CA_PRIVATE_KEY = "caPrivateKey";
 export const OPTION_CLIENT_COMMON_NAME = "clientCommonName";
 export const OPTION_CA_COMMON_NAME = "caCommonName";
 export const OPTION_MTLS_P12_PASSWORD = "mtlsP12Password";
+export const OPTION_NAME_CONSTRAINTS_PERMITTED = "nameConstraintsPermitted";
+export const OPTION_NAME_CONSTRAINTS_EXCLUDED = "nameConstraintsExcluded";
+export const OPTION_CERTIFICATE_POLICY_OID = "certificatePolicyOid";
+export const OPTION_CERTIFICATE_POLICY_CPS_URL = "certificatePolicyCpsUrl";
 
 export const OPTION_PASSWORD = "password";
 export const OPTION_PRIVATE_KEY = "privateKey";
@@ -363,6 +367,22 @@ export function readIntermediateCommonName(
 
 export function readComparisonCert(options: OptionValues): string {
   return optString(options, OPTION_COMPARISON_CERT) ?? "";
+}
+
+export function readNameConstraintsPermitted(options: OptionValues): string {
+  return optString(options, OPTION_NAME_CONSTRAINTS_PERMITTED) ?? "";
+}
+
+export function readNameConstraintsExcluded(options: OptionValues): string {
+  return optString(options, OPTION_NAME_CONSTRAINTS_EXCLUDED) ?? "";
+}
+
+export function readCertificatePolicyOid(options: OptionValues): string {
+  return optString(options, OPTION_CERTIFICATE_POLICY_OID) ?? "";
+}
+
+export function readCertificatePolicyCpsUrl(options: OptionValues): string {
+  return optString(options, OPTION_CERTIFICATE_POLICY_CPS_URL) ?? "";
 }
 
 export const OPTION_CA_MODE = "caMode";

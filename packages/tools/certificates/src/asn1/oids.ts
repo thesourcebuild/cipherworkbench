@@ -115,13 +115,14 @@ export const EXTENSION_NAMES: Record<string, string> = {
   "2.5.29.20": "CRL Number",
   "2.5.29.21": "CRL Reason Code",
   "2.5.29.27": "Delta CRL Indicator",
-  "2.5.29.28": "Issuing Distribution Point",
+  "2.5.29.30": "Name Constraints",
   "2.5.29.31": "CRL Distribution Points",
   "2.5.29.32": "Certificate Policies",
   "2.5.29.35": "Authority Key Identifier",
   "2.5.29.37": "Extended Key Usage",
   "1.3.6.1.5.5.7.1.1": "Authority Information Access (AIA)",
   "1.3.6.1.4.1.11129.2.4.2": "Certificate Transparency SCT List",
+  "1.3.6.1.4.1.11129.2.4.3": "Certificate Transparency Pre-Certificate Poison",
 };
 
 export const EXTENDED_KEY_USAGES: Record<string, string> = {
