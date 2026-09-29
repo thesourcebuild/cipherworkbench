@@ -108,6 +108,9 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts[OPTION_PRIVATE_KEY] = RSA_PRIVATE_KEY_PEM;
   } else if (variant === "cert-diff") {
     opts[OPTION_COMPARISON_CERT] = RSA_CERTIFICATE_PEM;
+  } else if (variant === "tls-grader" || variant === "cert-expiry" || variant === "universal-decoder") {
+    opts[OPTION_INPUT_FORMAT] = "auto";
+    opts[OPTION_DETAIL_LEVEL] = "summary";
   }
 
   return {

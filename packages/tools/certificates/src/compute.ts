@@ -13,6 +13,9 @@ import { verifyCertificateKeyPair } from "./asn1/cert-matcher";
 import { diffCertificates, type CertDiffAttribute } from "./asn1/cert-diff";
 import { signCsr } from "./asn1/csr-signer";
 import { buildOcspRequest, parseOcspResponse, createMockOcspResponse } from "./asn1/ocsp";
+import { gradeCertificate } from "./asn1/tls-grader";
+import { auditCertificateExpiry } from "./asn1/cert-expiry";
+import { decodeUniversalArtifact } from "./asn1/universal-decoder";
 import { calculateAcmeChallenges } from "./crypto/acme";
 import { spkiToOpenSsh } from "./crypto/openssh";
 import { spkiToJwk } from "./crypto/jwk";
@@ -1410,6 +1413,152 @@ export async function computeCertificate(
     }
   }
 
+  if (spec.variant === "tls-grader") {
+    try {
+      const grade = gradeCertificate(input);
+      const fields: ToolResultField[] = [
+        { label: "Letter Grade", value: grade.grade, hint: "Overall Security & Health Grade" },
+        { label: "Score", value: `${grade.score} / 100`, hint: "Weighted baseline compliance score" },
+        { label: "Subject", value: grade.cert.subject.dn },
+        { label: "Public Key", value: `${grade.cert.publicKey.algorithmName} (${grade.cert.publicKey.details})` },
+        { label: "Signature Algorithm", value: grade.cert.signatureAlgorithmName },
+        { label: "Validity", value: grade.cert.validity.statusLabel },
+        { label: "Lifespan Progress", value: grade.cert.validity.visualProgressBar },
+        {
+          label: "CA/B Forum Status",
+          value: grade.cert.validity.cabForumCompliance.compliant
+            ? "Compliant (<=398 days)"
+            : `Warning (${grade.cert.validity.cabForumCompliance.reason})`,
+        },
+        { label: "SAN Count", value: String(grade.cert.extensions.sans.length) },
+      ];
+
+      const working = [
+        "### TLS & Certificate Health Audit",
+        "",
+        "```text",
+        grade.asciiBanner,
+        "```",
+        "",
+        "#### Evaluated Checks:",
+        ...grade.checks.map(
+          (c) =>
+            `- **${c.status === "pass" ? "✓ PASS" : c.status === "warn" ? "⚠ WARN" : "✗ FAIL"}** \`${c.name}\`: ${c.title} — ${c.detail}`,
+        ),
+        "",
+        "#### Equivalent CLI Command",
+        "```bash",
+        grade.sslxCommand,
+        "```",
+      ].join("\n");
+
+      return {
+        text: `Grade: ${grade.grade} (${grade.score}/100) — ${grade.summary}`,
+        fields,
+        working,
+        workingFormat: "markdown",
+      };
+    } catch (err) {
+      return {
+        error: `TLS Grader failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  if (spec.variant === "cert-expiry") {
+    try {
+      const report = auditCertificateExpiry(input);
+      if (report.totalCount === 0) {
+        return {
+          error:
+            "No valid X.509 certificates found in the provided input (expected PEM certificate blocks).",
+        };
+      }
+      const fields: ToolResultField[] = [
+        { label: "Total Certificates", value: String(report.totalCount) },
+        { label: "Healthy (>30d)", value: String(report.healthyCount) },
+        { label: "Expiring Soon (<=30d)", value: String(report.expiringSoonCount) },
+        { label: "Critical (<=7d)", value: String(report.criticalCount) },
+        { label: "Expired", value: String(report.expiredCount) },
+      ];
+
+      const working = [
+        "### Certificate Expiry Audit",
+        "",
+        "```text",
+        report.asciiTable,
+        "```",
+        "",
+        "#### Prometheus Alerting Rule",
+        "```yaml",
+        report.prometheusSnippet,
+        "```",
+        "",
+        "#### Equivalent CLI Command",
+        "```bash",
+        report.sslxCommand,
+        "```",
+      ].join("\n");
+
+      const files: ToolExportFile[] = [
+        { name: "expiry-report.json", content: report.jsonExport },
+        { name: "expiry-report.csv", content: report.csvExport },
+      ];
+
+      return {
+        text: report.asciiTable,
+        fields,
+        working,
+        workingFormat: "markdown",
+        files,
+      };
+    } catch (err) {
+      return {
+        error: `Expiry audit failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  if (spec.variant === "universal-decoder") {
+    try {
+      const decoded = decodeUniversalArtifact(input);
+      const fields: ToolResultField[] = [
+        { label: "Detected Artifact", value: decoded.kindLabel },
+        { label: "Recommended Tool", value: decoded.recommendedToolLabel },
+        ...decoded.properties.map((p) => ({ label: p.label, value: p.value, hint: p.hint })),
+      ];
+
+      const working = [
+        "### Universal Cryptographic Artifact Sniffer",
+        "",
+        `- **Classification**: **${decoded.kindLabel}** (\`${decoded.kind}\`)`,
+        `- **Description**: ${decoded.description}`,
+        `- **Recommended Tool**: [${decoded.recommendedToolLabel}](/tools/${decoded.recommendedToolId})`,
+        "",
+        "#### Decoded Metadata",
+        "```text",
+        decoded.formattedDump,
+        "```",
+        "",
+        "#### Equivalent CLI Command",
+        "```bash",
+        decoded.sslxCommand,
+        "```",
+      ].join("\n");
+
+      return {
+        text: decoded.formattedDump,
+        fields,
+        working,
+        workingFormat: "markdown",
+      };
+    } catch (err) {
+      return {
+        error: `Universal decoding failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
   // Resolve bytes based on auto-detect
   let der: Uint8Array;
   try {
@@ -1435,6 +1584,20 @@ export async function computeCertificate(
             value: `${cert.validity.notBefore.toISOString().split("T")[0]} to ${cert.validity.notAfter.toISOString().split("T")[0]} (${cert.validity.statusLabel})`,
             hint: "Validity period and active status",
           },
+          {
+            label: "Lifespan Progress",
+            value: `${cert.validity.visualProgressBar} (${cert.validity.daysRemaining > 0 ? `${cert.validity.daysRemaining} days remaining` : "Expired"})`,
+            hint: "Elapsed certificate lifetime percentage",
+          },
+          ...(!cert.validity.cabForumCompliance.compliant
+            ? [
+                {
+                  label: "CA/B Forum Compliance",
+                  value: `⚠️ Non-compliant: ${cert.validity.cabForumCompliance.reason}`,
+                  hint: "Public TLS baseline requirements (RFC 5280 / CA/B Forum)",
+                },
+              ]
+            : []),
           {
             label: "Serial Number",
             value: cert.serialNumber,
@@ -2156,6 +2319,51 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         {
           label: "Key Authorization",
           value: "token || '.' || base64url(sha256(accountKeyJwk))",
+        },
+      );
+      break;
+    }
+
+    case "tls-grader": {
+      fields.push(
+        {
+          label: "Security Audit Engine",
+          value: "CA/B Forum Baseline Requirements & Cryptographic Health Grader",
+          hint: "Grades certificate parameters from A+ to F across validity, key strength, signatures, extensions, and SANs.",
+        },
+        {
+          label: "Audit Dimensions",
+          value: "Validity Period (398d limit), Key Algorithm & Size, Hash Strength, SAN Coverage, Critical Extensions",
+        },
+      );
+      break;
+    }
+
+    case "cert-expiry": {
+      fields.push(
+        {
+          label: "Monitoring Engine",
+          value: "Multi-Host & Multi-Certificate Expiry & Lifespan Gauge",
+          hint: "Parses single or bundled certificates to calculate visual progress bars, days remaining, expiration alerts, and Prometheus rules.",
+        },
+        {
+          label: "Export Formats",
+          value: "Visual ASCII Table, JSON, CSV, and Prometheus Alerting Rule",
+        },
+      );
+      break;
+    }
+
+    case "universal-decoder": {
+      fields.push(
+        {
+          label: "Sniffer Engine",
+          value: "Universal Cryptographic Artifact Classifier & Decoder",
+          hint: "Autonomously detects and decodes JWT, X.509, PKCS#10, Private Keys, CRLs, SSH Public Keys, and WireGuard keys.",
+        },
+        {
+          label: "Supported Formats",
+          value: "PEM Armor, Base64/Base64URL, Raw Hex, DER Binary, OpenSSH, WireGuard",
         },
       );
       break;

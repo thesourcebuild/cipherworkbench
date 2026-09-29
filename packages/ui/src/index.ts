@@ -10,6 +10,7 @@ export { SecretField, type SecretFieldProps } from "./secret-field";
 export { ShellCommandBlock, type ShellCommandBlockProps } from "./shell-command-block";
 export {
   formatShellCommands,
+  type CliTool,
   type CommandLayout,
   type CommandShell,
   type ShellCommand,

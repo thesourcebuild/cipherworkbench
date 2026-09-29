@@ -171,11 +171,15 @@ function CsrCreatorCommands({ options }: { options: OptionValues }) {
   const keyType = optionString(options, OPTION_KEY_TYPE, "ecdsa-p256");
   const hashType = optionString(options, OPTION_HASH_TYPE, "sha256");
   const eku = ekuValue(options);
+  const subjStr = subject(options);
+  const cnMatch = subjStr.match(/\/CN=([^/]+)/);
+  const cn = cnMatch ? cnMatch[1] : "example.com";
+  const san = sanValue(options);
 
   return (
     <div className="space-y-3">
       <ShellCommandBlock
-        title="OpenSSL - Generate Key and CSR"
+        title="Generate Key and CSR"
         commands={shellVariants((shell) => [
           keyCommand(keyType),
           {
@@ -185,8 +189,8 @@ function CsrCreatorCommands({ options }: { options: OptionValues }) {
               "-key private.key",
               "-out request.csr",
               ...digestFlag(keyType, hashType),
-              `-subj ${shellQuote(subject(options), shell)}`,
-              `-addext ${shellQuote(`subjectAltName=${sanValue(options)}`, shell)}`,
+              `-subj ${shellQuote(subjStr, shell)}`,
+              `-addext ${shellQuote(`subjectAltName=${san}`, shell)}`,
               ...(eku ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`] : []),
             ],
           },
@@ -195,6 +199,16 @@ function CsrCreatorCommands({ options }: { options: OptionValues }) {
             parts: ["openssl req -in request.csr -noout -verify -text"],
           },
         ])}
+        sslxCommands={[
+          {
+            comment: "Create the PKCS#10 CSR with sslx CLI",
+            parts: [`sslx csr --cn ${cn}${san ? ` --san "${san}"` : ""}`],
+          },
+          {
+            comment: "Inspect the generated CSR",
+            parts: ["sslx inspect request.csr"],
+          },
+        ]}
       />
       <p className="text-[11px] text-slate-500 dark:text-slate-400">
         Ed25519 and ML-DSA use intrinsic signing parameters, so no digest flag is emitted for
@@ -213,7 +227,7 @@ function CsrSignerCommands({ options }: { options: OptionValues }) {
   return (
     <div className="space-y-3">
       <ShellCommandBlock
-        title="OpenSSL - Issue and Verify Certificate"
+        title="Issue and Verify Certificate"
         commands={shellVariants((shell) => [
           ...(caMode === "ephemeral-ca"
             ? [
@@ -254,6 +268,18 @@ function CsrSignerCommands({ options }: { options: OptionValues }) {
             parts: ["openssl verify -CAfile ca.crt cert.crt"],
           },
         ])}
+        sslxCommands={[
+          {
+            comment: "Sign CSR and output certificate with sslx CLI",
+            parts: [
+              `sslx sign --csr request.csr --ca ca.crt --cakey ca.key --days ${validityDays} --out cert.crt`,
+            ],
+          },
+          {
+            comment: "Verify the issued certificate and check expiration",
+            parts: ["sslx verify --ca ca.crt cert.crt", "sslx expiry cert.crt"],
+          },
+        ]}
       />
       <p className="text-[11px] text-slate-500 dark:text-slate-400">
         The in-browser signer applies the selected SAN and EKU policy. This compact OpenSSL

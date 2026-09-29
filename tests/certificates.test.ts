@@ -747,7 +747,7 @@ describe("Full mTLS Suite Generator", () => {
     expect(result.fields?.some((f) => f.label === "Client Certificate")).toBe(true);
   });
 
-  it("provides distinct, tool-specific Info fields for all 12 certificate tools", async () => {
+  it("provides distinct, tool-specific Info fields for all certificate tools", async () => {
     const { CERTIFICATE_TOOL_IDS } = await import("@ocs/certificates");
     for (const toolId of CERTIFICATE_TOOL_IDS) {
       const def = await loadTool(toolId);

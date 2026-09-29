@@ -61,6 +61,15 @@ export interface ParsedX509Certificate {
     status: "valid" | "expired" | "not-yet-valid";
     statusLabel: string;
     daysRemaining: number;
+    totalDays: number;
+    percentElapsed: number;
+    visualProgressBar: string;
+    cabForumCompliance: {
+      compliant: boolean;
+      totalDays: number;
+      maxAllowedDays: number;
+      reason?: string;
+    };
   };
   subject: ParsedName;
   publicKey: PublicKeyDetails;
@@ -314,6 +323,13 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
   let statusLabel = "";
   const msRemaining = notAfter.getTime() - now.getTime();
   const daysRemaining = Math.round(msRemaining / (1000 * 60 * 60 * 24));
+  const totalMs = Math.max(1, notAfter.getTime() - notBefore.getTime());
+  const totalDays = Math.max(1, Math.round(totalMs / (1000 * 60 * 60 * 24)));
+  const elapsedMs = Math.max(0, now.getTime() - notBefore.getTime());
+  const percentElapsed = Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100)));
+  const totalBlocks = 10;
+  const filledBlocks = Math.min(totalBlocks, Math.round((percentElapsed / 100) * totalBlocks));
+  const visualProgressBar = `[${"█".repeat(filledBlocks)}${"░".repeat(totalBlocks - filledBlocks)}] ${percentElapsed}%`;
 
   if (now.getTime() < notBefore.getTime()) {
     status = "not-yet-valid";
@@ -605,6 +621,21 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
   textLines.push(`        SHA-1:   ${fingerprints.sha1}`);
   textLines.push(`        MD5:     ${fingerprints.md5}`);
 
+  const isCa = basicConstraints?.isCa ?? false;
+  let cabForumCompliant = true;
+  let cabForumReason: string | undefined;
+
+  if (!isCa && totalDays > 398) {
+    cabForumCompliant = false;
+    cabForumReason = `Lifespan of ${totalDays} days exceeds CA/B Forum 398-day limit for public TLS certificates`;
+  } else if (/sha1|md5/i.test(signatureAlgorithmName)) {
+    cabForumCompliant = false;
+    cabForumReason = `Insecure signature algorithm (${signatureAlgorithmName}) prohibited by CA/B Forum Baseline Requirements`;
+  } else if (publicKey.keyType === "rsa" && publicKey.rsaBits && publicKey.rsaBits < 2048) {
+    cabForumCompliant = false;
+    cabForumReason = `RSA key size (${publicKey.rsaBits}-bit) is below the minimum 2048-bit requirement`;
+  }
+
   return {
     version,
     serialNumber,
@@ -617,6 +648,15 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
       status,
       statusLabel,
       daysRemaining,
+      totalDays,
+      percentElapsed,
+      visualProgressBar,
+      cabForumCompliance: {
+        compliant: cabForumCompliant,
+        totalDays,
+        maxAllowedDays: 398,
+        reason: cabForumReason,
+      },
     },
     subject,
     publicKey,

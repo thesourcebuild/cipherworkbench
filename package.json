@@ -1,11 +1,11 @@
 {
   "name": "cipherworkbench",
-  "version": "0.14.8",
+  "version": "0.15.0",
   "license": "GPL-3.0-only",
   "private": true,
   "//type": "The workspace root itself ships no JS; this is here so vitest.config.ts loads as ESM under Vite's native config loader instead of warning about CommonJS.",
   "type": "module",
-  "description": "Cross-platform cipher suite workbench \u2014 compute and validate hashes, CRCs, MACs, KDFs and ciphers. Web and desktop.",
+  "description": "Cross-platform cipher suite workbench — compute and validate hashes, CRCs, MACs, KDFs and ciphers. Web and desktop.",
   "packageManager": "pnpm@12.8.1",
   "engines": {
     "node": ">=20.11"
@@ -50,7 +50,6 @@
     "@noble/curves": "^2.3.0",
     "@noble/hashes": "^2.2.0",
     "@noble/post-quantum": "0.7.0",
-    "@scure/base": "^1.2.6",
     "@ocs/algos": "workspace:*",
     "@ocs/asymmetric": "workspace:*",
     "@ocs/certificates": "workspace:*",
@@ -71,8 +70,10 @@
     "@ocs/platform": "workspace:*",
     "@ocs/registry": "workspace:*",
     "@ocs/ui": "workspace:*",
+    "@scure/base": "^1.2.6",
     "@types/node": "^22.20.1",
     "bcryptjs": "^3.0.3",
+    "debug": "^4.4.3",
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "hash-wasm": "^4.12.0",

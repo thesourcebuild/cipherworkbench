@@ -285,6 +285,15 @@ export function generateCertCommandScripts(opts: {
           `curl -vk https://localhost:8443 --cacert "${chainFile ?? certFile}"`,
         ],
       },
+      {
+        id: "sslx",
+        description: "Inspect and verify with modern sslx CLI",
+        commands: [
+          `sslx inspect "${certFile}"`,
+          `sslx match "${certFile}" "${keyFile}"`,
+          ...(chainFile ? [`sslx verify "${certFile}" --ca "${chainFile}"`] : []),
+        ],
+      },
     ],
     reproduceCommand: opensslCommand,
   });
@@ -340,6 +349,15 @@ export function generateMtlsCommandScripts(opts: {
         description: "Test client connection with cURL (PKCS#12 password-protected container)",
         commands: [curlP12],
       },
+      {
+        id: "sslx",
+        description: "Inspect certificates and verify expiry with sslx CLI",
+        commands: [
+          "sslx inspect server.crt",
+          "sslx expiry server.crt client.crt ca.crt",
+          "sslx match server.crt server.key",
+        ],
+      },
     ],
   });
 }
@@ -376,6 +394,11 @@ export function generateCsrCommandScripts(opts: {
         id: "key",
         description: "Validate private key parameters",
         commands: [`openssl pkey -in "${keyFile}" -text -noout`],
+      },
+      {
+        id: "sslx",
+        description: "Inspect CSR with modern sslx CLI",
+        commands: [`sslx inspect "${csrFile}"`],
       },
     ],
     reproduceCommand: opensslCommand,

@@ -1,5 +1,6 @@
 export type CommandShell = "bash" | "powershell" | "cmd";
 export type CommandLayout = "multiline" | "single-line";
+export type CliTool = "openssl" | "sslx";
 
 export interface ShellCommand {
   /** Optional explanation rendered using the selected shell's comment syntax. */

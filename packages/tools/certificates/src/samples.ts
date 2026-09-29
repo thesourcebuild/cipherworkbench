@@ -199,6 +199,57 @@ ALWsLd9wsenS3NCf5ndbwya6e7OBPQIhALmuwWcrHC3HGhbGNNqCMtEP7a0QXr4j
 DZZGOeaGwCpn
 -----END CERTIFICATE-----`;
 
+export const EXPIRED_CERTIFICATE_PEM = `-----BEGIN CERTIFICATE-----
+MIIDMTCCAhmgAwIBAgIUINJeo01SG4o6RC4aPcv/rcpY5TYwDQYJKoZIhvcNAQEL
+BQAwQTELMAkGA1UEBhMCVVMxFDASBgNVBAoMC0xlZ2FjeSBDb3JwMRwwGgYDVQQD
+DBNleHBpcmVkLmV4YW1wbGUuY29tMB4XDTIwMDEwMTAwMDAwMFoXDTIxMDEwMTAw
+MDAwMFowQTELMAkGA1UEBhMCVVMxFDASBgNVBAoMC0xlZ2FjeSBDb3JwMRwwGgYD
+VQQDDBNleHBpcmVkLmV4YW1wbGUuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEAswHCGnPpEncms5Qc2nAsv6YItg4abKaisHnUMepl2NuM9wTDS9Xr
+Req2TnMoOjanxPUW8uJgIa3uh5C0/Cay1G5/wq4SFwIg+ljKVShA0z9rWCKSt1Wb
+fUUwPdramheV8VI16w2oquOJW0atnjfJiEu9IcezRcW4gsQhAy6q3Jj18ZC92os4
+52U2zd4DwT7Ep8TumUrjRu9ZORzlbCaB/S7EhVTT5ix37hB0WI8IvVHEa6z93Axd
+6vH9+kRc4OyVXlOPpbgJpaRNVnvGbUt1lB9UJFH+F82jjdPb8rsXI60/x28rhSBd
+TeR0+rdHwcEfxidMtGB0abaT7BFpYuLQ/QIDAQABoyEwHzAdBgNVHQ4EFgQUYH8Z
+G1PhYxrZyp14tO5LYq65Wl8wDQYJKoZIhvcNAQELBQADggEBAJBwI6TrpVOO8ZiA
+HwCbUQ4ut6EjoB7Y01H6If/q2cBHxEy5/p/l+2fe2U/mlKA442Hx6e6kUguwc/y/
+fuSBzbfUP5h18Szei5/a2Atycv+KoaYUONldY/E1w+RuwT4cEavhRkbSTxLYGxzy
+pGAnzpuTuzE80vsmcOWpdY8Nop3yoDSkyTFnPX38cnKNDKomj+vwAl2cf9JAsG7R
+QtHTe3YXo9pWU6qkK9jrsEPuHGzA+Jql3r+CQ5P/ifR5BOlrg8QOmIn4JqRDJI1T
+QijKDVOs/fodrFDy/kqFR0KZNkFF1njgW6jpKqwF/nFR3Va8hX5JCj1Vi0/3lEoe
+Qaezrvg=
+-----END CERTIFICATE-----`;
+
+export const EXPIRING_SOON_CERTIFICATE_PEM = `-----BEGIN CERTIFICATE-----
+MIIBvTCCAWOgAwIBAgIUe+1Q4290WdsbscRU1m+2sxiNjyIwCgYIKoZIzj0EAwIw
+TTELMAkGA1UEBhMCVVMxGTAXBgNVBAoMEFByb2R1Y3Rpb24gQ2xvdWQxIzAhBgNV
+BAMMGmFwaS5leHBpcmluZy1zb29uLmludGVybmFsMB4XDTI1MTAxNTAwMDAwMFoX
+DTI2MTAxNTAwMDAwMFowTTELMAkGA1UEBhMCVVMxGTAXBgNVBAoMEFByb2R1Y3Rp
+b24gQ2xvdWQxIzAhBgNVBAMMGmFwaS5leHBpcmluZy1zb29uLmludGVybmFsMFkw
+EwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEBoKa9/zgbt3ICbsvtIBrJSciGoqoXg7E
+dzQ6/DmAmwazzK0VEVTNvXx4DqeZAPrvmPY27NnQkFCsIjBjlfWZx6MhMB8wHQYD
+VR0OBBYEFCafnwUulvhcO4IyFuN/PFz/H8SVMAoGCCqGSM49BAMCA0gAMEUCIATZ
+jCUQwUksxAIErxxp/0gkfUbvPyBvdXBj/suUIE7OAiEA2FSH5XyYZznGi2eLm4YY
+Q1DRs0Q+pgXqLuTuocr3LHQ=
+-----END CERTIFICATE-----`;
+
+export const WILDCARD_SAN_CERTIFICATE_PEM = `-----BEGIN CERTIFICATE-----
+MIICIjCCAcegAwIBAgIUUbemuvskY+47w5SJPZ7WgdmMXycwCgYIKoZIzj0EAwIw
+VTELMAkGA1UEBhMCVVMxJzAlBgNVBAoMHkNpcGhlcldvcmtiZW5jaCBJbmZyYXN0
+cnVjdHVyZTEdMBsGA1UEAwwUKi53b3JrYmVuY2guaW50ZXJuYWwwHhcNMjYwOTAx
+MDAwMDAwWhcNMjcwOTAxMDAwMDAwWjBVMQswCQYDVQQGEwJVUzEnMCUGA1UECgwe
+Q2lwaGVyV29ya2JlbmNoIEluZnJhc3RydWN0dXJlMR0wGwYDVQQDDBQqLndvcmti
+ZW5jaC5pbnRlcm5hbDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABDR9rJKJK0ue
+EhSpekhIn3x1oYXmlpXyxloVuWZ05rYoB8I3HdKmNtRcSQxbbE6cWTEhPRiqVV5X
+LmanaO67ZZGjdTBzMFIGA1UdEQRLMEmCFCoud29ya2JlbmNoLmludGVybmFsghJ3
+b3JrYmVuY2guaW50ZXJuYWyCF2F1dGgud29ya2JlbmNoLmludGVybmFshwQKAAAB
+MB0GA1UdDgQWBBR20oMFLeDQ8KxfMWD4kODoRW69SDAKBggqhkjOPQQDAgNJADBG
+AiEAtsiFKt7fkfpXj9KhaljEmSxoEb+WWib4bNpKVllnGnoCIQDpxe/Ne/KDs3gs
+nTog9m543sAdOhabAe4wry7P0LAugA==
+-----END CERTIFICATE-----`;
+
+export const SAMPLE_FLEET_BUNDLE_PEM = `${EXPIRING_SOON_CERTIFICATE_PEM}\n\n${EXPIRED_CERTIFICATE_PEM}\n\n${WILDCARD_SAN_CERTIFICATE_PEM}\n\n${SAMPLE_2TIER_SERVER_PEM}\n\n${SAMPLE_ROOT_CA_PEM}`;
+
 export const SAMPLE_CRL_PEM = `-----BEGIN X509 CRL-----
 MIICKDCCARACAQEwDQYJKoZIhvcNAQELBQAwgYQxCzAJBgNVBAYTAlVTMRMwEQYD
 VQQIDApDYWxpZm9ybmlhMRYwFAYDVQQHDA1TYW4gRnJhbmNpc2NvMRkwFwYDVQQK
@@ -443,6 +494,69 @@ export function samplesFor(toolId: string): ToolSample[] {
           label: "ACME Challenge Token",
           note: "RFC 8555 HTTP-01 and DNS-01 challenge calculation sample",
           text: "evaGxfADs6pSRb2LAv9IZf17Dt3juxGJ-PCt92wr-oA",
+        },
+      ];
+    case "tls-grader":
+      return [
+        {
+          id: "tls-grade-sample",
+          label: "Production TLS Certificate",
+          note: "X.509 certificate to audit and grade against CA/B Forum and cryptographic baselines",
+          text: SAMPLE_2TIER_SERVER_PEM,
+        },
+      ];
+    case "cert-expiry":
+      return [
+        {
+          id: "fleet-expiry-bundle",
+          label: "Production Fleet Multi-Host Bundle (Mixed Lifespans)",
+          note: "Heterogeneous multi-host bundle containing active, expiring soon (<30d), and expired certificates",
+          text: SAMPLE_FLEET_BUNDLE_PEM,
+        },
+        {
+          id: "expiring-soon-sample",
+          label: "Urgent: Expiring Soon (< 30 Days)",
+          note: "Production API certificate with under 30 days of validity remaining, triggering warning status",
+          text: EXPIRING_SOON_CERTIFICATE_PEM,
+        },
+        {
+          id: "expired-cert-sample",
+          label: "Outdated / Expired Certificate",
+          note: "Legacy certificate that has exceeded its validity period, showing 100% elapsed gauge and expired alert",
+          text: EXPIRED_CERTIFICATE_PEM,
+        },
+        {
+          id: "wildcard-san-sample",
+          label: "Wildcard & Multi-SAN Certificate",
+          note: "Active enterprise wildcard certificate (*.workbench.internal) with multi-domain SANs",
+          text: WILDCARD_SAN_CERTIFICATE_PEM,
+        },
+        {
+          id: "cert-bundle-expiry",
+          label: "2-Tier Infrastructure CA & Server Bundle",
+          note: "Multi-certificate PEM bundle to audit expiration schedules and visual lifespans",
+          text: `${SAMPLE_2TIER_SERVER_PEM}\n\n${RSA_CERTIFICATE_PEM}\n\n${SAMPLE_ROOT_CA_PEM}`,
+        },
+        {
+          id: "single-server-expiry",
+          label: "Standalone Production TLS Certificate",
+          note: "Single edge server certificate to inspect remaining lifespan and visual progress bar",
+          text: SAMPLE_2TIER_SERVER_PEM,
+        },
+      ];
+    case "universal-decoder":
+      return [
+        {
+          id: "jwt-token-sample",
+          label: "Signed JWT Token",
+          note: "Standard compact JSON Web Token container for automatic classification and unpacking",
+          text: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjI1MzQwMjMwMDd9.dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
+        },
+        {
+          id: "cert-pem-sample",
+          label: "X.509 Certificate PEM",
+          note: "Standard PEM certificate for automatic detection",
+          text: RSA_CERTIFICATE_PEM,
         },
       ];
     default:

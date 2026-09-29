@@ -91,6 +91,27 @@ export const CERTIFICATE_TOOLS: readonly CertificateToolMeta[] = [
     summary: "Calculate RFC 8555 HTTP-01 and DNS-01 challenge digests, TXT records, and cross-platform verification scripts.",
     tags: ["acme", "letsencrypt", "dns01", "http01", "rfc8555", "tls", "zerossl", "challenge"],
   },
+  {
+    id: "tls-grader",
+    label: "TLS & Certificate Grader",
+    category: "Analysis",
+    summary: "Audit certificate and chain health, assigning an A+ to F letter grade with CA/B Forum and cryptographic baseline checks.",
+    tags: ["grade", "audit", "security", "ssllabs", "sslx", "tls", "x509", "compliance", "health"],
+  },
+  {
+    id: "cert-expiry",
+    label: "Certificate Expiry Monitor",
+    category: "Analysis",
+    summary: "Monitor expiration schedules across single or bulk certificate bundles with visual lifespan progress bars and Prometheus alert rules.",
+    tags: ["expiry", "expiration", "monitor", "lifespan", "days", "bulk", "audit", "alerts"],
+  },
+  {
+    id: "universal-decoder",
+    label: "Universal Crypto Sniffer",
+    category: "Analysis",
+    summary: "Automatically detect and unpack unknown cryptographic tokens, PEM/DER certificates, private keys, CSRs, CRLs, and JWTs.",
+    tags: ["sniff", "detect", "decode", "jwt", "pem", "der", "auto", "inspector"],
+  },
 ] as const;
 
 export const CERTIFICATE_TOOL_IDS = CERTIFICATE_TOOLS.map((t) => t.id);

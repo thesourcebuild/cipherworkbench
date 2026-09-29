@@ -54,6 +54,12 @@ export function describeSpec(spec: CertificateSpec): string {
       return "Inspects and decodes RFC 6960 OCSP revocation responses, generates responder queries, and exports OCSP staple bundles.";
     case "acme":
       return "Calculates RFC 8555 HTTP-01 and DNS-01 challenge parameters, TXT record digests, and cross-platform verification scripts.";
+    case "tls-grader":
+      return "Audits certificate and chain security, generating an A+ to F letter grade with CA/B Forum and modern cryptographic checks.";
+    case "cert-expiry":
+      return "Monitors expiration dates across single or multi-certificate bundles with visual lifespan progress bars and Prometheus alert rules.";
+    case "universal-decoder":
+      return "Automatically sniffs, detects, and decodes unknown cryptographic tokens, PEM/DER certificates, keys, CSRs, and JWTs.";
     default:
       return "Certificate analysis and conversion tool.";
   }

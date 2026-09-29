@@ -148,14 +148,37 @@ export {
 } from "./asn1/encoder";
 export { encodePem, parseAllPem, detectInputBytes } from "./asn1/pem";
 export {
+  gradeCertificate,
+  type TlsGradeCheck,
+  type TlsGradeLetter,
+  type TlsGradeResult,
+} from "./asn1/tls-grader";
+export {
+  auditCertificateExpiry,
+  extractCertPems,
+  type CertExpiryItem,
+  type CertExpiryReport,
+} from "./asn1/cert-expiry";
+export {
+  decodeUniversalArtifact,
+  type DetectedArtifactKind,
+  type DecodedProperty,
+  type UniversalDecoderResult,
+} from "./asn1/universal-decoder";
+export {
   RSA_CERTIFICATE_PEM,
   RSA_PRIVATE_KEY_PEM,
   ECDSA_CSR_PEM,
   CA_CERTIFICATE_PEM,
   CERTIFICATE_CHAIN_PEM,
   SAMPLE_ROOT_CA_PEM,
+  SAMPLE_2TIER_SERVER_PEM,
   SAMPLE_2TIER_CHAIN_PEM,
   SAMPLE_3TIER_CHAIN_PEM,
+  EXPIRED_CERTIFICATE_PEM,
+  EXPIRING_SOON_CERTIFICATE_PEM,
+  WILDCARD_SAN_CERTIFICATE_PEM,
+  SAMPLE_FLEET_BUNDLE_PEM,
   SAMPLE_CRL_PEM,
   SAMPLE_PPK_TEXT,
   SAMPLE_PKCS12_BASE64,

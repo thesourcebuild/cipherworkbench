@@ -235,6 +235,8 @@ describe("loadTool", () => {
     "cert-diff": /certificate|PEM|DER/i,
     "csr-signer": /CSR|PKCS#10|certificate|PEM|DER/i,
     ocsp: /OCSP|response|request|certificate|PEM|DER/i,
+    "tls-grader": /TLS|certificate|PEM|DER/i,
+    "cert-expiry": /certificate|PEM|DER/i,
     /**
      * BCH is here for a different reason from the four above, and it is worth distinguishing.
      *

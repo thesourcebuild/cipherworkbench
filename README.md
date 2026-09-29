@@ -117,6 +117,7 @@ Cipher Workbench relies on and builds upon several outstanding open-source crypt
 - **[Greg Cook's RevEng Catalogue](https://mcmilk.de/projects/user-defined-crc/)** — The definitive catalogue of named CRC algorithms powering the 113 CRC variant definitions.
 - **[emn178 / WHATWG Text Encoding](https://github.com/emn178/js-sha256)** — Legacy single-byte and multi-byte character encoding tables for exact byte-level digest input support.
 - **[OpenSSL Project](https://www.openssl.org)** — Reference cryptographic implementation used for host parity and differential test suites.
+- **[sslx](https://github.com/glincker/sslx)** by glincker — A modern, ergonomic CLI toolkit for X.509 certificate inspection, grading, and expiry monitoring. The `cert-expiry` multi-host lifespan monitor, `tls-grader` CA/B Forum auditor, and `universal-decoder` cryptographic sniffer in Cipher Workbench are directly inspired by `sslx grade`, `sslx expiry`, and `sslx decode`.
 
 We extend our deep gratitude to all the authors, maintainers, and security researchers whose work makes open-source cryptography reliable and accessible.
 

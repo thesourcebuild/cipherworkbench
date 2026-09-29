@@ -890,6 +890,8 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
     options.push(OCSP_OP, ISSUER_CERT);
   } else if (meta.id === "acme") {
     options.push(ACME_DOMAIN, ACME_TOKEN, ACME_ACCOUNT_KEY);
+  } else if (meta.id === "tls-grader" || meta.id === "cert-expiry" || meta.id === "universal-decoder") {
+    options.push(INPUT_FORMAT, DETAIL_LEVEL);
   }
 
   return createOptionCatalogue(options);
