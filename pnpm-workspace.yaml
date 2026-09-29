@@ -3,14 +3,31 @@ packages:
   - "packages/*"
   - "packages/tools/*"
 
-# pnpm 10+ blocks postinstall scripts unless a package is listed here.
-# `electron` needs its postinstall to download the platform binary.
-#
-# Note what is NOT here, and never should be: this app has no native modules.
-# Every algorithm is pure ESM (@noble/*, @scure/*, @ocs/algos), which is what
-# lets one bundle serve a browser tab and an Electron renderer unchanged.
+# pnpm 11+ uses allowBuilds, while pnpm 10 uses onlyBuiltDependencies.
+# Both are provided for seamless compatibility.
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  "@tailwindcss/oxide": true
+  unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - "@next/env@16.3.7"
+  - "@next/mdx@16.3.7"
+  - "@next/swc-darwin-arm64@16.3.7"
+  - "@next/swc-darwin-x64@16.3.7"
+  - "@next/swc-linux-arm64-gnu@16.3.7"
+  - "@next/swc-linux-arm64-musl@16.3.7"
+  - "@next/swc-linux-x64-gnu@16.3.7"
+  - "@next/swc-linux-x64-musl@16.3.7"
+  - "@next/swc-win32-arm64-msvc@16.3.7"
+  - "@next/swc-win32-x64-msvc@16.3.7"
+  - next@16.3.7
+
 onlyBuiltDependencies:
   - electron
+  - electron-winstaller
   - esbuild
   - "@tailwindcss/oxide"
   - unrs-resolver

@@ -13,6 +13,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@noble/hashes": "^2.2.0"
+  },
   "devDependencies": {
     "@ocs/config": "workspace:*",
     "typescript": "^5.9.3"
