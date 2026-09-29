@@ -40,7 +40,7 @@ const content: TutorialContent = {
     "ML-KEM handles quantum-safe key exchange; ML-DSA (FIPS 204) and SLH-DSA (FIPS 205) handle quantum-safe digital signatures."
   ],
   "seed": {
-    "toolId": "ml-kem",
+    "toolId": "mlkem",
     "sampleInput": "",
     "explanation": "Open ML-KEM (FIPS 203) Workbench to generate quantum-safe lattice keypairs and test encapsulation live."
   }

@@ -22,7 +22,7 @@ const content: TutorialContent = {
       title: "Step 3: Alice encrypts the content with AES-GCM",
       speaker: "Alice",
       content:
-        "Alice encrypts her entire 50 MB document with AES-256-GCM using the session key. This takes **milliseconds** and produces authenticated ciphertext.\n\nThe session key alone is useless to Eve unless she also has the plaintext or can break AES.",
+        "Alice encrypts her entire 50 MB document with AES-256-GCM using the session key. This takes **milliseconds** and produces authenticated ciphertext.\n\nThe ciphertext alone is useless to Eve unless she can obtain the session key or break AES.",
     },
     {
       title: "Step 4: Alice encrypts the session key with RSA",
@@ -38,7 +38,11 @@ const content: TutorialContent = {
       title: "Step 5: Alice sends both together",
       speaker: "Alice",
       content:
-        "Alice sends Bob one bundle:\n\n1. The AES-GCM encrypted ciphertext (50 MB)\n2. The RSA-encrypted session key (256 bytes)\n\nEve intercepts both. She cannot open the RSA envelope without Bob's private key. Even if she could, the session key only decrypts this one message — Alice will use a fresh key next time.",
+        "Alice sends Bob one bundle:\n\n1. The AES-GCM encrypted ciphertext with its 12-byte Nonce and 16-byte authentication tag (50 MB)\n2. The RSA-encrypted session key (256 bytes)\n\nEve intercepts both. She cannot open the RSA envelope without Bob's private key. Notice, however, that if Bob's private key is ever compromised in the future, Eve can retroactively decrypt this session key and read the message — static RSA hybrid encryption lacks Perfect Forward Secrecy.",
+      callout: {
+        type: "warning",
+        text: "Zero Sender Authenticity: Anyone can encrypt with Bob's public key. Hybrid encryption guarantees only Bob can read the message, but proves nothing about who sent it. In PGP and S/MIME, Alice must also digitally sign the message with her private key to prove authorship.",
+      },
     },
     {
       title: "Step 6: Bob decrypts in two steps",
@@ -47,7 +51,7 @@ const content: TutorialContent = {
         "Bob uses his **RSA Private Key** to decrypt the session key bundle → recovers the 32-byte AES key.\n\nThen Bob uses the recovered AES session key to decrypt the main ciphertext → recovers Alice's full document.\n\n**This is Hybrid Encryption**: the best of both worlds — RSA's key transport capability with AES's speed.",
       callout: {
         type: "security",
-        text: "PGP, S/MIME email encryption, TLS key encapsulation (pre-1.3), and age (the modern file encryption tool) all use hybrid encryption. In TLS 1.3, ECDH replaced RSA-KEM for the session key agreement, achieving Perfect Forward Secrecy — a significant upgrade.",
+        text: "PGP, S/MIME email encryption, pre-1.3 TLS (via RSA key transport), and age (via X25519) all use hybrid encryption. In TLS 1.3, ephemeral ECDH replaced static RSA key transport, achieving Perfect Forward Secrecy — ensuring past recorded traffic cannot be decrypted even if server private keys are later compromised.",
       },
     },
   ],
@@ -55,8 +59,8 @@ const content: TutorialContent = {
     "RSA is too slow for bulk data encryption — it is designed for small payloads like keys.",
     "Hybrid Encryption: encrypt the **data** with fast AES; encrypt the **AES key** with slow RSA.",
     "Always use RSA-OAEP padding — PKCS#1 v1.5 is broken and must never be used for new systems.",
-    "PGP, S/MIME, and many file encryption tools use exactly this two-step pattern.",
-    "TLS 1.3 replaced RSA-KEM with ECDH for the session key, gaining Perfect Forward Secrecy.",
+    "Hybrid encryption provides confidentiality for the recipient, but requires a digital signature for sender authenticity.",
+    "TLS 1.3 replaced static RSA key transport with ephemeral ECDH, gaining Perfect Forward Secrecy.",
   ],
   seed: {
     toolId: "rsa",

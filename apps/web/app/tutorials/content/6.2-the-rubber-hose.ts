@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -33,10 +33,10 @@ const content: TutorialContent = {
         "Mallory attaches a current probe to a smart card processing an AES encryption. The power consumption varies based on the bits being processed — high bits cause more transistor switching than low bits.\n\n**Simple Power Analysis (SPA):** A single power trace reveals key bits directly.\n**Differential Power Analysis (DPA):** Statistical analysis over thousands of encryptions recovers the full key even with noise.\n\nThis is not theoretical — DPA attacks have recovered keys from bank cards, passports, and HSMs in laboratory conditions.",
     },
     {
-      title: "Step 4: Cache Timing Attacks (Spectre, Flush+Reload)",
+      title: "Step 4: Cache Timing Attacks (Flush+Reload, Spectre)",
       speaker: "Eve",
       content:
-        "Modern CPUs cache frequently accessed memory. AES uses lookup tables (S-boxes) stored in memory. If the table access pattern depends on key bits, cache timing reveals those bits.\n\n**Flush+Reload:** Eve flushes a cache line, waits for Bob to encrypt, then measures how fast she can reload it. If it's fast, Bob accessed that cache line — revealing which S-box entries he looked up — revealing key bits.\n\nThis is the foundation of **Spectre** (2018) — a CPU-level vulnerability that affected every major processor.",
+        "Modern CPUs cache frequently accessed memory. Software AES implementations often use lookup tables (T-tables and S-boxes) stored in memory. If the table access pattern depends on key bits, cache timing reveals those bits.\n\n**Flush+Reload:** Eve flushes a cache line, waits for Bob to encrypt, then measures how fast she can reload it. If it's fast, Bob accessed that cache line — revealing which table entries he looked up — revealing key bits.\n\nCache timing measurement techniques like Flush+Reload also serve as the covert readout channel in speculative execution vulnerabilities like **Spectre** (2018).",
       callout: {
         type: "warning",
         text: "Modern AES-NI CPU instructions avoid this entirely by computing AES in dedicated hardware registers with no memory lookups. Always use hardware AES acceleration when available.",
@@ -53,7 +53,7 @@ const content: TutorialContent = {
     "Side-channel attacks exploit the *physical implementation*, not the mathematical algorithm.",
     "Timing attacks: always use constant-time comparison for secrets (`crypto.timingSafeEqual`).",
     "Power analysis: use hardware AES-NI and constant-weight algorithms on embedded systems.",
-    "Cache attacks (Spectre): use hardware AES acceleration to avoid software S-box table lookups.",
+    "Cache timing attacks: use hardware AES acceleration (AES-NI) to avoid software S-box table lookups.",
     "Perfect cryptography cannot protect against physical coercion — operational security matters.",
   ],
   seed: {

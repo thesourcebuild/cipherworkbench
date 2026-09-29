@@ -7,7 +7,7 @@ const content: TutorialContent = {
     {
       "title": "Step 1: Alice publishes the Official Fingerprint",
       "speaker": "Alice",
-      "content": "Alice builds a software update: `\"Install CipherWorkbench v0.14.0\"`. She computes the SHA-256 hash in Cipher Workbench:\n`b61b8f047535b914...`\nAlice posts this exact fingerprint on her verified website."
+      "content": "Alice builds a software update: `\"Install CipherWorkbench v0.14.0\"`. She computes the SHA-256 hash in Cipher Workbench:\n`474c60ba2deb4a23...`\nAlice posts this exact fingerprint on her verified website."
     },
     {
       "title": "Step 2: Mallory tries to tamper with the download mirror",
@@ -17,7 +17,7 @@ const content: TutorialContent = {
     {
       "title": "Step 3: The Avalanche Effect catches Mallory",
       "speaker": "Bob",
-      "content": "Bob downloads the file from the mirror and computes its SHA-256 hash locally. Instead of `b61b8f...`, Bob gets a completely different digest: `9f3c17...`.\nBecause Bob is comparing against Alice's pre-published fingerprint, Bob sees the mismatch instantly and deletes the infected file!",
+      "content": "Bob downloads the file from the mirror and computes its SHA-256 hash locally. Instead of `474c60...`, Bob gets a completely different digest: `9f3c17...`.\nBecause Bob is comparing against Alice's pre-published fingerprint, Bob sees the mismatch instantly and deletes the infected file!",
       "callout": {
         "type": "security",
         "text": "Second Pre-image Resistance: Given an input and its SHA-256 hash, it is computationally impossible for an attacker to find a different input that produces the exact same hash."

@@ -25,7 +25,7 @@ const content: TutorialContent = {
     {
       "title": "Step 3: Alice uses a position-weighted check digit: The Luhn Algorithm",
       "speaker": "Alice",
-      "content": "To catch human swaps on account numbers without heavy math, Alice uses a weighted check digit. She takes a 15-digit card number payload: `453201511283036`. The Luhn algorithm (Mod 10) processes digits from right to left, multiplying every second digit by 2 (and adding the digits of products ≥ 10). Because alternating positions have different weights (1 and 2), adjacent numbers no longer produce the same sum when swapped! Alice adds the computed check digit `6` to the end, forming the valid 16-digit card number: `4532015112830366`."
+      "content": "To catch human swaps on account numbers without heavy math, Alice uses a weighted check digit. She takes a 15-digit card number payload: `453201511283036`. The Luhn algorithm (Mod 10) processes digits from right to left, multiplying every second digit by 2 (and adding the digits of products ≥ 10). Because alternating positions have different weights (1 and 2), adjacent numbers no longer produce the same sum when swapped (with the sole exception of `09 ↔ 90`, which later motivated algorithms like Verhoeff). Alice adds the computed check digit `6` to the end, forming the valid 16-digit card number: `4532015112830366`."
     },
     {
       "title": "Step 4: Bob catches the swapped digits instantly",
@@ -40,7 +40,7 @@ const content: TutorialContent = {
   "takeaways": [
     "Simple checksums (additive sums, XOR, one's complement) sum data bytes to detect dropped bytes or transmission noise with near-zero overhead.",
     "Additive checksums are order-independent (commutative), making them incapable of catching transposition errors (swapped digits like 36 ↔ 63) or compensating errors.",
-    "Check digits (such as Luhn, ISBN-10, and Verhoeff) apply position-dependent weights to catch 100% of single-digit typos and adjacent transpositions.",
+    "Check digits apply position-dependent weights to catch single-digit typos and adjacent transpositions (Verhoeff and Damm catch 100%, while Luhn catches ~98%, missing only 09 ↔ 90).",
     "Neither checksums nor check digits are cryptographic: they protect against accidental noise and human slip-ups, not deliberate tampering."
   ],
   "seed": {

@@ -1,7 +1,7 @@
 import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
-  "analogy": "Imagine a long mathematical division problem. You divide a huge number by a special prime polynomial and keep only the remainder (like the change left over in your pocket). If even a tiny cluster of bits flips, the remainder completely changes.",
+  "analogy": "Imagine a long mathematical division problem. You divide a huge number by a predetermined generator polynomial and keep only the remainder (like the change left over in your pocket). If even a tiny cluster of bits flips, the remainder completely changes.",
   "problem": "Why do simple addition checksums fail when network noise flips multiple bits, and how does CRC solve telecommunication burst errors?",
   "steps": [
     {

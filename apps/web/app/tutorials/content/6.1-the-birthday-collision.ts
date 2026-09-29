@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -16,7 +16,7 @@ const content: TutorialContent = {
       title: "Step 2: The Birthday Paradox in Hash Math",
       speaker: "Eve",
       content:
-        "If a hash function has an n-bit output, there are 2ⁿ possible hash values. To find a collision:\n\n- **Pre-image attack** (find input for a specific hash): requires ~2ⁿ attempts\n- **Collision attack** (find *any* two inputs with the same hash): requires only ~2^(n/2) attempts\n\nFor MD5 (128-bit output): collision attack requires ~2⁶⁴ operations — feasible on a modern GPU cluster in **hours**.\n\nFor SHA-1 (160-bit output): ~2⁸⁰ operations — Google's SHAttered attack produced a real SHA-1 collision in 2017, costing ~$100,000 in cloud compute.",
+        "If a hash function has an n-bit output, there are 2ⁿ possible hash values. To find a collision:\n\n- **Pre-image attack** (find input for a specific hash): requires ~2ⁿ attempts\n- **Collision attack** (find *any* two inputs with the same hash): requires only ~2^(n/2) attempts via the birthday bound\n\nFor MD5 (128-bit output): a generic collision search requires ~2⁶⁴ operations, but Wang et al. (2004) found cryptanalytic shortcuts reducing this to seconds on commodity hardware.\n\nFor SHA-1 (160-bit output): a generic birthday attack requires ~2⁸⁰ operations. However, cryptanalytic weaknesses allowed Google's SHAttered attack (2017) to find a real collision in ~2⁶³ operations (about 9 quintillion computations, ~100,000× faster than birthday search), costing ~$100,000 in cloud compute.",
       callout: {
         type: "warning",
         text: "SHAttered (2017): Google produced two different PDF files with identical SHA-1 hashes. SHA-1 certificates were immediately deprecated by all major browsers. MD5 collisions have been demonstrated since 2004.",
@@ -32,7 +32,7 @@ const content: TutorialContent = {
       title: "Step 4: Why SHA-256 Is Safe (For Now)",
       speaker: "Bob",
       content:
-        "SHA-256 produces a 256-bit output. Collision resistance requires ~2¹²⁸ operations — equivalent to searching through more atoms than exist on Earth.\n\nSHA-3 (Keccak) provides an alternative with different internal construction, resistant to length-extension attacks that affect SHA-256.\n\nFor digital signatures, NIST recommends SHA-256 minimum, SHA-384 for 192-bit security, SHA-512 for 256-bit security.",
+        "SHA-256 produces a 256-bit output. Collision resistance requires ~2¹²⁸ operations — an astronomical computational barrier requiring trillions of times more energy than the entire global power grid produces in a century.\n\nSHA-3 (Keccak) provides an alternative with different internal construction, resistant to length-extension attacks that affect SHA-256.\n\nFor digital signatures, NIST recommends SHA-256 minimum, SHA-384 for 192-bit security, SHA-512 for 256-bit security.",
       callout: {
         type: "security",
         text: "Never use MD5 or SHA-1 for security purposes — only for non-security checksums where collision resistance is irrelevant (e.g. file deduplication in a trusted environment). Git is migrating from SHA-1 to SHA-256 (SHA-256 object format) for exactly this reason.",

@@ -70,7 +70,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Alice",
           "Bob"
         ],
-        "summary": "Lightning strikes near a transmission cable, flipping 5 consecutive bits in an Ethernet frame. A simple sum checksum completely misses the burst, but CRC-32 polynomial division catches it with 99.999% mathematical certainty."
+        "summary": "Lightning strikes near a transmission cable, flipping 5 consecutive bits in an Ethernet frame. A simple sum checksum completely misses the burst, but CRC-32 polynomial division catches it with 100% mathematical certainty (guaranteed for any burst up to 32 bits)."
       },
       {
         "id": "1.3-the-digital-fingerprint",
@@ -407,7 +407,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
         "subtitle": "Defeating Shor's algorithm and 'Store Now, Decrypt Later' attacks with lattice crystals",
         "conceptId": "putting-it-together",
         "family": "asymmetric",
-        "toolId": "ml-kem",
+        "toolId": "mlkem",
         "difficulty": "Intermediate",
         "readTime": "6 min",
         "characters": [
@@ -448,7 +448,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
         "title": "The Rubber Hose: Side-Channel & Timing Attacks",
         "subtitle": "How Mallory breaks crypto by measuring time, power, and cache — without touching the math",
         "conceptId": "attacks-defenses",
-        "family": "hash",
+        "family": "mac",
         "toolId": "hmac",
         "difficulty": "Advanced",
         "readTime": "7 min",
@@ -464,7 +464,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
         "id": "6.3-the-padding-oracle",
         "number": "6.3",
         "title": "The Padding Oracle: How One Error Message Broke TLS",
-        "subtitle": "The BEAST and POODLE attacks: decrypting any AES-CBC ciphertext with 4096 queries",
+        "subtitle": "The POODLE and Lucky Thirteen attacks: decrypting AES-CBC ciphertext with padding oracle queries",
         "conceptId": "attacks-defenses",
         "family": "cipher",
         "toolId": "aes",
@@ -476,7 +476,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Eve",
           "Mallory"
         ],
-        "summary": "Bob's server returns two different error messages: 'decryption failed' vs 'invalid padding'. Mallory uses that single bit of difference as an oracle, sending 4096 crafted requests per block to decrypt Alice's session cookie without ever knowing the key. The attack behind BEAST, POODLE, and Lucky Thirteen."
+        "summary": "Bob's server returns two different error messages: 'decryption failed' vs 'invalid padding'. Mallory uses that single bit of difference as an oracle, sending 4096 crafted requests per block to decrypt Alice's session cookie without ever knowing the key. The attack behind POODLE, Lucky Thirteen, and Vaudenay's oracle."
       },
       {
         "id": "6.4-the-key-ceremony",
@@ -510,7 +510,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
         "title": "Lost in Translation: Encoding vs Encryption",
         "subtitle": "Why Base64 is not encryption, and how this mistake causes real-world breaches",
         "conceptId": "encoding-advanced",
-        "family": "encoding",
+        "family": "cipher",
         "toolId": "aes",
         "difficulty": "Beginner",
         "readTime": "5 min",

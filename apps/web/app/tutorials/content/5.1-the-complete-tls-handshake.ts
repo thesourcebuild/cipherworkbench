@@ -18,7 +18,7 @@ const content: TutorialContent = {
     {
       "title": "Step 3: Key Derivation (HKDF)",
       "speaker": "Alice",
-      "content": "Both Alice and Bob combine their ECDH shares to produce the master secret, and feed it into HKDF (HMAC-based Key Derivation Function) to derive encryption and MAC keys."
+      "content": "Both Alice and Bob combine their ECDH shares to produce the master secret, and feed it into HKDF (HMAC-based Key Derivation Function) to derive the symmetric AEAD traffic keys and IVs."
     },
     {
       "title": "Step 4: Encrypted Application Data",

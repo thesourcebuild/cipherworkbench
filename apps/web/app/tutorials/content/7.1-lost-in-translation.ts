@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -42,7 +42,7 @@ const content: TutorialContent = {
       title: "Step 5: When to Use Each",
       speaker: "Bob",
       content:
-        "| Goal | Tool | Provides |\n|---|---|---|\n| Transport binary as text | Base64 | Compatibility only |\n| Hide content from everyone | AES-GCM encryption | Confidentiality |\n| Prove who sent a message | HMAC / Ed25519 | Authenticity |\n| Store a password | Argon2id | One-way hardness |\n| Compress data | Gzip / Brotli | Size reduction |\n\n**Rule:** If you need a key, it is cryptography. If you do not need a key, it is encoding.",
+        "| Goal | Tool | Provides |\n|---|---|---|\n| Transport binary as text | Base64 | Compatibility only |\n| Hide content from everyone | AES-GCM encryption | Confidentiality |\n| Prove who sent a message | HMAC / Ed25519 | Authenticity |\n| Store a password | Argon2id | One-way hardness |\n| Compress data | Gzip / Brotli | Size reduction |\n\n**Rule:** If it is keyless and reversible, it is **encoding**. If it is keyless and irreversible, it is **cryptographic hashing**. If it requires a secret key to reverse, it is **encryption**.",
       callout: {
         type: "security",
         text: "Security through obscurity — hiding secrets by making them 'hard to read' (Base64, ROT13, hex) without a key — is not a security measure. It is a speed bump that delays a competent attacker by seconds.",

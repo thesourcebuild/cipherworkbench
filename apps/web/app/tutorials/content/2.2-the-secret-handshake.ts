@@ -17,7 +17,7 @@ const content: TutorialContent = {
     {
       "title": "Step 3: Mallory is foiled",
       "speaker": "Mallory",
-      "content": "Mallory intercepts the request and tries to alter `amount=50.00` to `amount=5000.00`. But Mallory cannot produce the matching HMAC because she lacks `sk_live_secret_99812`. Any code Mallory guesses has a 1-in-2²⁵⁶ chance of being correct — more atoms than in the observable universe."
+      "content": "Mallory intercepts the request and tries to alter `amount=50.00` to `amount=5000.00`. But Mallory cannot produce the matching HMAC because she lacks `sk_live_secret_99812`. Any code Mallory guesses has a 1-in-2²⁵⁶ chance of being correct — roughly 1 in 10⁷⁷, practically comparable to the total number of atoms in the observable universe (~10⁸⁰)."
     },
     {
       "title": "Step 4: Bob verifies in constant time",

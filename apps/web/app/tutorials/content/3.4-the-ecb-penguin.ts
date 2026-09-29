@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -60,7 +60,7 @@ const content: TutorialContent = {
   ],
   seed: {
     toolId: "aes",
-    sampleInput: "AAAAAAAAAAAAAAAA AAAAAAAAAAAAAAAA Hello, World!!!! AAAAAAAAAAAAAAAA",
+    sampleInput: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHello, World!!!!AAAAAAAAAAAAAAAA",
     explanation:
       "Open AES Workbench, switch between ECB and GCM modes, and observe how identical 16-byte blocks produce identical ciphertext in ECB but unique ciphertext in GCM.",
   },

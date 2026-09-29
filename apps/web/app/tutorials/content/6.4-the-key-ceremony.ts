@@ -42,7 +42,7 @@ const content: TutorialContent = {
       title: "Step 5: Key Rotation and Revocation",
       speaker: "Trent",
       content:
-        "Root CA private keys are rotated every 20–25 years. But if a key is compromised before rotation:\n\n- **CRL (Certificate Revocation List):** A signed list of revoked certificate serial numbers. Browsers download it periodically — but it is often stale.\n- **OCSP (Online Certificate Status Protocol):** Real-time revocation check. But adds latency and leaks browsing history to the CA.\n- **OCSP Stapling:** The web server fetches and caches the OCSP response, serving it with the TLS handshake. No third-party query needed.\n- **Chrome's CRLSet / Firefox's OneCRL:** Browser vendors push emergency revocation lists to all users within hours of a major CA compromise.",
+        "Root CA private keys are rotated every 20–25 years. But what happens if a certificate in the chain is compromised?\n\n- **Intermediate & Leaf Revocation (CRL & OCSP):** CAs publish Certificate Revocation Lists (CRLs) or provide OCSP responders (and OCSP Stapling in TLS) to revoke subordinate certificates without changing root trust.\n- **Root CA Compromise (Root Store Updates):** Because a Root CA is a self-signed trust anchor, it cannot be revoked via its own CRL or OCSP! If a Root CA key is compromised, it must be untrusted globally via emergency OS and browser root-store updates (such as Chrome's CRLSet, Firefox's OneCRL, and Apple/Microsoft trust store patches).",
     },
   ],
   takeaways: [

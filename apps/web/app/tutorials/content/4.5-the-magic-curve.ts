@@ -10,7 +10,7 @@ const content: TutorialContent = {
       title: "Step 1: The Hard Problem Behind RSA",
       speaker: "Alice",
       content:
-        "RSA security rests on the **Integer Factorisation Problem**: given a large number N = p × q (where p and q are huge primes), find p and q.\n\nThe best known classical algorithm (General Number Field Sieve) requires roughly `e^(1.9 × ∛(ln N))` operations. For a 2048-bit N, that is astronomically large — but it scales sub-exponentially, meaning doubling security requires much more than doubling key size.",
+        "RSA security rests on the **Integer Factorisation Problem**: given a large number N = p × q (where p and q are huge primes), find p and q.\n\nThe best known classical algorithm (General Number Field Sieve) runs in sub-exponential time: roughly `exp(1.92 × (ln N)^(1/3) × (ln ln N)^(2/3))` operations. For a 2048-bit N, that requires ~2¹¹⁷ operations — astronomically large, but because it scales sub-exponentially, doubling security requires exponentially larger keys.",
     },
     {
       title: "Step 2: The Hard Problem Behind Elliptic Curves",

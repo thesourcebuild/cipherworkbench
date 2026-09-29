@@ -17,7 +17,7 @@ const content: TutorialContent = {
     {
       "title": "Step 3: Mallory's Tampering is Rejected",
       "speaker": "Bob",
-      "content": "Mallory attempts to modify 1 byte of the ciphertext. Bob's AES-GCM engine checks the tag before decrypting. The tag does not match! Bob immediately rejects the packet without revealing padding errors.",
+      "content": "Mallory attempts to modify 1 byte of the ciphertext. Bob's AES-GCM engine checks the tag before releasing plaintext. The tag does not match! Bob immediately rejects the packet, preventing bit-flipping and eliminating padding oracle attacks completely (as GCM requires no padding).",
       "callout": {
         "type": "security",
         "text": "Cipher Workbench Diagnostic Rule C001 warns whenever an unauthenticated mode (like ECB or CBC without MAC) is selected!"

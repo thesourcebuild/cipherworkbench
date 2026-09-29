@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -32,7 +32,7 @@ const content: TutorialContent = {
       title: "Step 4: The Fix — Generate a Fresh Nonce Every Time",
       speaker: "Alice",
       content:
-        "The solution is simple: **never reuse a nonce**. Generate a cryptographically random nonce for every single message.\n\n- **AES-GCM (96-bit nonce):** At high volumes, random nonces risk collision after ~2³² messages (birthday bound). Use a counter or switch to XChaCha20.\n- **XChaCha20-Poly1305 (192-bit nonce):** Large enough that random nonces are safe for any realistic volume.\n- **AES-GCM-SIV:** A nonce-misuse resistant mode — even if a nonce is accidentally reused, it only leaks *whether two plaintexts were identical*, nothing more.",
+        "The solution is simple: **never reuse a nonce**. Generate a cryptographically random nonce for every single message.\n\n- **AES-GCM (96-bit nonce):** With random nonces, NIST SP 800-38D caps invocations at 2³² messages under a single key to keep collision risk below 2⁻³² (the true 50% birthday collision bound is 2⁴⁸). Use a deterministic counter or switch to XChaCha20 for high volumes.\n- **XChaCha20-Poly1305 (192-bit nonce):** Large enough that random nonces are safe for any realistic volume.\n- **AES-GCM-SIV:** A nonce-misuse resistant mode — even if a nonce is accidentally reused, it only leaks *whether two plaintexts were identical*, nothing more.",
       callout: {
         type: "info",
         text: "TLS 1.3 avoids this entirely by deriving a unique per-record nonce from an incrementing sequence number XOR'd with the traffic secret — nonce reuse is structurally impossible.",

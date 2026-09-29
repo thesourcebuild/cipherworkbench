@@ -26,7 +26,7 @@ const content: TutorialContent = {
       title: "Step 3: The Attack — Decrypting One Byte",
       speaker: "Mallory",
       content:
-        "CBC decryption: `Plaintext Block N = Decrypt(Cipher Block N) ⊕ Cipher Block N-1`\n\nMallory wants to find the last byte of `Plaintext Block 2`. She modifies the last byte of `Cipher Block 1` and sends the pair to Bob.\n\n1. She flips the last byte of `Cipher Block 1` by XORing it with guess values 0–255.\n2. When Bob returns `200 OK`, the decrypted last byte is `01` (valid 1-byte padding).\n3. From that, Mallory knows: `Decrypt(Cipher Block 2)[last byte] ⊕ guess = 01`\n4. Therefore: `Decrypt(Cipher Block 2)[last byte] = 01 ⊕ guess`\n5. Therefore: `Plaintext[last byte] = Decrypt(Cipher Block 2)[last byte] ⊕ original Cipher Block 1[last byte]`\n\nRepeat for every byte. **One block of AES-CBC is fully decrypted in at most 256 × 16 = 4096 oracle queries.**",
+        "CBC decryption: `Plaintext Block N = Decrypt(Cipher Block N) ⊕ Cipher Block N-1`\n\nMallory wants to find the last byte of `Plaintext Block 2`. She modifies the last byte of `Cipher Block 1` and sends the pair to Bob.\n\n1. She replaces the last byte of `Cipher Block 1` with test byte values `G` from 0 to 255.\n2. When Bob returns `200 OK`, the decrypted last byte is `01` (valid 1-byte padding).\n3. From that, Mallory knows: `Decrypt(Cipher Block 2)[last byte] ⊕ G = 01`\n4. Therefore: `Decrypt(Cipher Block 2)[last byte] = 01 ⊕ G`\n5. Therefore: `Plaintext[last byte] = Decrypt(Cipher Block 2)[last byte] ⊕ original Cipher Block 1[last byte]`\n\nRepeat for every byte. **One block of AES-CBC is fully decrypted in at most 256 × 16 = 4096 oracle queries.**",
     },
     {
       title: "Step 4: Real-World Impact",

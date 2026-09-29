@@ -1,4 +1,4 @@
-﻿import type { TutorialContent } from "../tutorial-types";
+import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
   analogy:
@@ -42,7 +42,7 @@ const content: TutorialContent = {
       title: "Step 5: Fix #3 — TLS Sequence Numbers",
       speaker: "Bob",
       content:
-        "At the transport layer, **TLS 1.3 uses an implicit per-record sequence number** XOR'd into the nonce of each AES-GCM record. If Mallory replays or reorders even a single TLS record, the AEAD authentication tag immediately fails — the out-of-sequence number produces a different nonce, yielding different ciphertext that decrypts to garbage.",
+        "At the transport layer, **TLS 1.3 uses an implicit per-record sequence number** XOR'd into the nonce of each AES-GCM record. If Mallory replays or reorders even a single TLS record, the receiver uses its expected sequence counter to reconstruct the nonce. Because that nonce does not match what the sender used, the AEAD authentication tag check immediately fails — the corrupted or replayed record is dropped and the session is terminated without releasing unverified data.",
     },
   ],
   takeaways: [
