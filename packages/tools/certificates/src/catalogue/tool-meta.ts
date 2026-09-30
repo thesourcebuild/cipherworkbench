@@ -46,8 +46,8 @@ export const CERTIFICATE_TOOLS: readonly CertificateToolMeta[] = [
     id: "crl",
     label: "CRL (Revocation List)",
     category: "Parser",
-    summary: "Inspect and parse RFC 5280 X.509 v2 Certificate Revocation Lists (CRL) in PEM or DER format.",
-    tags: ["crl", "revocation", "x509", "pki", "tls", "der", "pem"],
+    summary: "Inspect, parse, and generate RFC 5280 X.509 v2 Certificate Revocation Lists (CRL) with custom CA signing, revoked serials, and reason codes.",
+    tags: ["crl", "revocation", "x509", "pki", "tls", "der", "pem", "creator", "generator", "issue"],
   },
   {
     id: "cert-converter",

@@ -404,3 +404,37 @@ export function generateCsrCommandScripts(opts: {
     reproduceCommand: opensslCommand,
   });
 }
+
+/**
+ * Generate verification and management scripts for a Certificate Revocation List (CRL).
+ */
+export function generateCrlCommandScripts(opts: {
+  crlFile: string;
+  caCertFile: string;
+}): CommandScripts {
+  const { crlFile, caCertFile } = opts;
+  return buildVerificationScripts({
+    title: "Certificate Revocation List (CRL) Verification",
+    description: `Inspect ${crlFile} and verify revoked certificates against ${caCertFile}.`,
+    actions: [
+      {
+        id: "inspect",
+        description: "Inspect CRL structure, revoked serials, and extensions",
+        commands: [`openssl crl -in "${crlFile}" -text -noout`],
+      },
+      {
+        id: "verify",
+        description: "Verify a certificate against this CRL",
+        commands: [
+          `openssl verify -crl_check -CAfile "${caCertFile}" -CRLfile "${crlFile}" cert.crt`,
+        ],
+      },
+      {
+        id: "sslx",
+        description: "Inspect CRL with modern sslx CLI",
+        commands: [`sslx inspect "${crlFile}"`],
+      },
+    ],
+  });
+}
+

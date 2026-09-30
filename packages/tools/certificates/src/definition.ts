@@ -12,6 +12,8 @@ import {
   OPTION_CONVERTER_OP,
   OPTION_CREATOR_MODE,
   OPTION_ISSUANCE_MODE,
+  OPTION_CRL_OP,
+  OPTION_CRL_CA_MODE,
 } from "./pure";
 import { samplesFor } from "./samples";
 import { CertificateSpec } from "./spec";
@@ -49,6 +51,16 @@ export function certificatesToolDefinition(toolId: string): ToolDefinition<Certi
       }
       if (toolId === "cert-converter") {
         return [String(spec.options[OPTION_CONVERTER_OP] ?? "pem-to-der")];
+      }
+      if (toolId === "crl") {
+        const crlOp = String(spec.options[OPTION_CRL_OP] ?? "inspect-crl");
+        if (crlOp === "create-crl") {
+          const caMode = String(
+            spec.options[OPTION_CRL_CA_MODE] ?? spec.options[OPTION_CA_MODE] ?? "ephemeral-ca",
+          );
+          return ["create-crl", caMode];
+        }
+        return ["inspect-crl"];
       }
       return undefined;
     },

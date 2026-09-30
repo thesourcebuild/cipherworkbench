@@ -45,6 +45,13 @@ import {
   OPTION_ACME_DOMAIN,
   OPTION_ACME_TOKEN,
   OPTION_ACME_ACCOUNT_KEY,
+  OPTION_CRL_OP,
+  OPTION_CRL_NUMBER,
+  OPTION_CRL_REASON,
+  OPTION_CRL_CA_MODE,
+  OPTION_CRL_CA_KEY_TYPE,
+  OPTION_CRL_HASH_TYPE,
+  OPTION_CRL_VALIDITY_DAYS,
 } from "../pure";
 import type { CertificateOptionGroup } from "./groups";
 import type { CertificateToolMeta } from "./tool-meta";
@@ -660,6 +667,116 @@ const ACME_ACCOUNT_KEY: OptionDef<CertificateOptionGroup> = {
   order: 3,
 };
 
+const CRL_OP: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CRL_OP,
+  label: "CRL Operation",
+  group: "format",
+  kind: "enum",
+  choices: [
+    {
+      value: "inspect-crl",
+      label: "Inspect CRL",
+      summary: "Parse and decode an existing RFC 5280 X.509 v2 CRL",
+    },
+    {
+      value: "create-crl",
+      label: "Create / Issue CRL",
+      summary: "Generate and cryptographically sign an RFC 5280 X.509 v2 CRL",
+    },
+  ],
+  summary: "Action to perform on Certificate Revocation List data.",
+  detail:
+    "Select whether to inspect an existing CRL or create and sign a new CRL using a custom CA or ephemeral Micro-CA.",
+  order: 1,
+};
+
+const CRL_CA_MODE: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CRL_CA_MODE,
+  label: "Issuing CA Mode",
+  group: "ca",
+  kind: "enum",
+  availableOn: ["create-crl"],
+  choices: [
+    {
+      value: "ephemeral-ca",
+      label: "Ephemeral Micro-CA",
+      summary: "Automatically generate a fresh Root CA to sign this CRL",
+    },
+    {
+      value: "custom-ca",
+      label: "Custom CA",
+      summary: "Use provided CA certificate and CA private key",
+    },
+  ],
+  summary: "How the CRL is signed.",
+  detail:
+    "Select whether to use an ephemeral in-browser Root CA or sign with an existing custom CA.",
+  order: 5,
+};
+
+const CRL_CA_KEY_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...CA_KEY_TYPE,
+  id: OPTION_CRL_CA_KEY_TYPE,
+  label: "Micro-CA Key Algorithm",
+  availableOn: ["create-crl", "ephemeral-ca"],
+  order: 7,
+};
+
+const CRL_HASH_TYPE: OptionDef<CertificateOptionGroup> = {
+  ...HASH_TYPE,
+  id: OPTION_CRL_HASH_TYPE,
+  label: "CRL Signature Hash",
+  availableOn: ["create-crl"],
+  order: 8,
+};
+
+const CRL_NUMBER: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CRL_NUMBER,
+  label: "CRL Number",
+  group: "extensions",
+  kind: "text",
+  availableOn: ["create-crl"],
+  arg: { placeholder: "1" },
+  summary: "Monotonically increasing sequence number for this CRL (RFC 5280 §5.2.3).",
+  detail: "The CRL Number extension allows relying parties to track whether a newer CRL exists.",
+  order: 10,
+};
+
+const CRL_VALIDITY_DAYS: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CRL_VALIDITY_DAYS,
+  label: "Next Update Window (Days)",
+  group: "extensions",
+  kind: "text",
+  availableOn: ["create-crl"],
+  arg: { placeholder: "30", unit: "days" },
+  summary: "Number of days until Next Update (default: 30 days).",
+  detail:
+    "RFC 5280 nextUpdate field indicating when relying parties must refresh the revocation list.",
+  order: 15,
+};
+
+const CRL_REASON: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_CRL_REASON,
+  label: "Default Revocation Reason",
+  group: "extensions",
+  kind: "enum",
+  availableOn: ["create-crl"],
+  choices: [
+    { value: "0", label: "Unspecified (0)", summary: "No specific reason given" },
+    { value: "1", label: "Key Compromise (1)", summary: "Private key is compromised" },
+    { value: "2", label: "CA Compromise (2)", summary: "CA private key is compromised" },
+    { value: "3", label: "Affiliation Changed (3)", summary: "Subject affiliation changed" },
+    { value: "4", label: "Superseded (4)", summary: "Certificate replaced by a newer certificate" },
+    { value: "5", label: "Cessation of Operation (5)", summary: "Subject server or service terminated" },
+    { value: "6", label: "Certificate Hold (6)", summary: "Temporary suspension of certificate" },
+    { value: "9", label: "Privilege Withdrawn (9)", summary: "Certificate privileges withdrawn" },
+    { value: "10", label: "AA Compromise (10)", summary: "Attribute Authority compromised" },
+  ],
+  summary: "Default RFC 5280 Reason Code applied to revoked certificates without explicit reason.",
+  detail: "Reason codes are encoded into each entry in the CRL via the id-ce-cRLReason extension.",
+  order: 20,
+};
+
 const CA_CERT: OptionDef<CertificateOptionGroup> = {
   id: OPTION_CA_CERT,
   label: "CA Certificate (PEM)",
@@ -809,6 +926,13 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   ACME_DOMAIN,
   ACME_TOKEN,
   ACME_ACCOUNT_KEY,
+  CRL_OP,
+  CRL_CA_MODE,
+  CRL_CA_KEY_TYPE,
+  CRL_HASH_TYPE,
+  CRL_NUMBER,
+  CRL_VALIDITY_DAYS,
+  CRL_REASON,
 ];
 
 export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalogue {
@@ -890,6 +1014,20 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
     options.push(OCSP_OP, ISSUER_CERT);
   } else if (meta.id === "acme") {
     options.push(ACME_DOMAIN, ACME_TOKEN, ACME_ACCOUNT_KEY);
+  } else if (meta.id === "crl") {
+    options.push(
+      CRL_OP,
+      CRL_CA_MODE,
+      CRL_CA_KEY_TYPE,
+      CRL_HASH_TYPE,
+      CA_CERT,
+      CA_PRIVATE_KEY,
+      CRL_NUMBER,
+      CRL_VALIDITY_DAYS,
+      CRL_REASON,
+      INPUT_FORMAT,
+      DETAIL_LEVEL,
+    );
   } else if (meta.id === "tls-grader" || meta.id === "cert-expiry" || meta.id === "universal-decoder") {
     options.push(INPUT_FORMAT, DETAIL_LEVEL);
   }

@@ -109,6 +109,8 @@ export { encodePkcs12Archive, decodePkcs12Archive } from "./asn1/pkcs12";
 export {
   createCrl,
   parseX509Crl,
+  parseRevocationInputText,
+  parseCrlReasonCode,
   CrlReasonCode,
   CRL_REASON_NAMES,
   type CreateCrlOptions,
@@ -116,7 +118,9 @@ export {
   type ParsedCrl,
   type ParsedRevokedCert,
   type RevokedCertificateInput,
+  type ParsedRevocationEntry,
 } from "./asn1/crl";
+export { generateCrlCommandScripts } from "./export/commands";
 export {
   exportToPpkV3,
   parsePpk,

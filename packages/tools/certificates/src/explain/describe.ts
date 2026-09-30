@@ -1,4 +1,4 @@
-import { readConverterOp, readVerifyCsrSig } from "../pure";
+import { readConverterOp, readVerifyCsrSig, readCrlOp } from "../pure";
 import type { CertificateSpec } from "../spec";
 
 export function describeSpec(spec: CertificateSpec): string {
@@ -40,8 +40,13 @@ export function describeSpec(spec: CertificateSpec): string {
       return "Generates a complete self-signed or CA-signed X.509 v3 TLS/SSL certificate and private key.";
     case "csr-creator":
       return "Generates a PKCS#10 Certificate Signing Request (CSR) with requested extensions and self-signature.";
-    case "crl":
+    case "crl": {
+      const op = readCrlOp(spec.options);
+      if (op === "create-crl") {
+        return "Generates and cryptographically signs an RFC 5280 X.509 v2 Certificate Revocation List (CRL) with custom CA signing, revoked serials, reason codes, and extensions.";
+      }
       return "Parses and inspects X.509 v2 Certificate Revocation Lists (CRL) and checks revoked serials.";
+    }
     case "cert-verifier":
       return "Verifies X.509 certificate chains, digital signatures, validity dates, and AKI/SKI linkages.";
     case "cert-matcher":

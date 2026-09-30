@@ -9,8 +9,9 @@ import {
   encodeDerEnumerated,
   encodeDerBitString,
 } from "./encoder";
-import { encodePem, detectInputBytes } from "./pem";
+import { encodePem, detectInputBytes, parseAllPem } from "./pem";
 import { SIGNATURE_ALGORITHMS, DN_SHORT_NAMES } from "./oids";
+import { parseX509Certificate } from "./x509";
 import type { CaSigner } from "../crypto/keys";
 
 export enum CrlReasonCode {
@@ -39,10 +40,164 @@ export const CRL_REASON_NAMES: Record<number, string> = {
   10: "AA Compromise",
 };
 
+export function parseCrlReasonCode(val: string | number | undefined): CrlReasonCode | undefined {
+  if (val === undefined) return undefined;
+  if (typeof val === "number") return val as CrlReasonCode;
+  const s = String(val).trim().toLowerCase().replace(/[-_\s]/g, "");
+  if (s === "0" || s === "unspecified") return CrlReasonCode.Unspecified;
+  if (s === "1" || s === "keycompromise") return CrlReasonCode.KeyCompromise;
+  if (s === "2" || s === "cacompromise") return CrlReasonCode.CACompromise;
+  if (s === "3" || s === "affiliationchanged") return CrlReasonCode.AffiliationChanged;
+  if (s === "4" || s === "superseded") return CrlReasonCode.Superseded;
+  if (s === "5" || s === "cessationofoperation") return CrlReasonCode.CessationOfOperation;
+  if (s === "6" || s === "certificatehold") return CrlReasonCode.CertificateHold;
+  if (s === "8" || s === "removefromcrl") return CrlReasonCode.RemoveFromCRL;
+  if (s === "9" || s === "privilegewithdrawn") return CrlReasonCode.PrivilegeWithdrawn;
+  if (s === "10" || s === "aacompromise") return CrlReasonCode.AACompromise;
+  const num = parseInt(val, 10);
+  if (!isNaN(num) && num in CRL_REASON_NAMES) return num as CrlReasonCode;
+  return undefined;
+}
+
 export interface RevokedCertificateInput {
   serialNumber: bigint | number | string;
   revocationDate?: Date;
   reasonCode?: CrlReasonCode;
+  subjectInfo?: string;
+}
+
+export interface ParsedRevocationEntry {
+  serialNumber: bigint | string;
+  serialNumberHex: string;
+  serialNumberDec: string;
+  revocationDate: Date;
+  reasonCode?: CrlReasonCode;
+  reasonText?: string;
+  subjectInfo?: string;
+}
+
+/**
+ * Parses user-provided revocation input, accepting PEM certificate blocks or line-by-line serials.
+ * Line format: `<serial>[:<reason>][:<date>]` or `<serial>[ <reason>][ <date>]`.
+ */
+export function parseRevocationInputText(
+  input: string | Uint8Array,
+  defaultReason?: CrlReasonCode,
+): ParsedRevocationEntry[] {
+  const text = typeof input === "string" ? input : new TextDecoder().decode(input);
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  const entries: ParsedRevocationEntry[] = [];
+
+  // Check for PEM certificate blocks
+  if (trimmed.includes("-----BEGIN")) {
+    const pemBlocks = parseAllPem(trimmed);
+    for (const block of pemBlocks) {
+      if (block.label.includes("CERTIFICATE") && !block.label.includes("REQUEST")) {
+        try {
+          const cert = parseX509Certificate(block.bytes);
+          const cleanHex = cert.serialNumber.replace(/[^0-9a-fA-F]/g, "");
+          const serialBigInt = BigInt("0x" + (cleanHex || "0"));
+          entries.push({
+            serialNumber: serialBigInt,
+            serialNumberHex: cleanHex.toUpperCase(),
+            serialNumberDec: serialBigInt.toString(10),
+            revocationDate: new Date(),
+            reasonCode: defaultReason ?? CrlReasonCode.Unspecified,
+            reasonText:
+              defaultReason !== undefined ? CRL_REASON_NAMES[defaultReason] : "Unspecified",
+            subjectInfo: cert.subject.commonName || cert.subject.dn,
+          });
+        } catch {
+          // Continue if single block fails
+        }
+      }
+    }
+    if (entries.length > 0) return entries;
+    if (trimmed.includes("-----BEGIN CERTIFICATE")) {
+      return [];
+    }
+  }
+
+  // Parse line-by-line serial entries
+  const lines = trimmed.split(/[\r\n,;]+/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#") || line.startsWith("//")) continue;
+
+    let serialStr = "";
+    let reasonToken: string | undefined;
+    let dateToken: string | undefined;
+
+    const spaceTokens = line.split(/\s+/).filter(Boolean);
+    if (spaceTokens.length >= 2) {
+      serialStr = spaceTokens[0]!;
+      reasonToken = spaceTokens[1];
+      dateToken = spaceTokens[2];
+    } else {
+      const rawToken = spaceTokens[0] || line;
+      if (/^([0-9a-fA-F]{2}:)+[0-9a-fA-F]{2}$/.test(rawToken)) {
+        serialStr = rawToken;
+      } else {
+        const colonParts = rawToken.split(":");
+        serialStr = colonParts[0]!;
+        reasonToken = colonParts[1];
+        dateToken = colonParts[2];
+      }
+    }
+
+    if (!serialStr) continue;
+
+    const cleanSerial = serialStr.replace(/[:\s]/g, "");
+    let serialBigInt: bigint;
+    try {
+      if (cleanSerial.startsWith("0x") || cleanSerial.startsWith("0X")) {
+        serialBigInt = BigInt(cleanSerial);
+      } else if (/^[0-9a-fA-F]+$/.test(cleanSerial) && /[a-fA-F]/.test(cleanSerial)) {
+        serialBigInt = BigInt("0x" + cleanSerial);
+      } else if (/^\d+$/.test(cleanSerial)) {
+        serialBigInt = BigInt(cleanSerial);
+      } else {
+        serialBigInt = BigInt("0x" + cleanSerial.replace(/[^0-9a-fA-F]/g, ""));
+      }
+    } catch {
+      continue;
+    }
+
+    const hex = serialBigInt.toString(16).toUpperCase();
+    const dec = serialBigInt.toString(10);
+
+    let reasonCode = defaultReason;
+    let revDate = new Date();
+
+    if (reasonToken) {
+      const parsedReason = parseCrlReasonCode(reasonToken);
+      if (parsedReason !== undefined) {
+        reasonCode = parsedReason;
+      } else {
+        const d = new Date(reasonToken);
+        if (!isNaN(d.getTime())) revDate = d;
+      }
+    }
+
+    if (dateToken) {
+      const d = new Date(dateToken);
+      if (!isNaN(d.getTime())) revDate = d;
+    }
+
+    entries.push({
+      serialNumber: serialBigInt,
+      serialNumberHex: hex,
+      serialNumberDec: dec,
+      revocationDate: revDate,
+      reasonCode,
+      reasonText:
+        reasonCode !== undefined ? CRL_REASON_NAMES[reasonCode] ?? `Reason(${reasonCode})` : undefined,
+    });
+  }
+
+  return entries;
 }
 
 export interface CreateCrlOptions {
@@ -62,6 +217,8 @@ export interface CreatedCrl {
   revokedCount: number;
   issuerDn: string;
   signatureAlgorithm: string;
+  authorityKeyIdentifierHex?: string;
+  revokedEntries: ParsedRevokedCert[];
 }
 
 export interface ParsedRevokedCert {
@@ -187,6 +344,56 @@ export async function createCrl(opts: CreateCrlOptions): Promise<CreatedCrl> {
 
   const crlPem = encodePem("X509 CRL", crlDer);
 
+  let signatureAlgorithm = "Signature Algorithm";
+  try {
+    const sigOid = parseAsn1(opts.signer.signatureAlgorithmDer).children[0]?.asOid();
+    if (sigOid && SIGNATURE_ALGORITHMS[sigOid]) {
+      signatureAlgorithm = SIGNATURE_ALGORITHMS[sigOid].name;
+    }
+  } catch {
+    // fallback
+  }
+
+  let authorityKeyIdentifierHex: string | undefined;
+  if (opts.signer.issuerSki && opts.signer.issuerSki.length > 0) {
+    authorityKeyIdentifierHex = Array.from(opts.signer.issuerSki)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(":")
+      .toUpperCase();
+  }
+
+  const parsedRevokedList: ParsedRevokedCert[] = [];
+  for (const rev of revokedInputs) {
+    let serialBigInt: bigint;
+    if (typeof rev.serialNumber === "bigint") {
+      serialBigInt = rev.serialNumber;
+    } else if (typeof rev.serialNumber === "number") {
+      serialBigInt = BigInt(rev.serialNumber);
+    } else {
+      const s = String(rev.serialNumber).trim();
+      serialBigInt =
+        s.startsWith("0x") || s.startsWith("0X")
+          ? BigInt(s)
+          : /^[0-9a-fA-F]+$/.test(s) && /[a-fA-F]/.test(s)
+            ? BigInt("0x" + s)
+            : BigInt(s);
+    }
+    const hex = serialBigInt.toString(16).toUpperCase();
+    const dec = serialBigInt.toString(10);
+    const date = rev.revocationDate ?? now;
+    const reasonText =
+      rev.reasonCode !== undefined
+        ? CRL_REASON_NAMES[rev.reasonCode] ?? `Reason(${rev.reasonCode})`
+        : undefined;
+    parsedRevokedList.push({
+      serialNumberHex: hex,
+      serialNumberDec: dec,
+      revocationDate: date,
+      reasonCode: rev.reasonCode,
+      reasonText,
+    });
+  }
+
   return {
     crlDer,
     crlPem,
@@ -195,7 +402,9 @@ export async function createCrl(opts: CreateCrlOptions): Promise<CreatedCrl> {
     nextUpdate,
     revokedCount: revokedInputs.length,
     issuerDn: opts.signer.issuerDnString,
-    signatureAlgorithm: "Signature Algorithm",
+    signatureAlgorithm,
+    authorityKeyIdentifierHex,
+    revokedEntries: parsedRevokedList,
   };
 }
 

@@ -24,6 +24,13 @@ import {
   OPTION_SERVER_HASH_TYPE,
   OPTION_CLIENT_KEY_TYPE,
   OPTION_CLIENT_HASH_TYPE,
+  OPTION_CRL_OP,
+  OPTION_CRL_NUMBER,
+  OPTION_CRL_REASON,
+  OPTION_CRL_CA_MODE,
+  OPTION_CRL_CA_KEY_TYPE,
+  OPTION_CRL_HASH_TYPE,
+  OPTION_CRL_VALIDITY_DAYS,
   SPEC_VERSION,
 } from "./pure";
 import { RSA_CERTIFICATE_PEM, RSA_PRIVATE_KEY_PEM } from "./samples";
@@ -48,6 +55,13 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
   } else if (variant === "crl") {
     opts[OPTION_INPUT_FORMAT] = "auto";
     opts[OPTION_DETAIL_LEVEL] = "summary";
+    opts[OPTION_CRL_OP] = "inspect-crl";
+    opts[OPTION_CRL_CA_MODE] = "ephemeral-ca";
+    opts[OPTION_CRL_CA_KEY_TYPE] = "ecdsa-p256";
+    opts[OPTION_CRL_HASH_TYPE] = "sha256";
+    opts[OPTION_CRL_NUMBER] = 1;
+    opts[OPTION_CRL_VALIDITY_DAYS] = 30;
+    opts[OPTION_CRL_REASON] = "0";
   } else if (variant === "cert-verifier") {
     opts[OPTION_INPUT_FORMAT] = "auto";
     opts[OPTION_DETAIL_LEVEL] = "summary";

@@ -7,7 +7,8 @@ import { parseX509Certificate } from "./asn1/x509";
 import { createCertificate } from "./asn1/create-cert";
 import { createCsr } from "./asn1/create-csr";
 import { generateMtlsSuite } from "./asn1/mtls";
-import { parseX509Crl } from "./asn1/crl";
+import { parseX509Crl, createCrl, parseRevocationInputText, CrlReasonCode } from "./asn1/crl";
+import { importCaSigner, type CaSigner } from "./crypto/keys";
 import { verifyCertificateChain } from "./asn1/chain-verifier";
 import { verifyCertificateKeyPair } from "./asn1/cert-matcher";
 import { diffCertificates, type CertDiffAttribute } from "./asn1/cert-diff";
@@ -34,6 +35,7 @@ import {
   generateCertCommandScripts,
   generateMtlsCommandScripts,
   generateCsrCommandScripts,
+  generateCrlCommandScripts,
 } from "./export/commands";
 import {
   readInputFormat,
@@ -85,8 +87,204 @@ import {
   readNameConstraintsExcluded,
   readCertificatePolicyOid,
   readCertificatePolicyCpsUrl,
+  readCrlOp,
+  readCrlNumber,
+  readCrlReason,
+  readCrlCaMode,
+  readCrlCaKeyType,
+  readCrlHashType,
+  readCrlValidityDays,
 } from "./pure";
 import type { CertificateSpec } from "./spec";
+
+async function handleCreateCrl(
+  spec: CertificateSpec,
+  input: Uint8Array,
+): Promise<ToolResult> {
+  try {
+    const caMode = readCrlCaMode(spec.options);
+    const caKeyType = readCrlCaKeyType(spec.options, "ecdsa-p256");
+    const hashType = readCrlHashType(spec.options, "sha256");
+    const crlNumber = readCrlNumber(spec.options, 1);
+    const validityDays = readCrlValidityDays(spec.options, 30);
+    const defaultReasonNum = readCrlReason(spec.options);
+    const defaultReason =
+      defaultReasonNum !== undefined
+        ? (defaultReasonNum as CrlReasonCode)
+        : CrlReasonCode.Unspecified;
+
+    let caSigner: CaSigner;
+    let caCertPem: string;
+    let caPrivateKeyPem: string | undefined;
+
+    if (caMode === "custom-ca") {
+      const caCertOpt = readCaCert(spec.options);
+      const caKeyOpt = readCaPrivateKey(spec.options);
+      if (!caCertOpt?.trim() || !caKeyOpt?.trim()) {
+        return {
+          error:
+            "Custom CA CRL creation requires both a CA certificate and matching private key in the options.",
+        };
+      }
+      const caCertDer = detectInputBytes(caCertOpt).der;
+      const caKeyDer = detectInputBytes(caKeyOpt).der;
+      caSigner = await importCaSigner(caCertDer, caKeyDer, hashType);
+      caCertPem = caCertOpt.trim();
+      caPrivateKeyPem = caKeyOpt.trim();
+    } else {
+      // Ephemeral Micro-CA Root
+      const caCertResult = await createCertificate({
+        commonName: "CipherWorkbench CRL Root CA",
+        organization: "CipherWorkbench Trust Network",
+        organizationalUnit: "Revocation Authority",
+        country: "US",
+        state: "California",
+        locality: "San Francisco",
+        keyType: caKeyType,
+        hashType,
+        validityDays: 3650,
+        isCa: true,
+        customSerialHex: "01CA0001",
+      });
+      caCertPem = caCertResult.certPem;
+      caPrivateKeyPem = caCertResult.privateKeyPem;
+      caSigner = await importCaSigner(
+        caCertResult.certDer,
+        caCertResult.privateKeyDer,
+        hashType,
+      );
+    }
+
+    // Parse revoked certificates from input
+    const revokedInputs = parseRevocationInputText(input, defaultReason);
+
+    const now = new Date();
+    const thisUpdate = now;
+    const nextUpdate = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
+
+    const crlResult = await createCrl({
+      signer: caSigner,
+      crlNumber,
+      thisUpdate,
+      nextUpdate,
+      revokedCertificates: revokedInputs.map((r) => ({
+        serialNumber: r.serialNumber,
+        revocationDate: r.revocationDate,
+        reasonCode: r.reasonCode,
+      })),
+    });
+
+    const fields: ToolResultField[] = [
+      { label: "Operation", value: "RFC 5280 v2 CRL Issued" },
+      { label: "Issuer", value: crlResult.issuerDn, hint: "Subject DN of the issuing CA" },
+      { label: "CRL Number", value: `#${crlResult.crlNumber}` },
+      {
+        label: "Revoked Count",
+        value:
+          crlResult.revokedCount === 0
+            ? "0 (Clean / Empty CRL)"
+            : `${crlResult.revokedCount} Certificate${crlResult.revokedCount === 1 ? "" : "s"}`,
+        hint: "Total number of revoked certificates in this list",
+      },
+      {
+        label: "This Update",
+        value: crlResult.thisUpdate.toISOString().replace("T", " ").replace(/\..+/, " UTC"),
+        hint: "Time at which this CRL was issued",
+      },
+      {
+        label: "Next Update",
+        value: crlResult.nextUpdate.toISOString().replace("T", " ").replace(/\..+/, " UTC"),
+        hint: `Authoritative lifespan (+${validityDays} days)`,
+      },
+      {
+        label: "Signature Algorithm",
+        value: crlResult.signatureAlgorithm,
+      },
+    ];
+
+    if (crlResult.authorityKeyIdentifierHex) {
+      fields.push({
+        label: "Authority Key Identifier",
+        value: crlResult.authorityKeyIdentifierHex,
+      });
+    }
+
+    const workingLines = [
+      "### RFC 5280 X.509 v2 Certificate Revocation List (CRL) Issued",
+      "",
+      `- **Issuer CA**: \`${crlResult.issuerDn}\``,
+      `- **CRL Sequence Number**: \`#${crlResult.crlNumber}\``,
+      `- **This Update**: \`${crlResult.thisUpdate.toISOString()}\``,
+      `- **Next Update**: \`${crlResult.nextUpdate.toISOString()}\` (+${validityDays} days)`,
+      `- **Signature Algorithm**: \`${crlResult.signatureAlgorithm}\``,
+      `- **Revocation Status**: ${crlResult.revokedCount === 0 ? "*(Clean CRL - 0 revoked certificates)*" : `**${crlResult.revokedCount} revoked certificate(s)**`}`,
+      ...(crlResult.authorityKeyIdentifierHex
+        ? [`- **Authority Key Identifier (AKI)**: \`${crlResult.authorityKeyIdentifierHex}\``]
+        : []),
+      "",
+      "#### Revoked Entries:",
+    ];
+
+    if (crlResult.revokedEntries.length === 0) {
+      workingLines.push(
+        "*(No certificates revoked. This is an authentic clean initial CRL ready for distribution.)*",
+      );
+    } else {
+      for (let i = 0; i < crlResult.revokedEntries.length; i++) {
+        const rev = crlResult.revokedEntries[i]!;
+        const extra = revokedInputs[i]?.subjectInfo
+          ? ` (${revokedInputs[i]!.subjectInfo})`
+          : "";
+        workingLines.push(
+          `- **#${i + 1}**: Serial \`0x${rev.serialNumberHex}\` (Dec: \`${rev.serialNumberDec}\`)${extra} — Date: \`${rev.revocationDate.toISOString()}\`${rev.reasonText ? ` | Reason: **${rev.reasonText}**` : ""}`,
+        );
+      }
+    }
+
+    workingLines.push(
+      "",
+      "#### Verification & Inspection Workflow",
+      "```bash",
+      "# Inspect the generated CRL structure",
+      'openssl crl -in "ca.crl" -text -noout',
+      "",
+      "# Verify a certificate against this CRL",
+      'openssl verify -crl_check -CAfile "ca.crt" -CRLfile "ca.crl" "cert.crt"',
+      "```",
+    );
+
+    const cmdScripts = generateCrlCommandScripts({
+      crlFile: "ca.crl",
+      caCertFile: "ca.crt",
+    });
+
+    const exportFiles: ToolExportFile[] = [
+      { name: "ca.crl", content: crlResult.crlPem },
+      { name: "ca.crl.der", content: crlResult.crlDer },
+      { name: "ca.crt", content: caCertPem },
+      { name: "commands.sh", content: cmdScripts.sh },
+      { name: "commands.ps1", content: cmdScripts.ps1 },
+      { name: "commands.bat", content: cmdScripts.bat },
+    ];
+
+    if (caPrivateKeyPem) {
+      exportFiles.push({ name: "ca.key", content: caPrivateKeyPem });
+    }
+
+    return {
+      text: crlResult.crlPem,
+      bytes: crlResult.crlDer,
+      fields,
+      working: workingLines.join("\n"),
+      workingFormat: "markdown",
+      files: exportFiles,
+    };
+  } catch (err) {
+    return {
+      error: `CRL generation failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
 
 export async function computeCertificate(
   spec: CertificateSpec,
@@ -806,6 +1004,10 @@ export async function computeCertificate(
         error: `CSR generation failed: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
+  }
+
+  if (spec.variant === "crl" && readCrlOp(spec.options) === "create-crl") {
+    return handleCreateCrl(spec, input);
   }
 
   if (input.length === 0) {
@@ -1815,6 +2017,10 @@ export async function computeCertificate(
     }
 
     case "crl": {
+      const crlOp = readCrlOp(spec.options);
+      if (crlOp === "create-crl") {
+        return handleCreateCrl(spec, input);
+      }
       try {
         const parsed = parseX509Crl(der);
         const fields: ToolResultField[] = [
@@ -2208,18 +2414,44 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
     }
 
     case "crl": {
-      fields.push(
-        {
-          label: "Standard",
-          value: "RFC 5280 X.509 v2 Certificate Revocation List",
-          hint: "Signed list of revoked certificate serial numbers, revocation dates, and reason codes.",
-        },
-        {
-          label: "Revocation Verification",
-          value:
-            "Serial lookup, CRL extensions (AKI, CRL Number), and Authority Digital Signature",
-        },
-      );
+      const op = readCrlOp(spec.options);
+      if (op === "create-crl") {
+        const caMode = readCrlCaMode(spec.options);
+        const crlNum = readCrlNumber(spec.options, 1);
+        const days = readCrlValidityDays(spec.options, 30);
+        fields.push(
+          {
+            label: "Operation",
+            value: "RFC 5280 v2 CRL Issuance",
+            hint: "Generates and cryptographically signs a fresh X.509 v2 Certificate Revocation List.",
+          },
+          {
+            label: "CA Authority",
+            value: caMode === "custom-ca" ? "Custom CA Certificate & Key" : "Ephemeral Micro-CA",
+          },
+          {
+            label: "CRL Number",
+            value: `#${crlNum}`,
+          },
+          {
+            label: "Validity Period",
+            value: `${days} days from time of issuance`,
+          },
+        );
+      } else {
+        fields.push(
+          {
+            label: "Standard",
+            value: "RFC 5280 X.509 v2 Certificate Revocation List",
+            hint: "Signed list of revoked certificate serial numbers, revocation dates, and reason codes.",
+          },
+          {
+            label: "Revocation Verification",
+            value:
+              "Serial lookup, CRL extensions (AKI, CRL Number), and Authority Digital Signature",
+          },
+        );
+      }
       break;
     }
 

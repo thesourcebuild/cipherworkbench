@@ -423,3 +423,63 @@ export const OPTION_ACME_ACCOUNT_KEY = "acmeAccountKey";
 export function readAcmeAccountKey(options: OptionValues): string {
   return optString(options, OPTION_ACME_ACCOUNT_KEY) ?? "";
 }
+
+export const OPTION_CRL_OP = "crlOp";
+export type CrlOpOption = "inspect-crl" | "create-crl";
+
+export function readCrlOp(options: OptionValues): CrlOpOption {
+  const val = optString(options, OPTION_CRL_OP);
+  if (val === "create-crl") return "create-crl";
+  return "inspect-crl";
+}
+
+export const OPTION_CRL_NUMBER = "crlNumber";
+export function readCrlNumber(options: OptionValues, defaultVal = 1): number {
+  const val = optString(options, OPTION_CRL_NUMBER);
+  if (val) {
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && parsed >= 1) return parsed;
+  }
+  return defaultVal;
+}
+
+export const OPTION_CRL_REASON = "crlReason";
+export function readCrlReason(options: OptionValues): number | undefined {
+  const val = optString(options, OPTION_CRL_REASON);
+  if (!val || val === "none") return undefined;
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) ? undefined : parsed;
+}
+
+export const OPTION_CRL_CA_MODE = "crlCaMode";
+export function readCrlCaMode(options: OptionValues): CaModeOption {
+  const val = optString(options, OPTION_CRL_CA_MODE) ?? optString(options, OPTION_CA_MODE);
+  if (val === "custom-ca") return "custom-ca";
+  return "ephemeral-ca";
+}
+
+export const OPTION_CRL_CA_KEY_TYPE = "crlCaKeyType";
+export function readCrlCaKeyType(
+  options: OptionValues,
+  defaultVal: KeyTypeOption = "ecdsa-p256",
+): KeyTypeOption {
+  return readKeyTypeOption(options, OPTION_CRL_CA_KEY_TYPE, readCaKeyType(options, defaultVal));
+}
+
+export const OPTION_CRL_HASH_TYPE = "crlHashType";
+export function readCrlHashType(
+  options: OptionValues,
+  defaultVal: HashTypeOption = "sha256",
+): HashTypeOption {
+  return readHashTypeOption(options, OPTION_CRL_HASH_TYPE, readHashType(options, defaultVal));
+}
+
+export const OPTION_CRL_VALIDITY_DAYS = "crlValidityDays";
+export function readCrlValidityDays(options: OptionValues, defaultVal = 30): number {
+  const val = optString(options, OPTION_CRL_VALIDITY_DAYS);
+  if (val) {
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return defaultVal;
+}
