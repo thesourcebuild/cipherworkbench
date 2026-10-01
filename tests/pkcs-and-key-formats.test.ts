@@ -8,9 +8,20 @@ import {
 } from "../packages/tools/certificates/src/asn1/converter";
 import {
   spkiToOpenSsh,
+  formatRfc4716PublicKey,
+  parseRfc4716PublicKey,
+  parseOpenSshPublicKey,
   sshMpint,
   sshString,
 } from "../packages/tools/certificates/src/crypto/openssh";
+import {
+  parsePkcs11Uri,
+  buildPkcs11Uri,
+  validatePkcs11Uri,
+  bytesToPkcs11Id,
+  pkcs11IdToBytes,
+} from "../packages/tools/certificates/src/crypto/pkcs11";
+import { decodeUniversalArtifact } from "../packages/tools/certificates/src/asn1/universal-decoder";
 import {
   spkiToJwk,
   computeJwkThumbprint,
@@ -300,6 +311,196 @@ describe("PKCS and Keystore Formats Comprehensive Suite", () => {
     it("safely handles malformed and truncated CSRs", () => {
       expect(() => parseCsr(new Uint8Array(0))).toThrow();
       expect(() => parseCsr(new Uint8Array([0x30, 0x05, 0x02, 0x01, 0x00]))).toThrow();
+    });
+  });
+
+  describe("RFC 4716 SSH2 Public Key Format (SECSH)", () => {
+    it("formats and parses RSA-2048 key into RFC 4716 SECSH multi-line format", async () => {
+      const rsaKey = await generateKeyBundle("rsa-2048");
+      const ssh = spkiToOpenSsh(rsaKey.spkiBytes, "rsa-2048", "admin@workbench");
+      const directFormat = formatRfc4716PublicKey(ssh.wireBlob, "admin@workbench");
+      expect(directFormat).toBe(ssh.rfc4716Format);
+
+      expect(ssh.rfc4716Format).toContain("---- BEGIN SSH2 PUBLIC KEY ----");
+      expect(ssh.rfc4716Format).toContain("---- END SSH2 PUBLIC KEY ----");
+      expect(ssh.rfc4716Format).toContain('Comment: "admin@workbench"');
+
+      // Verify line wrapping at <= 70 chars per RFC 4716 §3.3
+      const lines = ssh.rfc4716Format.split("\n");
+      const base64Lines = lines.slice(2, -1);
+      for (const line of base64Lines) {
+        expect(line.length).toBeLessThanOrEqual(70);
+      }
+
+      // Parse back
+      const parsed = parseRfc4716PublicKey(ssh.rfc4716Format);
+      expect(parsed.keyType).toBe("ssh-rsa");
+      expect(parsed.sha256Fingerprint).toBe(ssh.sha256Fingerprint);
+      expect(parsed.authorizedKeysLine).toBe(ssh.authorizedKeysLine);
+    });
+
+    it("formats and parses Ed25519 and ECDSA keys into RFC 4716 SECSH format", async () => {
+      const edKey = await generateKeyBundle("ed25519");
+      const sshEd = spkiToOpenSsh(edKey.spkiBytes, "ed25519", "ed@workbench");
+      const parsedEd = parseRfc4716PublicKey(sshEd.rfc4716Format);
+      expect(parsedEd.keyType).toBe("ssh-ed25519");
+      expect(parsedEd.sha256Fingerprint).toBe(sshEd.sha256Fingerprint);
+
+      const p256Key = await generateKeyBundle("ecdsa-p256");
+      const sshP256 = spkiToOpenSsh(p256Key.spkiBytes, "ecdsa-p256", "p256@workbench");
+      const parsedP256 = parseRfc4716PublicKey(sshP256.rfc4716Format);
+      expect(parsedP256.keyType).toBe("ecdsa-sha2-nistp256");
+      expect(parsedP256.sha256Fingerprint).toBe(sshP256.sha256Fingerprint);
+    });
+
+    it("parses single-line OpenSSH key and converts to RFC 4716", () => {
+      const openSsh = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAG9wS9iPqF/uF9+7U5o6WqE0g9W user@host";
+      const parsed = parseOpenSshPublicKey(openSsh);
+      expect(parsed.keyType).toBe("ssh-ed25519");
+      expect(parsed.rfc4716Format).toContain("---- BEGIN SSH2 PUBLIC KEY ----");
+      expect(parsed.rfc4716Format).toContain('Comment: "user@host"');
+      expect(parsed.sha256Fingerprint).toMatch(/^SHA256:/);
+    });
+
+    it("integrates with convertCertificate (pem-to-ssh2, ssh2-to-openssh, openssh-to-ssh2, auto)", async () => {
+      // 1. pem-to-ssh2 from RSA cert
+      const resSsh2 = await convertCertificate(new TextEncoder().encode(RSA_CERTIFICATE_PEM), "pem-to-ssh2");
+      expect(resSsh2.operation).toBe("pem-to-ssh2");
+      expect(resSsh2.text).toContain("---- BEGIN SSH2 PUBLIC KEY ----");
+
+      // 2. auto detection of SSH2 SECSH format
+      const autoSsh2 = await convertCertificate(new TextEncoder().encode(resSsh2.text!), "auto");
+      expect(autoSsh2.detectedType).toContain("SSH2 Public Key");
+      expect(autoSsh2.operation).toBe("ssh2-to-openssh");
+      expect(autoSsh2.text).toContain("ssh-rsa ");
+
+      // 3. auto detection of OpenSSH format
+      const autoOpenSsh = await convertCertificate(
+        new TextEncoder().encode("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAG9wS9iPqF/uF9+7U5o6WqE0g9W test@host"),
+        "auto",
+      );
+      expect(autoOpenSsh.detectedType).toContain("OpenSSH");
+      expect(autoOpenSsh.operation).toBe("openssh-to-ssh2");
+      expect(autoOpenSsh.text).toContain("---- BEGIN SSH2 PUBLIC KEY ----");
+    });
+
+    it("integrates with decodeUniversalArtifact (Universal Sniffer)", () => {
+      const ssh2Text = [
+        "---- BEGIN SSH2 PUBLIC KEY ----",
+        'Comment: "test-key"',
+        "AAAAC3NzaC1lZDI1NTE5AAAAIAG9wS9iPqF/uF9+7U5o6WqE0g9W7z30b8s0k1l2m3n4",
+        "---- END SSH2 PUBLIC KEY ----",
+      ].join("\n");
+
+      const decoded = decodeUniversalArtifact(ssh2Text);
+      expect(decoded.kind).toBe("ssh-public-key");
+      expect(decoded.kindLabel).toContain("SSH2 Public Key");
+      expect(decoded.recommendedToolId).toBe("cert-converter");
+    });
+
+    it("rejects malformed RFC 4716 keys", () => {
+      expect(() => parseRfc4716PublicKey("not an ssh key")).toThrow(/missing '---- BEGIN SSH2 PUBLIC KEY ----'/i);
+      expect(() => parseRfc4716PublicKey("---- BEGIN SSH2 PUBLIC KEY ----\n---- END SSH2 PUBLIC KEY ----")).toThrow();
+    });
+  });
+
+  describe("RFC 7512 PKCS#11 URI Scheme & Integration", () => {
+    it("parses complete RFC 7512 PKCS#11 URI path and query components", () => {
+      const uriStr =
+        "pkcs11:token=My%20YubiKey;manufacturer=Yubico;model=YubiKey%205;serial=123456;object=PIV%20AUTH%20key;type=private;id=%01%02%03;slot-id=1?pin-value=123456&module-path=/usr/lib/opensc-pkcs11.so&module-name=opensc";
+      const uri = parsePkcs11Uri(uriStr);
+
+      expect(uri.token).toBe("My YubiKey");
+      expect(uri.manufacturer).toBe("Yubico");
+      expect(uri.model).toBe("YubiKey 5");
+      expect(uri.serial).toBe("123456");
+      expect(uri.object).toBe("PIV AUTH key");
+      expect(uri.type).toBe("private");
+      expect(uri.slotId).toBe(1);
+      expect(uri.idHex).toBe("010203");
+      expect(uri.idBytes).toEqual(new Uint8Array([0x01, 0x02, 0x03]));
+      expect(uri.pinValue).toBe("123456");
+      expect(uri.modulePath).toBe("/usr/lib/opensc-pkcs11.so");
+      expect(uri.moduleName).toBe("opensc");
+    });
+
+    it("builds canonical RFC 7512 URI from attributes and handles percent encoding", () => {
+      const canonical = buildPkcs11Uri({
+        token: "Hardware Token #1",
+        object: "Cert & Key",
+        type: "cert",
+        idBytes: new Uint8Array([0xaa, 0xbb, 0xcc]),
+        pinValue: "secret?pin&value",
+        modulePath: "C:\\Program Files\\SoftHSM2\\lib\\softhsm2.dll",
+      });
+
+      expect(canonical).toContain("pkcs11:token=Hardware%20Token%20%231");
+      expect(canonical).toContain("object=Cert%20%26%20Key");
+      expect(canonical).toContain("type=cert");
+      expect(canonical).toContain("id=%AA%BB%CC");
+      expect(canonical).toContain("pin-value=secret%3Fpin%26value");
+
+      // Verify round-trip parsing
+      const reparsed = parsePkcs11Uri(canonical);
+      expect(reparsed.token).toBe("Hardware Token #1");
+      expect(reparsed.object).toBe("Cert & Key");
+      expect(reparsed.type).toBe("cert");
+      expect(reparsed.idHex).toBe("aabbcc");
+      expect(reparsed.pinValue).toBe("secret?pin&value");
+    });
+
+    it("validates PKCS#11 URIs and reports clear errors", () => {
+      const valid = validatePkcs11Uri("pkcs11:token=YubiKey;object=MyKey;type=public");
+      expect(valid.valid).toBe(true);
+      expect(valid.uri?.token).toBe("YubiKey");
+
+      const invalidScheme = validatePkcs11Uri("http://example.com/pkcs11");
+      expect(invalidScheme.valid).toBe(false);
+      expect(invalidScheme.error).toContain("must begin with 'pkcs11:'");
+
+      const malformedAttr = validatePkcs11Uri("pkcs11:invalid-attr-without-equal");
+      expect(malformedAttr.valid).toBe(false);
+      expect(malformedAttr.error).toContain("missing '='");
+    });
+
+    it("converts byte arrays to and from PKCS#11 CKA_ID representations", () => {
+      const original = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+      const idStr = bytesToPkcs11Id(original);
+      expect(idStr).toBe("%DE%AD%BE%EF");
+
+      const decodedBytes = pkcs11IdToBytes(idStr);
+      expect(decodedBytes).toEqual(original);
+    });
+
+    it("integrates PKCS#11 inspection with convertCertificate", async () => {
+      const uri =
+        "pkcs11:token=HSM_Partition_1;object=TLS_Private_Key;type=private;slot-id=0?pin-value=password123&module-path=/usr/lib/libCryptoki2.so";
+      const res = await convertCertificate(new TextEncoder().encode(uri), "pkcs11-inspect");
+
+      expect(res.operation).toBe("pkcs11-inspect");
+      expect(res.detectedType).toContain("PKCS#11 URI");
+      expect(res.text).toContain("RFC 7512 PKCS#11 URI Inspection Report");
+      expect(res.text).toContain("HSM_Partition_1");
+      expect(res.text).toContain("TLS_Private_Key");
+      expect(res.text).toContain("******");
+
+      // Test auto-detection
+      const autoRes = await convertCertificate(new TextEncoder().encode(uri), "auto");
+      expect(autoRes.operation).toBe("pkcs11-inspect");
+      expect(autoRes.detectedType).toContain("PKCS#11 URI");
+    });
+
+    it("integrates PKCS#11 URI detection into Universal Crypto Sniffer", () => {
+      const uri = "pkcs11:token=YubiKey_PIV;object=Card%20Authentication;type=cert;id=%01%02%03%04";
+      const sniffer = decodeUniversalArtifact(uri);
+
+      expect(sniffer.kind).toBe("pkcs11-uri");
+      expect(sniffer.kindLabel).toBe("PKCS#11 URI (RFC 7512)");
+      expect(sniffer.properties.some((p) => p.label === "Token Label" && p.value === "YubiKey_PIV")).toBe(true);
+      expect(sniffer.properties.some((p) => p.label === "Object Label" && p.value === "Card Authentication")).toBe(true);
+      expect(sniffer.properties.some((p) => p.label === "Object Type" && p.value === "cert")).toBe(true);
+      expect(sniffer.properties.some((p) => p.label === "CKA_ID (Hex)" && p.value === "01020304")).toBe(true);
+      expect(sniffer.recommendedToolId).toBe("cert-converter");
     });
   });
 });

@@ -88,6 +88,149 @@ export interface OpenSshKeyResult {
   base64: string;
   authorizedKeysLine: string;
   sha256Fingerprint: string;
+  rfc4716Format: string;
+}
+
+/**
+ * Formats a public key wire blob as an RFC 4716 SSH2 Public Key (SECSH format).
+ *
+ * Example:
+ * ---- BEGIN SSH2 PUBLIC KEY ----
+ * Comment: "user@cipherworkbench"
+ * AAAAB3NzaC1yc2EAAAADAQABAAABAQC...
+ * ---- END SSH2 PUBLIC KEY ----
+ */
+export function formatRfc4716PublicKey(wireBlob: Uint8Array, comment = "user@cipherworkbench"): string {
+  const b64 = uint8ArrayToBase64(wireBlob);
+  const lines: string[] = [];
+  for (let i = 0; i < b64.length; i += 70) {
+    lines.push(b64.slice(i, i + 70));
+  }
+  const cleanComment = comment.replace(/["\r\n]/g, "");
+  return [
+    "---- BEGIN SSH2 PUBLIC KEY ----",
+    `Comment: "${cleanComment}"`,
+    ...lines,
+    "---- END SSH2 PUBLIC KEY ----",
+  ].join("\n");
+}
+
+/**
+ * Parses an RFC 4716 SSH2 Public Key file into wireBlob, keyType, and OpenSSH representations.
+ */
+export function parseRfc4716PublicKey(ssh2Text: string): OpenSshKeyResult {
+  const lines = ssh2Text.trim().split(/\r?\n/);
+  const firstLine = lines[0]?.trim();
+  if (!firstLine || !firstLine.includes("BEGIN SSH2 PUBLIC KEY")) {
+    throw new Error("Invalid RFC 4716 SSH2 Public Key: missing '---- BEGIN SSH2 PUBLIC KEY ----' header");
+  }
+
+  let comment = "";
+  const b64Parts: string[] = [];
+  let inHeaders = true;
+
+  for (let i = 1; i < lines.length; i++) {
+    const rawLine = lines[i]!;
+    const line = rawLine.trim();
+    if (line.includes("END SSH2 PUBLIC KEY")) {
+      break;
+    }
+    if (inHeaders) {
+      if (line.includes(":")) {
+        const colonIdx = line.indexOf(":");
+        const key = line.slice(0, colonIdx).trim().toLowerCase();
+        let val = line.slice(colonIdx + 1).trim();
+        // RFC 4716 continuation lines end with backslash
+        while (val.endsWith("\\") && i + 1 < lines.length) {
+          i++;
+          val = val.slice(0, -1) + lines[i]!.trim();
+        }
+        if (val.startsWith('"') && val.endsWith('"')) {
+          val = val.slice(1, -1);
+        }
+        if (key === "comment") {
+          comment = val;
+        }
+        continue;
+      }
+      inHeaders = false;
+    }
+
+    if (line.length > 0) {
+      b64Parts.push(line);
+    }
+  }
+
+  const b64 = b64Parts.join("");
+  const binary = atob(b64);
+  const wireBlob = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    wireBlob[i] = binary.charCodeAt(i);
+  }
+
+  if (wireBlob.length < 4) {
+    throw new Error("Invalid SSH2 wire blob: payload too short");
+  }
+  const typeLen =
+    ((wireBlob[0]! << 24) | (wireBlob[1]! << 16) | (wireBlob[2]! << 8) | wireBlob[3]!) >>> 0;
+  if (wireBlob.length < 4 + typeLen) {
+    throw new Error("Invalid SSH2 wire blob: truncated key type string");
+  }
+  const keyType = new TextDecoder().decode(wireBlob.subarray(4, 4 + typeLen));
+
+  const commentStr = comment ? ` ${comment}` : "";
+  const authorizedKeysLine = `${keyType} ${b64}${commentStr}`;
+
+  const digest = sha256(wireBlob);
+  const fpB64 = uint8ArrayToBase64(digest).replace(/=+$/, "");
+  const sha256Fingerprint = `SHA256:${fpB64}`;
+  const rfc4716Format = formatRfc4716PublicKey(wireBlob, comment || "cipherworkbench");
+
+  return {
+    keyType,
+    wireBlob,
+    base64: b64,
+    authorizedKeysLine,
+    sha256Fingerprint,
+    rfc4716Format,
+  };
+}
+
+/**
+ * Parses an OpenSSH single-line public key ("ssh-rsa AAAAB3... [comment]").
+ */
+export function parseOpenSshPublicKey(openSshLine: string): OpenSshKeyResult {
+  const trimmed = openSshLine.trim();
+  const match = trimmed.match(/^([a-z0-9-]+)\s+([A-Za-z0-9+/=]+)(?:\s+(.*))?$/);
+  if (!match) {
+    throw new Error("Invalid OpenSSH public key format: expected '<keytype> <base64> [comment]'");
+  }
+  const keyType = match[1]!;
+  const b64 = match[2]!;
+  const comment = match[3]?.trim() || "";
+
+  const binary = atob(b64);
+  const wireBlob = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    wireBlob[i] = binary.charCodeAt(i);
+  }
+
+  const commentStr = comment ? ` ${comment}` : "";
+  const authorizedKeysLine = `${keyType} ${b64}${commentStr}`;
+
+  const digest = sha256(wireBlob);
+  const fpB64 = uint8ArrayToBase64(digest).replace(/=+$/, "");
+  const sha256Fingerprint = `SHA256:${fpB64}`;
+  const rfc4716Format = formatRfc4716PublicKey(wireBlob, comment || "cipherworkbench");
+
+  return {
+    keyType,
+    wireBlob,
+    base64: b64,
+    authorizedKeysLine,
+    sha256Fingerprint,
+    rfc4716Format,
+  };
 }
 
 /**
@@ -161,6 +304,7 @@ export function spkiToOpenSsh(
   const digest = sha256(wireBlob);
   const fpB64 = uint8ArrayToBase64(digest).replace(/=+$/, "");
   const sha256Fingerprint = `SHA256:${fpB64}`;
+  const rfc4716Format = formatRfc4716PublicKey(wireBlob, comment || "cipherworkbench");
 
   return {
     keyType,
@@ -168,6 +312,7 @@ export function spkiToOpenSsh(
     base64: b64,
     authorizedKeysLine,
     sha256Fingerprint,
+    rfc4716Format,
   };
 }
 

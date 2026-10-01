@@ -16,3 +16,12 @@ export * from "./lint/run";
 export * from "./tool-definition";
 export * from "./table-format";
 export * from "./stream";
+export type {
+  CommandShell,
+  CommandLayout,
+  CliTool,
+  ShellCommand,
+  ShellCommandVariants,
+  CliProviderCommand,
+} from "@ocs/contracts/shell";
+export { formatShellCommands, buildPipedShellVariants, buildFileShellVariants } from "@ocs/contracts/shell";

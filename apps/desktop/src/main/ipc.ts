@@ -2,22 +2,13 @@ import { BrowserWindow, app, ipcMain, shell } from "electron";
 import { z } from "zod";
 import { openTextFile } from "./dialogs";
 import { readSavedState, writeSavedState } from "./store";
+import { probeTlsEndpoint, queryOcspResponder, queryCtLogs } from "./network";
 
 /**
  * Every channel is validated. The renderer is the least trusted part of an Electron
  * app, so arguments arriving over IPC get the same treatment as arguments arriving
  * over a network boundary — even though nothing here spawns a process, `openTextFile`
  * and `openExternal` are both real capabilities.
- *
- * The whole surface is five channels wide, and it shrank rather than grew: `dialog:saveTextFile` and
- * `dialog:saveBinaryFile` are gone, along with `PlatformApi.saveTextFile`, `saveBinaryFile`,
- * `SaveResult` and `canChooseSaveLocation`. They lost their last caller when the Result panel's Save
- * button was removed, and a *file-write capability* is not a thing to leave exposed to the renderer
- * on the grounds that it might be wanted again. If saving comes back, so can they.
- *
- * That is not minimalism for its own sake: input files are read by the renderer's own `File` API and
- * every algorithm runs in the renderer, so the main process is only needed for the handful of things
- * a sandboxed page genuinely cannot do.
  */
 
 const Extension = z.string().regex(/^[A-Za-z0-9]{1,12}$/);
@@ -33,6 +24,21 @@ const EXTERNAL_ALLOWLIST = [
 ];
 
 const SavedStateJson = z.string().max(1024 * 1024);
+
+const HostnameRegex = /^[a-zA-Z0-9.\-_]+$/;
+const ProbeTlsArgs = z.object({
+  host: z.string().min(1).max(255).regex(HostnameRegex),
+  port: z.number().int().min(1).max(65535).optional().default(443),
+  servername: z.string().min(1).max(255).regex(HostnameRegex).optional(),
+  timeoutMs: z.number().int().min(1000).max(60000).optional().default(20000),
+});
+
+const QueryOcspArgs = z.object({
+  responderUrl: z.string().url().max(2048),
+  requestBase64: z.string().min(1).max(1024 * 1024),
+});
+
+const QueryCtLogsArgs = z.string().min(1).max(255).regex(HostnameRegex);
 
 function senderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null {
   return BrowserWindow.fromWebContents(event.sender);
@@ -58,4 +64,20 @@ export function registerIpc(): void {
   ipcMain.handle("store:writeSavedState", async (_event, raw) => {
     await writeSavedState(SavedStateJson.parse(raw));
   });
+
+  ipcMain.handle("network:probeTls", async (_event, raw) => {
+    const args = ProbeTlsArgs.parse(raw);
+    return probeTlsEndpoint(args);
+  });
+
+  ipcMain.handle("network:queryOcsp", async (_event, raw) => {
+    const args = QueryOcspArgs.parse(raw);
+    return queryOcspResponder(args.responderUrl, args.requestBase64);
+  });
+
+  ipcMain.handle("network:queryCtLogs", async (_event, raw) => {
+    const domain = QueryCtLogsArgs.parse(raw);
+    return queryCtLogs(domain);
+  });
 }
+

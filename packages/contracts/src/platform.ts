@@ -61,6 +61,62 @@ export interface OpenedTextFile {
  * in-process; the eslint config enforces that `child_process` is unreachable
  * from every file in the repo, including the Electron main process.
  */
+export interface TlsProbeOptions {
+  host: string;
+  port?: number;
+  servername?: string;
+  timeoutMs?: number;
+}
+
+export interface TlsCipherDetails {
+  name: string;
+  standardName?: string;
+  version?: string;
+}
+
+export interface TlsProbeResult {
+  host: string;
+  port: number;
+  ip?: string;
+  protocol: string | null;
+  cipher: TlsCipherDetails | null;
+  alpnProtocol: string | false | null;
+  authorized: boolean;
+  authorizationError: string | null;
+  peerCertificatePem: string | null;
+  certificateChainPems: string[];
+  ocspStapled: boolean;
+  ocspResponseBase64: string | null;
+  timing: {
+    connectMs: number;
+    handshakeMs: number;
+    totalMs: number;
+  };
+}
+
+export interface OcspQueryOptions {
+  responderUrl: string;
+  requestBase64: string;
+}
+
+export interface OcspQueryResult {
+  status: number;
+  responseBase64: string;
+  latencyMs: number;
+}
+
+export interface CtLogEntry {
+  issuerCaId: number;
+  issuerName: string;
+  commonName: string;
+  nameValue: string;
+  id: number;
+  entryTimestamp: string;
+  notBefore: string;
+  notAfter: string;
+  serialNumber: string;
+}
+
 export interface PlatformApi {
   environment(): Promise<PlatformEnvironment>;
 
@@ -72,4 +128,14 @@ export interface PlatformApi {
   /** Raw JSON string so the caller's schema stays the single validator. */
   readSavedState(): Promise<string | undefined>;
   writeSavedState(json: string): Promise<void>;
+
+  /**
+   * Optional live network probing methods.
+   * Only implemented in the desktop shell (Electron with native TCP/TLS socket capabilities).
+   * In web/browser mode, these are undefined.
+   */
+  probeTls?(options: TlsProbeOptions): Promise<TlsProbeResult>;
+  queryOcsp?(options: OcspQueryOptions): Promise<OcspQueryResult>;
+  queryCtLogs?(domain: string): Promise<CtLogEntry[]>;
 }
+

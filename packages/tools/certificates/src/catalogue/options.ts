@@ -187,6 +187,26 @@ const CONVERTER_OP: OptionDef<CertificateOptionGroup> = {
       label: "Split Chain / Bundle",
       summary: "Splits multiple concatenated PEM certs into separate blocks",
     },
+    {
+      value: "pem-to-ssh2",
+      label: "Certificate / Key to SSH2 Public (RFC 4716)",
+      summary: "Converts certificate or public key to multi-line RFC 4716 SECSH format",
+    },
+    {
+      value: "ssh2-to-openssh",
+      label: "SSH2 (RFC 4716) to OpenSSH",
+      summary: "Converts RFC 4716 SSH2 multi-line public key to single-line authorized_keys",
+    },
+    {
+      value: "openssh-to-ssh2",
+      label: "OpenSSH to SSH2 (RFC 4716)",
+      summary: "Converts single-line OpenSSH public key to RFC 4716 SECSH multi-line format",
+    },
+    {
+      value: "pkcs11-inspect",
+      label: "Inspect PKCS#11 URI (RFC 7512)",
+      summary: "Parses and inspects an RFC 7512 PKCS#11 cryptographic token URI",
+    },
   ],
   summary: "Which conversion or extraction transformation to perform.",
   detail:
@@ -939,11 +959,11 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
   const options: OptionDef<CertificateOptionGroup>[] = [];
 
   if (meta.id === "x509") {
-    options.push(INPUT_FORMAT, DETAIL_LEVEL);
+    options.push(DETAIL_LEVEL);
   } else if (meta.id === "csr") {
-    options.push(INPUT_FORMAT, VERIFY_CSR_SIG, DETAIL_LEVEL);
+    options.push(VERIFY_CSR_SIG, DETAIL_LEVEL);
   } else if (meta.id === "cert-converter") {
-    options.push(CONVERTER_OP, INPUT_FORMAT, PASSWORD, CONVERTER_PRIVATE_KEY);
+    options.push(CONVERTER_OP, PASSWORD, CONVERTER_PRIVATE_KEY);
   } else if (meta.id === "cert-creator") {
     options.push(
       CREATOR_MODE,
@@ -1025,11 +1045,7 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
       CRL_NUMBER,
       CRL_VALIDITY_DAYS,
       CRL_REASON,
-      INPUT_FORMAT,
-      DETAIL_LEVEL,
     );
-  } else if (meta.id === "tls-grader" || meta.id === "cert-expiry" || meta.id === "universal-decoder") {
-    options.push(INPUT_FORMAT, DETAIL_LEVEL);
   }
 
   return createOptionCatalogue(options);

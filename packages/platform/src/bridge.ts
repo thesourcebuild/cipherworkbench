@@ -1,4 +1,12 @@
-import type { HostPlatform, OpenedTextFile } from "@ocs/contracts";
+import type {
+  CtLogEntry,
+  HostPlatform,
+  OcspQueryOptions,
+  OcspQueryResult,
+  OpenedTextFile,
+  TlsProbeOptions,
+  TlsProbeResult,
+} from "@ocs/contracts";
 
 /** Native menu items the desktop shell can dispatch into the renderer. */
 export type MenuAction =
@@ -12,13 +20,6 @@ export type MenuAction =
  * The exact surface `apps/desktop` exposes on `window` through contextBridge.
  * Declared here so both sides typecheck against one definition, and so the
  * renderer never needs to import anything from electron.
- *
- * Note how little is here. Input files are read by the renderer itself with the
- * ordinary `File` API — an Electron renderer is a Chromium renderer — so this
- * bridge carries no file *reading* at all, only the things a sandboxed page
- * genuinely cannot do. And there is no execute/spawn surface of any kind: this
- * app computes in-process, and eslint makes `child_process` unreachable from
- * every file in the repo, main process included.
  */
 export interface DesktopBridge {
   readonly isDesktop: true;
@@ -30,6 +31,10 @@ export interface DesktopBridge {
   writeSavedState(json: string): Promise<void>;
   /** Returns an unsubscribe function. */
   onMenuAction(handler: (action: MenuAction) => void): () => void;
+
+  probeTls?(options: TlsProbeOptions): Promise<TlsProbeResult>;
+  queryOcsp?(options: OcspQueryOptions): Promise<OcspQueryResult>;
+  queryCtLogs?(domain: string): Promise<CtLogEntry[]>;
 }
 
 declare global {

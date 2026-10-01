@@ -2,7 +2,7 @@ import type { ToolExportFile, ToolResult, ToolResultField } from "@ocs/engine";
 import { parseAsn1 } from "./asn1/asn1";
 import { convertCertificate } from "./asn1/converter";
 import { parseCsr } from "./asn1/csr";
-import { detectInputBytes } from "./asn1/pem";
+import { detectInputBytes, encodePem, type PemBlock } from "./asn1/pem";
 import { parseX509Certificate } from "./asn1/x509";
 import { createCertificate } from "./asn1/create-cert";
 import { createCsr } from "./asn1/create-csr";
@@ -815,6 +815,11 @@ export async function computeCertificate(
             .authorizedKeysLine,
         },
         {
+          name: "id_ssh2.pub",
+          content: spkiToOpenSsh(created.keyBundle.spkiBytes, keyType, commonName)
+            .rfc4716Format,
+        },
+        {
           name: "jwk.json",
           content: JSON.stringify(spkiToJwk(created.keyBundle.spkiBytes, keyType), null, 2),
         },
@@ -1099,6 +1104,74 @@ export async function computeCertificate(
         fields,
         working,
         workingFormat: "markdown",
+        cliProviders: [
+          {
+            id: "sslx",
+            label: "sslx",
+            commands: [
+              {
+                comment: "Verify whether certificate and private key match",
+                parts: ["sslx match cert.pem private.key"],
+              },
+            ],
+          },
+          {
+            id: "openssl",
+            label: "OpenSSL",
+            commands: {
+              bash: [
+                {
+                  comment: "Verify RSA modulus match between cert and key",
+                  parts: [
+                    "diff <(openssl x509 -noout -modulus -in cert.pem | openssl md5)",
+                    "     <(openssl rsa -noout -modulus -in private.key | openssl md5)",
+                  ],
+                },
+                {
+                  comment: "Verify EC/ECDSA public key match between cert and key",
+                  parts: [
+                    "diff <(openssl x509 -in cert.pem -pubkey -noout)",
+                    "     <(openssl pkey -in private.key -pubout)",
+                  ],
+                },
+              ],
+              powershell: [
+                {
+                  comment: "Verify RSA modulus match between cert and key",
+                  parts: [
+                    "(openssl x509 -noout -modulus -in cert.pem | openssl md5) -eq",
+                    "(openssl rsa -noout -modulus -in private.key | openssl md5)",
+                  ],
+                },
+                {
+                  comment: "Verify EC/ECDSA public key match between cert and key",
+                  parts: [
+                    "(openssl x509 -in cert.pem -pubkey -noout) -eq",
+                    "(openssl pkey -in private.key -pubout)",
+                  ],
+                },
+              ],
+              cmd: [
+                {
+                  comment: "Verify RSA modulus match between cert and key",
+                  parts: [
+                    "openssl x509 -noout -modulus -in cert.pem | openssl md5 > cert.md5 &&",
+                    "openssl rsa -noout -modulus -in private.key | openssl md5 > key.md5 &&",
+                    "fc cert.md5 key.md5",
+                  ],
+                },
+                {
+                  comment: "Verify EC/ECDSA public key match between cert and key",
+                  parts: [
+                    "openssl x509 -in cert.pem -pubkey -noout > cert.pub &&",
+                    "openssl pkey -in private.key -pubout > key.pub &&",
+                    "fc cert.pub key.pub",
+                  ],
+                },
+              ],
+            },
+          },
+        ],
       };
     } catch (err) {
       return {
@@ -1159,6 +1232,52 @@ export async function computeCertificate(
           status: statusMap[a.status],
           note: a.note,
         })),
+        cliProviders: [
+          {
+            id: "sslx",
+            label: "sslx",
+            commands: [
+              {
+                comment: "Diff two certificates side-by-side with sslx",
+                parts: ["sslx diff cert1.pem cert2.pem"],
+              },
+            ],
+          },
+          {
+            id: "openssl",
+            label: "OpenSSL",
+            commands: {
+              bash: [
+                {
+                  comment: "Compare two certificates using OpenSSL text dumps and diff",
+                  parts: [
+                    "diff -u <(openssl x509 -in cert1.pem -text -noout)",
+                    "        <(openssl x509 -in cert2.pem -text -noout)",
+                  ],
+                },
+              ],
+              powershell: [
+                {
+                  comment: "Compare two certificates using OpenSSL text dumps and Compare-Object",
+                  parts: [
+                    "Compare-Object (openssl x509 -in cert1.pem -text -noout)",
+                    "               (openssl x509 -in cert2.pem -text -noout)",
+                  ],
+                },
+              ],
+              cmd: [
+                {
+                  comment: "Compare two certificates using OpenSSL text dumps and fc",
+                  parts: [
+                    "openssl x509 -in cert1.pem -text -noout > c1.txt &&",
+                    "openssl x509 -in cert2.pem -text -noout > c2.txt &&",
+                    "fc c1.txt c2.txt",
+                  ],
+                },
+              ],
+            },
+          },
+        ],
       };
     } catch (err) {
       return {
@@ -1364,6 +1483,52 @@ export async function computeCertificate(
         working: working.join("\n"),
         workingFormat: "markdown",
         files: exportFiles,
+        cliProviders: [
+          {
+            id: "openssl",
+            label: "OpenSSL",
+            commands: [
+              {
+                comment: "Sign CSR with CA certificate and key using OpenSSL",
+                parts: [
+                  "openssl x509 -req",
+                  "-in request.csr",
+                  "-CA ca.crt",
+                  "-CAkey ca.key",
+                  "-CAcreateserial",
+                  "-out cert.crt",
+                  `-days ${validityDays}`,
+                  "-sha256",
+                ],
+              },
+              {
+                comment: "Verify the issued certificate against the CA",
+                parts: ["openssl verify -CAfile ca.crt cert.crt"],
+              },
+              {
+                comment: "Generate self-signed certificate directly with OpenSSL",
+                parts: [
+                  "openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256",
+                  `-keyout key.pem -out cert.pem -days ${validityDays} -nodes -batch -subj "/CN=localhost"`,
+                ],
+              },
+            ],
+          },
+          {
+            id: "sslx",
+            label: "sslx",
+            commands: [
+              {
+                comment: "Sign CSR with sslx CLI",
+                parts: [`sslx sign request.csr --ca ca.crt --key ca.key --days ${validityDays}`],
+              },
+              {
+                comment: "Generate self-signed certificate directly with sslx",
+                parts: ["sslx generate --cn localhost"],
+              },
+            ],
+          },
+        ],
       };
     } catch (err) {
       return {
@@ -1618,11 +1783,16 @@ export async function computeCertificate(
   if (spec.variant === "tls-grader") {
     try {
       const grade = gradeCertificate(input);
+      const keyDisplay =
+        grade.cert.publicKey.algorithmName === "Elliptic Curve (EC)"
+          ? grade.cert.publicKey.details
+          : `${grade.cert.publicKey.algorithmName} (${grade.cert.publicKey.details})`;
+
       const fields: ToolResultField[] = [
         { label: "Letter Grade", value: grade.grade, hint: "Overall Security & Health Grade" },
         { label: "Score", value: `${grade.score} / 100`, hint: "Weighted baseline compliance score" },
         { label: "Subject", value: grade.cert.subject.dn },
-        { label: "Public Key", value: `${grade.cert.publicKey.algorithmName} (${grade.cert.publicKey.details})` },
+        { label: "Public Key", value: keyDisplay },
         { label: "Signature Algorithm", value: grade.cert.signatureAlgorithmName },
         { label: "Validity", value: grade.cert.validity.statusLabel },
         { label: "Lifespan Progress", value: grade.cert.validity.visualProgressBar },
@@ -1635,30 +1805,123 @@ export async function computeCertificate(
         { label: "SAN Count", value: String(grade.cert.extensions.sans.length) },
       ];
 
-      const working = [
-        "### TLS & Certificate Health Audit",
+      const workingSections = [
+        "### 🛡️ TLS & Certificate Security Scorecard",
         "",
         "```text",
         grade.asciiBanner,
         "```",
         "",
-        "#### Evaluated Checks:",
-        ...grade.checks.map(
-          (c) =>
-            `- **${c.status === "pass" ? "✓ PASS" : c.status === "warn" ? "⚠ WARN" : "✗ FAIL"}** \`${c.name}\`: ${c.title} — ${c.detail}`,
-        ),
+        "| Status | Security Check | Score | Evaluation & Details |",
+        "|:------:|----------------|:-----:|----------------------|",
+        ...grade.checks.map((c) => {
+          const badge =
+            c.status === "pass"
+              ? "**✓ PASS**"
+              : c.status === "warn"
+                ? "**⚠ WARN**"
+                : "**✗ FAIL**";
+          return `| ${badge} | **${c.name}** | \`${c.score}/100\` | **${c.title}**<br>${c.detail} |`;
+        }),
+      ];
+
+      if (grade.chainCerts && grade.chainCerts.length > 1) {
+        workingSections.push(
+          "",
+          "---",
+          "",
+          `### 📦 Certificate Chain Hierarchy (${grade.chainCerts.length} Certificates)`,
+          "",
+          "| # | Role | Subject Common Name | Issuer | Signature Algorithm | Valid Until | Status |",
+          "|:-:|------|---------------------|--------|---------------------|-------------|:------:|",
+          ...grade.chainCerts.map((c, idx) => {
+            const isLeaf = idx === 0;
+            const isRoot =
+              idx === grade.chainCerts!.length - 1 &&
+              (c.subject.dn === c.issuer.dn || Boolean(c.extensions.basicConstraints?.isCa));
+            const role = isLeaf ? "🌿 Leaf (Server)" : isRoot ? "🏛️ Root CA" : "⛓️ Intermediate CA";
+            const sub = c.subject.commonName || c.subject.dn;
+            const iss = c.issuer.commonName || c.issuer.dn;
+            const exp = c.validity.notAfter.toISOString().split("T")[0];
+            const status = c.validity.statusLabel;
+            return `| **#${idx + 1}** | ${role} | \`${sub}\` | \`${iss}\` | \`${c.signatureAlgorithmName}\` | ${exp} | ${status} |`;
+          }),
+        );
+      }
+
+      workingSections.push(
+        "",
+        "---",
         "",
         "#### Equivalent CLI Command",
         "```bash",
         grade.sslxCommand,
         "```",
-      ].join("\n");
+      );
 
       return {
-        text: `Grade: ${grade.grade} (${grade.score}/100) — ${grade.summary}`,
+        text: grade.summary,
         fields,
-        working,
+        working: workingSections.join("\n"),
         workingFormat: "markdown",
+        cliProviders: [
+          {
+            id: "sslx",
+            label: "sslx",
+            commands: [
+              {
+                comment: "Audit and grade certificate & TLS baseline security",
+                parts: [grade.sslxCommand],
+              },
+              {
+                comment: "Perform TLS handshake and display remote certificate chain",
+                parts: ["sslx connect host"],
+              },
+            ],
+          },
+          {
+            id: "openssl",
+            label: "OpenSSL",
+            commands: {
+              bash: [
+                {
+                  comment: "Inspect remote TLS handshake and certificate chain",
+                  parts: [
+                    "openssl s_client -connect host:443 2>/dev/null | openssl x509 -text",
+                  ],
+                },
+                {
+                  comment: "Online TLS grading (OpenSSL has no grader; use SSL Labs)",
+                  parts: ["# Visit: https://www.ssllabs.com/ssltest/"],
+                },
+              ],
+              powershell: [
+                {
+                  comment: "Inspect remote TLS handshake and certificate chain",
+                  parts: [
+                    "cmd /c '<nul openssl s_client -connect host:443 2>nul | openssl x509 -text'",
+                  ],
+                },
+                {
+                  comment: "Online TLS grading (OpenSSL has no grader; use SSL Labs)",
+                  parts: ["# Visit: https://www.ssllabs.com/ssltest/"],
+                },
+              ],
+              cmd: [
+                {
+                  comment: "Inspect remote TLS handshake and certificate chain",
+                  parts: [
+                    "<nul openssl s_client -connect host:443 2>nul | openssl x509 -text",
+                  ],
+                },
+                {
+                  comment: "Online TLS grading (OpenSSL has no grader; use SSL Labs)",
+                  parts: ["REM Visit: https://www.ssllabs.com/ssltest/"],
+                },
+              ],
+            },
+          },
+        ],
       };
     } catch (err) {
       return {
@@ -1696,9 +1959,9 @@ export async function computeCertificate(
         report.prometheusSnippet,
         "```",
         "",
-        "#### Equivalent CLI Command",
+        "#### Equivalent CLI Commands",
         "```bash",
-        report.sslxCommand,
+        `# Modern sslx CLI\n${report.sslxCommand}\n\n# OpenSSL CLI\nopenssl x509 -enddate -noout -in cert.pem`,
         "```",
       ].join("\n");
 
@@ -1713,6 +1976,61 @@ export async function computeCertificate(
         working,
         workingFormat: "markdown",
         files,
+        cliProviders: [
+          {
+            id: "sslx",
+            label: "sslx",
+            commands: [
+              {
+                comment: "Monitor and audit certificate fleet expiration dates",
+                parts: [report.sslxCommand],
+              },
+            ],
+          },
+          {
+            id: "openssl",
+            label: "OpenSSL",
+            commands: {
+              bash: [
+                {
+                  comment: "Check local certificate expiration date",
+                  parts: ["openssl x509 -enddate -noout -in cert.pem"],
+                },
+                {
+                  comment: "Check remote TLS server certificate expiration date",
+                  parts: [
+                    "echo | openssl s_client -connect example.com:443 2>/dev/null",
+                    "| openssl x509 -noout -enddate",
+                  ],
+                },
+              ],
+              powershell: [
+                {
+                  comment: "Check local certificate expiration date",
+                  parts: ["openssl x509 -enddate -noout -in cert.pem"],
+                },
+                {
+                  comment: "Check remote TLS server certificate expiration date",
+                  parts: [
+                    "cmd /c '<nul openssl s_client -connect example.com:443 2>nul | openssl x509 -noout -enddate'",
+                  ],
+                },
+              ],
+              cmd: [
+                {
+                  comment: "Check local certificate expiration date",
+                  parts: ["openssl x509 -enddate -noout -in cert.pem"],
+                },
+                {
+                  comment: "Check remote TLS server certificate expiration date",
+                  parts: [
+                    "<nul openssl s_client -connect example.com:443 2>nul | openssl x509 -noout -enddate",
+                  ],
+                },
+              ],
+            },
+          },
+        ],
       };
     } catch (err) {
       return {
@@ -1753,6 +2071,35 @@ export async function computeCertificate(
         fields,
         working,
         workingFormat: "markdown",
+        cliProviders: [
+          {
+            id: "sslx",
+            label: "sslx",
+            commands: [
+              {
+                comment: "Inspect cryptographic artifact with sslx",
+                parts: [decoded.sslxCommand],
+              },
+            ],
+          },
+          {
+            id: "openssl",
+            label: "OpenSSL",
+            commands: [
+              {
+                comment:
+                  decoded.kind === "jwt"
+                    ? "Decode JWT (OpenSSL cannot decode JWT -- visit jwt.io)"
+                    : "Parse ASN.1 structure with OpenSSL",
+                parts: [
+                  decoded.kind === "jwt"
+                    ? "# Visit: https://jwt.io/"
+                    : "openssl asn1parse -in artifact.pem",
+                ],
+              },
+            ],
+          },
+        ],
       };
     } catch (err) {
       return {
@@ -1763,8 +2110,9 @@ export async function computeCertificate(
 
   // Resolve bytes based on auto-detect
   let der: Uint8Array;
+  let detected: ReturnType<typeof detectInputBytes>;
   try {
-    const detected = detectInputBytes(input);
+    detected = detectInputBytes(input);
     der = detected.der;
   } catch (err) {
     return {
@@ -1775,10 +2123,25 @@ export async function computeCertificate(
   switch (spec.variant) {
     case "x509": {
       try {
+        const certBlocks = (detected.blocks || []).filter(
+          (b: PemBlock) => b.label.includes("CERTIFICATE") && !b.label.includes("REQUEST"),
+        );
+        const hasMultiple = certBlocks.length > 1;
+
         const cert = parseX509Certificate(der);
         const detailLevel = readDetailLevel(spec.options);
 
-        const fields: ToolResultField[] = [
+        const fields: ToolResultField[] = [];
+
+        if (hasMultiple) {
+          fields.push({
+            label: "Certificate Bundle Detected",
+            value: `${certBlocks.length} Certificates in Input (Inspecting #1: ${cert.subject.commonName || "Leaf"})`,
+            hint: "The input contains multiple concatenated certificates. See the Multi-Certificate Breakdown in the report below.",
+          });
+        }
+
+        fields.push(
           { label: "Subject", value: cert.subject.dn, hint: "Subject Distinguished Name" },
           { label: "Issuer", value: cert.issuer.dn, hint: "Certificate Authority (Issuer)" },
           {
@@ -1810,7 +2173,7 @@ export async function computeCertificate(
             label: "Public Key",
             value: `${cert.publicKey.algorithmName} (${cert.publicKey.details})`,
           },
-        ];
+        );
 
         if (cert.extensions.sans.length > 0) {
           fields.push({
@@ -1873,11 +2236,106 @@ export async function computeCertificate(
           }
         }
 
+        let workingContent = cert.textDump;
+        if (hasMultiple) {
+          const allCerts = certBlocks
+            .map((b: PemBlock, idx: number) => {
+              try {
+                const c = parseX509Certificate(b.bytes);
+                const isLeaf = idx === 0;
+                const isRoot =
+                  idx === certBlocks.length - 1 &&
+                  (c.subject.dn === c.issuer.dn || Boolean(c.extensions.basicConstraints?.isCa));
+                const role = isLeaf ? "Leaf (Server)" : isRoot ? "Root CA" : "Intermediate CA";
+                return { index: idx + 1, role, cert: c };
+              } catch {
+                return null;
+              }
+            })
+            .filter((c: { index: number; role: string; cert: ReturnType<typeof parseX509Certificate> } | null): c is { index: number; role: string; cert: ReturnType<typeof parseX509Certificate> } => c !== null);
+
+          workingContent = [
+            `### 📦 Multi-Certificate Bundle Detected (${certBlocks.length} Certificates)`,
+            "",
+            `The input contains **${certBlocks.length} concatenated PEM certificates**. Certificate #1 is inspected in detail below.`,
+            "",
+            "| # | Role | Subject CN | Issuer CN | Valid Until | Days Left | Key Algorithm |",
+            "|---|------|------------|-----------|-------------|-----------|---------------|",
+            ...allCerts.map((item: { index: number; role: string; cert: ReturnType<typeof parseX509Certificate> }) => {
+              const sub = item.cert.subject.commonName || item.cert.subject.dn;
+              const iss = item.cert.issuer.commonName || item.cert.issuer.dn;
+              const exp = item.cert.validity.notAfter.toISOString().split("T")[0];
+              const days = `${item.cert.validity.daysRemaining}d`;
+              const key = `${item.cert.publicKey.algorithmName} (${item.cert.publicKey.details})`;
+              return `| **#${item.index}** | ${item.role} | \`${sub}\` | \`${iss}\` | ${exp} | ${days} | ${key} |`;
+            }),
+            "",
+            "> 💡 **Tip**: To cryptographically verify this entire certificate chain path from leaf to root, open the **[Chain Verifier](/tools/cert-verifier)** or monitor fleet expiration in **[Certificate Expiry Monitor](/tools/cert-expiry)**.",
+            "",
+            "---",
+            "",
+            "### Primary Certificate Inspection (#1)",
+            "",
+            "```text",
+            cert.textDump,
+            "```",
+          ].join("\n");
+        }
+
+        const files: ToolExportFile[] = hasMultiple
+          ? certBlocks.map((b: PemBlock, i: number) => {
+              let cleanName = `cert-${i + 1}`;
+              try {
+                const c = parseX509Certificate(b.bytes);
+                if (c.subject.commonName) {
+                  cleanName = `cert-${i + 1}-${c.subject.commonName.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+                }
+              } catch {}
+              return {
+                name: `${cleanName}.crt`,
+                content: encodePem("CERTIFICATE", b.bytes),
+              };
+            })
+          : [];
+
         return {
           text: textOutput,
           bytes: cert.rawDer,
           fields,
-          working: cert.textDump,
+          working: workingContent,
+          files: files.length > 0 ? files : undefined,
+          cliProviders: [
+            {
+              id: "openssl",
+              label: "OpenSSL",
+              commands: [
+                {
+                  comment: "Inspect X.509 certificate details",
+                  parts: ["openssl x509 -in cert.pem -text -noout"],
+                },
+              ],
+            },
+            {
+              id: "sslx",
+              label: "sslx",
+              commands: [
+                {
+                  comment: "Inspect X.509 certificate with sslx",
+                  parts: ["sslx inspect cert.pem"],
+                },
+              ],
+            },
+            {
+              id: "gnutls",
+              label: "GnuTLS (certtool)",
+              commands: [
+                {
+                  comment: "Inspect certificate details with certtool",
+                  parts: ["certtool --certificate-info --infile cert.pem"],
+                },
+              ],
+            },
+          ],
         };
       } catch (err) {
         return {
@@ -1958,6 +2416,49 @@ export async function computeCertificate(
           bytes: csr.rawDer,
           fields,
           working: csr.textDump,
+          cliProviders: [
+            {
+              id: "openssl",
+              label: "OpenSSL",
+              commands: [
+                {
+                  comment: "Verify and inspect PKCS#10 CSR",
+                  parts: ["openssl req -in request.csr -text -noout -verify"],
+                },
+                {
+                  comment: "Generate new CSR and EC private key with OpenSSL",
+                  parts: [
+                    "openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256",
+                    '-keyout key.pem -out csr.pem -batch -subj "/CN=example.com"',
+                  ],
+                },
+              ],
+            },
+            {
+              id: "sslx",
+              label: "sslx",
+              commands: [
+                {
+                  comment: "Inspect PKCS#10 CSR with sslx",
+                  parts: ["sslx inspect request.csr"],
+                },
+                {
+                  comment: "Generate new CSR and private key with sslx",
+                  parts: ["sslx csr --cn example.com"],
+                },
+              ],
+            },
+            {
+              id: "gnutls",
+              label: "GnuTLS (certtool)",
+              commands: [
+                {
+                  comment: "Inspect PKCS#10 CSR with certtool",
+                  parts: ["certtool --crq-info --infile request.csr"],
+                },
+              ],
+            },
+          ],
         };
       } catch (err) {
         return {
@@ -2008,6 +2509,40 @@ export async function computeCertificate(
           working: result.text ?? result.summary,
           workingFormat: op === "pkcs12-inspect" ? "markdown" : undefined,
           files: files.length > 0 ? files : undefined,
+          cliProviders: [
+            {
+              id: "openssl",
+              label: "OpenSSL",
+              commands: [
+                {
+                  comment: "Convert X.509 PEM certificate to DER binary",
+                  parts: ["openssl x509 -in cert.pem -outform DER -out cert.der"],
+                },
+                {
+                  comment: "Convert DER binary certificate to PEM",
+                  parts: ["openssl x509 -in cert.der -inform DER -outform PEM -out cert.pem"],
+                },
+                {
+                  comment: "Extract SubjectPublicKeyInfo (SPKI) public key",
+                  parts: ["openssl x509 -in cert.pem -pubkey -noout > pubkey.pem"],
+                },
+              ],
+            },
+            {
+              id: "sslx",
+              label: "sslx",
+              commands: [
+                {
+                  comment: "Convert certificate format with sslx",
+                  parts: ["sslx convert cert.pem --to der"],
+                },
+                {
+                  comment: "Extract SPKI public key with sslx",
+                  parts: ["sslx spki cert.pem"],
+                },
+              ],
+            },
+          ],
         };
       } catch (err) {
         return {
@@ -2091,6 +2626,28 @@ export async function computeCertificate(
           fields,
           working: workingLines.join("\n"),
           workingFormat: "markdown",
+          cliProviders: [
+            {
+              id: "openssl",
+              label: "OpenSSL",
+              commands: [
+                {
+                  comment: "Inspect X.509 Certificate Revocation List",
+                  parts: ["openssl crl -in crl.pem -text -noout"],
+                },
+              ],
+            },
+            {
+              id: "sslx",
+              label: "sslx",
+              commands: [
+                {
+                  comment: "Inspect X.509 CRL with sslx",
+                  parts: ["sslx crl crl.pem"],
+                },
+              ],
+            },
+          ],
         };
       } catch (err) {
         return {
@@ -2161,6 +2718,46 @@ export async function computeCertificate(
           fields,
           working: workingLines.join("\n"),
           workingFormat: "markdown",
+          cliProviders: [
+            {
+              id: "openssl",
+              label: "OpenSSL",
+              commands: [
+                {
+                  comment: "Verify certificate chain using CA trust anchor",
+                  parts: [
+                    "openssl verify -CAfile ca.pem",
+                    "-untrusted intermediate.pem",
+                    "cert.pem",
+                  ],
+                },
+              ],
+            },
+            {
+              id: "sslx",
+              label: "sslx",
+              commands: [
+                {
+                  comment: "Verify certificate chain trust path with sslx",
+                  parts: ["sslx verify cert.pem --ca ca.pem"],
+                },
+              ],
+            },
+            {
+              id: "gnutls",
+              label: "GnuTLS (certtool)",
+              commands: [
+                {
+                  comment: "Verify certificate chain with certtool",
+                  parts: [
+                    "certtool --verify-chain",
+                    "--load-ca-certificate ca.pem",
+                    "--infile cert.pem",
+                  ],
+                },
+              ],
+            },
+          ],
         };
       } catch (err) {
         return {

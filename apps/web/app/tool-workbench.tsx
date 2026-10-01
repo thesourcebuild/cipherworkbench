@@ -32,6 +32,7 @@ import { DiagnosticsPanel } from "./diagnostics-panel";
 import { InputPanel } from "./input-panel";
 import { getCustomWorkbench } from "./custom-workbenches";
 import { getToolGuide } from "./tool-guides";
+import { EndpointProbeModal } from "./endpoint-probe-modal";
 import { isInputBlank, type InputState } from "./input-state";
 import { OptionsForm, visibleOptionGroups } from "./options-form";
 import { ProgressReadout } from "./progress-readout";
@@ -168,6 +169,29 @@ export function ToolWorkbench({
     return tool.readsInput;
   }, [tool, spec]);
 
+  const isCertTool = useMemo(
+    () =>
+      tool?.family === "certificates" &&
+      [
+        "x509",
+        "tls-grader",
+        "cert-expiry",
+        "cert-verifier",
+        "ocsp",
+        "cert-converter",
+        "cert-matcher",
+        "cert-diff",
+        "crl",
+        "universal-decoder",
+        "csr-signer",
+        "csr",
+      ].includes(tool.id),
+    [tool],
+  );
+
+  const [probeModalOpen, setProbeModalOpen] = useState(false);
+  const [probeTargetSlot, setProbeTargetSlot] = useState<"primary" | "secondary">("primary");
+
   const tag = useMemo(() => (tool && spec ? tool.variantTag?.(spec) : undefined), [tool, spec]);
 
   const secondaryOptionDef = useMemo(() => {
@@ -260,6 +284,63 @@ export function ToolWorkbench({
       }
     },
     [secondaryOptionDef, setOptionValue],
+  );
+
+  const handleApplyCertificateFromProbe = useCallback(
+    (pem: string) => {
+      if (probeTargetSlot === "secondary" && secondaryOptionDef) {
+        onSecondaryInputChange({
+          ...secondaryInput,
+          mode: "text",
+          file: undefined,
+          text: pem,
+        });
+      } else {
+        onInputChange({
+          ...input,
+          mode: "text",
+          file: undefined,
+          text: pem,
+        });
+      }
+    },
+    [input, onInputChange, onSecondaryInputChange, probeTargetSlot, secondaryInput, secondaryOptionDef],
+  );
+
+  const handleApplyPayloadFromProbe = useCallback(
+    (payload: {
+      inputText?: string;
+      options?: Record<string, unknown>;
+      targetSlot?: "primary" | "secondary";
+    }) => {
+      const slot = payload.targetSlot || probeTargetSlot;
+      if (slot === "secondary" && secondaryOptionDef) {
+        if (payload.inputText !== undefined) {
+          lastSetSecondaryVal.current = payload.inputText;
+          setSecondaryInput((prev) => ({
+            ...prev,
+            mode: "text",
+            file: undefined,
+            text: payload.inputText ?? "",
+          }));
+          setOptionValue(secondaryOptionDef.id, payload.inputText);
+        }
+      } else if (payload.inputText !== undefined) {
+        onInputChange({
+          ...input,
+          mode: "text",
+          file: undefined,
+          text: payload.inputText,
+        });
+      }
+
+      if (payload.options) {
+        for (const [key, val] of Object.entries(payload.options)) {
+          setOptionValue(key, val as OptionValue);
+        }
+      }
+    },
+    [input, onInputChange, probeTargetSlot, secondaryOptionDef, setOptionValue],
   );
 
   const secondaryDecoded = useMemo(() => {
@@ -715,6 +796,14 @@ export function ToolWorkbench({
                   autoUpdate={effectiveAutoUpdate}
                   onAutoUpdateChange={onAutoUpdateChange}
                   showAutoUpdate={true}
+                  onOpenProbe={
+                    isCertTool
+                      ? () => {
+                          setProbeTargetSlot("primary");
+                          setProbeModalOpen(true);
+                        }
+                      : undefined
+                  }
                 />
               ) : undefined
             }
@@ -743,6 +832,14 @@ export function ToolWorkbench({
             autoUpdate={effectiveAutoUpdate}
             onAutoUpdateChange={onAutoUpdateChange}
             showAutoUpdate={true}
+            onOpenProbe={
+              isCertTool
+                ? () => {
+                    setProbeTargetSlot("primary");
+                    setProbeModalOpen(true);
+                  }
+                : undefined
+            }
             footer={secondaryOptionDef ? undefined : computeFooter}
             material={
               hasInputMaterial ? (
@@ -781,6 +878,14 @@ export function ToolWorkbench({
             onAutoUpdateChange={onAutoUpdateChange}
             showAutoUpdate={false}
             footer={computeFooter}
+            onOpenProbe={
+              tool.id === "cert-diff"
+                ? () => {
+                    setProbeTargetSlot("secondary");
+                    setProbeModalOpen(true);
+                  }
+                : undefined
+            }
           />
         )}
 
@@ -891,6 +996,17 @@ export function ToolWorkbench({
             </div>
           )}
         </GuideOverlay>
+      )}
+
+      {isCertTool && (
+        <EndpointProbeModal
+          open={probeModalOpen}
+          onClose={() => setProbeModalOpen(false)}
+          onApplyCertificate={handleApplyCertificateFromProbe}
+          onApplyPayload={handleApplyPayloadFromProbe}
+          currentToolId={tool.id}
+          currentSpec={spec}
+        />
       )}
     </div>
   );

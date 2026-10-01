@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CopyButton } from "./copy-button";
 import {
   formatShellCommands,
-  type CliTool,
+  type CliProviderCommand,
   type CommandLayout,
   type CommandShell,
   type ShellCommandVariants,
@@ -12,9 +12,10 @@ import {
 
 export interface ShellCommandBlockProps {
   title: string;
-  commands: ShellCommandVariants;
+  commands?: ShellCommandVariants;
   sslxCommands?: ShellCommandVariants;
-  defaultTool?: CliTool;
+  providers?: readonly CliProviderCommand[];
+  defaultTool?: string;
   defaultShell?: CommandShell;
   defaultLayout?: CommandLayout;
 }
@@ -32,33 +33,47 @@ export function ShellCommandBlock({
   title,
   commands,
   sslxCommands,
-  defaultTool = "openssl",
+  providers,
+  defaultTool,
   defaultShell = "bash",
   defaultLayout = "multiline",
 }: ShellCommandBlockProps) {
-  const hasSslx = Boolean(sslxCommands);
-  const [tool, setTool] = useState<CliTool>(defaultTool);
+  const resolvedProviders: readonly CliProviderCommand[] = providers ?? [
+    ...(commands ? [{ id: "openssl", label: "OpenSSL", commands }] : []),
+    ...(sslxCommands ? [{ id: "sslx", label: "sslx", commands: sslxCommands }] : []),
+  ];
+
+  const initialTool = defaultTool ?? resolvedProviders[0]?.id ?? "openssl";
+  const [tool, setTool] = useState<string>(initialTool);
   const [shell, setShell] = useState<CommandShell>(defaultShell);
   const [layout, setLayout] = useState<CommandLayout>(defaultLayout);
 
-  const activeCommands = (tool === "sslx" && sslxCommands) ? sslxCommands : commands;
+  const activeProvider = resolvedProviders.find((p) => p.id === tool) ?? resolvedProviders[0];
+  const activeCommands = activeProvider?.commands ?? [];
   const value = formatShellCommands(activeCommands, shell, layout);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-900 p-3 font-mono text-xs text-slate-100 dark:border-slate-800">
       <div className="mb-1.5 flex flex-wrap items-center gap-1.5 border-b border-slate-800 pb-1.5 font-sans text-[11px] font-medium text-slate-400">
         <span className="mr-auto min-w-40">{title}</span>
-        {hasSslx && (
+        {resolvedProviders.length > 1 ? (
           <select
             aria-label={`${title} tool`}
-            value={tool}
-            onChange={(event) => setTool(event.target.value as CliTool)}
+            value={activeProvider?.id ?? tool}
+            onChange={(event) => setTool(event.target.value)}
             className="rounded border border-indigo-500/50 bg-indigo-950/60 px-2 py-1 text-[10px] font-semibold text-indigo-200"
           >
-            <option value="openssl">OpenSSL</option>
-            <option value="sslx">sslx</option>
+            {resolvedProviders.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
           </select>
-        )}
+        ) : resolvedProviders.length === 1 && resolvedProviders[0] ? (
+          <span className="rounded border border-indigo-500/40 bg-indigo-950/50 px-2 py-0.5 text-[10px] font-semibold text-indigo-300">
+            {resolvedProviders[0].label}
+          </span>
+        ) : null}
         <select
           aria-label={`${title} shell`}
           value={shell}

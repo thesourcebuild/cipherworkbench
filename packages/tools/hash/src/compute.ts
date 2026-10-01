@@ -1,6 +1,9 @@
 import {
   decodeBytesOption,
   decodeListOption,
+  buildPipedShellVariants,
+  buildFileShellVariants,
+  type CliProviderCommand,
   type ToolResult,
   type ToolStream,
   type ToolVariantTable,
@@ -231,7 +234,571 @@ export async function computeHash(spec: HashSpec, input: Uint8Array): Promise<To
   }
 
   hasher.update(input);
-  return { bytes: iterate(hasher.digest(), resolved) };
+  const cliProviders = generateHashCliProviders(spec.algorithm, input);
+  return {
+    bytes: iterate(hasher.digest(), resolved),
+    cliProviders,
+  };
+}
+
+export function generateHashCliProviders(
+  algorithm: string,
+  input?: Uint8Array,
+  fileName?: string,
+): CliProviderCommand[] | undefined {
+  if (fileName) {
+    return generateHashFileProviders(algorithm, fileName);
+  }
+
+  let textSample: string | undefined = undefined;
+  if (input) {
+    try {
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(input);
+      if (!/[\x00-\x08\x0E-\x1F]/.test(decoded) && decoded.length <= 128) {
+        textSample = decoded;
+      }
+    } catch {}
+  }
+
+  const safeBashText = textSample ? textSample.replace(/'/g, "'\\''") : "";
+
+  const pythonProviders = (hashExpr: string, label: string): CliProviderCommand => ({
+    id: "python",
+    label: "Python 3",
+    commands: {
+      bash: [
+        {
+          comment: `Compute ${label} digest in Python`,
+          parts: [
+            textSample !== undefined
+              ? `python3 -c "import hashlib; print(${hashExpr}('${safeBashText}'.encode()).hexdigest())"`
+              : `python3 -c "import hashlib, sys; print(${hashExpr}(sys.stdin.buffer.read()).hexdigest())"`,
+          ],
+        },
+      ],
+      powershell: [
+        {
+          comment: `Compute ${label} digest in Python`,
+          parts: [
+            textSample !== undefined
+              ? `python -c "import hashlib; print(${hashExpr}(b'${safeBashText}').hexdigest())"`
+              : `python -c "import hashlib, sys; print(${hashExpr}(sys.stdin.buffer.read()).hexdigest())"`,
+          ],
+        },
+      ],
+      cmd: [
+        {
+          comment: `Compute ${label} digest in Python`,
+          parts: [
+            textSample !== undefined
+              ? `python -c "import hashlib; print(${hashExpr}(b'${safeBashText}').hexdigest())"`
+              : `python -c "import hashlib, sys; print(${hashExpr}(sys.stdin.buffer.read()).hexdigest())"`,
+          ],
+        },
+      ],
+    },
+  });
+
+  if (algorithm === "sha256") {
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha256sum)",
+        commands: buildPipedShellVariants(
+          "sha256sum",
+          textSample,
+          "Compute SHA-256 digest with coreutils sha256sum",
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha256",
+          textSample,
+          "Compute SHA-256 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.sha256", "SHA-256"),
+    ];
+  }
+
+  if (algorithm === "sha512") {
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha512sum)",
+        commands: buildPipedShellVariants(
+          "sha512sum",
+          textSample,
+          "Compute SHA-512 digest with coreutils sha512sum",
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha512",
+          textSample,
+          "Compute SHA-512 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.sha512", "SHA-512"),
+    ];
+  }
+
+  if (algorithm === "md5") {
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (md5sum)",
+        commands: buildPipedShellVariants(
+          "md5sum",
+          textSample,
+          "Compute MD5 digest with coreutils md5sum",
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -md5",
+          textSample,
+          "Compute MD5 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.md5", "MD5"),
+    ];
+  }
+
+  if (algorithm === "sha1") {
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha1sum)",
+        commands: buildPipedShellVariants(
+          "sha1sum",
+          textSample,
+          "Compute SHA-1 digest with coreutils sha1sum",
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha1",
+          textSample,
+          "Compute SHA-1 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.sha1", "SHA-1"),
+    ];
+  }
+
+  if (algorithm === "sha384") {
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha384sum)",
+        commands: buildPipedShellVariants(
+          "sha384sum",
+          textSample,
+          "Compute SHA-384 digest with coreutils sha384sum",
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha384",
+          textSample,
+          "Compute SHA-384 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.sha384", "SHA-384"),
+    ];
+  }
+
+  if (algorithm === "sha224") {
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha224sum)",
+        commands: buildPipedShellVariants(
+          "sha224sum",
+          textSample,
+          "Compute SHA-224 digest with coreutils sha224sum",
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha224",
+          textSample,
+          "Compute SHA-224 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.sha224", "SHA-224"),
+    ];
+  }
+
+  if (algorithm === "sha3-256") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha3-256",
+          textSample,
+          "Compute SHA3-256 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.sha3_256", "SHA3-256"),
+    ];
+  }
+
+  if (algorithm === "sha3-512") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha3-512",
+          textSample,
+          "Compute SHA3-512 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.sha3_512", "SHA3-512"),
+    ];
+  }
+
+  if (algorithm === "blake2b-256" || algorithm === "blake2b-512") {
+    const bits = algorithm === "blake2b-256" ? "256" : "512";
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (b2sum)",
+        commands: buildPipedShellVariants(
+          `b2sum -l ${bits}`,
+          textSample,
+          `Compute BLAKE2b-${bits} digest with b2sum`,
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -blake2b512",
+          textSample,
+          "Compute BLAKE2b-512 digest with OpenSSL",
+        ),
+      },
+      pythonProviders(
+        bits === "256"
+          ? "(lambda b: hashlib.blake2b(b, digest_size=32))"
+          : "(lambda b: hashlib.blake2b(b, digest_size=64))",
+        `BLAKE2b-${bits}`,
+      ),
+    ];
+  }
+
+  if (algorithm === "blake3") {
+    return [
+      {
+        id: "coreutils",
+        label: "b3sum CLI",
+        commands: buildPipedShellVariants(
+          "b3sum",
+          textSample,
+          "Compute BLAKE3 digest with official b3sum CLI",
+        ),
+      },
+    ];
+  }
+
+  return undefined;
+}
+
+function generateHashFileProviders(
+  algorithm: string,
+  fileName: string,
+): CliProviderCommand[] | undefined {
+  const safePyFile = fileName.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
+  const filePythonProvider = (hashExpr: string, label: string): CliProviderCommand => ({
+    id: "python",
+    label: "Python 3",
+    commands: {
+      bash: [
+        {
+          comment: `Compute ${label} digest of a file in Python`,
+          parts: [
+            `python3 -c "import hashlib; print(${hashExpr}(open('${safePyFile}', 'rb').read()).hexdigest())"`,
+          ],
+        },
+      ],
+      powershell: [
+        {
+          comment: `Compute ${label} digest of a file in Python`,
+          parts: [
+            `python -c "import hashlib; print(${hashExpr}(open('${safePyFile}', 'rb').read()).hexdigest())"`,
+          ],
+        },
+      ],
+      cmd: [
+        {
+          comment: `Compute ${label} digest of a file in Python`,
+          parts: [
+            `python -c "import hashlib; print(${hashExpr}(open('${safePyFile}', 'rb').read()).hexdigest())"`,
+          ],
+        },
+      ],
+    },
+  });
+
+  const nativeFileProvider = (
+    certutilAlg: string,
+    powershellAlg: string,
+    shasumBits?: string,
+  ): CliProviderCommand => ({
+    id: "native",
+    label: `OS Native (certutil / Get-FileHash${shasumBits ? " / shasum" : ""})`,
+    commands: buildFileShellVariants(
+      {
+        bash: shasumBits ? `shasum -a ${shasumBits} {file}` : `openssl dgst -${algorithm} {file}`,
+        powershell: `Get-FileHash -Algorithm ${powershellAlg} {file}`,
+        cmd: `certutil -hashfile {file} ${certutilAlg}`,
+      },
+      fileName,
+      `Compute ${certutilAlg} hash of a file using OS built-in utilities`,
+    ),
+  });
+
+  if (algorithm === "sha256") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha256",
+          fileName,
+          "Compute SHA-256 digest of a file with OpenSSL dgst",
+        ),
+      },
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha256sum)",
+        commands: buildFileShellVariants(
+          "sha256sum",
+          fileName,
+          "Compute SHA-256 digest of a file with coreutils sha256sum",
+        ),
+      },
+      nativeFileProvider("SHA256", "SHA256", "256"),
+      filePythonProvider("hashlib.sha256", "SHA-256"),
+    ];
+  }
+
+  if (algorithm === "sha512") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha512",
+          fileName,
+          "Compute SHA-512 digest of a file with OpenSSL dgst",
+        ),
+      },
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha512sum)",
+        commands: buildFileShellVariants(
+          "sha512sum",
+          fileName,
+          "Compute SHA-512 digest of a file with coreutils sha512sum",
+        ),
+      },
+      nativeFileProvider("SHA512", "SHA512", "512"),
+      filePythonProvider("hashlib.sha512", "SHA-512"),
+    ];
+  }
+
+  if (algorithm === "md5") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -md5",
+          fileName,
+          "Compute MD5 digest of a file with OpenSSL dgst",
+        ),
+      },
+      {
+        id: "coreutils",
+        label: "GNU coreutils (md5sum)",
+        commands: buildFileShellVariants(
+          "md5sum",
+          fileName,
+          "Compute MD5 digest of a file with coreutils md5sum",
+        ),
+      },
+      nativeFileProvider("MD5", "MD5"),
+      filePythonProvider("hashlib.md5", "MD5"),
+    ];
+  }
+
+  if (algorithm === "sha1") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha1",
+          fileName,
+          "Compute SHA-1 digest of a file with OpenSSL dgst",
+        ),
+      },
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha1sum)",
+        commands: buildFileShellVariants(
+          "sha1sum",
+          fileName,
+          "Compute SHA-1 digest of a file with coreutils sha1sum",
+        ),
+      },
+      nativeFileProvider("SHA1", "SHA1", "1"),
+      filePythonProvider("hashlib.sha1", "SHA-1"),
+    ];
+  }
+
+  if (algorithm === "sha384") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha384",
+          fileName,
+          "Compute SHA-384 digest of a file with OpenSSL dgst",
+        ),
+      },
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha384sum)",
+        commands: buildFileShellVariants(
+          "sha384sum",
+          fileName,
+          "Compute SHA-384 digest of a file with coreutils sha384sum",
+        ),
+      },
+      nativeFileProvider("SHA384", "SHA384", "384"),
+      filePythonProvider("hashlib.sha384", "SHA-384"),
+    ];
+  }
+
+  if (algorithm === "sha224") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha224",
+          fileName,
+          "Compute SHA-224 digest of a file with OpenSSL dgst",
+        ),
+      },
+      {
+        id: "coreutils",
+        label: "GNU coreutils (sha224sum)",
+        commands: buildFileShellVariants(
+          "sha224sum",
+          fileName,
+          "Compute SHA-224 digest of a file with coreutils sha224sum",
+        ),
+      },
+      filePythonProvider("hashlib.sha224", "SHA-224"),
+    ];
+  }
+
+  if (algorithm === "sha3-256") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha3-256",
+          fileName,
+          "Compute SHA3-256 digest of a file with OpenSSL dgst",
+        ),
+      },
+      filePythonProvider("hashlib.sha3_256", "SHA3-256"),
+    ];
+  }
+
+  if (algorithm === "sha3-512") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha3-512",
+          fileName,
+          "Compute SHA3-512 digest of a file with OpenSSL dgst",
+        ),
+      },
+      filePythonProvider("hashlib.sha3_512", "SHA3-512"),
+    ];
+  }
+
+  if (algorithm === "blake2b-256" || algorithm === "blake2b-512") {
+    const bits = algorithm === "blake2b-256" ? "256" : "512";
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (b2sum)",
+        commands: buildFileShellVariants(
+          `b2sum -l ${bits}`,
+          fileName,
+          `Compute BLAKE2b-${bits} digest of a file with b2sum`,
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -blake2b512",
+          fileName,
+          "Compute BLAKE2b-512 digest of a file with OpenSSL",
+        ),
+      },
+      filePythonProvider(
+        bits === "256"
+          ? "(lambda f: hashlib.blake2b(f, digest_size=32))"
+          : "(lambda f: hashlib.blake2b(f, digest_size=64))",
+        `BLAKE2b-${bits}`,
+      ),
+    ];
+  }
+
+  if (algorithm === "blake3") {
+    return [
+      {
+        id: "coreutils",
+        label: "b3sum CLI",
+        commands: buildFileShellVariants(
+          "b3sum",
+          fileName,
+          "Compute BLAKE3 digest of a file with official b3sum CLI",
+        ),
+      },
+    ];
+  }
+
+  return undefined;
 }
 
 /**
@@ -373,7 +940,8 @@ export function createHashStream(spec: HashSpec): ToolStream {
     finish(): ToolResult {
       if (finished) throw new Error("finish() called twice on the same hash stream.");
       finished = true;
-      return { bytes: iterate(hasher.digest(), resolved) };
+      const cliProviders = generateHashCliProviders(spec.algorithm, undefined, "file.txt");
+      return { bytes: iterate(hasher.digest(), resolved), cliProviders };
     },
   };
 }

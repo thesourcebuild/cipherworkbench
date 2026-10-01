@@ -111,6 +111,8 @@ export async function verifyCertificateKeyPair(
   let rawKeyDer: Uint8Array | undefined;
   let targetType: "certificate" | "csr" = "certificate";
 
+  const candidateCerts: Uint8Array[] = [];
+
   // 1. Separate combined inputs if only one parameter was supplied
   if (!keyInput || (typeof keyInput === "string" && keyInput.trim().length === 0)) {
     if (typeof certOrCsrInput === "string") {
@@ -118,7 +120,8 @@ export async function verifyCertificateKeyPair(
       for (const block of blocks) {
         const lbl = block.label.toUpperCase();
         if (lbl.includes("CERTIFICATE") && !lbl.includes("REQUEST")) {
-          certDer = block.bytes;
+          candidateCerts.push(block.bytes);
+          if (!certDer) certDer = block.bytes;
         } else if (lbl.includes("CERTIFICATE REQUEST") || lbl.includes("CSR")) {
           csrDer = block.bytes;
         } else if (lbl.includes("PRIVATE KEY")) {
@@ -130,21 +133,33 @@ export async function verifyCertificateKeyPair(
     // Inputs were provided separately
     if (typeof certOrCsrInput === "string") {
       const blocks = parseAllPem(certOrCsrInput);
-      if (blocks.length > 0 && blocks[0]) {
-        if (blocks[0].label.includes("REQUEST") || blocks[0].label.includes("CSR")) {
-          csrDer = blocks[0].bytes;
-        } else {
-          certDer = blocks[0].bytes;
+      const certBlocks = blocks.filter(
+        (b) => b.label.includes("CERTIFICATE") && !b.label.includes("REQUEST"),
+      );
+      const csrBlocks = blocks.filter(
+        (b) => b.label.includes("REQUEST") || b.label.includes("CSR"),
+      );
+
+      if (csrBlocks.length > 0 && csrBlocks[0]) {
+        csrDer = csrBlocks[0].bytes;
+      } else if (certBlocks.length > 0) {
+        for (const b of certBlocks) {
+          candidateCerts.push(b.bytes);
         }
+        certDer = certBlocks[0]!.bytes;
       } else {
         try {
           certDer = detectInputBytes(certOrCsrInput).der;
+          candidateCerts.push(certDer);
         } catch {
-          throw new Error("No valid X.509 Certificate or CSR found in the provided input (expected PEM or DER).");
+          throw new Error(
+            "No valid X.509 Certificate or CSR found in the provided input (expected PEM or DER).",
+          );
         }
       }
     } else {
       certDer = certOrCsrInput;
+      candidateCerts.push(certDer);
     }
 
     if (typeof keyInput === "string") {
@@ -198,11 +213,102 @@ export async function verifyCertificateKeyPair(
   }
 
   const pkcs8Key = ensurePkcs8(rawKeyDer);
-  const subtle = globalThis.crypto?.subtle;
-  let probeVerified = false;
-
-  // 2. Cryptographic Probe Verification
   const challenge = new TextEncoder().encode(`CipherWorkbench-MatchProbe-${Date.now()}`);
+
+  let matchedBundleIndex = -1;
+
+  // If input contains multiple certificates, scan all of them to find the matching one
+  if (targetType === "certificate" && candidateCerts.length > 1) {
+    for (let i = 0; i < candidateCerts.length; i++) {
+      const cDer = candidateCerts[i]!;
+      try {
+        const c = parseX509Certificate(cDer);
+        const probe = await probeSingleKeyPair(
+          c.publicKey.spkiDer,
+          c.publicKey.keyType,
+          c.publicKey.details,
+          pkcs8Key,
+          challenge,
+        );
+        if (probe.verified) {
+          matchedBundleIndex = i;
+          parsedCert = c;
+          certDer = cDer;
+          certPubSpki = c.publicKey.spkiDer;
+          certKeyType = c.publicKey.keyType;
+          certKeyDetails = c.publicKey.details;
+          subjectDn = c.subject.dn;
+          serialNumber = c.serialNumber;
+          notAfter = c.validity.notAfter.toISOString();
+          errors.length = 0;
+          break;
+        }
+      } catch {}
+    }
+  }
+
+  let probeVerified = false;
+  if (matchedBundleIndex !== -1) {
+    probeVerified = true;
+  } else {
+    const singleProbe = await probeSingleKeyPair(
+      certPubSpki,
+      certKeyType,
+      certKeyDetails,
+      pkcs8Key,
+      challenge,
+    );
+    probeVerified = singleProbe.verified;
+    errors.push(...singleProbe.errors);
+  }
+
+  const pubSha256 = bytesToHex(sha256(certPubSpki)).toUpperCase().match(/../g)?.join(":") ?? "";
+  const matches = probeVerified && errors.length === 0;
+
+  let summary = "";
+  if (matches) {
+    if (candidateCerts.length > 1) {
+      const subName = parsedCert?.subject.commonName || subjectDn;
+      summary = `MATCH CONFIRMED: The private key mathematically and cryptographically corresponds to Certificate #${matchedBundleIndex + 1} (${subName}) in the provided ${candidateCerts.length}-certificate bundle.`;
+    } else {
+      summary = `MATCH CONFIRMED: The private key mathematically and cryptographically corresponds to this ${targetType.toUpperCase()} (${certKeyDetails}).`;
+    }
+  } else if (candidateCerts.length > 1) {
+    summary = `KEY MISMATCH: The private key does NOT correspond to any of the ${candidateCerts.length} certificates in the provided bundle.`;
+  } else {
+    summary = `KEY MISMATCH: The private key does NOT correspond to this ${targetType.toUpperCase()}. Errors: ${errors.join("; ")}`;
+  }
+
+  return {
+    matches,
+    targetType,
+    keyType: certKeyType.toUpperCase(),
+    keyDetails: certKeyDetails,
+    fingerprints: {
+      certOrCsrPublicKeySha256: pubSha256,
+      privateKeyDerivedPublicKeySha256: probeVerified ? pubSha256 : undefined,
+    },
+    details: {
+      subjectDn,
+      serialNumber,
+      notAfter,
+      probeVerified,
+    },
+    summary,
+    errors,
+  };
+}
+
+async function probeSingleKeyPair(
+  certPubSpki: Uint8Array,
+  certKeyType: string,
+  certKeyDetails: string,
+  pkcs8Key: Uint8Array,
+  challenge: Uint8Array,
+): Promise<{ verified: boolean; errors: string[] }> {
+  const errors: string[] = [];
+  let probeVerified = false;
+  const subtle = globalThis.crypto?.subtle;
 
   if (certKeyType === "ed25519") {
     try {
@@ -243,8 +349,13 @@ export async function verifyCertificateKeyPair(
         ["verify"],
       );
 
-      const signature = await subtle.sign("RSASSA-PKCS1-v1_5", privKey, challenge);
-      probeVerified = await subtle.verify("RSASSA-PKCS1-v1_5", pubKey, signature, challenge);
+      const signature = await subtle.sign("RSASSA-PKCS1-v1_5", privKey, challenge as unknown as BufferSource);
+      probeVerified = await subtle.verify(
+        "RSASSA-PKCS1-v1_5",
+        pubKey,
+        signature as unknown as BufferSource,
+        challenge as unknown as BufferSource,
+      );
 
       if (!probeVerified) {
         errors.push("RSA signature verification probe failed: public key and private key do not form a key pair.");
@@ -279,8 +390,17 @@ export async function verifyCertificateKeyPair(
         ["verify"],
       );
 
-      const signature = await subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privKey, challenge);
-      probeVerified = await subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pubKey, signature, challenge);
+      const signature = await subtle.sign(
+        { name: "ECDSA", hash: "SHA-256" },
+        privKey,
+        challenge as unknown as BufferSource,
+      );
+      probeVerified = await subtle.verify(
+        { name: "ECDSA", hash: "SHA-256" },
+        pubKey,
+        signature as unknown as BufferSource,
+        challenge as unknown as BufferSource,
+      );
 
       if (!probeVerified) {
         errors.push("ECDSA signature verification probe failed: key coordinates do not match.");
@@ -292,29 +412,5 @@ export async function verifyCertificateKeyPair(
     errors.push(`Unsupported or unrecognized key algorithm: ${certKeyType}`);
   }
 
-  const pubSha256 = bytesToHex(sha256(certPubSpki)).toUpperCase().match(/../g)?.join(":") ?? "";
-  const matches = probeVerified && errors.length === 0;
-
-  const summary = matches
-    ? `MATCH CONFIRMED: The private key mathematically and cryptographically corresponds to this ${targetType.toUpperCase()} (${certKeyDetails}).`
-    : `KEY MISMATCH: The private key does NOT correspond to this ${targetType.toUpperCase()}. Errors: ${errors.join("; ")}`;
-
-  return {
-    matches,
-    targetType,
-    keyType: certKeyType.toUpperCase(),
-    keyDetails: certKeyDetails,
-    fingerprints: {
-      certOrCsrPublicKeySha256: pubSha256,
-      privateKeyDerivedPublicKeySha256: probeVerified ? pubSha256 : undefined,
-    },
-    details: {
-      subjectDn,
-      serialNumber,
-      notAfter,
-      probeVerified,
-    },
-    summary,
-    errors,
-  };
+  return { verified: probeVerified && errors.length === 0, errors };
 }

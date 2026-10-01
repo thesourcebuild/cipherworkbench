@@ -101,7 +101,7 @@ export {
   generatePkiHierarchyDiagram,
   type PkiGraphNode,
 } from "./export/chain-graph";
-export { parseX509Certificate } from "./asn1/x509";
+export { parseX509Certificate, type ParsedX509Certificate } from "./asn1/x509";
 export { parseCsr } from "./asn1/csr";
 export { convertCertificate } from "./asn1/converter";
 export { encodePkcs7CertBundle, decodePkcs7CertBundle } from "./asn1/pkcs7";
@@ -129,6 +129,24 @@ export {
   type ParsedPpkResult,
   type PpkToPemResult,
 } from "./crypto/putty";
+export {
+  spkiToOpenSsh,
+  pemToOpenSsh,
+  formatRfc4716PublicKey,
+  parseRfc4716PublicKey,
+  parseOpenSshPublicKey,
+  type OpenSshKeyResult,
+} from "./crypto/openssh";
+export {
+  parsePkcs11Uri,
+  buildPkcs11Uri,
+  validatePkcs11Uri,
+  bytesToPkcs11Id,
+  pkcs11IdToBytes,
+  type Pkcs11Uri,
+  type Pkcs11UriAttributes,
+  type Pkcs11ObjectType,
+} from "./crypto/pkcs11";
 export { createCertificate } from "./asn1/create-cert";
 export { createCsr } from "./asn1/create-csr";
 export { signCsr } from "./asn1/csr-signer";
@@ -140,6 +158,12 @@ export {
   type ChainVerificationResult,
 } from "./asn1/chain-verifier";
 export { generateMtlsSuite } from "./asn1/mtls";
+export {
+  parseOcspResponse,
+  buildOcspRequest,
+  type ParsedOcspResponse,
+  type BuildOcspRequestResult,
+} from "./asn1/ocsp";
 export { parseAsn1, TagClass, UniversalTag } from "./asn1/asn1";
 export {
   encodeDerSequence,

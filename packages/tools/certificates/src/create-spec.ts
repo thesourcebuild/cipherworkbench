@@ -3,7 +3,6 @@ import {
   OPTION_CONVERTER_OP,
   OPTION_CREATOR_MODE,
   OPTION_DETAIL_LEVEL,
-  OPTION_INPUT_FORMAT,
   OPTION_ISSUANCE_MODE,
   OPTION_HASH_TYPE,
   OPTION_PKI_HIERARCHY,
@@ -43,18 +42,13 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
   const opts: Record<string, string | boolean | number> = {};
 
   if (variant === "x509") {
-    opts[OPTION_INPUT_FORMAT] = "auto";
     opts[OPTION_DETAIL_LEVEL] = "summary";
   } else if (variant === "csr") {
-    opts[OPTION_INPUT_FORMAT] = "auto";
     opts[OPTION_VERIFY_CSR_SIG] = true;
     opts[OPTION_DETAIL_LEVEL] = "summary";
   } else if (variant === "cert-converter") {
     opts[OPTION_CONVERTER_OP] = "auto";
-    opts[OPTION_INPUT_FORMAT] = "auto";
   } else if (variant === "crl") {
-    opts[OPTION_INPUT_FORMAT] = "auto";
-    opts[OPTION_DETAIL_LEVEL] = "summary";
     opts[OPTION_CRL_OP] = "inspect-crl";
     opts[OPTION_CRL_CA_MODE] = "ephemeral-ca";
     opts[OPTION_CRL_CA_KEY_TYPE] = "ecdsa-p256";
@@ -62,9 +56,6 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts[OPTION_CRL_NUMBER] = 1;
     opts[OPTION_CRL_VALIDITY_DAYS] = 30;
     opts[OPTION_CRL_REASON] = "0";
-  } else if (variant === "cert-verifier") {
-    opts[OPTION_INPUT_FORMAT] = "auto";
-    opts[OPTION_DETAIL_LEVEL] = "summary";
   } else if (variant === "cert-creator") {
     opts[OPTION_CREATOR_MODE] = "single-cert";
     opts[OPTION_ISSUANCE_MODE] = "self-signed";
@@ -122,9 +113,6 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts[OPTION_PRIVATE_KEY] = RSA_PRIVATE_KEY_PEM;
   } else if (variant === "cert-diff") {
     opts[OPTION_COMPARISON_CERT] = RSA_CERTIFICATE_PEM;
-  } else if (variant === "tls-grader" || variant === "cert-expiry" || variant === "universal-decoder") {
-    opts[OPTION_INPUT_FORMAT] = "auto";
-    opts[OPTION_DETAIL_LEVEL] = "summary";
   }
 
   return {

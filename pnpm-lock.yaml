@@ -920,6 +920,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@ocs/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

@@ -2,6 +2,7 @@ import type { ZodType } from "zod";
 import type { LintRule } from "@ocs/contracts/diagnostic";
 import type { OutputEncoding } from "@ocs/contracts/encoding";
 import type { OptionValues } from "@ocs/contracts/options";
+import type { CliProviderCommand } from "@ocs/contracts/shell";
 import type { OptionCatalogue } from "./catalogue/options";
 import type { OptionGroupMeta } from "./catalogue/groups";
 
@@ -211,6 +212,11 @@ export interface ToolResult {
    * Rendered by a dedicated table component instead of a raw MonoBlock.
    */
   tableRows?: readonly ToolResultTableRow[];
+  /**
+   * Optional interactive CLI commands for different command-line utilities (OpenSSL, sslx, GnuTLS, coreutils, python, etc.)
+   * that can reproduce or automate the tool's computation across shells (Bash, PowerShell, cmd).
+   */
+  cliProviders?: readonly CliProviderCommand[];
 }
 
 /** One row in a structured comparison table (e.g. cert-diff property comparison). */

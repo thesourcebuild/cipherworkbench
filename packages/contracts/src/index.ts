@@ -4,3 +4,4 @@ export * from "./options";
 export * from "./encoding";
 export * from "./diagnostic";
 export * from "./platform";
+export * from "./shell";

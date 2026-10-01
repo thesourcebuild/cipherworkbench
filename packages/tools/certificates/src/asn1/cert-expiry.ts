@@ -148,26 +148,66 @@ export function auditCertificateExpiry(input: string | Uint8Array): CertExpiryRe
 
   // Format Prometheus alerting rules snippet
   const prometheusSnippet = [
-    "# Prometheus alert rule for certificate expiry",
+    "# Prometheus Alertmanager rule for certificate expiry (Blackbox Exporter)",
     "- alert: CertificateExpiringSoon",
-    "  expr: x509_cert_expiry_days < 30",
+    "  expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 30",
     "  for: 12h",
     "  labels:",
     "    severity: warning",
     "  annotations:",
-    "    summary: 'SSL certificate for {{ $labels.subject }} is expiring in {{ $value }} days'",
+    "    summary: 'SSL certificate for {{ $labels.instance }} is expiring in {{ $value | printf \"%.0f\" }} days'",
     "",
     "- alert: CertificateCriticalExpiry",
-    "  expr: x509_cert_expiry_days < 7",
+    "  expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 7",
     "  for: 1h",
     "  labels:",
     "    severity: critical",
     "  annotations:",
-    "    summary: 'CRITICAL: SSL certificate for {{ $labels.subject }} expires in {{ $value }} days!'",
+    "    summary: 'CRITICAL: SSL certificate for {{ $labels.instance }} expires in {{ $value | printf \"%.0f\" }} days!'",
   ].join("\n");
 
-  const hosts = items.map((i) => i.subjectCn.replace(/^\*\./, "")).slice(0, 4).join(" ");
-  const sslxCommand = `sslx expiry ${hosts || "example.com"}`;
+  // Extract only genuine hostnames/FQDNs (omitting CA names and organizational strings with spaces)
+  const targetHosts: string[] = [];
+  const seenHosts = new Set<string>();
+
+  for (const item of items) {
+    const cleanCn = item.subjectCn.trim().replace(/^\*\./, "");
+    const isDomainCn =
+      !/[\s"'`\\/()<>,;]/.test(cleanCn) &&
+      (/^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/.test(cleanCn) ||
+        /^(\d{1,3}\.){3}\d{1,3}$/.test(cleanCn) ||
+        /^localhost$/i.test(cleanCn));
+
+    if (isDomainCn) {
+      const lower = cleanCn.toLowerCase();
+      if (!seenHosts.has(lower)) {
+        seenHosts.add(lower);
+        targetHosts.push(cleanCn);
+        continue;
+      }
+    }
+
+    for (const san of item.sans || []) {
+      const cleanSan = san.replace(/^(DNS|IP Address):/i, "").trim().replace(/^\*\./, "");
+      const isDomainSan =
+        !/[\s"'`\\/()<>,;]/.test(cleanSan) &&
+        (/^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/.test(cleanSan) ||
+          /^(\d{1,3}\.){3}\d{1,3}$/.test(cleanSan) ||
+          /^localhost$/i.test(cleanSan));
+
+      if (isDomainSan) {
+        const lower = cleanSan.toLowerCase();
+        if (!seenHosts.has(lower)) {
+          seenHosts.add(lower);
+          targetHosts.push(cleanSan);
+          break;
+        }
+      }
+    }
+  }
+
+  const hostsStr = targetHosts.slice(0, 4).join(" ");
+  const sslxCommand = hostsStr ? `sslx expiry ${hostsStr}` : "sslx expiry cert.pem";
 
   return {
     items,

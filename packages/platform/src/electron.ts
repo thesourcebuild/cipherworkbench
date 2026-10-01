@@ -46,4 +46,22 @@ export const electronPlatform: PlatformApi = {
   writeSavedState(json: string): Promise<void> {
     return bridge().writeSavedState(json);
   },
+
+  async probeTls(options) {
+    const fn = bridge().probeTls;
+    if (!fn) throw new Error("probeTls is not supported in this desktop build.");
+    return fn(options);
+  },
+
+  async queryOcsp(options) {
+    const fn = bridge().queryOcsp;
+    if (!fn) throw new Error("queryOcsp is not supported in this desktop build.");
+    return fn(options);
+  },
+
+  async queryCtLogs(domain) {
+    const fn = bridge().queryCtLogs;
+    if (!fn) throw new Error("queryCtLogs is not supported in this desktop build.");
+    return fn(domain);
+  },
 };

@@ -1,4 +1,4 @@
-import { detectInputBytes } from "./pem";
+import { detectInputBytes, type PemBlock } from "./pem";
 import { parseX509Certificate, type ParsedX509Certificate } from "./x509";
 
 export interface TlsGradeCheck {
@@ -20,6 +20,7 @@ export interface TlsGradeResult {
   checks: TlsGradeCheck[];
   asciiBanner: string;
   cert: ParsedX509Certificate;
+  chainCerts?: ParsedX509Certificate[];
   sslxCommand: string;
 }
 
@@ -29,7 +30,8 @@ export interface TlsGradeResult {
  */
 export function gradeCertificate(certInput: Uint8Array | string): TlsGradeResult {
   const bytes = typeof certInput === "string" ? new TextEncoder().encode(certInput) : certInput;
-  const der = detectInputBytes(bytes).der;
+  const detected = detectInputBytes(bytes);
+  const der = detected.der;
   const cert = parseX509Certificate(der);
 
   const checks: TlsGradeCheck[] = [];
@@ -243,6 +245,89 @@ export function gradeCertificate(certInput: Uint8Array | string): TlsGradeResult
     });
   }
 
+  // 6. Chain Completeness & Intermediate CA Trust Path Check
+  const certBlocks = (detected.blocks || []).filter(
+    (b: PemBlock) => b.label.includes("CERTIFICATE") && !b.label.includes("REQUEST"),
+  );
+  let parsedChainCerts: ParsedX509Certificate[] = [];
+  if (certBlocks.length > 1) {
+    const chainCerts = certBlocks
+      .map((b: PemBlock) => {
+        try {
+          return parseX509Certificate(b.bytes);
+        } catch {
+          return null;
+        }
+      })
+      .filter((c: ParsedX509Certificate | null): c is ParsedX509Certificate => c !== null);
+    parsedChainCerts = chainCerts;
+
+    const hasWeakCa = chainCerts.some((c: ParsedX509Certificate) => {
+      const alg = c.signatureAlgorithmName.toLowerCase();
+      return alg.includes("md5") || alg.includes("sha1") || alg.includes("sha-1");
+    });
+
+    const isLinked = chainCerts.every((c: ParsedX509Certificate, idx: number) => {
+      if (idx === 0) return true;
+      const prev = chainCerts[idx - 1];
+      if (!prev) return true;
+      return prev.issuer.dn === c.subject.dn || prev.issuer.commonName === c.subject.commonName;
+    });
+
+    if (hasWeakCa) {
+      isCriticalFail = true;
+      checks.push({
+        id: "chain-completeness",
+        name: "Chain Health",
+        category: "chain",
+        status: "fail",
+        score: 0,
+        title: "Weak/Deprecated Intermediate CA Signature",
+        detail: "One or more intermediate CAs in the certificate chain use SHA-1 or MD5 signatures.",
+      });
+    } else if (!isLinked) {
+      checks.push({
+        id: "chain-completeness",
+        name: "Chain Health",
+        category: "chain",
+        status: "warn",
+        score: 75,
+        title: `Chain Linkage Gap (${chainCerts.length} certificates)`,
+        detail: "The intermediate CA certificates provided do not cleanly match the leaf issuer DN.",
+      });
+    } else {
+      checks.push({
+        id: "chain-completeness",
+        name: "Chain Health",
+        category: "chain",
+        status: "pass",
+        score: 100,
+        title: `Complete Chain Provided (${chainCerts.length} certificates)`,
+        detail: `Valid validation path supplied from leaf (${cert.subject.commonName || "Leaf"}) to intermediate/root CA.`,
+      });
+    }
+  } else if (!isCa) {
+    checks.push({
+      id: "chain-completeness",
+      name: "Chain Health",
+      category: "chain",
+      status: "warn",
+      score: 85,
+      title: "Standalone Leaf Certificate (No Intermediates Provided)",
+      detail: "Modern TLS servers must serve intermediate CA certificates alongside the leaf certificate to prevent validation failures on clients without cached intermediates.",
+    });
+  } else {
+    checks.push({
+      id: "chain-completeness",
+      name: "Chain Health",
+      category: "chain",
+      status: "pass",
+      score: 100,
+      title: "CA Certificate Architecture",
+      detail: "Self-contained Certificate Authority structure.",
+    });
+  }
+
   // Calculate Weighted Overall Score
   const rawScore = checks.reduce((acc, c) => acc + c.score, 0) / checks.length;
   let finalScore = Math.round(rawScore);
@@ -259,11 +344,21 @@ export function gradeCertificate(certInput: Uint8Array | string): TlsGradeResult
   else if (finalScore >= 35) grade = "D";
   else grade = "F";
 
-  const hostHint = sans[0]?.replace(/^DNS:/, "") || cert.subject.commonName || "certificate";
+  const rawCandidate = sans[0]?.replace(/^DNS:/, "") || cert.subject.commonName || "";
+  const cleanCandidate = rawCandidate.replace(/^\*\./, "").trim();
+  const isHost =
+    Boolean(cleanCandidate) &&
+    !/[\s"'`\\/()<>,;]/.test(cleanCandidate) &&
+    (/^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/.test(cleanCandidate) ||
+      /^(\d{1,3}\.){3}\d{1,3}$/.test(cleanCandidate) ||
+      /^localhost$/i.test(cleanCandidate));
+
+  const hostDisplay = isHost ? cleanCandidate : (cert.subject.commonName || "certificate");
+  const bannerName = hostDisplay.length > 38 ? `${hostDisplay.slice(0, 35)}...` : hostDisplay;
 
   const bannerLines = [
     "╭──────────────────────────────────────────────────────────╮",
-    `│ ${hostHint.padEnd(40)} Grade: ${grade.padEnd(4)} │`,
+    `│ ${bannerName.padEnd(40)} Grade: ${grade.padEnd(4)} │`,
     "╰──────────────────────────────────────────────────────────╯",
     ...checks.map((c) => {
       const mark = c.status === "pass" ? "✓" : c.status === "warn" ? "!" : "✗";
@@ -272,7 +367,7 @@ export function gradeCertificate(certInput: Uint8Array | string): TlsGradeResult
   ];
 
   const asciiBanner = bannerLines.join("\n");
-  const sslxCommand = `sslx grade ${hostHint}`;
+  const sslxCommand = isHost ? `sslx grade ${cleanCandidate}` : "sslx inspect cert.pem";
 
   return {
     grade,
@@ -281,6 +376,7 @@ export function gradeCertificate(certInput: Uint8Array | string): TlsGradeResult
     checks,
     asciiBanner,
     cert,
+    chainCerts: parsedChainCerts.length > 1 ? parsedChainCerts : undefined,
     sslxCommand,
   };
 }

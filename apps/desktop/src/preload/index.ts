@@ -31,6 +31,10 @@ contextBridge.exposeInMainWorld("openCipherSuite", {
   readSavedState: () => ipcRenderer.invoke("store:readSavedState"),
   writeSavedState: (json: string) => ipcRenderer.invoke("store:writeSavedState", json),
 
+  probeTls: (options: unknown) => ipcRenderer.invoke("network:probeTls", options),
+  queryOcsp: (options: unknown) => ipcRenderer.invoke("network:queryOcsp", options),
+  queryCtLogs: (domain: string) => ipcRenderer.invoke("network:queryCtLogs", domain),
+
   /**
    * Native menu items dispatch here. Only the fixed channel list above is
    * subscribable, and the listener receives no event object — passing Electron's
@@ -48,3 +52,4 @@ contextBridge.exposeInMainWorld("openCipherSuite", {
     };
   },
 });
+

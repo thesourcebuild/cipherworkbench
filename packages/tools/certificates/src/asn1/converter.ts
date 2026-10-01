@@ -5,6 +5,12 @@ import { decodePkcs7CertBundle, encodePkcs7CertBundle } from "./pkcs7";
 import { decodePkcs12Archive, encodePkcs12Archive, inspectPkcs12 } from "./pkcs12";
 import { parseX509Certificate } from "./x509";
 import { exportToPpkV3, ppkToPem } from "../crypto/putty";
+import {
+  parseRfc4716PublicKey,
+  parseOpenSshPublicKey,
+  pemToOpenSsh,
+} from "../crypto/openssh";
+import { parsePkcs11Uri } from "../crypto/pkcs11";
 
 export type ConverterOperation =
   | "auto"
@@ -20,7 +26,11 @@ export type ConverterOperation =
   | "ppk-to-pem"
   | "pkcs12-inspect"
   | "extract-public-key"
-  | "split-chain";
+  | "split-chain"
+  | "pem-to-ssh2"
+  | "ssh2-to-openssh"
+  | "openssh-to-ssh2"
+  | "pkcs11-inspect";
 
 export interface ConverterExtraOptions {
   password?: string;
@@ -98,6 +108,141 @@ export async function convertCertificate(
         summary: `Auto-converted PuTTY Private Key (${converted.keyType}, comment: "${converted.comment}") to PKCS#8 PEM format.`,
       };
     }
+  }
+
+  const isPkcs11 = inputText.trim().toLowerCase().startsWith("pkcs11:");
+  if (isPkcs11) {
+    detectedType = "RFC 7512 PKCS#11 URI";
+    if (op === "auto" || op === "pkcs11-inspect") {
+      const parsed = parsePkcs11Uri(inputText);
+      const lines = [
+        "### RFC 7512 PKCS#11 URI Inspection Report",
+        "",
+        `* **Canonical URI**: \`${parsed.canonicalUri}\``,
+        parsed.token ? `* **Token Label**: \`${parsed.token}\`` : "",
+        parsed.object ? `* **Object Label**: \`${parsed.object}\`` : "",
+        parsed.type ? `* **Object Type**: \`${parsed.type}\`` : "",
+        parsed.idHex ? `* **CKA_ID (Hex)**: \`${parsed.idHex}\`` : "",
+        parsed.manufacturer ? `* **Manufacturer**: \`${parsed.manufacturer}\`` : "",
+        parsed.serial ? `* **Serial Number**: \`${parsed.serial}\`` : "",
+        parsed.model ? `* **Token Model**: \`${parsed.model}\`` : "",
+        parsed.slotId !== undefined ? `* **Slot ID**: \`${parsed.slotId}\`` : "",
+        parsed.pinValue ? `* **PIN**: \`******\` (Specified in query)` : "",
+        parsed.pinSource ? `* **PIN Source**: \`${parsed.pinSource}\`` : "",
+        parsed.moduleName ? `* **Module Name**: \`${parsed.moduleName}\`` : "",
+        parsed.modulePath ? `* **Module Path**: \`${parsed.modulePath}\`` : "",
+      ].filter(Boolean);
+
+      return {
+        operation: "pkcs11-inspect",
+        detectedType: "RFC 7512 PKCS#11 URI",
+        text: lines.join("\n"),
+        summary: `Parsed RFC 7512 PKCS#11 URI for token "${parsed.token || "default"}" referencing object "${parsed.object || "unnamed"}".`,
+      };
+    }
+  }
+
+  const isSsh2 = inputText.includes("BEGIN SSH2 PUBLIC KEY");
+  if (isSsh2) {
+    detectedType = "RFC 4716 SSH2 Public Key (SECSH)";
+    if (op === "auto" || op === "ssh2-to-openssh") {
+      const parsed = parseRfc4716PublicKey(inputText);
+      return {
+        operation: "ssh2-to-openssh",
+        detectedType: `RFC 4716 SSH2 Public Key (${parsed.keyType})`,
+        text: `${parsed.authorizedKeysLine}\n\n# SHA-256 Fingerprint:\n# ${parsed.sha256Fingerprint}`,
+        bytes: parsed.wireBlob,
+        summary: `Converted RFC 4716 SSH2 public key (${parsed.keyType}) to OpenSSH authorized_keys format.`,
+      };
+    }
+  }
+
+  const isOpenSsh = /^(ssh-rsa|ssh-ed25519|ecdsa-sha2-[a-z0-9]+)\s+[A-Za-z0-9+/=]+/m.test(inputText.trim());
+  if (isOpenSsh) {
+    detectedType = "OpenSSH Public Key (RFC 4253)";
+    if (op === "auto" || op === "openssh-to-ssh2") {
+      const firstLine =
+        inputText.trim().split(/\r?\n/).find((l) => /^(ssh-rsa|ssh-ed25519|ecdsa-sha2-[a-z0-9]+)\s+/.test(l)) ||
+        inputText.trim();
+      const parsed = parseOpenSshPublicKey(firstLine);
+      return {
+        operation: "openssh-to-ssh2",
+        detectedType: `OpenSSH Public Key (${parsed.keyType})`,
+        text: parsed.rfc4716Format,
+        bytes: parsed.wireBlob,
+        summary: `Converted OpenSSH public key (${parsed.keyType}) to RFC 4716 SECSH multi-line format.`,
+      };
+    }
+  }
+
+  // --- Explicit SSH & PKCS#11 Operations ---
+  if (op === "pem-to-ssh2") {
+    let sshRes;
+    try {
+      sshRes = pemToOpenSsh(inputText);
+    } catch {
+      sshRes = pemToOpenSsh(der);
+    }
+    return {
+      operation: "pem-to-ssh2",
+      detectedType: `Public Key (${sshRes.keyType})`,
+      text: sshRes.rfc4716Format,
+      bytes: sshRes.wireBlob,
+      summary: `Exported ${sshRes.keyType} public key in RFC 4716 SSH2 (SECSH) format.`,
+    };
+  }
+
+  if (op === "ssh2-to-openssh") {
+    const parsed = parseRfc4716PublicKey(inputText);
+    return {
+      operation: "ssh2-to-openssh",
+      detectedType: `RFC 4716 SSH2 Public Key (${parsed.keyType})`,
+      text: parsed.authorizedKeysLine,
+      bytes: parsed.wireBlob,
+      summary: `Converted RFC 4716 SSH2 public key to OpenSSH authorized_keys format.`,
+    };
+  }
+
+  if (op === "openssh-to-ssh2") {
+    const firstLine =
+      inputText.trim().split(/\r?\n/).find((l) => /^(ssh-rsa|ssh-ed25519|ecdsa-sha2-[a-z0-9]+)\s+/.test(l)) ||
+      inputText.trim();
+    const parsed = parseOpenSshPublicKey(firstLine);
+    return {
+      operation: "openssh-to-ssh2",
+      detectedType: `OpenSSH Public Key (${parsed.keyType})`,
+      text: parsed.rfc4716Format,
+      bytes: parsed.wireBlob,
+      summary: `Converted OpenSSH public key to RFC 4716 SSH2 format.`,
+    };
+  }
+
+  if (op === "pkcs11-inspect") {
+    const parsed = parsePkcs11Uri(inputText);
+    const lines = [
+      "### RFC 7512 PKCS#11 URI Inspection Report",
+      "",
+      `* **Canonical URI**: \`${parsed.canonicalUri}\``,
+      parsed.token ? `* **Token Label**: \`${parsed.token}\`` : "",
+      parsed.object ? `* **Object Label**: \`${parsed.object}\`` : "",
+      parsed.type ? `* **Object Type**: \`${parsed.type}\`` : "",
+      parsed.idHex ? `* **CKA_ID (Hex)**: \`${parsed.idHex}\`` : "",
+      parsed.manufacturer ? `* **Manufacturer**: \`${parsed.manufacturer}\`` : "",
+      parsed.serial ? `* **Serial Number**: \`${parsed.serial}\`` : "",
+      parsed.model ? `* **Token Model**: \`${parsed.model}\`` : "",
+      parsed.slotId !== undefined ? `* **Slot ID**: \`${parsed.slotId}\`` : "",
+      parsed.pinValue ? `* **PIN**: \`******\` (Specified in query)` : "",
+      parsed.pinSource ? `* **PIN Source**: \`${parsed.pinSource}\`` : "",
+      parsed.moduleName ? `* **Module Name**: \`${parsed.moduleName}\`` : "",
+      parsed.modulePath ? `* **Module Path**: \`${parsed.modulePath}\`` : "",
+    ].filter(Boolean);
+
+    return {
+      operation: "pkcs11-inspect",
+      detectedType: "RFC 7512 PKCS#11 URI",
+      text: lines.join("\n"),
+      summary: `Parsed RFC 7512 PKCS#11 URI for token "${parsed.token || "default"}".`,
+    };
   }
 
   // --- PKCS#7 Operations ---

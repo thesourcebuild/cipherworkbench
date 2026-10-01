@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   decodeInput,
+  type CliProviderCommand,
+  type ShellCommand,
   type StreamProgress,
   type ToolDefinition,
   type ToolResult,
@@ -174,7 +176,14 @@ export function useCompute(
             signal: controller.signal,
             onProgress: (progress) => commit({ status: "computing", progress }),
           });
-          return commit({ status: "done", result, inputByteLength: input.file.size });
+          const finalResult =
+            input.file?.name && result.cliProviders
+              ? {
+                  ...result,
+                  cliProviders: formatProvidersForFileName(result.cliProviders, input.file.name),
+                }
+              : result;
+          return commit({ status: "done", result: finalResult, inputByteLength: input.file.size });
         }
 
         if (!decoded) return;
@@ -383,4 +392,44 @@ export function useCompute(
     inputProblem,
   };
 }
+
+function formatProvidersForFileName(
+  providers: readonly CliProviderCommand[] | undefined,
+  fileName: string,
+): readonly CliProviderCommand[] | undefined {
+  if (!providers) return undefined;
+  const quote = (shell: string): string => {
+    if (!/[\s"'$`\\&|<>]/.test(fileName)) return fileName;
+    if (shell === "cmd") return `"${fileName.replace(/"/g, '""')}"`;
+    if (shell === "powershell") return `"${fileName.replace(/[`"$]/g, "`$&")}"`;
+    return `"${fileName.replace(/["\\$`]/g, "\\$&")}"`;
+  };
+
+  return providers.map((provider) => {
+    if (Array.isArray(provider.commands)) {
+      return {
+        ...provider,
+        commands: provider.commands.map((cmd: ShellCommand) => ({
+          ...cmd,
+          parts: cmd.parts.map((p: string) => p.replace(/\bfile\.txt\b/g, quote("bash"))),
+        })),
+      };
+    }
+    const updatedVariants: Record<string, readonly ShellCommand[] | undefined> = {};
+    for (const [shell, cmds] of Object.entries(provider.commands)) {
+      if (cmds) {
+        updatedVariants[shell] = (cmds as readonly ShellCommand[]).map((cmd: ShellCommand) => ({
+          ...cmd,
+          parts: cmd.parts.map((p: string) => p.replace(/\bfile\.txt\b/g, quote(shell))),
+        }));
+      }
+    }
+    return {
+      ...provider,
+      commands: updatedVariants,
+    };
+  });
+}
+
+
 

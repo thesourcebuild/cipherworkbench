@@ -80,7 +80,11 @@ export type ConverterOpOption =
   | "ppk-to-pem"
   | "pkcs12-inspect"
   | "extract-public-key"
-  | "split-chain";
+  | "split-chain"
+  | "pem-to-ssh2"
+  | "ssh2-to-openssh"
+  | "openssh-to-ssh2"
+  | "pkcs11-inspect";
 
 export type KeyTypeOption =
   | "ecdsa-p256"
@@ -126,7 +130,11 @@ export function readConverterOp(options: OptionValues): ConverterOpOption {
     val === "ppk-to-pem" ||
     val === "pkcs12-inspect" ||
     val === "extract-public-key" ||
-    val === "split-chain"
+    val === "split-chain" ||
+    val === "pem-to-ssh2" ||
+    val === "ssh2-to-openssh" ||
+    val === "openssh-to-ssh2" ||
+    val === "pkcs11-inspect"
   ) {
     return val;
   }

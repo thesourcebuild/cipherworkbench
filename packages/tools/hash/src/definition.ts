@@ -76,7 +76,7 @@ export const HASH_TOOL_IDS: readonly string[] = HASH_ALGORITHMS.map((a) => a.id)
 // Re-exported from this side of the manifest/definition split, not from `./index`:
 // these reach `@noble`, and the test suite needs them to check the declared
 // output lengths against the real ones.
-export { computeHash, createHashStream, hashVariants } from "./compute";
+export { computeHash, createHashStream, hashVariants, generateHashCliProviders } from "./compute";
 export { getHashBinding, requireHashBinding } from "./bindings";
 
 /**

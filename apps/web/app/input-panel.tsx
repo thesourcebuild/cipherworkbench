@@ -100,6 +100,8 @@ export interface InputPanelProps {
   description?: ReactNode;
   /** False to hide the Auto update toggle. Defaults to true. */
   showAutoUpdate?: boolean;
+  /** Optional handler to open the live TLS endpoint probe dialog. */
+  onOpenProbe?: () => void;
 }
 
 /**
@@ -134,6 +136,7 @@ export function InputPanel({
   title,
   description,
   showAutoUpdate = true,
+  onOpenProbe,
 }: InputPanelProps) {
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -256,6 +259,17 @@ export function InputPanel({
             )}
 
             <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                {onOpenProbe && (
+                  <button
+                    type="button"
+                    onClick={onOpenProbe}
+                    className="inline-flex items-center gap-1.5 rounded border border-blue-300 bg-blue-50/90 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:text-blue-900 dark:border-blue-700/60 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/80 transition-all shadow-sm active:scale-95"
+                    title="Probe a remote TLS server to extract its live certificates, cipher suite, and OCSP staple"
+                  >
+                    <span className="text-xs leading-none">🌐</span>
+                    <span>Probe Host</span>
+                  </button>
+                )}
                 <CopyIconButton
                   value={() => input.text}
                   writeClipboard={(text) => platform().copyToClipboard(text)}

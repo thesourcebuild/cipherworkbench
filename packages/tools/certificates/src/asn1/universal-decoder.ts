@@ -1,17 +1,21 @@
 import { parseAsn1, UniversalTag } from "./asn1";
 import { parseCsr } from "./csr";
-import { detectInputBytes } from "./pem";
+import { detectInputBytes, parseAllPem } from "./pem";
 import { parseX509Certificate } from "./x509";
 import { base64url } from "@scure/base";
+import { parseRfc4716PublicKey, parseOpenSshPublicKey } from "../crypto/openssh";
+import { parsePkcs11Uri } from "../crypto/pkcs11";
 
 export type DetectedArtifactKind =
   | "jwt"
   | "x509-certificate"
+  | "x509-bundle"
   | "pkcs10-csr"
   | "private-key"
   | "public-key"
   | "x509-crl"
   | "ssh-public-key"
+  | "pkcs11-uri"
   | "wireguard-key"
   | "pkcs12-archive"
   | "base64-blob"
@@ -92,29 +96,109 @@ function tryDecodeJwt(text: string): UniversalDecoderResult | null {
 }
 
 /**
- * Sniff SSH public keys: "ssh-rsa ...", "ssh-ed25519 ...", "ecdsa-sha2-nistp256 ...".
+ * Sniff RFC 7512 PKCS#11 URIs: "pkcs11:token=...;object=...".
+ */
+function tryDecodePkcs11Uri(text: string): UniversalDecoderResult | null {
+  const trimmed = text.trim();
+  if (!trimmed.toLowerCase().startsWith("pkcs11:")) return null;
+
+  try {
+    const parsed = parsePkcs11Uri(trimmed);
+    const properties: DecodedProperty[] = [];
+    if (parsed.token) properties.push({ label: "Token Label", value: parsed.token, hint: "Hardware / software token identifier" });
+    if (parsed.object) properties.push({ label: "Object Label", value: parsed.object, hint: "Key or certificate label" });
+    if (parsed.type) properties.push({ label: "Object Type", value: parsed.type, hint: "cert, public, private, secret-key, data" });
+    if (parsed.idHex) properties.push({ label: "CKA_ID (Hex)", value: parsed.idHex });
+    if (parsed.manufacturer) properties.push({ label: "Manufacturer", value: parsed.manufacturer });
+    if (parsed.serial) properties.push({ label: "Serial Number", value: parsed.serial });
+    if (parsed.model) properties.push({ label: "Token Model", value: parsed.model });
+    if (parsed.slotId !== undefined) properties.push({ label: "Slot ID", value: String(parsed.slotId) });
+    if (parsed.pinValue) properties.push({ label: "PIN Value", value: "****** (Protected)", hint: "Supplied in URI query" });
+    if (parsed.pinSource) properties.push({ label: "PIN Source", value: parsed.pinSource });
+    if (parsed.moduleName) properties.push({ label: "Module Name", value: parsed.moduleName });
+    if (parsed.modulePath) properties.push({ label: "Module Path", value: parsed.modulePath });
+
+    const formattedDump = [
+      "✓ Detected: RFC 7512 PKCS#11 Cryptographic Token URI",
+      `Canonical URI: ${parsed.canonicalUri}`,
+      parsed.token ? `Token:         ${parsed.token}` : "",
+      parsed.object ? `Object:        ${parsed.object}` : "",
+      parsed.type ? `Type:          ${parsed.type}` : "",
+      parsed.idHex ? `CKA_ID:        ${parsed.idHex}` : "",
+      parsed.modulePath ? `Module Path:   ${parsed.modulePath}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    return {
+      kind: "pkcs11-uri",
+      kindLabel: "PKCS#11 URI (RFC 7512)",
+      description: "Cryptographic hardware token identifier referencing keys/certificates on an HSM or smart card.",
+      recommendedToolId: "cert-converter",
+      recommendedToolLabel: "Certificate & Key Converter",
+      properties,
+      formattedDump,
+      sslxCommand: `pkcs11-tool --uri "${parsed.canonicalUri}" -O`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sniff SSH public keys: OpenSSH format or RFC 4716 SECSH format.
  */
 function tryDecodeSshPublicKey(text: string): UniversalDecoderResult | null {
   const trimmed = text.trim();
+
+  // 1. RFC 4716 SECSH SSH2 format
+  if (trimmed.includes("BEGIN SSH2 PUBLIC KEY")) {
+    try {
+      const parsed = parseRfc4716PublicKey(trimmed);
+      return {
+        kind: "ssh-public-key",
+        kindLabel: "SSH2 Public Key (RFC 4716 SECSH)",
+        description: `RFC 4716 / SECSH SSH2 multi-line public key (${parsed.keyType}).`,
+        recommendedToolId: "cert-converter",
+        recommendedToolLabel: "Certificate & Key Converter",
+        properties: [
+          { label: "Key Type", value: parsed.keyType },
+          { label: "Fingerprint (SHA-256)", value: parsed.sha256Fingerprint },
+          { label: "OpenSSH Line", value: parsed.authorizedKeysLine },
+          { label: "Format", value: "RFC 4716 SECSH Multi-line" },
+        ],
+        formattedDump: `✓ Detected: RFC 4716 SSH2 Public Key\nType:        ${parsed.keyType}\nFingerprint: ${parsed.sha256Fingerprint}\nOpenSSH:     ${parsed.authorizedKeysLine}`,
+        sslxCommand: "ssh-keygen -l -f <key.pub>",
+      };
+    } catch {}
+  }
+
+  // 2. OpenSSH single-line format
   const match = trimmed.match(/^(ssh-rsa|ssh-ed25519|ecdsa-sha2-[a-z0-9]+)\s+([A-Za-z0-9+/=]+)(?:\s+(.*))?$/);
   if (!match) return null;
 
   const keyType = match[1]!;
   const keyBase64 = match[2]!;
   const comment = match[3] || "(No comment)";
+  let fp = "";
+  try {
+    const parsed = parseOpenSshPublicKey(trimmed);
+    fp = parsed.sha256Fingerprint;
+  } catch {}
 
   return {
     kind: "ssh-public-key",
-    kindLabel: "SSH Public Key",
+    kindLabel: "OpenSSH Public Key (RFC 4253)",
     description: `OpenSSH authorized public key formatted with ${keyType}.`,
     recommendedToolId: "cert-converter",
     recommendedToolLabel: "Certificate & Key Converter",
     properties: [
       { label: "Key Type", value: keyType },
       { label: "Comment", value: comment },
+      ...(fp ? [{ label: "Fingerprint (SHA-256)", value: fp }] : []),
       { label: "Key Data (Base64)", value: `${keyBase64.slice(0, 32)}... (${keyBase64.length} chars)` },
     ],
-    formattedDump: `✓ Detected: OpenSSH Public Key\nType:    ${keyType}\nComment: ${comment}`,
+    formattedDump: `✓ Detected: OpenSSH Public Key\nType:        ${keyType}\nFingerprint: ${fp || "N/A"}\nComment:     ${comment}`,
     sslxCommand: "ssh-keygen -l -f <key.pub>",
   };
 }
@@ -154,19 +238,120 @@ export function decodeUniversalArtifact(input: Uint8Array | string): UniversalDe
   const jwt = tryDecodeJwt(text);
   if (jwt) return jwt;
 
-  // 2. Try SSH Public Key
+  // 2. Try PKCS#11 URI
+  const pkcs11 = tryDecodePkcs11Uri(text);
+  if (pkcs11) return pkcs11;
+
+  // 3. Try SSH Public Key
   const ssh = tryDecodeSshPublicKey(text);
   if (ssh) return ssh;
 
-  // 3. Try WireGuard Key
+  // 4. Try WireGuard Key
   const wg = tryDecodeWireguardKey(text);
   if (wg) return wg;
 
   // 4. Try PEM Detection
   const trimmed = text.trim();
 
-  // X.509 Certificate
+  // X.509 Certificate or Multi-Certificate Chain / Bundle
   if (trimmed.includes("-----BEGIN CERTIFICATE-----")) {
+    const certBlocks = parseAllPem(trimmed).filter((b) => b.label === "CERTIFICATE");
+    if (certBlocks.length > 1) {
+      const certs = certBlocks
+        .map((b) => {
+          try {
+            return parseX509Certificate(b.bytes);
+          } catch {
+            return null;
+          }
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null);
+
+      if (certs.length > 0) {
+        const leaf = certs[0]!;
+        const root = certs[certs.length - 1];
+
+        const isChain =
+          certs.length > 1 &&
+          certs.every((c, idx) => {
+            if (idx === 0) return true;
+            const prev = certs[idx - 1];
+            if (!prev) return true;
+            return (
+              prev.issuer.dn === c.subject.dn ||
+              (Boolean(prev.issuer.commonName) && prev.issuer.commonName === c.subject.commonName)
+            );
+          });
+
+        const lines: string[] = [
+          `✓ Detected: ${isChain ? "X.509 Certificate Chain" : "X.509 Certificate Bundle"} (${certs.length} certificates)\n`,
+        ];
+
+        certs.forEach((c, i) => {
+          const isLeaf = i === 0;
+          const isRoot =
+            i === certs.length - 1 &&
+            (c.subject.dn === c.issuer.dn || Boolean(c.extensions.basicConstraints?.isCa));
+          const role = isLeaf ? "Leaf (Server)" : isRoot ? "Root CA" : "Intermediate CA";
+          const subCn = c.subject.commonName || c.subject.dn;
+          const issCn = c.issuer.commonName || c.issuer.dn;
+          const exp = c.validity.notAfter.toISOString().split("T")[0];
+          lines.push(`[${i + 1}] ${role}: ${subCn}`);
+          lines.push(`    Issuer:   ${issCn}`);
+          lines.push(`    Key:      ${c.publicKey.algorithmName} (${c.publicKey.details})`);
+          lines.push(`    Validity: ${exp} (${c.validity.daysRemaining} days left)`);
+          if (isLeaf && c.extensions.sans.length > 0) {
+            lines.push(`    SANs:     ${c.extensions.sans.slice(0, 4).join(", ")}`);
+          }
+          lines.push("");
+        });
+
+        const targetHosts = certs
+          .map((c) => c.subject.commonName?.replace(/^\*\./, "").trim())
+          .filter(
+            (cn): cn is string =>
+              Boolean(cn && !cn.includes(" ") && /^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(cn)),
+          );
+
+        return {
+          kind: "x509-bundle",
+          kindLabel: isChain
+            ? `X.509 Certificate Chain (${certs.length} Certs)`
+            : `X.509 Certificate Bundle (${certs.length} Certs)`,
+          description: `RFC 5280 multi-certificate bundle containing ${certs.length} certificates (${leaf.subject.commonName || "Leaf"}, intermediates, and root).`,
+          recommendedToolId: isChain ? "cert-verifier" : "cert-expiry",
+          recommendedToolLabel: isChain ? "Chain Verifier (Verify Chain)" : "Certificate Expiry Monitor",
+          properties: [
+            { label: "Bundle Size", value: `${certs.length} Certificates` },
+            { label: "Leaf Subject", value: leaf.subject.commonName || leaf.subject.dn },
+            {
+              label: "Chain Hierarchy",
+              value: isChain
+                ? "Ordered Valid Path (Leaf → Intermediates → Root)"
+                : "Multi-Certificate Bundle",
+            },
+            {
+              label: "Root CA",
+              value: root ? root.subject.commonName || root.subject.dn : "Unknown",
+            },
+            {
+              label: "Leaf Expiry",
+              value: `${leaf.validity.notAfter.toISOString().split("T")[0]} (${leaf.validity.daysRemaining} days remaining)`,
+            },
+            {
+              label: "Key Types",
+              value: [...new Set(certs.map((c) => c.publicKey.algorithmName))].join(", "),
+            },
+          ],
+          formattedDump: lines.join("\n").trim(),
+          sslxCommand:
+            targetHosts.length > 0
+              ? `sslx expiry ${targetHosts.join(" ")}`
+              : "sslx verify cert.pem --ca chain.pem",
+        };
+      }
+    }
+
     try {
       const cert = parseX509Certificate(bytes);
       return {

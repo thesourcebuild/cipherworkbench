@@ -10,7 +10,7 @@ import {
   type ToolResultField,
   type ToolSpecBase,
 } from "@ocs/engine";
-import { Button, CopyButton, MonoBlock, Panel, cn } from "@ocs/ui";
+import { Button, CopyButton, MonoBlock, Panel, ShellCommandBlock, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
 import { buildExportPayload, downloadJsonFile } from "./export-json";
 import { collectExportFiles, exportFilesToFolder } from "./export-folder";
@@ -360,6 +360,15 @@ export function ResultPanel({
           Headed, because an unlabelled second monospace block under the first reads as a continuation
           of the result rather than as an explanation of it.
         */}
+        {state.result?.cliProviders && state.result.cliProviders.length > 0 && (
+          <div className="space-y-1">
+            <ShellCommandBlock
+              title={manifest?.label ? `${manifest.label} CLI` : "CLI Commands"}
+              providers={state.result.cliProviders}
+            />
+          </div>
+        )}
+
         {!isCertDiff && state.result?.working && (
           state.result.workingFormat === "markdown" ? (
             <WorkingView key={manifest?.id ?? "working"} value={state.result.working} />
