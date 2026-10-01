@@ -31,6 +31,7 @@ import {
   requireKdfTool,
   type KdfSpec,
 } from "@ocs/kdf";
+import { formatShellCommands } from "../packages/ui/src/shell-command";
 import {
   applyAllFixes,
   createSpec,
@@ -1096,3 +1097,94 @@ describe("EvpKDF matches OpenSSL", () => {
     }
   });
 });
+
+describe("OpenSSL KDF & Passwd CLI Command Parity", () => {
+  it("generates OpenSSL kdf commands for HKDF, PBKDF2, and scrypt", async () => {
+    // 1. HKDF
+    const hkdfTool = kdfToolDefinition("hkdf");
+    const hkdfSpec = hkdfTool.createSpec();
+    hkdfSpec.options[OPTION_IKM] = "000102030405060708090a0b0c0d0e0f";
+    hkdfSpec.options["ikmEncoding"] = "hex";
+    hkdfSpec.options[OPTION_SALT] = "0001020304050607";
+    hkdfSpec.options["saltEncoding"] = "hex";
+    hkdfSpec.options[OPTION_HASH] = "sha256";
+    hkdfSpec.options[OPTION_KEY_LENGTH] = 32;
+    const hkdfRes = await hkdfTool.compute(hkdfSpec, new Uint8Array(0));
+    expect(hkdfRes.cliProviders).toBeDefined();
+    const hkdfOpenssl = hkdfRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(hkdfOpenssl).toBeDefined();
+    const hkdfBash = formatShellCommands(hkdfOpenssl!.commands, "bash", "single-line");
+    expect(hkdfBash).toContain("openssl kdf -keylen 32 -kdfopt digest:SHA256 -kdfopt hexkey:");
+    expect(hkdfBash).toContain("-kdfopt hexsalt:0001020304050607 HKDF");
+
+    // 2. PBKDF2
+    const pbkdfTool = kdfToolDefinition("pbkdf2");
+    const pbkdfSpec = pbkdfTool.createSpec();
+    pbkdfSpec.options[OPTION_PASSWORD] = "myPassword";
+    pbkdfSpec.options[OPTION_SALT] = "0011223344556677";
+    pbkdfSpec.options["saltEncoding"] = "hex";
+    pbkdfSpec.options[OPTION_ITERATIONS] = 10000;
+    pbkdfSpec.options[OPTION_HASH] = "sha256";
+    pbkdfSpec.options[OPTION_KEY_LENGTH] = 32;
+    const pbkdfRes = await pbkdfTool.compute(pbkdfSpec, new Uint8Array(0));
+    const pbkdfOpenssl = pbkdfRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(pbkdfOpenssl).toBeDefined();
+    const pbkdfBash = formatShellCommands(pbkdfOpenssl!.commands, "bash", "single-line");
+    expect(pbkdfBash).toContain('openssl kdf -keylen 32 -kdfopt pass:"myPassword" -kdfopt hexsalt:0011223344556677 -kdfopt iter:10000 -kdfopt digest:SHA256 PBKDF2');
+
+    // 3. scrypt
+    const scryptTool = kdfToolDefinition("scrypt");
+    const scryptSpec = scryptTool.createSpec();
+    scryptSpec.options[OPTION_PASSWORD] = "myPassword";
+    scryptSpec.options[OPTION_SALT] = "0011223344556677";
+    scryptSpec.options["saltEncoding"] = "hex";
+    scryptSpec.options[OPTION_SCRYPT_N] = 1024;
+    scryptSpec.options[OPTION_SCRYPT_R] = 8;
+    scryptSpec.options[OPTION_SCRYPT_P] = 16;
+    scryptSpec.options[OPTION_KEY_LENGTH] = 32;
+    const scryptRes = await scryptTool.compute(scryptSpec, new Uint8Array(0));
+    const scryptOpenssl = scryptRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(scryptOpenssl).toBeDefined();
+    const scryptBash = formatShellCommands(scryptOpenssl!.commands, "bash", "single-line");
+    expect(scryptBash).toContain('openssl kdf -keylen 32 -kdfopt pass:"myPassword" -kdfopt hexsalt:0011223344556677 -kdfopt n:1024 -kdfopt r:8 -kdfopt p:16 SCRYPT');
+  });
+
+  it("generates OpenSSL passwd commands for crypt hashes", async () => {
+    // 1. SHA-512 crypt
+    const sha512Tool = kdfToolDefinition("sha512crypt");
+    const sha512Spec = sha512Tool.createSpec();
+    sha512Spec.options[OPTION_PASSWORD] = "testpass";
+    sha512Spec.options[OPTION_SALT] = "saltsalt";
+    sha512Spec.options["saltEncoding"] = "utf-8";
+    const sha512Res = await sha512Tool.compute(sha512Spec, new Uint8Array(0));
+    const sha512Openssl = sha512Res.cliProviders?.find((p) => p.id === "openssl");
+    expect(sha512Openssl).toBeDefined();
+    const sha512Bash = formatShellCommands(sha512Openssl!.commands, "bash", "single-line");
+    expect(sha512Bash).toContain('openssl passwd -6 -salt "saltsalt" "testpass"');
+
+    // 2. SHA-256 crypt
+    const sha256Tool = kdfToolDefinition("sha256crypt");
+    const sha256Spec = sha256Tool.createSpec();
+    sha256Spec.options[OPTION_PASSWORD] = "testpass";
+    sha256Spec.options[OPTION_SALT] = "saltsalt";
+    sha256Spec.options["saltEncoding"] = "utf-8";
+    const sha256Res = await sha256Tool.compute(sha256Spec, new Uint8Array(0));
+    const sha256Openssl = sha256Res.cliProviders?.find((p) => p.id === "openssl");
+    expect(sha256Openssl).toBeDefined();
+    const sha256Bash = formatShellCommands(sha256Openssl!.commands, "bash", "single-line");
+    expect(sha256Bash).toContain('openssl passwd -5 -salt "saltsalt" "testpass"');
+
+    // 3. MD5 crypt
+    const md5Tool = kdfToolDefinition("md5crypt");
+    const md5Spec = md5Tool.createSpec();
+    md5Spec.options[OPTION_PASSWORD] = "testpass";
+    md5Spec.options[OPTION_SALT] = "saltsalt";
+    md5Spec.options["saltEncoding"] = "utf-8";
+    const md5Res = await md5Tool.compute(md5Spec, new Uint8Array(0));
+    const md5Openssl = md5Res.cliProviders?.find((p) => p.id === "openssl");
+    expect(md5Openssl).toBeDefined();
+    const md5Bash = formatShellCommands(md5Openssl!.commands, "bash", "single-line");
+    expect(md5Bash).toContain('openssl passwd -1 -salt "saltsalt" "testpass"');
+  });
+});
+

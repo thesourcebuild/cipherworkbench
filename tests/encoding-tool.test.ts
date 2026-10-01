@@ -19,6 +19,7 @@ import {
   RULE_CODES,
 } from "@ocs/encoding/definition";
 import { encodeOutput, validateCatalogue } from "@ocs/engine";
+import { formatShellCommands } from "../packages/ui/src/shell-command";
 
 const ascii = (text: string) => new TextEncoder().encode(text);
 
@@ -443,3 +444,32 @@ describe("lint rules", () => {
     }
   });
 });
+
+describe("OpenSSL Base64 Command Parity", () => {
+  it("generates OpenSSL base64 commands for encode and decode", async () => {
+    const base64Tool = encodingToolDefinition("base64");
+
+    // Encode direction
+    const encSpec = base64Tool.createSpec();
+    encSpec.options[OPTION_DIRECTION] = "encode";
+    const encRes = await base64Tool.compute(encSpec, ascii("Hello World"));
+    expect(encRes.cliProviders).toBeDefined();
+    const encOpenssl = encRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(encOpenssl).toBeDefined();
+    expect(formatShellCommands(encOpenssl!.commands, "bash", "single-line")).toContain(
+      "openssl base64 -e",
+    );
+
+    // Decode direction
+    const decSpec = base64Tool.createSpec();
+    decSpec.options[OPTION_DIRECTION] = "decode";
+    const decRes = await base64Tool.compute(decSpec, ascii("SGVsbG8gV29ybGQ="));
+    expect(decRes.cliProviders).toBeDefined();
+    const decOpenssl = decRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(decOpenssl).toBeDefined();
+    expect(formatShellCommands(decOpenssl!.commands, "bash", "single-line")).toContain(
+      "openssl base64 -d",
+    );
+  });
+});
+

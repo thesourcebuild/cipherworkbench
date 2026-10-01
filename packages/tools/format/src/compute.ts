@@ -96,6 +96,7 @@ import {
 } from "./pure";
 import type { FormatSpec } from "./spec";
 import { optBool, optNumber, optString } from "@ocs/contracts/pure";
+import type { CliProviderCommand } from "@ocs/contracts";
 
 const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
@@ -808,6 +809,23 @@ function randomResult(spec: FormatSpec): ToolResult {
     ? [...drawn].sort((a, b) => a - b)
     : drawn;
 
+  const cliProviders: CliProviderCommand[] = [
+    {
+      id: "openssl",
+      label: "OpenSSL",
+      commands: [
+        {
+          comment: "Generate a prime number with OpenSSL",
+          parts: ["openssl prime -generate -bits 256"],
+        },
+        {
+          comment: "Check primality with OpenSSL",
+          parts: [`openssl prime ${values[0] ?? 104729}`],
+        },
+      ],
+    },
+  ];
+
   return {
     text: values.join("\n"),
     fields: [
@@ -834,6 +852,7 @@ function randomResult(spec: FormatSpec): ToolResult {
       },
       { label: "Source", value: "crypto.getRandomValues" },
     ],
+    cliProviders,
   };
 }
 
@@ -853,6 +872,22 @@ function randomBytesResult(spec: FormatSpec): ToolResult {
   const length = clampNumber(spec.options, OPTION_RANDOM_BYTES, 32, 1, 4096);
   const count = readCount(spec.options);
   const bits = length * 8;
+  const cliProviders: CliProviderCommand[] = [
+    {
+      id: "openssl",
+      label: "OpenSSL",
+      commands: [
+        {
+          comment: `Generate ${length} random bytes in hexadecimal`,
+          parts: [`openssl rand -hex ${length}`],
+        },
+        {
+          comment: `Generate ${length} random bytes in Base64`,
+          parts: [`openssl rand -base64 ${length}`],
+        },
+      ],
+    },
+  ];
 
   if (count === 1) {
     return {
@@ -861,6 +896,7 @@ function randomBytesResult(spec: FormatSpec): ToolResult {
         { label: "Size", value: `${length} bytes (${bits} bits)` },
         { label: "Source", value: "crypto.getRandomValues" },
       ],
+      cliProviders,
     };
   }
 
@@ -878,6 +914,7 @@ function randomBytesResult(spec: FormatSpec): ToolResult {
       },
       { label: "Source", value: "crypto.getRandomValues" },
     ],
+    cliProviders,
   };
 }
 

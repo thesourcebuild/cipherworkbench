@@ -38,6 +38,7 @@ import {
   resolveAsymmetric,
 } from "@ocs/asymmetric/definition";
 import { encodeHex, validateCatalogue } from "@ocs/engine";
+import { formatShellCommands } from "../packages/ui/src/shell-command";
 
 const ascii = (text: string) => new TextEncoder().encode(text);
 const fromHex = (hex: string) =>
@@ -1690,4 +1691,67 @@ describe("the post-quantum tools", () => {
     });
   });
 });
+
+describe("OpenSSL Asymmetric Key CLI Parity", () => {
+  it("generates OpenSSL commands for RSA keygen, inspection, and operations", async () => {
+    // 1. RSA Keygen
+    const rsaTool = asymmetricToolDefinition("rsa");
+    const genSpec = rsaTool.createSpec();
+    genSpec.options[OPTION_OPERATION] = "generate";
+    genSpec.options[OPTION_MODULUS_LENGTH] = "2048";
+    const genRes = await rsaTool.compute(genSpec, new Uint8Array(0));
+    expect(genRes.cliProviders).toBeDefined();
+    const openssl = genRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(openssl).toBeDefined();
+    const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+    expect(bash).toContain("openssl genrsa -out private.key 2048");
+    expect(bash).toContain("openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.key");
+    expect(bash).toContain("openssl rsa -in private.key -pubout -out public.key");
+    expect(bash).toContain("openssl pkcs8 -topk8 -in private.key -out private.pk8 -nocrypt");
+    expect(bash).toContain("openssl rsa -in private.key -check -text -noout");
+  });
+
+  it("generates OpenSSL commands for ECDSA and Ed25519 keygen", async () => {
+    // 1. ECDSA
+    const ecdsaTool = asymmetricToolDefinition("ecdsa");
+    const ecSpec = ecdsaTool.createSpec();
+    ecSpec.options[OPTION_OPERATION] = "generate";
+    ecSpec.options[OPTION_CURVE] = "p256";
+    const ecRes = await ecdsaTool.compute(ecSpec, new Uint8Array(0));
+    const ecOpenssl = ecRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(ecOpenssl).toBeDefined();
+    const ecBash = formatShellCommands(ecOpenssl!.commands, "bash", "single-line");
+    expect(ecBash).toContain("openssl ecparam -name prime256v1 -genkey -noout -out ec_private.key");
+    expect(ecBash).toContain("openssl ec -in ec_private.key -pubout -out ec_public.key");
+    expect(ecBash).toContain("openssl pkcs8 -topk8 -in ec_private.key -out ec_private.pk8 -nocrypt");
+
+    // 2. Ed25519
+    const edTool = asymmetricToolDefinition("ed25519");
+    const edSpec = edTool.createSpec();
+    edSpec.options[OPTION_OPERATION] = "generate";
+    const edRes = await edTool.compute(edSpec, new Uint8Array(0));
+    const edOpenssl = edRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(edOpenssl).toBeDefined();
+    const edBash = formatShellCommands(edOpenssl!.commands, "bash", "single-line");
+    expect(edBash).toContain("openssl genpkey -algorithm ED25519 -out ed25519.key");
+    expect(edBash).toContain("openssl pkey -in ed25519.key -pubout -out ed25519_pub.key");
+  });
+
+  it("generates OpenSSL pkeyutl commands for ECDH key derivation", async () => {
+    const ecdhTool = asymmetricToolDefinition("ecdh");
+    const ecdhSpec = ecdhTool.createSpec();
+    ecdhSpec.options[OPTION_OPERATION] = "derive";
+    ecdhSpec.options[OPTION_CURVE] = "p256";
+    ecdhSpec.options[OPTION_PRIVATE_KEY] = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    ecdhSpec.options["privateKeyEncoding"] = "hex";
+    ecdhSpec.options[OPTION_PUBLIC_KEY] = "04" + "00".repeat(64);
+    ecdhSpec.options["publicKeyEncoding"] = "hex";
+    const ecdhRes = await ecdhTool.compute(ecdhSpec, new Uint8Array(0));
+    const openssl = ecdhRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(openssl).toBeDefined();
+    const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+    expect(bash).toContain("openssl pkeyutl -derive -inkey local_priv.key -peerkey peer_pub.key -out shared_secret.bin");
+  });
+});
+
 

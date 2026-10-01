@@ -44,6 +44,7 @@ import {
   SHA3_ADDON_VECTORS,
   XOF_VECTORS,
 } from "./vectors";
+import { formatShellCommands } from "../packages/ui/src/shell-command";
 
 const ascii = (text: string) => new TextEncoder().encode(text);
 const fromHex = (hex: string) =>
@@ -1688,3 +1689,61 @@ describe("SHA-3 derived functions", () => {
     });
   }
 });
+
+describe("OpenSSL Message Digest (dgst) CLI Command Parity", () => {
+  it("generates OpenSSL dgst commands with correct algorithm flags and shell pipes", async () => {
+    const dgstChecks: { id: string; expectedFlag: string }[] = [
+      { id: "blake2b", expectedFlag: "-blake2b512" },
+      { id: "blake2s", expectedFlag: "-blake2s256" },
+      { id: "md4", expectedFlag: "-md4" },
+      { id: "md5", expectedFlag: "-md5" },
+      { id: "ripemd160", expectedFlag: "-rmd160" },
+      { id: "sha1", expectedFlag: "-sha1" },
+      { id: "sha224", expectedFlag: "-sha224" },
+      { id: "sha256", expectedFlag: "-sha256" },
+      { id: "sha384", expectedFlag: "-sha384" },
+      { id: "sha512", expectedFlag: "-sha512" },
+      { id: "sha512-224", expectedFlag: "-sha512-224" },
+      { id: "sha512-256", expectedFlag: "-sha512-256" },
+      { id: "sha3-224", expectedFlag: "-sha3-224" },
+      { id: "sha3-256", expectedFlag: "-sha3-256" },
+      { id: "sha3-384", expectedFlag: "-sha3-384" },
+      { id: "sha3-512", expectedFlag: "-sha3-512" },
+      { id: "shake128", expectedFlag: "-shake128" },
+      { id: "shake256", expectedFlag: "-shake256" },
+      { id: "sm3", expectedFlag: "-sm3" },
+    ];
+
+    for (const item of dgstChecks) {
+      const tool = hashToolDefinition(item.id);
+      const spec = tool.createSpec();
+      const res = await tool.compute(spec, ascii("test digest input"));
+      expect(res.cliProviders, `cliProviders for ${item.id}`).toBeDefined();
+      const openssl = res.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl, `OpenSSL provider for ${item.id}`).toBeDefined();
+
+      const bashCmd = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bashCmd).toContain(`openssl dgst ${item.expectedFlag}`);
+      expect(bashCmd).toContain(`printf "%s" 'test digest input' | openssl dgst ${item.expectedFlag}`);
+
+      const cmdShell = formatShellCommands(openssl!.commands, "cmd", "single-line");
+      expect(cmdShell).toContain(`<nul set /p ="test digest input" | openssl dgst ${item.expectedFlag}`);
+
+      const psShell = formatShellCommands(openssl!.commands, "powershell", "single-line");
+      expect(psShell).toContain(`cmd /c '<nul set /p ="test digest input" | openssl dgst ${item.expectedFlag}'`);
+    }
+  });
+
+  it("generates file-based OpenSSL dgst commands when streaming files", async () => {
+    const tool = hashToolDefinition("sha256");
+    const spec = tool.createSpec();
+    const stream = tool.createStream!(spec);
+    const res = await stream.finish();
+    expect(res.cliProviders).toBeDefined();
+    const openssl = res.cliProviders?.find((p) => p.id === "openssl");
+    expect(openssl).toBeDefined();
+    const bashCmd = formatShellCommands(openssl!.commands, "bash", "single-line");
+    expect(bashCmd).toContain("openssl dgst -sha256 file.txt");
+  });
+});
+

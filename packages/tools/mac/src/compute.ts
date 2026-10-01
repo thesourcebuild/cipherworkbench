@@ -1,4 +1,10 @@
 import type { ToolResult, ToolResultField, ToolStream } from "@ocs/engine";
+import { encodeHex } from "@ocs/engine";
+import {
+  buildPipedShellVariants,
+  buildFileShellVariants,
+  type CliProviderCommand,
+} from "@ocs/contracts";
 import {
   computeAsconPrfShort,
   computeChaskey,
@@ -210,7 +216,88 @@ export async function computeMac(spec: MacSpec, input: Uint8Array): Promise<Tool
     return { error: error instanceof Error ? error.message : String(error) };
   }
 
-  return { bytes: truncate(tag, r), fields: fields(r) };
+  const cliProviders = generateMacCliProviders(r, input);
+  return {
+    bytes: truncate(tag, r),
+    fields: fields(r),
+    ...(cliProviders ? { cliProviders } : {}),
+  };
+}
+
+export function generateMacCliProviders(
+  r: ResolvedMac,
+  input?: Uint8Array,
+  fileName?: string,
+): CliProviderCommand[] | undefined {
+  const hexKey = encodeHex(r.key);
+  let textSample: string | undefined = undefined;
+  if (input) {
+    try {
+      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(input);
+      if (!/[\x00-\x08\x0E-\x1F]/.test(decoded) && decoded.length <= 128) {
+        textSample = decoded;
+      }
+    } catch {}
+  }
+
+  let opensslCmd: string | undefined = undefined;
+  let comment = "Compute MAC with OpenSSL";
+
+  switch (r.toolId) {
+    case "hmac": {
+      const hash = r.hashId.toUpperCase();
+      opensslCmd = `openssl mac -digest ${hash} -macopt hexkey:${hexKey} HMAC`;
+      comment = `Compute HMAC-${hash} with OpenSSL mac`;
+      break;
+    }
+    case "cmac": {
+      const bits = r.key.length * 8;
+      const cipher = `AES-${bits}-CBC`;
+      opensslCmd = `openssl mac -cipher ${cipher} -macopt hexkey:${hexKey} CMAC`;
+      comment = `Compute AES-${bits}-CMAC with OpenSSL mac`;
+      break;
+    }
+    case "kmac": {
+      const kmacAlg = r.kmacVariant === "kmac256" ? "KMAC256" : "KMAC128";
+      const customOpt =
+        r.customization && r.customization.length > 0
+          ? ` -macopt custom:${new TextDecoder().decode(r.customization)}`
+          : "";
+      opensslCmd = `openssl mac -macopt hexkey:${hexKey}${customOpt} ${kmacAlg}`;
+      comment = `Compute ${kmacAlg} with OpenSSL mac`;
+      break;
+    }
+    case "poly1305": {
+      opensslCmd = `openssl mac -macopt hexkey:${hexKey} Poly1305`;
+      comment = "Compute Poly1305 authenticator with OpenSSL mac";
+      break;
+    }
+    case "siphash": {
+      opensslCmd = `openssl mac -macopt hexkey:${hexKey} SipHash`;
+      comment = "Compute SipHash PRF with OpenSSL mac";
+      break;
+    }
+    default:
+      return undefined;
+  }
+
+  if (fileName) {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(opensslCmd, fileName, comment),
+      },
+    ];
+  }
+
+  return [
+    {
+      id: "openssl",
+      label: "OpenSSL",
+      commands: buildPipedShellVariants(opensslCmd, textSample, comment),
+    },
+  ];
 }
 
 export function createMacStream(spec: MacSpec): ToolStream {
@@ -252,16 +339,6 @@ export function createMacStream(spec: MacSpec): ToolStream {
   }
 
   if (!hasher) {
-    /**
-     * CMAC cannot stream — noble exposes it one-shot — and Ascon-PRFShort cannot either, since its
-     * input is capped at 16 bytes and that length is baked into the initialising value. Buffering the
-     * whole input and computing at the end is the honest fallback: it produces the right answer and
-     * uses memory proportional to the file, which the input panel already warns about for any tool
-     * whose manifest says `streaming: false`.
-     *
-     * HMAC used to be in this list for SM3, which was wrong twice over: the generic implementation
-     * streams every hash now, and it always could have.
-     */
     const chunks: Uint8Array[] = [];
     let length = 0;
     let finished = false;
@@ -284,7 +361,12 @@ export function createMacStream(spec: MacSpec): ToolStream {
           r.toolId === "cmac"
             ? computeCmac(r.key, joined)
             : computeHmac(r.hashId, r.key, joined);
-        return { bytes: truncate(tag, r), fields: fields(r) };
+        const cliProviders = generateMacCliProviders(r, undefined, "file.txt");
+        return {
+          bytes: truncate(tag, r),
+          fields: fields(r),
+          ...(cliProviders ? { cliProviders } : {}),
+        };
       },
     };
   }
@@ -298,7 +380,12 @@ export function createMacStream(spec: MacSpec): ToolStream {
     finish() {
       if (finished) throw new Error("finish() called twice on the same MAC stream.");
       finished = true;
-      return { bytes: truncate(hasher!.digest(), r), fields: fields(r) };
+      const cliProviders = generateMacCliProviders(r, undefined, "file.txt");
+      return {
+        bytes: truncate(hasher!.digest(), r),
+        fields: fields(r),
+        ...(cliProviders ? { cliProviders } : {}),
+      };
     },
   };
 }

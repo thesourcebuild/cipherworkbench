@@ -9,11 +9,13 @@ import {
   SAMPLE_PKCS12_BASE64,
   SAMPLE_PKCS7_PEM,
   SAMPLE_DER_CERT_HEX,
+  SAMPLE_CRL_PEM,
   samplesFor,
   OPTION_CONVERTER_OP,
   OPTION_PASSWORD,
   OPTION_PRIVATE_KEY,
 } from "@ocs/certificates";
+import { formatShellCommands } from "../packages/ui/src/shell-command";
 
 describe("Certificate Converter - All Input Formats & Operations", () => {
   it("verifies all sample test inputs compute without error", async () => {
@@ -204,5 +206,112 @@ describe("Certificate Converter - All Input Formats & Operations", () => {
     expect(result.error).toBeUndefined();
     expect(result.text).toContain("CERTIFICATE #1");
     expect(result.text).toContain("CERTIFICATE #2");
+  });
+
+  describe("OpenSSL CLI Providers for PKCS#12, PKCS#7, and CRL", () => {
+    it("generates OpenSSL pkcs12 export commands (pem-to-pkcs12)", async () => {
+      const tool = await loadTool("cert-converter");
+      const spec = {
+        ...tool.createSpec(),
+        options: {
+          [OPTION_CONVERTER_OP]: "pem-to-pkcs12",
+          [OPTION_PASSWORD]: "testpass123",
+          [OPTION_PRIVATE_KEY]: RSA_PRIVATE_KEY_PEM,
+        },
+      };
+
+      const result = await tool.compute(spec, new TextEncoder().encode(RSA_CERTIFICATE_PEM));
+      expect(result.error).toBeUndefined();
+      const openssl = result.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl).toBeDefined();
+      const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bash).toContain('openssl pkcs12 -export -out bundle.p12 -inkey key.pem -in cert.pem -passout "pass:testpass123"');
+      expect(bash).toContain("openssl pkcs12 -export -out bundle.p12 -inkey key.pem -in cert.pem -certfile chain.pem");
+    });
+
+    it("generates OpenSSL pkcs12 extract commands (pkcs12-to-pem)", async () => {
+      const tool = await loadTool("cert-converter");
+      const spec = {
+        ...tool.createSpec(),
+        options: {
+          [OPTION_CONVERTER_OP]: "pkcs12-to-pem",
+          [OPTION_PASSWORD]: "password123",
+        },
+      };
+
+      const p12Bytes = Buffer.from(SAMPLE_PKCS12_BASE64, "base64");
+      const result = await tool.compute(spec, p12Bytes);
+      expect(result.error).toBeUndefined();
+      const openssl = result.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl).toBeDefined();
+      const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bash).toContain('openssl pkcs12 -in bundle.p12 -nodes -out cert-and-key.pem -passin "pass:password123"');
+      expect(bash).toContain("openssl pkcs12 -in bundle.p12 -clcerts -nokeys -out cert.pem");
+      expect(bash).toContain("openssl pkcs12 -in bundle.p12 -nocerts -nodes -out key.pem");
+      expect(bash).toContain("openssl pkcs12 -in bundle.p12 -cacerts -nokeys -out chain.pem");
+    });
+
+    it("generates OpenSSL pkcs12 inspect commands (pkcs12-inspect)", async () => {
+      const tool = await loadTool("cert-converter");
+      const spec = {
+        ...tool.createSpec(),
+        options: {
+          [OPTION_CONVERTER_OP]: "pkcs12-inspect",
+          [OPTION_PASSWORD]: "password123",
+        },
+      };
+
+      const p12Bytes = Buffer.from(SAMPLE_PKCS12_BASE64, "base64");
+      const result = await tool.compute(spec, p12Bytes);
+      expect(result.error).toBeUndefined();
+      const openssl = result.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl).toBeDefined();
+      const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bash).toContain('openssl pkcs12 -in bundle.p12 -info -noout -passin "pass:password123"');
+    });
+
+    it("generates OpenSSL crl2pkcs7 bundle commands (pem-to-pkcs7)", async () => {
+      const tool = await loadTool("cert-converter");
+      const spec = {
+        ...tool.createSpec(),
+        options: { [OPTION_CONVERTER_OP]: "pem-to-pkcs7" },
+      };
+
+      const result = await tool.compute(spec, new TextEncoder().encode(CERTIFICATE_CHAIN_PEM));
+      expect(result.error).toBeUndefined();
+      const openssl = result.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl).toBeDefined();
+      const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bash).toContain("openssl crl2pkcs7 -nocrl -certfile cert.pem -out certs.p7b");
+      expect(bash).toContain("openssl crl2pkcs7 -nocrl -certfile cert.pem -certfile chain.pem -out certs.p7b");
+    });
+
+    it("generates OpenSSL pkcs7 print_certs commands (pkcs7-to-pem)", async () => {
+      const tool = await loadTool("cert-converter");
+      const spec = {
+        ...tool.createSpec(),
+        options: { [OPTION_CONVERTER_OP]: "pkcs7-to-pem" },
+      };
+
+      const result = await tool.compute(spec, new TextEncoder().encode(SAMPLE_PKCS7_PEM));
+      expect(result.error).toBeUndefined();
+      const openssl = result.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl).toBeDefined();
+      const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bash).toContain("openssl pkcs7 -in certs.p7b -print_certs -out certs.pem");
+      expect(bash).toContain("openssl pkcs7 -in certs.p7b -text -noout");
+    });
+
+    it("generates OpenSSL crl and crl2pkcs7 commands in CRL tool", async () => {
+      const crlTool = await loadTool("crl");
+      const spec = crlTool.createSpec();
+      const result = await crlTool.compute(spec, new TextEncoder().encode(SAMPLE_CRL_PEM));
+      expect(result.error).toBeUndefined();
+      const openssl = result.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl).toBeDefined();
+      const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bash).toContain("openssl crl -in crl.pem -text -noout");
+      expect(bash).toContain("openssl crl2pkcs7 -in crl.pem -certfile cert.pem -out bundle.p7b");
+    });
   });
 });

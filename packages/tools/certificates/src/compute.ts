@@ -1,4 +1,5 @@
 import type { ToolExportFile, ToolResult, ToolResultField } from "@ocs/engine";
+import type { CliProviderCommand } from "@ocs/contracts";
 import { parseAsn1 } from "./asn1/asn1";
 import { convertCertificate } from "./asn1/converter";
 import { parseCsr } from "./asn1/csr";
@@ -94,8 +95,222 @@ import {
   readCrlCaKeyType,
   readCrlHashType,
   readCrlValidityDays,
+  type ConverterOpOption,
+  type OcspOpOption,
 } from "./pure";
 import type { CertificateSpec } from "./spec";
+
+export function generateCertConverterCliProviders(
+  op: ConverterOpOption,
+  options: { password?: string; detectedType?: string } = {},
+): CliProviderCommand[] {
+  const { password, detectedType } = options;
+  const passInArg = password ? ` -passin "pass:${password}"` : "";
+  const passOutArg = password ? ` -passout "pass:${password}"` : "";
+
+  const opensslCommands: { comment: string; parts: string[] }[] = [];
+  const sslxCommands: { comment: string; parts: string[] }[] = [];
+
+  const effectiveOp =
+    op === "auto"
+      ? detectedType === "pkcs12"
+        ? "pkcs12-to-pem"
+        : detectedType === "pkcs7"
+          ? "pkcs7-to-pem"
+          : "auto"
+      : op;
+
+  if (effectiveOp === "pem-to-pkcs12") {
+    opensslCommands.push(
+      {
+        comment: "Package PEM certificate and private key into PKCS#12 (.p12 / .pfx) archive",
+        parts: [`openssl pkcs12 -export -out bundle.p12 -inkey key.pem -in cert.pem${passOutArg}`],
+      },
+      {
+        comment: "Package certificate, private key, and CA certificate chain into PKCS#12 archive",
+        parts: [
+          `openssl pkcs12 -export -out bundle.p12 -inkey key.pem -in cert.pem -certfile chain.pem${passOutArg}`,
+        ],
+      },
+    );
+    sslxCommands.push({
+      comment: "Package certificate and key into PKCS#12 with sslx",
+      parts: ["sslx pkcs12 --cert cert.pem --key key.pem --out bundle.p12"],
+    });
+  } else if (effectiveOp === "pkcs12-to-pem") {
+    opensslCommands.push(
+      {
+        comment: "Extract both certificate and private key from PKCS#12 (.p12 / .pfx) archive",
+        parts: [`openssl pkcs12 -in bundle.p12 -nodes -out cert-and-key.pem${passInArg}`],
+      },
+      {
+        comment: "Extract only the client certificate (without private keys)",
+        parts: [`openssl pkcs12 -in bundle.p12 -clcerts -nokeys -out cert.pem${passInArg}`],
+      },
+      {
+        comment: "Extract only the private key (decrypted / unencrypted)",
+        parts: [`openssl pkcs12 -in bundle.p12 -nocerts -nodes -out key.pem${passInArg}`],
+      },
+      {
+        comment: "Extract only CA / intermediate chain certificates",
+        parts: [`openssl pkcs12 -in bundle.p12 -cacerts -nokeys -out chain.pem${passInArg}`],
+      },
+    );
+    sslxCommands.push({
+      comment: "Extract PKCS#12 bundle to PEM with sslx",
+      parts: ["sslx pkcs12 --in bundle.p12 --out cert-and-key.pem"],
+    });
+  } else if (effectiveOp === "pkcs12-inspect") {
+    opensslCommands.push({
+      comment: "Inspect PKCS#12 (.p12 / .pfx) structure and certificate details",
+      parts: [`openssl pkcs12 -in bundle.p12 -info -noout${passInArg}`],
+    });
+    sslxCommands.push({
+      comment: "Inspect PKCS#12 container with sslx",
+      parts: ["sslx inspect bundle.p12"],
+    });
+  } else if (effectiveOp === "pem-to-pkcs7") {
+    opensslCommands.push(
+      {
+        comment: "Package certificate(s) into PKCS#7 / P7B bundle using crl2pkcs7",
+        parts: ["openssl crl2pkcs7 -nocrl -certfile cert.pem -out certs.p7b"],
+      },
+      {
+        comment: "Package multiple certificates into PKCS#7 / P7B bundle",
+        parts: ["openssl crl2pkcs7 -nocrl -certfile cert.pem -certfile chain.pem -out certs.p7b"],
+      },
+    );
+    sslxCommands.push({
+      comment: "Package certificates into PKCS#7 with sslx",
+      parts: ["sslx pkcs7 --cert cert.pem --out certs.p7b"],
+    });
+  } else if (effectiveOp === "pkcs7-to-pem") {
+    opensslCommands.push(
+      {
+        comment: "Extract all PEM certificates from PKCS#7 / P7B bundle",
+        parts: ["openssl pkcs7 -in certs.p7b -print_certs -out certs.pem"],
+      },
+      {
+        comment: "Inspect PKCS#7 / P7B bundle structure and certificates",
+        parts: ["openssl pkcs7 -in certs.p7b -text -noout"],
+      },
+    );
+    sslxCommands.push({
+      comment: "Extract certificates from PKCS#7 with sslx",
+      parts: ["sslx pkcs7 --in certs.p7b --out certs.pem"],
+    });
+  } else {
+    opensslCommands.push(
+      {
+        comment: "Convert X.509 PEM certificate to DER binary",
+        parts: ["openssl x509 -in cert.pem -outform DER -out cert.der"],
+      },
+      {
+        comment: "Convert DER binary certificate to PEM",
+        parts: ["openssl x509 -in cert.der -inform DER -outform PEM -out cert.pem"],
+      },
+      {
+        comment: "Extract SubjectPublicKeyInfo (SPKI) public key",
+        parts: ["openssl x509 -in cert.pem -pubkey -noout > pubkey.pem"],
+      },
+      {
+        comment: "Package certificate into PKCS#7 / P7B bundle using crl2pkcs7",
+        parts: ["openssl crl2pkcs7 -nocrl -certfile cert.pem -out certs.p7b"],
+      },
+      {
+        comment: "Extract certificates from PKCS#7 / P7B bundle",
+        parts: ["openssl pkcs7 -in certs.p7b -print_certs -out certs.pem"],
+      },
+      {
+        comment: "Package certificate and key into PKCS#12 archive",
+        parts: ["openssl pkcs12 -export -out bundle.p12 -inkey key.pem -in cert.pem"],
+      },
+      {
+        comment: "Extract certificates and key from PKCS#12 archive",
+        parts: ["openssl pkcs12 -in bundle.p12 -nodes -out cert-and-key.pem"],
+      },
+    );
+    sslxCommands.push(
+      {
+        comment: "Convert certificate format with sslx",
+        parts: ["sslx convert cert.pem --to der"],
+      },
+      {
+        comment: "Extract SPKI public key with sslx",
+        parts: ["sslx spki cert.pem"],
+      },
+    );
+  }
+
+  return [
+    {
+      id: "openssl",
+      label: "OpenSSL",
+      commands: opensslCommands,
+    },
+    {
+      id: "sslx",
+      label: "sslx",
+      commands: sslxCommands,
+    },
+  ];
+}
+
+export function generateOcspCliProviders(
+  op: OcspOpOption,
+  options: { opensslQueryCommand?: string } = {},
+): CliProviderCommand[] {
+  const opensslCommands: { comment: string; parts: string[] }[] = [];
+
+  if (op === "build-request") {
+    if (options.opensslQueryCommand) {
+      opensslCommands.push({
+        comment: "Query online OCSP responder using OpenSSL",
+        parts: [options.opensslQueryCommand],
+      });
+    }
+    opensslCommands.push(
+      {
+        comment: "Save OCSP request to DER binary for manual query",
+        parts: ["openssl ocsp -issuer ca.crt -cert cert.crt -reqout ocsp-req.der -text"],
+      },
+      {
+        comment: "Inspect offline or cached OCSP response",
+        parts: ["openssl ocsp -respin ocsp.der -text -noverify"],
+      },
+    );
+  } else if (op === "generate-staple") {
+    opensslCommands.push(
+      {
+        comment: "Inspect OCSP staple response file with OpenSSL",
+        parts: ["openssl ocsp -respin staple.der -text -noverify"],
+      },
+      {
+        comment: "Fetch fresh OCSP staple response from live responder",
+        parts: ["openssl ocsp -issuer ca.crt -cert cert.crt -url <ocsp_url> -respout staple.der"],
+      },
+    );
+  } else {
+    opensslCommands.push(
+      {
+        comment: "Inspect OCSP response DER binary or base64 file",
+        parts: ["openssl ocsp -respin ocsp-response.der -text -noverify"],
+      },
+      {
+        comment: "Verify OCSP response against issuer CA certificate",
+        parts: ["openssl ocsp -respin ocsp-response.der -CAfile ca.crt -text"],
+      },
+    );
+  }
+
+  return [
+    {
+      id: "openssl",
+      label: "OpenSSL",
+      commands: opensslCommands,
+    },
+  ];
+}
 
 async function handleCreateCrl(
   spec: CertificateSpec,
@@ -636,6 +851,38 @@ export async function computeCertificate(
           working: working.join("\n"),
           workingFormat: "markdown",
           files,
+          cliProviders: [
+            {
+              id: "openssl",
+              label: "OpenSSL",
+              commands: [
+                {
+                  comment: "Inspect client PKCS#12 bundle",
+                  parts: [`openssl pkcs12 -in client.p12 -info -noout -passin "pass:${p12Password}"`],
+                },
+                {
+                  comment: "Export client certificate and key from PKCS#12 bundle",
+                  parts: [
+                    `openssl pkcs12 -in client.p12 -nodes -out client-unbundled.pem -passin "pass:${p12Password}"`,
+                  ],
+                },
+                {
+                  comment: "Verify server certificate against Root CA",
+                  parts: [
+                    mtls.intermediate
+                      ? "openssl verify -CAfile ca.crt -untrusted intermediate.crt server.crt"
+                      : "openssl verify -CAfile ca.crt server.crt",
+                  ],
+                },
+                {
+                  comment: "Test mTLS handshake with OpenSSL s_client",
+                  parts: [
+                    "openssl s_client -connect localhost:8443 -CAfile ca.crt -cert client.crt -key client.key",
+                  ],
+                },
+              ],
+            },
+          ],
         };
       }
 
@@ -1585,6 +1832,9 @@ export async function computeCertificate(
           fields,
           working,
           workingFormat: "markdown",
+          cliProviders: generateOcspCliProviders("build-request", {
+            opensslQueryCommand: req.opensslCommand,
+          }),
         };
       }
 
@@ -1612,6 +1862,7 @@ export async function computeCertificate(
           working:
             "### Offline OCSP Staple Generated\n\nUse this binary DER bundle for Web Server TLS Stapling (e.g. `ssl_stapling_file` in Nginx).",
           workingFormat: "markdown",
+          cliProviders: generateOcspCliProviders("generate-staple"),
         };
       }
 
@@ -1665,6 +1916,7 @@ export async function computeCertificate(
         fields,
         working: workingLines.join("\n"),
         workingFormat: "markdown",
+        cliProviders: generateOcspCliProviders("inspect-response"),
       };
     } catch (err) {
       return {
@@ -2509,40 +2761,10 @@ export async function computeCertificate(
           working: result.text ?? result.summary,
           workingFormat: op === "pkcs12-inspect" ? "markdown" : undefined,
           files: files.length > 0 ? files : undefined,
-          cliProviders: [
-            {
-              id: "openssl",
-              label: "OpenSSL",
-              commands: [
-                {
-                  comment: "Convert X.509 PEM certificate to DER binary",
-                  parts: ["openssl x509 -in cert.pem -outform DER -out cert.der"],
-                },
-                {
-                  comment: "Convert DER binary certificate to PEM",
-                  parts: ["openssl x509 -in cert.der -inform DER -outform PEM -out cert.pem"],
-                },
-                {
-                  comment: "Extract SubjectPublicKeyInfo (SPKI) public key",
-                  parts: ["openssl x509 -in cert.pem -pubkey -noout > pubkey.pem"],
-                },
-              ],
-            },
-            {
-              id: "sslx",
-              label: "sslx",
-              commands: [
-                {
-                  comment: "Convert certificate format with sslx",
-                  parts: ["sslx convert cert.pem --to der"],
-                },
-                {
-                  comment: "Extract SPKI public key with sslx",
-                  parts: ["sslx spki cert.pem"],
-                },
-              ],
-            },
-          ],
+          cliProviders: generateCertConverterCliProviders(op, {
+            password,
+            detectedType: result.detectedType,
+          }),
         };
       } catch (err) {
         return {
@@ -2634,6 +2856,14 @@ export async function computeCertificate(
                 {
                   comment: "Inspect X.509 Certificate Revocation List",
                   parts: ["openssl crl -in crl.pem -text -noout"],
+                },
+                {
+                  comment: "Package CRL and certificate into PKCS#7 / P7B bundle",
+                  parts: ["openssl crl2pkcs7 -in crl.pem -certfile cert.pem -out bundle.p7b"],
+                },
+                {
+                  comment: "Convert CRL from PEM to DER binary",
+                  parts: ["openssl crl -in crl.pem -outform DER -out crl.der"],
                 },
               ],
             },

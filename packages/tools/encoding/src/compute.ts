@@ -1,4 +1,9 @@
-import type { ToolResult, ToolResultField } from "@ocs/engine";
+import {
+  buildPipedShellVariants,
+  type CliProviderCommand,
+  type ToolResult,
+  type ToolResultField,
+} from "@ocs/engine";
 import { requireEncodingTool, VARIANT_ALPHABET, VARIANT_LABEL } from "./catalogue/tool-meta";
 import { decodeFromText, encodeToText, type EncodeSettings } from "./codec";
 import {
@@ -11,6 +16,62 @@ import {
   readVariant,
 } from "./pure";
 import type { EncodingSpec } from "./spec";
+
+function generateBase64CliProviders(
+  direction: "encode" | "decode",
+  input: Uint8Array,
+): CliProviderCommand[] {
+  const textSample =
+    input.length > 0
+      ? new TextDecoder("utf-8", { fatal: false }).decode(input)
+      : direction === "encode"
+        ? "Hello World"
+        : "SGVsbG8gV29ybGQ=";
+
+  if (direction === "encode") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl base64 -e",
+          textSample,
+          "Encode input to Base64 using OpenSSL",
+        ),
+      },
+      {
+        id: "coreutils",
+        label: "GNU coreutils (base64)",
+        commands: buildPipedShellVariants(
+          "base64",
+          textSample,
+          "Encode input to Base64 using coreutils base64",
+        ),
+      },
+    ];
+  }
+
+  return [
+    {
+      id: "openssl",
+      label: "OpenSSL",
+      commands: buildPipedShellVariants(
+        "openssl base64 -d",
+        textSample,
+        "Decode Base64 to plaintext using OpenSSL",
+      ),
+    },
+    {
+      id: "coreutils",
+      label: "GNU coreutils (base64 -d)",
+      commands: buildPipedShellVariants(
+        "base64 -d",
+        textSample,
+        "Decode Base64 to plaintext using coreutils base64",
+      ),
+    },
+  ];
+}
 
 function settingsFor(spec: EncodingSpec): EncodeSettings {
   const meta = requireEncodingTool(spec.variant);
@@ -79,6 +140,9 @@ export async function computeEncoding(
   const settings = settingsFor(spec);
   const direction = readDirection(spec.options);
 
+  const cliProviders =
+    spec.variant === "base64" ? generateBase64CliProviders(direction, input) : undefined;
+
   try {
     if (direction === "encode") {
       const text = encodeToText(input, settings);
@@ -89,6 +153,7 @@ export async function computeEncoding(
         fields: [
           { label: "Length", value: `${text.length} characters from ${input.length} bytes` },
         ],
+        ...(cliProviders ? { cliProviders } : {}),
       };
     }
 
@@ -104,6 +169,7 @@ export async function computeEncoding(
           label: index === 0 ? "Note" : " ",
           value: note,
         })),
+        ...(cliProviders ? { cliProviders } : {}),
       };
     }
     if (!result.bytes) return {};
@@ -115,6 +181,7 @@ export async function computeEncoding(
           value: `${result.bytes.length} bytes from ${asText.trim().length} characters`,
         },
       ],
+      ...(cliProviders ? { cliProviders } : {}),
     };
   } catch (error) {
     /**

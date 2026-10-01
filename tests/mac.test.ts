@@ -25,6 +25,7 @@ import {
 } from "@ocs/mac/definition";
 import { MAC_TOOL_IDS } from "@ocs/mac";
 import { encodeHex, isAvailableOn, rechunk, runStream, validateCatalogue } from "@ocs/engine";
+import { formatShellCommands } from "../packages/ui/src/shell-command";
 // The hash family's eager metadata, for the one assertion that compares the two families' views of a
 // hash's block size. Strings only -- no implementation is reachable from it.
 import { HASH_ALGORITHMS } from "@ocs/hash";
@@ -1803,3 +1804,82 @@ describe("HighwayHash as a MAC-family tool", () => {
     expect(c!.slice(0, 32)).not.toBe(b);
   });
 });
+
+describe("OpenSSL MAC Command Parity across Tool Members", () => {
+  it("generates OpenSSL mac commands with correct options and shell piping", async () => {
+    // 1. HMAC (SHA-256)
+    const hmacTool = macToolDefinition("hmac");
+    const hmacSpec = hmacTool.createSpec();
+    hmacSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    hmacSpec.options["keyEncoding"] = "hex";
+    hmacSpec.options[OPTION_HASH] = "sha256";
+    const hmacRes = await hmacTool.compute(hmacSpec, ascii("Hello HMAC"));
+    expect(hmacRes.cliProviders).toBeDefined();
+    const hmacOpenssl = hmacRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(hmacOpenssl).toBeDefined();
+    const hmacBash = formatShellCommands(hmacOpenssl!.commands, "bash", "single-line");
+    expect(hmacBash).toContain("openssl mac -digest SHA256 -macopt hexkey:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f HMAC");
+    expect(hmacBash).toContain(`printf "%s" 'Hello HMAC' |`);
+
+    // 2. CMAC (AES-128)
+    const cmacTool = macToolDefinition("cmac");
+    const cmacSpec = cmacTool.createSpec();
+    cmacSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f";
+    cmacSpec.options["keyEncoding"] = "hex";
+    const cmacRes = await cmacTool.compute(cmacSpec, ascii("Hello CMAC"));
+    const cmacOpenssl = cmacRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(cmacOpenssl).toBeDefined();
+    const cmacBash = formatShellCommands(cmacOpenssl!.commands, "bash", "single-line");
+    expect(cmacBash).toContain("openssl mac -cipher AES-128-CBC -macopt hexkey:000102030405060708090a0b0c0d0e0f CMAC");
+
+    // 3. KMAC (KMAC128)
+    const kmacTool = macToolDefinition("kmac");
+    const kmacSpec = kmacTool.createSpec();
+    kmacSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f";
+    kmacSpec.options["keyEncoding"] = "hex";
+    kmacSpec.options[OPTION_KMAC_VARIANT] = "kmac128";
+    const kmacRes = await kmacTool.compute(kmacSpec, ascii("Hello KMAC"));
+    const kmacOpenssl = kmacRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(kmacOpenssl).toBeDefined();
+    const kmacBash = formatShellCommands(kmacOpenssl!.commands, "bash", "single-line");
+    expect(kmacBash).toContain("openssl mac -macopt hexkey:000102030405060708090a0b0c0d0e0f KMAC128");
+
+    // 4. Poly1305
+    const polyTool = macToolDefinition("poly1305");
+    const polySpec = polyTool.createSpec();
+    polySpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f";
+    polySpec.options["keyEncoding"] = "hex";
+    const polyRes = await polyTool.compute(polySpec, ascii("Hello Poly"));
+    const polyOpenssl = polyRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(polyOpenssl).toBeDefined();
+    const polyBash = formatShellCommands(polyOpenssl!.commands, "bash", "single-line");
+    expect(polyBash).toContain("openssl mac -macopt hexkey:000102030405060708090a0b0c0d0e0f000102030405060708090a0b0c0d0e0f Poly1305");
+
+    // 5. SipHash
+    const sipTool = macToolDefinition("siphash");
+    const sipSpec = sipTool.createSpec();
+    sipSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f";
+    sipSpec.options["keyEncoding"] = "hex";
+    const sipRes = await sipTool.compute(sipSpec, ascii("Hello SipHash"));
+    const sipOpenssl = sipRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(sipOpenssl).toBeDefined();
+    const sipBash = formatShellCommands(sipOpenssl!.commands, "bash", "single-line");
+    expect(sipBash).toContain("openssl mac -macopt hexkey:000102030405060708090a0b0c0d0e0f SipHash");
+  });
+
+  it("generates file-based OpenSSL mac commands when streaming", async () => {
+    const hmacTool = macToolDefinition("hmac");
+    const hmacSpec = hmacTool.createSpec();
+    hmacSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    hmacSpec.options["keyEncoding"] = "hex";
+    hmacSpec.options[OPTION_HASH] = "sha256";
+    const stream = hmacTool.createStream!(hmacSpec);
+    const res = await stream.finish();
+    expect(res.cliProviders).toBeDefined();
+    const openssl = res.cliProviders?.find((p) => p.id === "openssl");
+    expect(openssl).toBeDefined();
+    const bashCmd = formatShellCommands(openssl!.commands, "bash", "single-line");
+    expect(bashCmd).toContain("openssl mac -digest SHA256 -macopt hexkey:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f HMAC file.txt");
+  });
+});
+

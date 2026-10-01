@@ -473,7 +473,7 @@ export function generateHashCliProviders(
     ];
   }
 
-  if (algorithm === "blake2b-256" || algorithm === "blake2b-512") {
+  if (algorithm === "blake2b" || algorithm === "blake2b-256" || algorithm === "blake2b-512") {
     const bits = algorithm === "blake2b-256" ? "256" : "512";
     return [
       {
@@ -500,6 +500,161 @@ export function generateHashCliProviders(
           : "(lambda b: hashlib.blake2b(b, digest_size=64))",
         `BLAKE2b-${bits}`,
       ),
+    ];
+  }
+
+  if (algorithm === "blake2s" || algorithm === "blake2s-256") {
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (b2sum)",
+        commands: buildPipedShellVariants(
+          "b2sum -l 256",
+          textSample,
+          "Compute BLAKE2s-256 digest with b2sum",
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -blake2s256",
+          textSample,
+          "Compute BLAKE2s-256 digest with OpenSSL",
+        ),
+      },
+      pythonProviders("(lambda b: hashlib.blake2s(b))", "BLAKE2s-256"),
+    ];
+  }
+
+  if (algorithm === "md4") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -md4",
+          textSample,
+          "Compute MD4 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("(lambda b: hashlib.new('md4', b))", "MD4"),
+    ];
+  }
+
+  if (algorithm === "ripemd160" || algorithm === "rmd160") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -rmd160",
+          textSample,
+          "Compute RIPEMD-160 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("(lambda b: hashlib.new('ripemd160', b))", "RIPEMD-160"),
+    ];
+  }
+
+  if (algorithm === "sha3-224") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha3-224",
+          textSample,
+          "Compute SHA3-224 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.sha3_224", "SHA3-224"),
+    ];
+  }
+
+  if (algorithm === "sha3-384") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha3-384",
+          textSample,
+          "Compute SHA3-384 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("hashlib.sha3_384", "SHA3-384"),
+    ];
+  }
+
+  if (algorithm === "sha512-224") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha512-224",
+          textSample,
+          "Compute SHA-512/224 digest with OpenSSL dgst",
+        ),
+      },
+    ];
+  }
+
+  if (algorithm === "sha512-256") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sha512-256",
+          textSample,
+          "Compute SHA-512/256 digest with OpenSSL dgst",
+        ),
+      },
+    ];
+  }
+
+  if (algorithm === "shake128") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -shake128",
+          textSample,
+          "Compute SHAKE128 digest with OpenSSL dgst",
+        ),
+      },
+    ];
+  }
+
+  if (algorithm === "shake256") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -shake256",
+          textSample,
+          "Compute SHAKE256 digest with OpenSSL dgst",
+        ),
+      },
+    ];
+  }
+
+  if (algorithm === "sm3") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildPipedShellVariants(
+          "openssl dgst -sm3",
+          textSample,
+          "Compute SM3 digest with OpenSSL dgst",
+        ),
+      },
+      pythonProviders("(lambda b: hashlib.new('sm3', b))", "SM3"),
     ];
   }
 
@@ -754,7 +909,7 @@ function generateHashFileProviders(
     ];
   }
 
-  if (algorithm === "blake2b-256" || algorithm === "blake2b-512") {
+  if (algorithm === "blake2b" || algorithm === "blake2b-256" || algorithm === "blake2b-512") {
     const bits = algorithm === "blake2b-256" ? "256" : "512";
     return [
       {
@@ -781,6 +936,162 @@ function generateHashFileProviders(
           : "(lambda f: hashlib.blake2b(f, digest_size=64))",
         `BLAKE2b-${bits}`,
       ),
+    ];
+  }
+
+  if (algorithm === "blake2s" || algorithm === "blake2s-256") {
+    return [
+      {
+        id: "coreutils",
+        label: "GNU coreutils (b2sum)",
+        commands: buildFileShellVariants(
+          "b2sum -l 256",
+          fileName,
+          "Compute BLAKE2s-256 digest of a file with b2sum",
+        ),
+      },
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -blake2s256",
+          fileName,
+          "Compute BLAKE2s-256 digest of a file with OpenSSL",
+        ),
+      },
+      filePythonProvider("(lambda f: hashlib.blake2s(f))", "BLAKE2s-256"),
+    ];
+  }
+
+  if (algorithm === "md4") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -md4",
+          fileName,
+          "Compute MD4 digest of a file with OpenSSL dgst",
+        ),
+      },
+      nativeFileProvider("MD4", "MD4"),
+      filePythonProvider("(lambda f: hashlib.new('md4', f))", "MD4"),
+    ];
+  }
+
+  if (algorithm === "ripemd160" || algorithm === "rmd160") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -rmd160",
+          fileName,
+          "Compute RIPEMD-160 digest of a file with OpenSSL dgst",
+        ),
+      },
+      filePythonProvider("(lambda f: hashlib.new('ripemd160', f))", "RIPEMD-160"),
+    ];
+  }
+
+  if (algorithm === "sha3-224") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha3-224",
+          fileName,
+          "Compute SHA3-224 digest of a file with OpenSSL dgst",
+        ),
+      },
+      filePythonProvider("hashlib.sha3_224", "SHA3-224"),
+    ];
+  }
+
+  if (algorithm === "sha3-384") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha3-384",
+          fileName,
+          "Compute SHA3-384 digest of a file with OpenSSL dgst",
+        ),
+      },
+      filePythonProvider("hashlib.sha3_384", "SHA3-384"),
+    ];
+  }
+
+  if (algorithm === "sha512-224") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha512-224",
+          fileName,
+          "Compute SHA-512/224 digest of a file with OpenSSL dgst",
+        ),
+      },
+    ];
+  }
+
+  if (algorithm === "sha512-256") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sha512-256",
+          fileName,
+          "Compute SHA-512/256 digest of a file with OpenSSL dgst",
+        ),
+      },
+    ];
+  }
+
+  if (algorithm === "shake128") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -shake128",
+          fileName,
+          "Compute SHAKE128 digest of a file with OpenSSL dgst",
+        ),
+      },
+    ];
+  }
+
+  if (algorithm === "shake256") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -shake256",
+          fileName,
+          "Compute SHAKE256 digest of a file with OpenSSL dgst",
+        ),
+      },
+    ];
+  }
+
+  if (algorithm === "sm3") {
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(
+          "openssl dgst -sm3",
+          fileName,
+          "Compute SM3 digest of a file with OpenSSL dgst",
+        ),
+      },
+      filePythonProvider("(lambda f: hashlib.new('sm3', f))", "SM3"),
     ];
   }
 

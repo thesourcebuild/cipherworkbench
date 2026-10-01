@@ -1,4 +1,12 @@
-import { encodeHex, type ToolResult, type ToolResultField, type ToolStream } from "@ocs/engine";
+import {
+  encodeHex,
+  buildPipedShellVariants,
+  buildFileShellVariants,
+  type CliProviderCommand,
+  type ToolResult,
+  type ToolResultField,
+  type ToolStream,
+} from "@ocs/engine";
 import {
   aegisOperation,
   aesOperation,
@@ -29,6 +37,147 @@ import type { CipherSpec } from "./spec";
 import { readBigUint64BE, type CobblestoneVariant, type PaddingScheme } from "@ocs/algos";
 import { opensslHeader, type KeySource } from "@ocs/kdf/key-source";
 import { concatBytes, randomBytes } from "@ocs/engine";
+
+export function getOpenSslCipherName(r: ResolvedCipher): string | undefined {
+  const mode = r.mode?.id ?? "cbc";
+  const keyBits =
+    r.key.length > 0
+      ? r.key.length * 8
+      : r.derivedKeyLength
+        ? r.derivedKeyLength * 8
+        : 128;
+
+  switch (r.toolId) {
+    case "aes":
+      return `aes-${keyBits}-${mode}`;
+    case "aria":
+      return `aria-${keyBits}-${mode}`;
+    case "camellia":
+      return `camellia-${keyBits}-${mode}`;
+    case "sm4":
+      return `sm4-${mode}`;
+    case "blowfish":
+      return `bf-${mode}`;
+    case "cast5":
+      return `cast5-${mode}`;
+    case "des":
+      return `des-${mode}`;
+    case "3des":
+      return r.key.length === 16 ? `des-ede-${mode}` : `des-ede3-${mode}`;
+    case "idea":
+      return `idea-${mode}`;
+    case "rc2":
+      if (r.key.length === 5) return `rc2-40-${mode}`;
+      if (r.key.length === 8) return `rc2-64-${mode}`;
+      return `rc2-${mode}`;
+    case "seed":
+      return `seed-${mode}`;
+    case "rc4":
+      return r.key.length === 5 ? "rc4-40" : "rc4";
+    case "chacha20":
+      return "chacha20";
+    default:
+      return undefined;
+  }
+}
+
+export function generateCipherCliProviders(
+  r: ResolvedCipher,
+  input?: Uint8Array,
+  fileName?: string,
+): CliProviderCommand[] | undefined {
+  if (fileName) {
+    return generateCipherFileProviders(r, fileName);
+  }
+
+  const cipherName = getOpenSslCipherName(r);
+  if (!cipherName) return undefined;
+
+  const dirFlag = r.direction === "decrypt" ? "-d" : "-e";
+  const cmdParts = ["openssl", "enc", `-${cipherName}`, dirFlag, "-base64"];
+
+  if (r.key && r.key.length > 0) {
+    cmdParts.push("-K", encodeHex(r.key));
+  }
+
+  const isEcb = r.mode?.id === "ecb";
+  const isRc4 = r.toolId === "rc4";
+  if (!isEcb && !isRc4 && r.nonce && r.nonce.length > 0) {
+    cmdParts.push("-iv", encodeHex(r.nonce));
+  }
+
+  if (r.padding === "none") {
+    cmdParts.push("-nopad");
+  }
+
+  cmdParts.push("-nosalt");
+
+  const fullCmd = cmdParts.join(" ");
+  const textSample =
+    input && input.length > 0
+      ? new TextDecoder("utf-8", { fatal: false }).decode(input)
+      : r.direction === "decrypt"
+        ? "ciphertext_base64"
+        : "sample plaintext";
+
+  const comment = `${r.direction === "decrypt" ? "Decrypt" : "Encrypt"} using OpenSSL enc (-${cipherName})`;
+
+  return [
+    {
+      id: "openssl",
+      label: "OpenSSL (enc)",
+      commands: buildPipedShellVariants(fullCmd, textSample, comment),
+    },
+  ];
+}
+
+export function generateCipherFileProviders(
+  r: ResolvedCipher,
+  fileName: string,
+): CliProviderCommand[] | undefined {
+  const cipherName = getOpenSslCipherName(r);
+  if (!cipherName) return undefined;
+
+  const dirFlag = r.direction === "decrypt" ? "-d" : "-e";
+  const outExt = r.direction === "decrypt" ? "dec" : "enc";
+  const cmdParts = [
+    "openssl",
+    "enc",
+    `-${cipherName}`,
+    dirFlag,
+    "-in",
+    "{file}",
+    "-out",
+    `{file}.${outExt}`,
+  ];
+
+  if (r.key && r.key.length > 0) {
+    cmdParts.push("-K", encodeHex(r.key));
+  }
+
+  const isEcb = r.mode?.id === "ecb";
+  const isRc4 = r.toolId === "rc4";
+  if (!isEcb && !isRc4 && r.nonce && r.nonce.length > 0) {
+    cmdParts.push("-iv", encodeHex(r.nonce));
+  }
+
+  if (r.padding === "none") {
+    cmdParts.push("-nopad");
+  }
+
+  cmdParts.push("-nosalt");
+
+  const fullCmd = cmdParts.join(" ");
+  const comment = `${r.direction === "decrypt" ? "Decrypt" : "Encrypt"} file using OpenSSL enc (-${cipherName})`;
+
+  return [
+    {
+      id: "openssl",
+      label: "OpenSSL (enc)",
+      commands: buildFileShellVariants(fullCmd, fileName, comment),
+    },
+  ];
+}
 
 /**
  * The AEAD tag length, from the resolved spec.
@@ -629,7 +778,12 @@ export async function computeCipher(spec: CipherSpec, input: Uint8Array): Promis
      * reason: the tag it splits off is at the end of the ciphertext, not of the framing.
      */
     const framed = envelopeSalt ? concatBytes(opensslHeader(envelopeSalt), output) : output;
-    return { bytes: framed, fields: fields(r, r.direction === "encrypt" ? output : payload) };
+    const cliProviders = generateCipherCliProviders(r, input);
+    return {
+      bytes: framed,
+      fields: fields(r, r.direction === "encrypt" ? output : payload),
+      ...(cliProviders ? { cliProviders } : {}),
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 

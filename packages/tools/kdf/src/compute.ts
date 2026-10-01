@@ -1,4 +1,5 @@
 import { encodeHex, timingSafeEqual, type ToolResult, type ToolResultField } from "@ocs/engine";
+import type { CliProviderCommand } from "@ocs/contracts";
 import {
   bcryptCostOf,
   deriveAnsiX963,
@@ -481,6 +482,7 @@ export async function computeKdf(spec: KdfSpec, _input: Uint8Array): Promise<Too
     if (r.mode === "verify") return verify(r);
 
     const { bytes, encoded } = derive(r);
+    const cliProviders = generateKdfCliProviders(r);
     return {
       bytes,
       fields: [
@@ -495,9 +497,72 @@ export async function computeKdf(spec: KdfSpec, _input: Uint8Array): Promise<Too
               },
             ]),
       ],
+      ...(cliProviders ? { cliProviders } : {}),
     };
   } catch (error) {
     // noble throws on out-of-range parameters, such as an Argon2 memory below 8p KiB.
     return { error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+export function generateKdfCliProviders(r: ResolvedKdf): CliProviderCommand[] | undefined {
+  const hexSalt = encodeHex(r.salt);
+  const safePass = r.passwordText ? r.passwordText.replace(/"/g, '\\"') : "";
+  const saltStr =
+    r.salt.length > 0 ? new TextDecoder().decode(r.salt).replace(/"/g, '\\"') : "salt";
+
+  let cmd: string | undefined = undefined;
+  let comment = "Derive key with OpenSSL";
+
+  switch (r.toolId) {
+    case "hkdf": {
+      const digest = r.hashId.toUpperCase();
+      const saltPart = r.salt.length > 0 ? ` -kdfopt hexsalt:${hexSalt}` : "";
+      const infoPart = r.info.length > 0 ? ` -kdfopt hexinfo:${encodeHex(r.info)}` : "";
+      cmd = `openssl kdf -keylen ${r.keyLength} -kdfopt digest:${digest} -kdfopt hexkey:${encodeHex(r.ikm)}${saltPart}${infoPart} HKDF`;
+      comment = `Derive key using HKDF-${digest} with OpenSSL kdf`;
+      break;
+    }
+    case "pbkdf2": {
+      const digest = r.hashId.toUpperCase();
+      cmd = `openssl kdf -keylen ${r.keyLength} -kdfopt pass:"${safePass}" -kdfopt hexsalt:${hexSalt} -kdfopt iter:${r.iterations} -kdfopt digest:${digest} PBKDF2`;
+      comment = `Derive key using PBKDF2-HMAC-${digest} with OpenSSL kdf`;
+      break;
+    }
+    case "scrypt": {
+      cmd = `openssl kdf -keylen ${r.keyLength} -kdfopt pass:"${safePass}" -kdfopt hexsalt:${hexSalt} -kdfopt n:${r.scryptN} -kdfopt r:${r.scryptR} -kdfopt p:${r.scryptP} SCRYPT`;
+      comment = "Derive key using scrypt with OpenSSL kdf";
+      break;
+    }
+    case "sha512crypt": {
+      cmd = `openssl passwd -6 -salt "${saltStr}" "${safePass}"`;
+      comment = "Hash password with SHA-512 crypt (openssl passwd -6)";
+      break;
+    }
+    case "sha256crypt": {
+      cmd = `openssl passwd -5 -salt "${saltStr}" "${safePass}"`;
+      comment = "Hash password with SHA-256 crypt (openssl passwd -5)";
+      break;
+    }
+    case "md5crypt": {
+      cmd = `openssl passwd -1 -salt "${saltStr}" "${safePass}"`;
+      comment = "Hash password with MD5 crypt (openssl passwd -1)";
+      break;
+    }
+    default:
+      return undefined;
+  }
+
+  return [
+    {
+      id: "openssl",
+      label: "OpenSSL",
+      commands: [
+        {
+          comment,
+          parts: [cmd],
+        },
+      ],
+    },
+  ];
 }

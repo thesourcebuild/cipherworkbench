@@ -52,6 +52,8 @@ export {
   OPTION_NAME_CONSTRAINTS_EXCLUDED,
   OPTION_CERTIFICATE_POLICY_OID,
   OPTION_CERTIFICATE_POLICY_CPS_URL,
+  OPTION_OCSP_OP,
+  OPTION_ISSUER_CERT,
   readNameConstraintsPermitted,
   readNameConstraintsExcluded,
   readCertificatePolicyOid,
@@ -60,6 +62,8 @@ export {
   readDetailLevel,
   readVerifyCsrSig,
   readConverterOp,
+  readOcspOp,
+  readIssuerCert,
   readWorkflowLayout,
   readCreatorMode,
   readIssuanceMode,
@@ -214,3 +218,8 @@ export {
   SAMPLE_DER_CERT_HEX,
   samplesFor,
 } from "./samples";
+export {
+  computeCertificate,
+  generateCertConverterCliProviders,
+  generateOcspCliProviders,
+} from "./compute";

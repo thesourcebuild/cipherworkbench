@@ -1,4 +1,5 @@
 import { encodeHex, randomBytes, type ToolResult, type ToolResultField } from "@ocs/engine";
+import type { CliProviderCommand } from "@ocs/contracts";
 import {
   agreementCurve,
   digest,
@@ -813,12 +814,18 @@ export async function computeAsymmetric(
         };
       }
     }
+    let res: ToolResult;
     if (r.operation === "generate") {
-      return r.tool.usesPem ? await generateRsa(r) : generateCurveKeypair(r);
+      res = r.tool.usesPem ? await generateRsa(r) : generateCurveKeypair(r);
+    } else if (r.tool.usesPem) {
+      res = await rsaOperate(r, input);
+    } else if (r.operation === "derive") {
+      res = deriveSharedSecret(r);
+    } else {
+      res = curveSignOrVerify(r, input);
     }
-    if (r.tool.usesPem) return await rsaOperate(r, input);
-    if (r.operation === "derive") return deriveSharedSecret(r);
-    return curveSignOrVerify(r, input);
+    const cliProviders = generateAsymmetricCliProviders(r);
+    return { ...res, ...(cliProviders ? { cliProviders } : {}) };
   } catch (error) {
     /**
      * Anything not already handled: an invalid secret scalar, a point not on the curve, a
@@ -827,4 +834,169 @@ export async function computeAsymmetric(
      */
     return { error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+export function generateAsymmetricCliProviders(
+  r: ResolvedAsymmetric,
+): CliProviderCommand[] | undefined {
+  const commands: { comment: string; parts: string[] }[] = [];
+
+  if (r.tool.id === "rsa") {
+    if (r.operation === "generate") {
+      const bits = r.modulusBits || 2048;
+      commands.push(
+        {
+          comment: `Generate ${bits}-bit RSA private key using genrsa`,
+          parts: [`openssl genrsa -out private.key ${bits}`],
+        },
+        {
+          comment: `Generate ${bits}-bit RSA private key using modern genpkey`,
+          parts: [`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:${bits} -out private.key`],
+        },
+        {
+          comment: "Extract RSA public key in PEM (SPKI) format",
+          parts: ["openssl rsa -in private.key -pubout -out public.key"],
+        },
+        {
+          comment: "Convert RSA private key to unencrypted PKCS#8 format",
+          parts: ["openssl pkcs8 -topk8 -in private.key -out private.pk8 -nocrypt"],
+        },
+        {
+          comment: "Inspect and check RSA private key consistency",
+          parts: ["openssl rsa -in private.key -check -text -noout"],
+        },
+      );
+    } else if (r.operation === "sign") {
+      const digestFlag = r.hash.toLowerCase();
+      commands.push(
+        {
+          comment: `Sign data using RSA (${r.scheme.toUpperCase()}) with pkeyutl`,
+          parts: [
+            `openssl pkeyutl -sign -inkey private.key -rawin -digest ${digestFlag} -in message.txt -out signature.bin`,
+          ],
+        },
+        {
+          comment: "Sign data using legacy dgst command",
+          parts: [`openssl dgst -${digestFlag} -sign private.key -out signature.bin message.txt`],
+        },
+      );
+    } else if (r.operation === "verify") {
+      const digestFlag = r.hash.toLowerCase();
+      commands.push(
+        {
+          comment: `Verify RSA signature using pkeyutl`,
+          parts: [
+            `openssl pkeyutl -verify -pubin -inkey public.key -rawin -digest ${digestFlag} -sigfile signature.bin -in message.txt`,
+          ],
+        },
+        {
+          comment: "Verify RSA signature using legacy dgst command",
+          parts: [
+            `openssl dgst -${digestFlag} -verify public.key -signature signature.bin message.txt`,
+          ],
+        },
+      );
+    } else if (r.operation === "encrypt") {
+      commands.push({
+        comment: "Encrypt payload using RSA-OAEP with pkeyutl",
+        parts: [
+          `openssl pkeyutl -encrypt -pubin -inkey public.key -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:${r.hash.toLowerCase()} -in secret.bin -out ciphertext.bin`,
+        ],
+      });
+    } else if (r.operation === "decrypt") {
+      commands.push({
+        comment: "Decrypt payload using RSA-OAEP with pkeyutl",
+        parts: [
+          `openssl pkeyutl -decrypt -inkey private.key -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:${r.hash.toLowerCase()} -in ciphertext.bin -out secret.bin`,
+        ],
+      });
+    }
+  } else if (r.tool.id === "ecdsa") {
+    const curveName =
+      r.curve?.id === "p384"
+        ? "secp384r1"
+        : r.curve?.id === "p521"
+          ? "secp521r1"
+          : r.curve?.id === "secp256k1"
+            ? "secp256k1"
+            : "prime256v1";
+    if (r.operation === "generate") {
+      commands.push(
+        {
+          comment: `Generate EC private key for curve ${r.curve?.label ?? "P-256"} using ecparam`,
+          parts: [`openssl ecparam -name ${curveName} -genkey -noout -out ec_private.key`],
+        },
+        {
+          comment: `Generate EC private key using genpkey`,
+          parts: [`openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:${curveName} -out ec_private.key`],
+        },
+        {
+          comment: "Extract EC public key using openssl ec",
+          parts: ["openssl ec -in ec_private.key -pubout -out ec_public.key"],
+        },
+        {
+          comment: "Convert EC key to PKCS#8 format",
+          parts: ["openssl pkcs8 -topk8 -in ec_private.key -out ec_private.pk8 -nocrypt"],
+        },
+      );
+    } else if (r.operation === "sign") {
+      commands.push({
+        comment: "Sign data using ECDSA with pkeyutl",
+        parts: [
+          "openssl pkeyutl -sign -inkey ec_private.key -rawin -digest sha256 -in message.txt -out signature.bin",
+        ],
+      });
+    } else if (r.operation === "verify") {
+      commands.push({
+        comment: "Verify ECDSA signature using pkeyutl",
+        parts: [
+          "openssl pkeyutl -verify -pubin -inkey ec_public.key -rawin -digest sha256 -sigfile signature.bin -in message.txt",
+        ],
+      });
+    }
+  } else if (r.tool.id === "ed25519") {
+    if (r.operation === "generate") {
+      commands.push(
+        {
+          comment: "Generate Ed25519 private key using genpkey",
+          parts: ["openssl genpkey -algorithm ED25519 -out ed25519.key"],
+        },
+        {
+          comment: "Extract Ed25519 public key using pkey",
+          parts: ["openssl pkey -in ed25519.key -pubout -out ed25519_pub.key"],
+        },
+      );
+    } else if (r.operation === "sign") {
+      commands.push({
+        comment: "Sign message using Ed25519 with pkeyutl",
+        parts: ["openssl pkeyutl -sign -inkey ed25519.key -rawin -in message.txt -out signature.bin"],
+      });
+    } else if (r.operation === "verify") {
+      commands.push({
+        comment: "Verify Ed25519 signature using pkeyutl",
+        parts: [
+          "openssl pkeyutl -verify -pubin -inkey ed25519_pub.key -rawin -sigfile signature.bin -in message.txt",
+        ],
+      });
+    }
+  } else if (r.tool.id === "ecdh") {
+    if (r.operation === "derive") {
+      commands.push({
+        comment: "Derive shared secret using ECDH with pkeyutl",
+        parts: [
+          "openssl pkeyutl -derive -inkey local_priv.key -peerkey peer_pub.key -out shared_secret.bin",
+        ],
+      });
+    }
+  }
+
+  if (commands.length === 0) return undefined;
+
+  return [
+    {
+      id: "openssl",
+      label: "OpenSSL",
+      commands,
+    },
+  ];
 }

@@ -40,6 +40,7 @@ import {
   samplesFor,
 } from "@ocs/format/definition";
 import { isAvailableOn, validateCatalogue } from "@ocs/engine";
+import { formatShellCommands } from "../packages/ui/src/shell-command";
 
 /**
  * The format family: eight tools that are almost entirely catalogue over a mature library.
@@ -1112,3 +1113,34 @@ describe("lint rules", () => {
     ).toBe(false);
   });
 });
+
+describe("OpenSSL rand & prime CLI Parity", () => {
+  it("generates OpenSSL rand commands for random bytes", async () => {
+    const tool = formatToolDefinition("randombytes");
+    const spec = tool.createSpec();
+    spec.options[OPTION_RANDOM_BYTES] = 32;
+    const res = await tool.compute(spec, new Uint8Array(0));
+    expect(res.cliProviders).toBeDefined();
+    const openssl = res.cliProviders?.find((p) => p.id === "openssl");
+    expect(openssl).toBeDefined();
+    const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+    expect(bash).toContain("openssl rand -hex 32");
+    expect(bash).toContain("openssl rand -base64 32");
+  });
+
+  it("generates OpenSSL prime commands for random integer generation", async () => {
+    const tool = formatToolDefinition("random");
+    const spec = tool.createSpec();
+    spec.options[OPTION_RANDOM_SHAPE] = "integer";
+    spec.options[OPTION_RANDOM_MIN] = 1000;
+    spec.options[OPTION_RANDOM_MAX] = 2000;
+    const res = await tool.compute(spec, new Uint8Array(0));
+    expect(res.cliProviders).toBeDefined();
+    const openssl = res.cliProviders?.find((p) => p.id === "openssl");
+    expect(openssl).toBeDefined();
+    const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+    expect(bash).toContain("openssl prime -generate -bits 256");
+    expect(bash).toContain("openssl prime");
+  });
+});
+

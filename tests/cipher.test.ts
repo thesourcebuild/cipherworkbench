@@ -38,6 +38,7 @@ import {
   resolveCipher,
 } from "@ocs/cipher/definition";
 import { encodeHex, isAvailableOn, validateCatalogue, withAvailableChoices } from "@ocs/engine";
+import { formatShellCommands } from "../packages/ui/src/shell-command";
 import { SIMON_SPECK_VARIANTS } from "@ocs/algos";
 import { keySourceOptions } from "@ocs/kdf/key-source";
 import { ASCON_AEAD128_KAT } from "./ascon-kat";
@@ -5067,3 +5068,81 @@ describe("padding", () => {
     expect(await wrongKey("x923")).toMatch(/ANSI X9\.23 padding is invalid/);
   });
 });
+
+describe("OpenSSL Cipher (enc) Command Parity across Families", () => {
+  it("generates OpenSSL enc commands with correct flags, keys, IVs, and shell pipes", async () => {
+    // 1. AES-256-CBC
+    const aesTool = cipherToolDefinition("aes");
+    const aesSpec = aesTool.createSpec();
+    aesSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    aesSpec.options["keyEncoding"] = "hex";
+    aesSpec.options[OPTION_KEY_SIZE] = "256";
+    aesSpec.options[OPTION_MODE] = "cbc";
+    aesSpec.options[OPTION_NONCE] = "000102030405060708090a0b0c0d0e0f";
+    aesSpec.options["nonceEncoding"] = "hex";
+
+    const aesRes = await aesTool.compute(aesSpec, ascii("Hello AES"));
+    expect(aesRes.cliProviders).toBeDefined();
+    const aesOpenssl = aesRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(aesOpenssl).toBeDefined();
+
+    const aesBash = formatShellCommands(aesOpenssl!.commands, "bash", "single-line");
+    expect(aesBash).toContain(
+      "openssl enc -aes-256-cbc -e -base64 -K 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f -iv 000102030405060708090a0b0c0d0e0f -nosalt",
+    );
+
+    const aesCmd = formatShellCommands(aesOpenssl!.commands, "cmd", "single-line");
+    expect(aesCmd).toContain('<nul set /p ="Hello AES" | openssl enc -aes-256-cbc');
+
+    const aesPs = formatShellCommands(aesOpenssl!.commands, "powershell", "single-line");
+    expect(aesPs).toContain("cmd /c '<nul set /p =\"Hello AES\" | openssl enc -aes-256-cbc");
+
+    // 2. AES-128-ECB (no IV flag)
+    aesSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f";
+    aesSpec.options[OPTION_KEY_SIZE] = "128";
+    aesSpec.options[OPTION_MODE] = "ecb";
+    const ecbRes = await aesTool.compute(aesSpec, ascii("0123456789abcdef"));
+    const ecbOpenssl = ecbRes.cliProviders?.find((p) => p.id === "openssl");
+    const ecbBash = formatShellCommands(ecbOpenssl!.commands, "bash", "single-line");
+    expect(ecbBash).toContain(
+      "openssl enc -aes-128-ecb -e -base64 -K 000102030405060708090a0b0c0d0e0f -nosalt",
+    );
+    expect(ecbBash).not.toContain("-iv");
+
+    // 3. ARIA, Camellia, SM4, Blowfish, CAST5, DES, 3DES, IDEA, RC2, RC4, SEED, ChaCha20
+    const cipherChecks = [
+      { id: "aria", expected: "aria-128-cbc", keyLen: 16, ivLen: 16 },
+      { id: "camellia", expected: "camellia-128-cbc", keyLen: 16, ivLen: 16 },
+      { id: "sm4", expected: "sm4-cbc", keyLen: 16, ivLen: 16 },
+      { id: "blowfish", expected: "bf-cbc", keyLen: 16, ivLen: 8 },
+      { id: "cast5", expected: "cast5-cbc", keyLen: 16, ivLen: 8 },
+      { id: "des", expected: "des-cbc", keyLen: 8, ivLen: 8 },
+      { id: "3des", expected: "des-ede3-cbc", keyLen: 24, ivLen: 8 },
+      { id: "idea", expected: "idea-cbc", keyLen: 16, ivLen: 8 },
+      { id: "rc2", expected: "rc2-cbc", keyLen: 16, ivLen: 8 },
+      { id: "rc4", expected: "rc4", keyLen: 16, ivLen: 0 },
+      { id: "seed", expected: "seed-cbc", keyLen: 16, ivLen: 16 },
+      { id: "chacha20", expected: "chacha20", keyLen: 32, ivLen: 12 },
+    ];
+
+    for (const item of cipherChecks) {
+      const tool = cipherToolDefinition(item.id);
+      const spec = tool.createSpec();
+      spec.options[OPTION_MODE] = "cbc";
+      spec.options[OPTION_KEY] = "00".repeat(item.keyLen);
+      spec.options["keyEncoding"] = "hex";
+      if (item.ivLen > 0) {
+        spec.options[OPTION_NONCE] = "00".repeat(item.ivLen);
+        spec.options["nonceEncoding"] = "hex";
+      }
+      const res = await tool.compute(spec, ascii("Sample Plaintext"));
+      expect(res.cliProviders, `cliProviders for ${item.id}`).toBeDefined();
+      const openssl = res.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl, `OpenSSL provider for ${item.id}`).toBeDefined();
+      const bashCmd = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bashCmd).toContain(`openssl enc -${item.expected}`);
+      expect(bashCmd).toContain("-nosalt");
+    }
+  });
+});
+

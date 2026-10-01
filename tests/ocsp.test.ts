@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { loadTool } from "@ocs/registry";
 import {
   buildOcspRequest,
   parseOcspResponse,
@@ -9,7 +10,10 @@ import { detectInputBytes } from "../packages/tools/certificates/src/asn1/pem";
 import {
   SAMPLE_2TIER_SERVER_PEM,
   SAMPLE_ROOT_CA_PEM,
-} from "../packages/tools/certificates/src/samples";
+  OPTION_OCSP_OP,
+  OPTION_ISSUER_CERT,
+} from "@ocs/certificates";
+import { formatShellCommands } from "../packages/ui/src/shell-command";
 
 describe("OCSP Inspector & Builder", () => {
   it("builds a valid RFC 6960 CertID and OCSPRequest", () => {
@@ -76,5 +80,73 @@ describe("OCSP Inspector & Builder", () => {
     expect(parsed.responses[0]?.certStatus).toBe("revoked");
     expect(parsed.responses[0]?.revocationReason).toBe("keyCompromise");
     expect(parsed.responses[0]?.revocationTime).toBeDefined();
+  });
+
+  describe("OpenSSL CLI Providers for OCSP", () => {
+    it("generates OpenSSL ocsp commands for build-request", async () => {
+      const tool = await loadTool("ocsp");
+      const spec = {
+        ...tool.createSpec(),
+        options: {
+          [OPTION_OCSP_OP]: "build-request",
+          [OPTION_ISSUER_CERT]: SAMPLE_ROOT_CA_PEM,
+        },
+      };
+
+      const result = await tool.compute(spec, new TextEncoder().encode(SAMPLE_2TIER_SERVER_PEM));
+      expect(result.error).toBeUndefined();
+      const openssl = result.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl).toBeDefined();
+      const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bash).toContain("openssl ocsp -issuer ca.crt -cert cert.crt");
+      expect(bash).toContain("openssl ocsp -issuer ca.crt -cert cert.crt -reqout ocsp-req.der -text");
+      expect(bash).toContain("openssl ocsp -respin ocsp.der -text -noverify");
+    });
+
+    it("generates OpenSSL ocsp commands for generate-staple", async () => {
+      const tool = await loadTool("ocsp");
+      const spec = {
+        ...tool.createSpec(),
+        options: {
+          [OPTION_OCSP_OP]: "generate-staple",
+          [OPTION_ISSUER_CERT]: SAMPLE_ROOT_CA_PEM,
+        },
+      };
+
+      const result = await tool.compute(spec, new TextEncoder().encode(SAMPLE_2TIER_SERVER_PEM));
+      expect(result.error).toBeUndefined();
+      const openssl = result.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl).toBeDefined();
+      const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bash).toContain("openssl ocsp -respin staple.der -text -noverify");
+      expect(bash).toContain("openssl ocsp -issuer ca.crt -cert cert.crt -url <ocsp_url> -respout staple.der");
+    });
+
+    it("generates OpenSSL ocsp commands for inspect-response", async () => {
+      const tool = await loadTool("ocsp");
+      const spec = {
+        ...tool.createSpec(),
+        options: {
+          [OPTION_OCSP_OP]: "inspect-response",
+        },
+      };
+
+      const serverDer = detectInputBytes(SAMPLE_2TIER_SERVER_PEM).der;
+      const caDer = detectInputBytes(SAMPLE_ROOT_CA_PEM).der;
+      const mockResponse = createMockOcspResponse({
+        targetCertDer: serverDer,
+        issuerCertDer: caDer,
+        certStatus: "good",
+        validityHours: 48,
+      });
+
+      const result = await tool.compute(spec, mockResponse.der);
+      expect(result.error).toBeUndefined();
+      const openssl = result.cliProviders?.find((p) => p.id === "openssl");
+      expect(openssl).toBeDefined();
+      const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
+      expect(bash).toContain("openssl ocsp -respin ocsp-response.der -text -noverify");
+      expect(bash).toContain("openssl ocsp -respin ocsp-response.der -CAfile ca.crt -text");
+    });
   });
 });

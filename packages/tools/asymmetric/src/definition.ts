@@ -54,7 +54,7 @@ export function asymmetricToolDefinition(toolId: string): ToolDefinition<Asymmet
 export { ASYMMETRIC_TOOL_IDS };
 
 // Re-exported from the lazy side: all of these reach an implementation.
-export { computeAsymmetric } from "./compute";
+export { computeAsymmetric, generateAsymmetricCliProviders } from "./compute";
 export {
   acceptedPublicKeyLengths,
   resolveAsymmetric,

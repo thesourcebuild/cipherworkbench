@@ -40,7 +40,7 @@ export function kdfToolDefinition(toolId: string): ToolDefinition<KdfSpec> {
 export { KDF_TOOL_IDS };
 
 // Re-exported from the lazy side: all of these reach an implementation.
-export { computeKdf } from "./compute";
+export { computeKdf, generateKdfCliProviders } from "./compute";
 // Exported so the OpenSSL differential test can reach it directly, the same way the hash family
 // exposes its bindings for the declared-output-length cross-check.
 export { deriveEvpKdf } from "./bindings";

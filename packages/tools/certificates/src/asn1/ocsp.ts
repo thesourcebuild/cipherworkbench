@@ -397,10 +397,10 @@ export function createMockOcspResponse(opts: {
     const revInfo = encodeDerSequence([revTime, ...(revReason.length > 0 ? [revReason] : [])]);
     statusNode = encodeDerContext(1, revInfo, true);
   } else if (opts.certStatus === "unknown") {
-    statusNode = encodeDerContext(2, encodeDerNull(), false);
+    statusNode = encodeDerContext(2, new Uint8Array(0), false);
   } else {
     // good: [0] IMPLICIT NULL
-    statusNode = encodeDerContext(0, encodeDerNull(), false);
+    statusNode = encodeDerContext(0, new Uint8Array(0), false);
   }
 
   // SingleResponse: SEQUENCE { certId, certStatus, thisUpdate, nextUpdate [0] EXPLICIT }

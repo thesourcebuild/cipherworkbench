@@ -125,7 +125,14 @@ export {
   cobblestoneCrypto,
   createCobblestoneStream,
 } from "./bindings";
-export { computeCipher, createCipherStream, constructionLabel } from "./compute";
+export {
+  computeCipher,
+  createCipherStream,
+  constructionLabel,
+  generateCipherCliProviders,
+  generateCipherFileProviders,
+  getOpenSslCipherName,
+} from "./compute";
 export {
   acceptedNonceLengths,
   cipherAcceptedByteLengths,

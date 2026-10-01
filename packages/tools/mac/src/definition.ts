@@ -54,7 +54,7 @@ export function macToolDefinition(toolId: string): ToolDefinition<MacSpec> {
 export { MAC_TOOL_IDS };
 
 // Re-exported from the lazy side: all of these reach an implementation.
-export { computeMac, createMacStream } from "./compute";
+export { computeMac, createMacStream, generateMacCliProviders } from "./compute";
 export { resolveMac, type ResolvedMac, type ResolveResult } from "./resolve";
 export { macCatalogueFor } from "./catalogue/options";
 export { createSpec } from "./create-spec";
