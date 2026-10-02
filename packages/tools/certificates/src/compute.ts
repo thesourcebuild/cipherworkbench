@@ -203,31 +203,31 @@ export function generateCertConverterCliProviders(
     opensslCommands.push(
       {
         comment: "Convert X.509 PEM certificate to DER binary",
-        parts: ["openssl x509 -in cert.pem -outform DER -out cert.der"],
+        parts: ["openssl x509", "-in cert.pem", "-outform DER", "-out cert.der"],
       },
       {
         comment: "Convert DER binary certificate to PEM",
-        parts: ["openssl x509 -in cert.der -inform DER -outform PEM -out cert.pem"],
+        parts: ["openssl x509", "-in cert.der", "-inform DER", "-outform PEM", "-out cert.pem"],
       },
       {
         comment: "Extract SubjectPublicKeyInfo (SPKI) public key",
-        parts: ["openssl x509 -in cert.pem -pubkey -noout > pubkey.pem"],
+        parts: ["openssl x509", "-in cert.pem", "-pubkey", "-noout > pubkey.pem"],
       },
       {
         comment: "Package certificate into PKCS#7 / P7B bundle using crl2pkcs7",
-        parts: ["openssl crl2pkcs7 -nocrl -certfile cert.pem -out certs.p7b"],
+        parts: ["openssl crl2pkcs7", "-nocrl", "-certfile cert.pem", "-out certs.p7b"],
       },
       {
         comment: "Extract certificates from PKCS#7 / P7B bundle",
-        parts: ["openssl pkcs7 -in certs.p7b -print_certs -out certs.pem"],
+        parts: ["openssl pkcs7", "-in certs.p7b", "-print_certs", "-out certs.pem"],
       },
       {
         comment: "Package certificate and key into PKCS#12 archive",
-        parts: ["openssl pkcs12 -export -out bundle.p12 -inkey key.pem -in cert.pem"],
+        parts: ["openssl pkcs12 -export", "-out bundle.p12", "-inkey key.pem", "-in cert.pem"],
       },
       {
         comment: "Extract certificates and key from PKCS#12 archive",
-        parts: ["openssl pkcs12 -in bundle.p12 -nodes -out cert-and-key.pem"],
+        parts: ["openssl pkcs12", "-in bundle.p12", "-nodes", "-out cert-and-key.pem"],
       },
     );
     sslxCommands.push(
@@ -2563,7 +2563,12 @@ export async function computeCertificate(
               commands: [
                 {
                   comment: "Inspect X.509 certificate details",
-                  parts: ["openssl x509 -in cert.pem -text -noout"],
+                  parts: [
+                    "openssl x509",
+                    "-in cert.pem",
+                    "-text",
+                    "-noout",
+                  ],
                 },
               ],
             },
@@ -2583,7 +2588,11 @@ export async function computeCertificate(
               commands: [
                 {
                   comment: "Inspect certificate details with certtool",
-                  parts: ["certtool --certificate-info --infile cert.pem"],
+                  parts: [
+                    "certtool",
+                    "--certificate-info",
+                    "--infile cert.pem",
+                  ],
                 },
               ],
             },

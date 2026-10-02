@@ -44,6 +44,18 @@ function commandsForShell(
   return variants[shell] ?? variants.bash ?? variants.powershell ?? variants.cmd ?? [];
 }
 
+/**
+ * Returns true if any command in the variants has two or more parts,
+ * meaning it can actually be wrapped across multiple lines in "multiline" layout.
+ */
+export function canWrapShellCommands(
+  variants: ShellCommandVariants,
+  shell: CommandShell = "bash",
+): boolean {
+  const commands = commandsForShell(variants, shell);
+  return commands.some((command) => command.parts.map((part) => part.trim()).filter(Boolean).length > 1);
+}
+
 export function formatShellCommands(
   variants: ShellCommandVariants,
   shell: CommandShell,

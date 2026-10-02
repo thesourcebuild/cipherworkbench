@@ -1,5 +1,6 @@
 export {
   formatShellCommands,
+  canWrapShellCommands,
   buildPipedShellVariants,
   buildFileShellVariants,
   formatByteSize,

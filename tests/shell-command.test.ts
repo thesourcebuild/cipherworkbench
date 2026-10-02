@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatShellCommands,
+  canWrapShellCommands,
   formatByteSize,
   getInlineTextSample,
   describeInputExclusion,
@@ -100,5 +101,23 @@ describe("shell command formatting", () => {
     const descBin = describeInputExclusion(new Uint8Array([0x00, 0xff, 0xfe]));
     expect(descBin.note).toContain("Input is binary");
     expect(descBin.defaultFileName).toBe("input.bin");
+  });
+
+  it("determines whether commands have wrappable multi-line parts", () => {
+    // Single-part command: cannot wrap
+    const singlePart = [{ parts: ["openssl x509 -in cert.pem -text -noout"] }];
+    expect(canWrapShellCommands(singlePart, "bash")).toBe(false);
+
+    // Multi-part command: can wrap
+    const multiPart = [{ parts: ["openssl x509", "-in cert.pem", "-text", "-noout"] }];
+    expect(canWrapShellCommands(multiPart, "bash")).toBe(true);
+
+    // Formatting multiPart in multiline vs single-line
+    expect(formatShellCommands(multiPart, "bash", "multiline")).toBe(
+      "openssl x509 \\\n  -in cert.pem \\\n  -text \\\n  -noout",
+    );
+    expect(formatShellCommands(multiPart, "bash", "single-line")).toBe(
+      "openssl x509 -in cert.pem -text -noout",
+    );
   });
 });

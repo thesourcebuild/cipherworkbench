@@ -26,6 +26,7 @@ export type {
 } from "@ocs/contracts/shell";
 export {
   formatShellCommands,
+  canWrapShellCommands,
   buildPipedShellVariants,
   buildFileShellVariants,
   formatByteSize,

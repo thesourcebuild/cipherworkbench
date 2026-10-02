@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CopyButton } from "./copy-button";
 import {
   formatShellCommands,
+  canWrapShellCommands,
   type CliProviderCommand,
   type CommandLayout,
   type CommandShell,
@@ -50,7 +51,8 @@ export function ShellCommandBlock({
 
   const activeProvider = resolvedProviders.find((p) => p.id === tool) ?? resolvedProviders[0];
   const activeCommands = activeProvider?.commands ?? [];
-  const value = formatShellCommands(activeCommands, shell, layout);
+  const canWrap = canWrapShellCommands(activeCommands, shell);
+  const value = formatShellCommands(activeCommands, shell, canWrap ? layout : "single-line");
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-900 p-3 font-mono text-xs text-slate-100 dark:border-slate-800">
@@ -86,15 +88,17 @@ export function ShellCommandBlock({
             </option>
           ))}
         </select>
-        <select
-          aria-label={`${title} layout`}
-          value={layout}
-          onChange={(event) => setLayout(event.target.value as CommandLayout)}
-          className="rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-[10px] text-slate-200"
-        >
-          <option value="multiline">Multi-line</option>
-          <option value="single-line">Single line</option>
-        </select>
+        {canWrap && (
+          <select
+            aria-label={`${title} layout`}
+            value={layout}
+            onChange={(event) => setLayout(event.target.value as CommandLayout)}
+            className="rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-[10px] text-slate-200"
+          >
+            <option value="multiline">Multi-line</option>
+            <option value="single-line">Single line</option>
+          </select>
+        )}
         <CopyButton
           value={value}
           size="sm"
