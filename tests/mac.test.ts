@@ -1881,5 +1881,22 @@ describe("OpenSSL MAC Command Parity across Tool Members", () => {
     const bashCmd = formatShellCommands(openssl!.commands, "bash", "single-line");
     expect(bashCmd).toContain("openssl mac -digest SHA256 -macopt hexkey:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f HMAC file.txt");
   });
+
+  it("switches to file-based OpenSSL mac command with guidance note when input is large or multi-line", async () => {
+    const hmacTool = macToolDefinition("hmac");
+    const hmacSpec = hmacTool.createSpec();
+    hmacSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    hmacSpec.options["keyEncoding"] = "hex";
+    hmacSpec.options[OPTION_HASH] = "sha256";
+    const lorem3862 = ascii("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(70));
+    const res = await hmacTool.compute(hmacSpec, lorem3862);
+    expect(res.cliProviders).toBeDefined();
+    const openssl = res.cliProviders?.find((p) => p.id === "openssl");
+    expect(openssl).toBeDefined();
+    const bashCmd = formatShellCommands(openssl!.commands, "bash", "single-line");
+    expect(bashCmd).toContain("Input exceeds inline shell limit");
+    expect(bashCmd).toContain("save to input.txt or use File mode");
+    expect(bashCmd).toContain("openssl mac -digest SHA256 -macopt hexkey:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f HMAC input.txt");
+  });
 });
 

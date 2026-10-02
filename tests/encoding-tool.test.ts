@@ -466,10 +466,20 @@ describe("OpenSSL Base64 Command Parity", () => {
     const decRes = await base64Tool.compute(decSpec, ascii("SGVsbG8gV29ybGQ="));
     expect(decRes.cliProviders).toBeDefined();
     const decOpenssl = decRes.cliProviders?.find((p) => p.id === "openssl");
-    expect(decOpenssl).toBeDefined();
     expect(formatShellCommands(decOpenssl!.commands, "bash", "single-line")).toContain(
       "openssl base64 -d",
     );
+
+    // Large input
+    const lorem3862 = ascii("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(70));
+    const largeRes = await base64Tool.compute(encSpec, lorem3862);
+    expect(largeRes.cliProviders).toBeDefined();
+    const largeOpenssl = largeRes.cliProviders?.find((p) => p.id === "openssl");
+    expect(largeOpenssl).toBeDefined();
+    const largeBash = formatShellCommands(largeOpenssl!.commands, "bash", "single-line");
+    expect(largeBash).toContain("Input exceeds inline shell limit");
+    expect(largeBash).toContain("save to input.txt or use File mode");
+    expect(largeBash).toContain("openssl base64 -e -in input.txt -out input.txt.b64");
   });
 });
 

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   formatShellCommands,
+  formatByteSize,
+  getInlineTextSample,
+  describeInputExclusion,
   type ShellCommandVariants,
 } from "../packages/ui/src/shell-command";
 
@@ -42,5 +45,60 @@ describe("shell command formatting", () => {
     expect(formatShellCommands(variants, "cmd", "single-line")).toBe(
       "type server.crt intermediate.crt > server-chain.pem",
     );
+  });
+
+  it("formats multi-line comments with appropriate comment prefixes for each shell", () => {
+    const multiLineComment: ShellCommandVariants = [
+      {
+        comment: "Note 1: Input exceeds limit\nNote 2: Use file mode instead",
+        parts: ["openssl dgst -sha256 input.txt"],
+      },
+    ];
+
+    expect(formatShellCommands(multiLineComment, "bash", "single-line")).toBe(
+      "# Note 1: Input exceeds limit\n# Note 2: Use file mode instead\nopenssl dgst -sha256 input.txt",
+    );
+    expect(formatShellCommands(multiLineComment, "powershell", "single-line")).toBe(
+      "# Note 1: Input exceeds limit\n# Note 2: Use file mode instead\nopenssl dgst -sha256 input.txt",
+    );
+    expect(formatShellCommands(multiLineComment, "cmd", "single-line")).toBe(
+      "REM Note 1: Input exceeds limit\nREM Note 2: Use file mode instead\nopenssl dgst -sha256 input.txt",
+    );
+  });
+
+  it("handles byte size formatting", () => {
+    expect(formatByteSize(100)).toBe("100 B");
+    expect(formatByteSize(3862)).toBe("3.8 KB");
+    expect(formatByteSize(1024 * 1024 * 5)).toBe("5.0 MB");
+  });
+
+  it("identifies safe inline text vs large/multiline input", () => {
+    const enc = new TextEncoder();
+    expect(getInlineTextSample(enc.encode("hello world"))).toBe("hello world");
+    expect(getInlineTextSample(enc.encode(""))).toBe("");
+    expect(getInlineTextSample(undefined)).toBeUndefined();
+    // Multi-line text
+    expect(getInlineTextSample(enc.encode("line1\nline2"))).toBeUndefined();
+    // Text exceeding 256 chars
+    expect(getInlineTextSample(enc.encode("a".repeat(300)))).toBeUndefined();
+    // Binary
+    expect(getInlineTextSample(new Uint8Array([0x00, 0x01, 0x02]))).toBeUndefined();
+  });
+
+  it("describes exclusions properly with helpful notes", () => {
+    const enc = new TextEncoder();
+    const lorem3862 = enc.encode("Lorem ipsum ".repeat(322));
+    const descLarge = describeInputExclusion(lorem3862);
+    expect(descLarge.note).toContain("Input exceeds inline shell limit");
+    expect(descLarge.note).toContain("save to input.txt or use File mode");
+    expect(descLarge.defaultFileName).toBe("input.txt");
+
+    const descMulti = describeInputExclusion(enc.encode("line1\nline2"));
+    expect(descMulti.note).toContain("Input is multi-line");
+    expect(descMulti.defaultFileName).toBe("input.txt");
+
+    const descBin = describeInputExclusion(new Uint8Array([0x00, 0xff, 0xfe]));
+    expect(descBin.note).toContain("Input is binary");
+    expect(descBin.defaultFileName).toBe("input.bin");
   });
 });

@@ -5144,5 +5144,27 @@ describe("OpenSSL Cipher (enc) Command Parity across Families", () => {
       expect(bashCmd).toContain("-nosalt");
     }
   });
+
+  it("switches to file-based OpenSSL enc commands with guidance note when input is large or multi-line", async () => {
+    const tool = cipherToolDefinition("aes");
+    const spec = tool.createSpec();
+    spec.options[OPTION_MODE] = "cbc";
+    spec.options[OPTION_KEY] = "00".repeat(32);
+    spec.options["keyEncoding"] = "hex";
+    spec.options[OPTION_NONCE] = "00".repeat(16);
+    spec.options["nonceEncoding"] = "hex";
+
+    const lorem3862 = ascii("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(70));
+    const res = await tool.compute(spec, lorem3862);
+    expect(res.cliProviders).toBeDefined();
+
+    const openssl = res.cliProviders?.find((p) => p.id === "openssl");
+    expect(openssl).toBeDefined();
+
+    const bashCmd = formatShellCommands(openssl!.commands, "bash", "single-line");
+    expect(bashCmd).toContain("Input exceeds inline shell limit");
+    expect(bashCmd).toContain("save to input.txt or use File mode");
+    expect(bashCmd).toContain("openssl enc -aes-256-cbc -e -in input.txt -out input.txt.enc");
+  });
 });
 

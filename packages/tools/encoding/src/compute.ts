@@ -1,5 +1,8 @@
 import {
   buildPipedShellVariants,
+  buildFileShellVariants,
+  getInlineTextSample,
+  describeInputExclusion,
   type CliProviderCommand,
   type ToolResult,
   type ToolResultField,
@@ -21,9 +24,59 @@ function generateBase64CliProviders(
   direction: "encode" | "decode",
   input: Uint8Array,
 ): CliProviderCommand[] {
-  const textSample =
-    input.length > 0
-      ? new TextDecoder("utf-8", { fatal: false }).decode(input)
+  const textSample = getInlineTextSample(input);
+  if (textSample === undefined && input.length > 0) {
+    const { note, defaultFileName } = describeInputExclusion(input);
+    const targetFile = direction === "decode" ? "input.b64" : defaultFileName;
+    const commentPrefix = `${note}\n`;
+    if (direction === "encode") {
+      return [
+        {
+          id: "openssl",
+          label: "OpenSSL",
+          commands: buildFileShellVariants(
+            "openssl base64 -e -in {file} -out {file}.b64",
+            targetFile,
+            `${commentPrefix}Encode file to Base64 using OpenSSL`,
+          ),
+        },
+        {
+          id: "coreutils",
+          label: "GNU coreutils (base64)",
+          commands: buildFileShellVariants(
+            "base64 {file}",
+            targetFile,
+            `${commentPrefix}Encode file to Base64 using coreutils base64`,
+          ),
+        },
+      ];
+    } else {
+      return [
+        {
+          id: "openssl",
+          label: "OpenSSL",
+          commands: buildFileShellVariants(
+            "openssl base64 -d -in {file} -out {file}.bin",
+            targetFile,
+            `${commentPrefix}Decode Base64 file using OpenSSL`,
+          ),
+        },
+        {
+          id: "coreutils",
+          label: "GNU coreutils (base64 -d)",
+          commands: buildFileShellVariants(
+            "base64 -d {file}",
+            targetFile,
+            `${commentPrefix}Decode Base64 file using coreutils base64`,
+          ),
+        },
+      ];
+    }
+  }
+
+  const safeText =
+    textSample !== undefined
+      ? textSample
       : direction === "encode"
         ? "Hello World"
         : "SGVsbG8gV29ybGQ=";
@@ -35,7 +88,7 @@ function generateBase64CliProviders(
         label: "OpenSSL",
         commands: buildPipedShellVariants(
           "openssl base64 -e",
-          textSample,
+          safeText,
           "Encode input to Base64 using OpenSSL",
         ),
       },
@@ -44,7 +97,7 @@ function generateBase64CliProviders(
         label: "GNU coreutils (base64)",
         commands: buildPipedShellVariants(
           "base64",
-          textSample,
+          safeText,
           "Encode input to Base64 using coreutils base64",
         ),
       },
@@ -57,7 +110,7 @@ function generateBase64CliProviders(
       label: "OpenSSL",
       commands: buildPipedShellVariants(
         "openssl base64 -d",
-        textSample,
+        safeText,
         "Decode Base64 to plaintext using OpenSSL",
       ),
     },
@@ -66,7 +119,7 @@ function generateBase64CliProviders(
       label: "GNU coreutils (base64 -d)",
       commands: buildPipedShellVariants(
         "base64 -d",
-        textSample,
+        safeText,
         "Decode Base64 to plaintext using coreutils base64",
       ),
     },

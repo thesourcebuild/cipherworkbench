@@ -53,7 +53,13 @@ export function formatShellCommands(
     .map((command) => {
       const parts = command.parts.map((part) => part.trim()).filter(Boolean);
       const comment = command.comment
-        ? `${COMMENT_PREFIX[shell]} ${command.comment.trim()}\n`
+        ? command.comment
+            .split("\n")
+            .map((line) => {
+              const trimmed = line.trim();
+              return trimmed ? `${COMMENT_PREFIX[shell]} ${trimmed}` : COMMENT_PREFIX[shell];
+            })
+            .join("\n") + "\n"
         : "";
 
       if (layout === "single-line" || parts.length < 2) {
@@ -72,6 +78,93 @@ export function formatShellCommands(
       );
     })
     .join("\n\n");
+}
+
+/**
+ * Formats a byte count into a human-readable size string (e.g. "3.8 KB", "500 B", "12.4 MB").
+ */
+export function formatByteSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Checks whether an input Uint8Array can be cleanly and safely inlined into a single-line shell pipe.
+ * Returns the decoded UTF-8 string if it is single-line, contains no control characters,
+ * and does not exceed maxLen. Returns undefined if it should be handled via a file instead.
+ */
+export function getInlineTextSample(input?: Uint8Array, maxLen: number = 256): string | undefined {
+  if (!input) return undefined;
+  if (input.length === 0) return "";
+  try {
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(input);
+    // Disallow control characters (\x00-\x1F, \x7F) including newlines (\n, \r)
+    if (!/[\x00-\x1F\x7F]/.test(decoded) && decoded.length <= maxLen) {
+      return decoded;
+    }
+  } catch {}
+  return undefined;
+}
+
+export interface InputExclusionInfo {
+  note: string;
+  defaultFileName: string;
+}
+
+/**
+ * Generates an informative guidance note and recommended fallback filename
+ * when input cannot be inlined into a shell command snippet.
+ */
+export function describeInputExclusion(input: Uint8Array): InputExclusionInfo {
+  const size = formatByteSize(input.length);
+  try {
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(input);
+    if (decoded.includes("\n") || decoded.includes("\r")) {
+      return {
+        note: `Input is multi-line (${size}) — save to input.txt or use File mode:`,
+        defaultFileName: "input.txt",
+      };
+    }
+    if (decoded.length > 256) {
+      return {
+        note: `Input exceeds inline shell limit (${size}) — save to input.txt or use File mode:`,
+        defaultFileName: "input.txt",
+      };
+    }
+  } catch {}
+  return {
+    note: `Input is binary (${size}) — save to input.bin or use File mode:`,
+    defaultFileName: "input.bin",
+  };
+}
+
+/**
+ * Prepends an advisory note to each command comment in a ShellCommandVariants structure.
+ */
+export function prefixVariantsComment(
+  variants: ShellCommandVariants,
+  note: string,
+): ShellCommandVariants {
+  if (Array.isArray(variants)) {
+    return variants.map((cmd) => ({
+      ...cmd,
+      comment: cmd.comment ? `${note}\n${cmd.comment}` : note,
+    }));
+  }
+  const variantRecord = variants as Readonly<Partial<Record<CommandShell, readonly ShellCommand[]>>>;
+  const res: Partial<Record<CommandShell, readonly ShellCommand[]>> = {};
+  const shells: readonly CommandShell[] = ["bash", "powershell", "cmd"];
+  for (const shell of shells) {
+    const cmds = variantRecord[shell];
+    if (cmds) {
+      res[shell] = cmds.map((cmd: ShellCommand) => ({
+        ...cmd,
+        comment: cmd.comment ? `${note}\n${cmd.comment}` : note,
+      }));
+    }
+  }
+  return res;
 }
 
 /**

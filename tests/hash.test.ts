@@ -1745,5 +1745,34 @@ describe("OpenSSL Message Digest (dgst) CLI Command Parity", () => {
     const bashCmd = formatShellCommands(openssl!.commands, "bash", "single-line");
     expect(bashCmd).toContain("openssl dgst -sha256 file.txt");
   });
+
+  it("switches to file-based commands with guidance note when input is large or multi-line", async () => {
+    const tool = hashToolDefinition("sha256");
+    const spec = tool.createSpec();
+    const lorem3862 = ascii("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(70));
+    const res = await tool.compute(spec, lorem3862);
+    expect(res.cliProviders).toBeDefined();
+
+    const openssl = res.cliProviders?.find((p) => p.id === "openssl");
+    expect(openssl).toBeDefined();
+
+    const bashCmd = formatShellCommands(openssl!.commands, "bash", "single-line");
+    expect(bashCmd).not.toBe("openssl dgst -sha256");
+    expect(bashCmd).toContain("Input exceeds inline shell limit");
+    expect(bashCmd).toContain("save to input.txt or use File mode");
+    expect(bashCmd).toContain("openssl dgst -sha256 input.txt");
+
+    const coreutils = res.cliProviders?.find((p) => p.id === "coreutils");
+    expect(coreutils).toBeDefined();
+    const coreBash = formatShellCommands(coreutils!.commands, "bash", "single-line");
+    expect(coreBash).toContain("sha256sum input.txt");
+
+    const native = res.cliProviders?.find((p) => p.id === "native");
+    expect(native).toBeDefined();
+    const psCmd = formatShellCommands(native!.commands, "powershell", "single-line");
+    expect(psCmd).toContain("Get-FileHash -Algorithm SHA256 input.txt");
+    const cmdCmd = formatShellCommands(native!.commands, "cmd", "single-line");
+    expect(cmdCmd).toContain("certutil -hashfile input.txt SHA256");
+  });
 });
 

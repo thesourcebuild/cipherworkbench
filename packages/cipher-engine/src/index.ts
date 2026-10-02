@@ -24,4 +24,13 @@ export type {
   ShellCommandVariants,
   CliProviderCommand,
 } from "@ocs/contracts/shell";
-export { formatShellCommands, buildPipedShellVariants, buildFileShellVariants } from "@ocs/contracts/shell";
+export {
+  formatShellCommands,
+  buildPipedShellVariants,
+  buildFileShellVariants,
+  formatByteSize,
+  getInlineTextSample,
+  describeInputExclusion,
+  prefixVariantsComment,
+  type InputExclusionInfo,
+} from "@ocs/contracts/shell";

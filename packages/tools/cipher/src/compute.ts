@@ -2,6 +2,8 @@ import {
   encodeHex,
   buildPipedShellVariants,
   buildFileShellVariants,
+  getInlineTextSample,
+  describeInputExclusion,
   type CliProviderCommand,
   type ToolResult,
   type ToolResultField,
@@ -90,6 +92,13 @@ export function generateCipherCliProviders(
     return generateCipherFileProviders(r, fileName);
   }
 
+  const textSample = getInlineTextSample(input);
+  if (textSample === undefined && input && input.length > 0) {
+    const { note, defaultFileName } = describeInputExclusion(input);
+    const targetFile = r.direction === "decrypt" ? "ciphertext.bin" : defaultFileName;
+    return generateCipherFileProviders(r, targetFile, note);
+  }
+
   const cipherName = getOpenSslCipherName(r);
   if (!cipherName) return undefined;
 
@@ -113,9 +122,9 @@ export function generateCipherCliProviders(
   cmdParts.push("-nosalt");
 
   const fullCmd = cmdParts.join(" ");
-  const textSample =
-    input && input.length > 0
-      ? new TextDecoder("utf-8", { fatal: false }).decode(input)
+  const safeText =
+    textSample !== undefined
+      ? textSample
       : r.direction === "decrypt"
         ? "ciphertext_base64"
         : "sample plaintext";
@@ -126,7 +135,7 @@ export function generateCipherCliProviders(
     {
       id: "openssl",
       label: "OpenSSL (enc)",
-      commands: buildPipedShellVariants(fullCmd, textSample, comment),
+      commands: buildPipedShellVariants(fullCmd, safeText, comment),
     },
   ];
 }
@@ -134,6 +143,7 @@ export function generateCipherCliProviders(
 export function generateCipherFileProviders(
   r: ResolvedCipher,
   fileName: string,
+  note?: string,
 ): CliProviderCommand[] | undefined {
   const cipherName = getOpenSslCipherName(r);
   if (!cipherName) return undefined;
@@ -168,7 +178,8 @@ export function generateCipherFileProviders(
   cmdParts.push("-nosalt");
 
   const fullCmd = cmdParts.join(" ");
-  const comment = `${r.direction === "decrypt" ? "Decrypt" : "Encrypt"} file using OpenSSL enc (-${cipherName})`;
+  const baseComment = `${r.direction === "decrypt" ? "Decrypt" : "Encrypt"} file using OpenSSL enc (-${cipherName})`;
+  const comment = note ? `${note}\n${baseComment}` : baseComment;
 
   return [
     {

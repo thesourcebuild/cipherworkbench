@@ -3,6 +3,9 @@ import {
   decodeListOption,
   buildPipedShellVariants,
   buildFileShellVariants,
+  getInlineTextSample,
+  describeInputExclusion,
+  prefixVariantsComment,
   type CliProviderCommand,
   type ToolResult,
   type ToolStream,
@@ -250,14 +253,10 @@ export function generateHashCliProviders(
     return generateHashFileProviders(algorithm, fileName);
   }
 
-  let textSample: string | undefined = undefined;
-  if (input) {
-    try {
-      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(input);
-      if (!/[\x00-\x08\x0E-\x1F]/.test(decoded) && decoded.length <= 128) {
-        textSample = decoded;
-      }
-    } catch {}
+  const textSample = getInlineTextSample(input);
+  if (textSample === undefined && input && input.length > 0) {
+    const { note, defaultFileName } = describeInputExclusion(input);
+    return generateHashFileProviders(algorithm, defaultFileName, note);
   }
 
   const safeBashText = textSample ? textSample.replace(/'/g, "'\\''") : "";
@@ -675,7 +674,7 @@ export function generateHashCliProviders(
   return undefined;
 }
 
-function generateHashFileProviders(
+function buildHashFileProviders(
   algorithm: string,
   fileName: string,
 ): CliProviderCommand[] | undefined {
@@ -1110,6 +1109,19 @@ function generateHashFileProviders(
   }
 
   return undefined;
+}
+
+export function generateHashFileProviders(
+  algorithm: string,
+  fileName: string = "file.txt",
+  note?: string,
+): CliProviderCommand[] | undefined {
+  const providers = buildHashFileProviders(algorithm, fileName);
+  if (!providers || !note) return providers;
+  return providers.map((provider) => ({
+    ...provider,
+    commands: prefixVariantsComment(provider.commands, note),
+  }));
 }
 
 /**

@@ -3,6 +3,8 @@ import { encodeHex } from "@ocs/engine";
 import {
   buildPipedShellVariants,
   buildFileShellVariants,
+  getInlineTextSample,
+  describeInputExclusion,
   type CliProviderCommand,
 } from "@ocs/contracts";
 import {
@@ -230,15 +232,7 @@ export function generateMacCliProviders(
   fileName?: string,
 ): CliProviderCommand[] | undefined {
   const hexKey = encodeHex(r.key);
-  let textSample: string | undefined = undefined;
-  if (input) {
-    try {
-      const decoded = new TextDecoder("utf-8", { fatal: true }).decode(input);
-      if (!/[\x00-\x08\x0E-\x1F]/.test(decoded) && decoded.length <= 128) {
-        textSample = decoded;
-      }
-    } catch {}
-  }
+  const textSample = getInlineTextSample(input);
 
   let opensslCmd: string | undefined = undefined;
   let comment = "Compute MAC with OpenSSL";
@@ -287,6 +281,17 @@ export function generateMacCliProviders(
         id: "openssl",
         label: "OpenSSL",
         commands: buildFileShellVariants(opensslCmd, fileName, comment),
+      },
+    ];
+  }
+
+  if (textSample === undefined && input && input.length > 0) {
+    const { note, defaultFileName } = describeInputExclusion(input);
+    return [
+      {
+        id: "openssl",
+        label: "OpenSSL",
+        commands: buildFileShellVariants(opensslCmd, defaultFileName, `${note}\n${comment}`),
       },
     ];
   }
