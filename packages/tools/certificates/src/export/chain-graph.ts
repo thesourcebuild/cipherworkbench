@@ -13,6 +13,24 @@ export interface PkiGraphNode {
   status?: "valid" | "expired" | "not-yet-valid";
 }
 
+function padEndVisual(str: string, targetWidth: number): string {
+  let visualWidth = 0;
+  for (const ch of str) {
+    const cp = ch.codePointAt(0);
+    if (cp !== undefined) {
+      if ((cp >= 0x1f300 && cp <= 0x1faff) || (cp >= 0x2600 && cp <= 0x27bf)) {
+        visualWidth += 2;
+      } else if (cp === 0xfe0f) {
+        visualWidth += 0;
+      } else {
+        visualWidth += 1;
+      }
+    }
+  }
+  const paddingNeeded = Math.max(0, targetWidth - visualWidth);
+  return str + " ".repeat(paddingNeeded);
+}
+
 /**
  * Generates an ASCII/Unicode box-and-arrow PKI hierarchy diagram
  * for display in console, terminals, and markdown code blocks.
@@ -67,25 +85,41 @@ export function generatePkiHierarchyDiagram(nodes: PkiGraphNode[]): string {
       "└────────────────────────────────────────────────────────────────────────┘",
     );
   }
-
   if (client) {
-    // 2-leaf split: Server + Client
+    // 2-leaf split: Server + Client side-by-side
+    const serverLines = [
+      `│ 💻 [Server Leaf: ${server.title}]`,
+      `│    Subject: ${server.subjectDn.length > 22 ? server.subjectDn.slice(0, 19) + "..." : server.subjectDn}`,
+      ...(server.san ? [`│    SAN: ${server.san.length > 25 ? server.san.slice(0, 22) + "..." : server.san}`] : []),
+      `│    Key: ${server.keyType.toUpperCase()}`,
+      `│    SHA-256: ${server.fingerprintSha256.slice(0, 17)}...`,
+    ];
+
+    const clientLines = [
+      `│ 📱 [Client Leaf: ${client.title}]`,
+      `│    Subject: ${client.subjectDn.length > 22 ? client.subjectDn.slice(0, 19) + "..." : client.subjectDn}`,
+      ...(client.validityRange ? [`│    Validity: ${client.validityRange}`] : []),
+      `│    Key: ${client.keyType.toUpperCase()}`,
+      `│    SHA-256: ${client.fingerprintSha256.slice(0, 17)}...`,
+    ];
+
+    const maxRows = Math.max(serverLines.length, clientLines.length);
+
     lines.push(
       "                      │                                   │",
       "            [signs]   │                                   │ [signs]",
       "                      ▼                                   ▼",
       "┌───────────────────────────────────┐   ┌────────────────────────────────┐",
-      `│ 💻 [Server Leaf: ${server.title}]`,
-      `│    Subject: ${server.subjectDn.length > 25 ? server.subjectDn.slice(0, 23) + "..." : server.subjectDn}`,
-      ...(server.san ? [`│    SAN: ${server.san.length > 27 ? server.san.slice(0, 25) + "..." : server.san}`] : []),
-      `│    Key: ${server.keyType.toUpperCase()}`,
-      `│    SHA-256: ${server.fingerprintSha256.slice(0, 17)}...`,
+    );
+
+    for (let i = 0; i < maxRows; i++) {
+      const s = serverLines[i] ?? "│";
+      const c = clientLines[i] ?? "│";
+      lines.push(padEndVisual(s, 40) + c);
+    }
+
+    lines.push(
       "└───────────────────────────────────┘   └────────────────────────────────┘",
-      `                                        │ 📱 [Client Leaf: ${client.title}]`,
-      `                                        │    Subject: ${client.subjectDn.length > 25 ? client.subjectDn.slice(0, 23) + "..." : client.subjectDn}`,
-      `                                        │    Key: ${client.keyType.toUpperCase()}`,
-      `                                        │    SHA-256: ${client.fingerprintSha256.slice(0, 17)}...`,
-      "                                        └────────────────────────────────┘",
     );
   } else {
     // Single leaf (Server or End-Entity)

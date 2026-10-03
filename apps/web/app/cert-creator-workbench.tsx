@@ -87,11 +87,11 @@ interface StepDefinition {
     | "mtls-root-ca"
     | "mtls-server-csr"
     | "mtls-server-sign"
+    | "mtls-client-csr"
     | "mtls-client-sign"
     | "mtls-trust"
     | "inter-csr"
     | "inter-sign"
-    | "server-chain"
     | "3tier-deploy";
 }
 
@@ -412,7 +412,10 @@ export function CertCreatorWorkbench({
               OPTION_PKI_HIERARCHY,
               OPTION_CA_COMMON_NAME,
               OPTION_ORGANIZATION,
+              OPTION_ORG_UNIT,
               OPTION_COUNTRY,
+              OPTION_STATE,
+              OPTION_LOCALITY,
               OPTION_ROOT_KEY_TYPE,
               OPTION_ROOT_HASH_TYPE,
             ],
@@ -440,45 +443,63 @@ export function CertCreatorWorkbench({
             guideKind: "inter-sign",
           },
           {
-            id: "step-server-chain",
+            id: "step-server-csr",
             stepNum: 4,
-            label: "4. Server Cert & Chain",
-            title: "Step 4: Generate & Sign Server Cert",
-            fileProduced: "server.key, server.crt, server-chain.pem",
+            label: "4. Server CSR",
+            title: "Step 4: Generate Server Key & CSR",
+            fileProduced: "server.key, server.csr",
+            purpose:
+              "Create a private key for your server and a Certificate Signing Request (CSR) with your server's domain name or IP address.",
+            optionIds: [OPTION_COMMON_NAME, OPTION_SAN, OPTION_SERVER_KEY_TYPE],
+            guideKind: "mtls-server-csr",
+          },
+          {
+            id: "step-server-sign",
+            stepNum: 5,
+            label: "5. Sign Server & Chain",
+            title: "Step 5: Sign Server Certificate & Build Chain",
+            fileProduced: "server.crt, server-chain.pem",
             purpose:
               "Intermediate CA signs the server cert (serverAuth). Server chain bundles server.crt + intermediate.crt.",
             optionIds: [
-              OPTION_COMMON_NAME,
-              OPTION_SAN,
               OPTION_VALIDITY_DAYS,
               OPTION_SERVER_AUTH,
-              OPTION_SERVER_KEY_TYPE,
               OPTION_SERVER_HASH_TYPE,
             ],
-            guideKind: "server-chain",
+            guideKind: "mtls-server-sign",
           },
           {
-            id: "step-client-p12",
-            stepNum: 5,
-            label: "5. Client Cert & P12",
-            title: "Step 5: Generate & Sign Client Cert",
-            fileProduced: "client.key, client.crt, client.p12",
+            id: "step-client-csr",
+            stepNum: 6,
+            label: "6. Client CSR",
+            title: "Step 6: Generate Client Key & CSR",
+            fileProduced: "client.key, client.csr",
             purpose:
-              "Intermediate CA signs the client cert (clientAuth). Packaged with intermediate.crt into .p12.",
+              "Create a separate private key and Certificate Signing Request (CSR) for the client configured with client authentication.",
+            optionIds: [OPTION_CLIENT_COMMON_NAME, OPTION_CLIENT_KEY_TYPE],
+            guideKind: "mtls-client-csr",
+          },
+          {
+            id: "step-client-sign",
+            stepNum: 7,
+            label: "7. Sign Client & P12",
+            title: "Step 7: Sign Client Certificate & Export PKCS#12",
+            fileProduced: "client.crt, client.p12",
+            purpose:
+              "Intermediate CA signs the client cert (clientAuth). Packaged with intermediate.crt into password-protected .p12 bundle.",
             optionIds: [
-              OPTION_CLIENT_COMMON_NAME,
+              OPTION_VALIDITY_DAYS,
               OPTION_CLIENT_AUTH,
-              OPTION_MTLS_P12_PASSWORD,
-              OPTION_CLIENT_KEY_TYPE,
               OPTION_CLIENT_HASH_TYPE,
+              OPTION_MTLS_P12_PASSWORD,
             ],
             guideKind: "mtls-client-sign",
           },
           {
             id: "step-deploy-chains",
-            stepNum: 6,
-            label: "6. Deploy Chains & Test",
-            title: "Step 6: Deploy Chains & Truststores",
+            stepNum: 8,
+            label: "8. Deploy Chains & Test",
+            title: "Step 8: Deploy Chains & Truststores",
             fileProduced: "Deploy chains & root-ca.crt",
             purpose:
               "Server serves server-chain.pem; Client & Server trust root-ca.crt to validate the full chain.",
@@ -533,17 +554,27 @@ export function CertCreatorWorkbench({
           guideKind: "mtls-server-sign",
         },
         {
-          id: "step-client-sign",
+          id: "step-client-csr",
           stepNum: 4,
-          label: "4. Client Certificate",
-          title: "Step 4: Generate and Sign the Client Certificate",
-          fileProduced: "client.key, client.csr, client.crt, client.p12",
+          label: "4. Client Key & CSR",
+          title: "Step 4: Generate the Client Key and CSR",
+          fileProduced: "client.key, client.csr",
           purpose:
-            "Create a separate private key and CSR for the client, then sign it with your Root CA to produce the client certificate (client.crt) configured for client authentication.",
+            "Create a separate private key and Certificate Signing Request (CSR) for the client with client authentication extension.",
+          optionIds: [OPTION_CLIENT_COMMON_NAME, OPTION_CLIENT_KEY_TYPE],
+          guideKind: "mtls-client-csr",
+        },
+        {
+          id: "step-client-sign",
+          stepNum: 5,
+          label: "5. Sign Client Cert & P12",
+          title: "Step 5: Sign Client Certificate & Export PKCS#12",
+          fileProduced: "client.crt, client.p12",
+          purpose:
+            "Sign the client CSR with your Root CA to produce the client certificate (client.crt), then export client certificate and key into a password-protected PKCS#12 bundle.",
           optionIds: [
-            OPTION_CLIENT_COMMON_NAME,
+            OPTION_VALIDITY_DAYS,
             OPTION_CLIENT_AUTH,
-            OPTION_CLIENT_KEY_TYPE,
             OPTION_CLIENT_HASH_TYPE,
             OPTION_MTLS_P12_PASSWORD,
           ],
@@ -551,9 +582,9 @@ export function CertCreatorWorkbench({
         },
         {
           id: "step-truststores",
-          stepNum: 5,
-          label: "5. Truststores & Test",
-          title: "Step 5: Configure Server and Client Truststores",
+          stepNum: 6,
+          label: "6. Truststores & Test",
+          title: "Step 6: Configure Server and Client Truststores",
           fileProduced: "Distribute ca.crt",
           purpose:
             "Install the Root CA public certificate into the server's truststore (so it trusts the client) and into the client's truststore (so it trusts the server).",
@@ -1184,13 +1215,21 @@ https.createServer(options, app).listen(8443, () => {
               Request (CSR):
             </p>
             <ShellCommandBlock
-              title="OpenSSL — Step 2: Generate the Server Key and CSR"
+              title={
+                pkiHierarchy === "3-tier"
+                  ? "OpenSSL — Step 4: Generate the Server Key and CSR"
+                  : "OpenSSL — Step 2: Generate the Server Key and CSR"
+              }
               commands={shellVariants((shell) => {
                 const eku = ekuExtension(commandOptions);
+                const keyType =
+                  creatorMode === "mtls-suite"
+                    ? commandOptions.serverKeyType
+                    : commandOptions.keyType;
                 return [
                   keyCommand(
                     "server.key",
-                    commandOptions.serverKeyType,
+                    keyType,
                     "Generate the Server private key",
                   ),
                   {
@@ -1219,56 +1258,100 @@ https.createServer(options, app).listen(8443, () => {
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Use the Root CA (
-              <code className="font-mono text-indigo-600 dark:text-indigo-400">ca.key</code> and{" "}
-              <code className="font-mono text-indigo-600 dark:text-indigo-400">ca.crt</code>) to
-              sign the server&apos;s CSR, turning it into a valid server certificate (
-              <code className="font-mono text-indigo-600 dark:text-indigo-400">server.crt</code>
-              ):
+              {pkiHierarchy === "3-tier" ? (
+                <>
+                  Use the Intermediate CA (
+                  <code className="font-mono text-indigo-600 dark:text-indigo-400">
+                    intermediate.key
+                  </code>{" "}
+                  and{" "}
+                  <code className="font-mono text-indigo-600 dark:text-indigo-400">
+                    intermediate.crt
+                  </code>
+                  ) to sign the server&apos;s CSR, then bundle the server certificate and intermediate
+                  certificate into a deployable chain (
+                  <code className="font-mono text-indigo-600 dark:text-indigo-400">
+                    server-chain.pem
+                  </code>
+                  ):
+                </>
+              ) : (
+                <>
+                  Use the Root CA (
+                  <code className="font-mono text-indigo-600 dark:text-indigo-400">ca.key</code> and{" "}
+                  <code className="font-mono text-indigo-600 dark:text-indigo-400">ca.crt</code>) to
+                  sign the server&apos;s CSR, turning it into a valid server certificate (
+                  <code className="font-mono text-indigo-600 dark:text-indigo-400">server.crt</code>
+                  ):
+                </>
+              )}
             </p>
             <ShellCommandBlock
-              title="OpenSSL — Step 3: Sign the Server Certificate"
-              commands={[
-                {
-                  parts: [
-                    "openssl x509 -req",
-                    "-in server.csr",
-                    `-CA ${pkiHierarchy === "3-tier" ? "intermediate.crt" : "ca.crt"}`,
-                    `-CAkey ${pkiHierarchy === "3-tier" ? "intermediate.key" : "ca.key"}`,
-                    "-CAcreateserial",
-                    "-copy_extensions copy",
-                    "-out server.crt",
-                    `-days ${commandOptions.validityDays}`,
-                    ...digestArgs(
-                      pkiHierarchy === "3-tier"
-                        ? commandOptions.intermediateKeyType
-                        : commandOptions.rootKeyType,
-                      commandOptions.serverHashType,
-                    ),
-                  ],
-                },
-              ]}
+              title={
+                pkiHierarchy === "3-tier"
+                  ? "OpenSSL — Step 5: Sign Server Certificate & Build Chain"
+                  : "OpenSSL — Step 3: Sign the Server Certificate"
+              }
+              commands={shellVariants((shell) => {
+                const is3Tier = pkiHierarchy === "3-tier";
+                const issuer = is3Tier ? "intermediate" : "ca";
+                const hashType =
+                  creatorMode === "mtls-suite"
+                    ? commandOptions.serverHashType
+                    : commandOptions.hashType;
+                const keyType = is3Tier
+                  ? commandOptions.intermediateKeyType
+                  : commandOptions.rootKeyType;
+                const digest = digestFlag(keyType, hashType);
+                const chainCommand =
+                  shell === "powershell"
+                    ? "Get-Content server.crt, intermediate.crt | Set-Content server-chain.pem"
+                    : shell === "cmd"
+                      ? "type server.crt intermediate.crt > server-chain.pem"
+                      : "cat server.crt intermediate.crt > server-chain.pem";
+                return [
+                  {
+                    comment: `Sign the Server CSR using the ${is3Tier ? "Intermediate" : "Root"} CA`,
+                    parts: [
+                      "openssl x509 -req",
+                      "-in server.csr",
+                      `-CA ${issuer}.crt`,
+                      `-CAkey ${issuer}.key`,
+                      "-CAcreateserial",
+                      "-copy_extensions copy",
+                      "-out server.crt",
+                      `-days ${commandOptions.validityDays}`,
+                      ...(digest ? [digest] : []),
+                    ],
+                  },
+                  ...(is3Tier
+                    ? [
+                        {
+                          comment: "Build the deployable certificate chain bundle",
+                          parts: [chainCommand],
+                        },
+                      ]
+                    : []),
+                ];
+              })}
             />
           </div>
         );
 
-      case "mtls-client-sign":
+      case "mtls-client-csr":
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Just like the server, the client needs its own keypair to authenticate itself back
-              to the server. Sign the client CSR with the Root CA:
+              The client needs its own private key and Certificate Signing Request (CSR) configured
+              with client authentication (clientAuth):
             </p>
             <ShellCommandBlock
-              title="OpenSSL — Step 4: Generate and Sign the Client Certificate"
+              title={
+                pkiHierarchy === "3-tier"
+                  ? "OpenSSL — Step 6: Generate the Client Key and CSR"
+                  : "OpenSSL — Step 4: Generate the Client Key and CSR"
+              }
               commands={shellVariants((shell) => {
-                const issuer = pkiHierarchy === "3-tier" ? "intermediate" : "ca";
-                const digest = digestFlag(
-                  pkiHierarchy === "3-tier"
-                    ? commandOptions.intermediateKeyType
-                    : commandOptions.rootKeyType,
-                  commandOptions.clientHashType,
-                );
                 const eku = ekuExtension(commandOptions, true);
                 return [
                   keyCommand(
@@ -1277,7 +1360,7 @@ https.createServer(options, app).listen(8443, () => {
                     "Generate the Client private key",
                   ),
                   {
-                    comment: "Generate the Client CSR",
+                    comment: "Generate the Client Certificate Signing Request (CSR)",
                     parts: [
                       "openssl req -new",
                       "-key client.key",
@@ -1288,6 +1371,41 @@ https.createServer(options, app).listen(8443, () => {
                         : []),
                     ],
                   },
+                ];
+              })}
+            />
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              The subject and clientAuth extension above update from this step&apos;s current options.
+            </p>
+          </div>
+        );
+
+      case "mtls-client-sign":
+        return (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Sign the client CSR using the{" "}
+              {pkiHierarchy === "3-tier" ? "Intermediate CA" : "Root CA"} to produce{" "}
+              <code className="font-mono text-indigo-600 dark:text-indigo-400">client.crt</code>, then
+              bundle the client certificate, key, and CA certificate into a password-protected PKCS#12 (
+              <code className="font-mono text-indigo-600 dark:text-indigo-400">client.p12</code>
+              ) container:
+            </p>
+            <ShellCommandBlock
+              title={
+                pkiHierarchy === "3-tier"
+                  ? "OpenSSL — Step 7: Sign Client Certificate & Export PKCS#12"
+                  : "OpenSSL — Step 5: Sign Client Certificate & Export PKCS#12"
+              }
+              commands={shellVariants((shell) => {
+                const issuer = pkiHierarchy === "3-tier" ? "intermediate" : "ca";
+                const digest = digestFlag(
+                  pkiHierarchy === "3-tier"
+                    ? commandOptions.intermediateKeyType
+                    : commandOptions.rootKeyType,
+                  commandOptions.clientHashType,
+                );
+                return [
                   {
                     comment: `Sign the Client CSR using the ${pkiHierarchy === "3-tier" ? "Intermediate" : "Root"} CA`,
                     parts: [
@@ -1304,7 +1422,7 @@ https.createServer(options, app).listen(8443, () => {
                   },
                   passwordEnvironmentCommand(commandOptions.p12Password, shell),
                   {
-                    comment: "Export the Client key and certificate as PKCS#12",
+                    comment: "Export the Client key and certificate as PKCS#12 bundle",
                     parts: [
                       "openssl pkcs12 -export",
                       "-out client.p12",
@@ -1361,7 +1479,7 @@ https.createServer(options, app).listen(8443, () => {
               so the Root CA private key can be securely stored offline.
             </p>
             <ShellCommandBlock
-              title="OpenSSL Intermediate Delegation Reference"
+              title="OpenSSL — Step 3: Sign Intermediate with Root CA"
               commands={[
                 {
                   parts: [
@@ -1380,68 +1498,6 @@ https.createServer(options, app).listen(8443, () => {
                   ],
                 },
               ]}
-            />
-          </div>
-        );
-
-      case "server-chain":
-        return (
-          <div className="space-y-3">
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              The Intermediate CA signs the server certificate. The resulting bundle contains
-              both the leaf certificate and the issuing intermediate certificate:
-            </p>
-            <ShellCommandBlock
-              title="OpenSSL — Generate and Sign the Server Chain"
-              commands={shellVariants((shell) => {
-                const digest = digestFlag(
-                  commandOptions.intermediateKeyType,
-                  commandOptions.serverHashType,
-                );
-                const eku = ekuExtension(commandOptions);
-                const chainCommand =
-                  shell === "powershell"
-                    ? "Get-Content server.crt, intermediate.crt | Set-Content server-chain.pem"
-                    : shell === "cmd"
-                      ? "type server.crt intermediate.crt > server-chain.pem"
-                      : "cat server.crt intermediate.crt > server-chain.pem";
-                return [
-                  keyCommand(
-                    "server.key",
-                    commandOptions.serverKeyType,
-                    "Generate the Server private key",
-                  ),
-                  {
-                    comment:
-                      "Generate the Server CSR with the selected identity and extensions",
-                    parts: [
-                      "openssl req -new",
-                      "-key server.key",
-                      "-out server.csr",
-                      `-subj ${shellQuote(subject(commandOptions, commandOptions.commonName), shell)}`,
-                      `-addext ${shellQuote(`subjectAltName=${sanExtension(commandOptions.san)}`, shell)}`,
-                      ...(eku
-                        ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`]
-                        : []),
-                    ],
-                  },
-                  {
-                    comment: "Sign the Server CSR with the Intermediate CA",
-                    parts: [
-                      "openssl x509 -req",
-                      "-in server.csr",
-                      "-CA intermediate.crt",
-                      "-CAkey intermediate.key",
-                      "-CAcreateserial",
-                      "-copy_extensions copy",
-                      "-out server.crt",
-                      `-days ${commandOptions.validityDays}`,
-                      ...(digest ? [digest] : []),
-                    ],
-                  },
-                  { comment: "Build the deployable certificate chain", parts: [chainCommand] },
-                ];
-              })}
             />
           </div>
         );

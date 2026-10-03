@@ -288,6 +288,11 @@ describe("Visual PKI Trust Hierarchy Diagram", () => {
     expect(diagram).toContain("Tier 2: Intermediate Issuing CA");
     expect(diagram).toContain("Server Leaf: TLS Server");
     expect(diagram).toContain("Client Leaf: mTLS Client");
+    // Verify side-by-side horizontal alignment of leaves on the same line
+    const leafHeaderLine = diagram.split("\n").find((l) => l.includes("Server Leaf"));
+    expect(leafHeaderLine).toBeDefined();
+    expect(leafHeaderLine).toContain("Server Leaf: TLS Server");
+    expect(leafHeaderLine).toContain("Client Leaf: mTLS Client");
   });
 });
 
