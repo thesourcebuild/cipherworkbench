@@ -147,6 +147,12 @@ describe("age (RFC age-encryption.org/v1) container format", () => {
 
   it("supports ASCII armor format", () => {
     const plaintext = new TextEncoder().encode("Armored age container text");
+    const rawContainer = ageEncrypt(ageCrypto, plaintext, { recipients: [testRecipient] });
+    const armored = armorAge(rawContainer);
+    expect(isArmoredAge(armored)).toBe(true);
+    const dearmored = dearmorAge(armored);
+    expect(dearmored).toEqual(rawContainer);
+
     const op = ageOperation({
       recipient: testRecipient,
       identity: testIdentity,

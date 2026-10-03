@@ -1,18 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { OptionValue } from "@ocs/contracts";
 import type { ToolDefinition, ToolSpecBase } from "@ocs/engine";
-import { Button, CopyButton, CopyIconButton, MonoBlock, cn } from "@ocs/ui";
+import { Button, CopyButton, CopyIconButton, cn } from "@ocs/ui";
 import {
   entropyToMnemonic,
   mnemonicToSeed,
   createMasterFromSeed,
   derivePath,
   deriveChild,
-  HARDENED_OFFSET,
-  BIP39_ENGLISH_SAMPLE,
 } from "@ocs/algos";
 import { sha256, sha512 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
@@ -129,7 +127,7 @@ function toChecksumAddress(hexAddr: string): string {
   return checksum;
 }
 
-export function Bip39Workbench({ tool }: CustomWorkbenchProps) {
+export function Bip39Workbench({ tool: _tool }: CustomWorkbenchProps) {
   const [wordCount, setWordCount] = useState<number>(12);
   const [entropyBytes, setEntropyBytes] = useState<Uint8Array>(() => {
     const buf = new Uint8Array(16);

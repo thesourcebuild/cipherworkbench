@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { OptionValue } from "@ocs/contracts";
 import type { ToolDefinition, ToolSpecBase } from "@ocs/engine";
-import { Button, CopyButton, CopyIconButton, MonoBlock, cn } from "@ocs/ui";
+import { Button, CopyButton, CopyIconButton, cn } from "@ocs/ui";
 import {
   shamirSplit,
   shamirCombine,
@@ -37,7 +37,13 @@ const PRESETS = [
   { label: "Disk Encryption Passphrase", text: "Correct-Horse-Battery-Staple-2026!#" },
 ];
 
-export function SecretSharingWorkbench({ tool }: CustomWorkbenchProps) {
+const cryptoRng = (len: number): Uint8Array => {
+  const buf = new Uint8Array(len);
+  globalThis.crypto.getRandomValues(buf);
+  return buf;
+};
+
+export function SecretSharingWorkbench({ tool: _tool }: CustomWorkbenchProps) {
   const [activeTab, setActiveTab] = useState<TabMode>("split");
 
   // --- Split State ---
@@ -45,19 +51,18 @@ export function SecretSharingWorkbench({ tool }: CustomWorkbenchProps) {
   const [isHexSecret, setIsHexSecret] = useState(false);
   const [thresholdK, setThresholdK] = useState(3);
   const [totalSharesN, setTotalSharesN] = useState(5);
-  const [generatedShares, setGeneratedShares] = useState<ShamirShare[]>([]);
-  const [hasGenerated, setHasGenerated] = useState(false);
+  const [generatedShares, setGeneratedShares] = useState<ShamirShare[]>(() => {
+    try {
+      const bytes = new TextEncoder().encode("TopSecret-Vault-Master-Key-2026");
+      return shamirSplit(bytes, 5, 3, cryptoRng);
+    } catch {
+      return [];
+    }
+  });
 
   // --- Combine State ---
   const [combineInput, setCombineInput] = useState("");
   const [combineThreshold, setCombineThreshold] = useState(3);
-
-  // Random number generator using browser WebCrypto
-  const cryptoRng = (len: number): Uint8Array => {
-    const buf = new Uint8Array(len);
-    globalThis.crypto.getRandomValues(buf);
-    return buf;
-  };
 
   // Convert secret input to bytes
   const getSecretBytes = (): Uint8Array => {
@@ -80,25 +85,10 @@ export function SecretSharingWorkbench({ tool }: CustomWorkbenchProps) {
       if (bytes.length === 0) return;
       const shares = shamirSplit(bytes, totalSharesN, thresholdK, cryptoRng);
       setGeneratedShares(shares);
-      setHasGenerated(true);
     } catch (e) {
       console.error("Shamir split failed:", e);
     }
   };
-
-  // Pre-split on initial mount if empty
-  useMemo(() => {
-    if (generatedShares.length === 0 && !hasGenerated) {
-      try {
-        const bytes = new TextEncoder().encode(secretText);
-        const shares = shamirSplit(bytes, totalSharesN, thresholdK, cryptoRng);
-        setGeneratedShares(shares);
-        setHasGenerated(true);
-      } catch {
-        // ignore
-      }
-    }
-  }, []);
 
   // Quick Send to Reconstructor
   const handleSendToReconstructor = (subsetCount?: number) => {
