@@ -112,10 +112,10 @@ Cipher Workbench relies on and builds upon several outstanding open-source crypt
   - [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers) — Audited, zero-dependency implementations of AES, ChaCha20, Salsa20, AEGIS, and LWC ciphers.
   - [`@noble/curves`](https://github.com/paulmillr/noble-curves) — Audited implementations of ECDSA, Ed25519, X25519, and NIST P-curves.
   - [`@noble/post-quantum`](https://github.com/paulmillr/noble-post-quantum) — Standards-compliant FIPS 203 (ML-KEM), FIPS 204 (ML-DSA), and FIPS 205 (SLH-DSA) primitives.
-- **[hash-wasm](https://github.com/Danipen/hash-wasm)** by Daniil Penkin — High-performance WebAssembly hash engine used for verification and oracles.
-- **[xxhash-wasm](https://github.com/mwilliamson/xxhash-wasm)** by Michael Williamson — WebAssembly bindings for xxHash verification.
-- **[Greg Cook's RevEng Catalogue](https://mcmilk.de/projects/user-defined-crc/)** — The definitive catalogue of named CRC algorithms powering the 113 CRC variant definitions.
-- **[emn178 / WHATWG Text Encoding](https://github.com/emn178/js-sha256)** — Legacy single-byte and multi-byte character encoding tables for exact byte-level digest input support.
+- **[hash-wasm](https://github.com/Daninet/hash-wasm)** by Daniil Penkin — High-performance WebAssembly hash engine used for verification and oracles.
+- **[xxhash-wasm](https://github.com/jungomi/xxhash-wasm)** by Michael Williamson — WebAssembly bindings for xxHash verification.
+- **[Greg Cook's RevEng Catalogue](https://reveng.sourceforge.io/crc-catalogue/)** — The definitive catalogue of named CRC algorithms powering the 113 CRC variant definitions.
+- **[emn178 online-tools](https://github.com/emn178/online-tools)** / **[WHATWG Encoding](https://encoding.spec.whatwg.org/)** — Legacy single-byte and multi-byte character encoding tables for exact byte-level digest input support.
 - **[OpenSSL Project](https://www.openssl.org)** — Reference cryptographic implementation used for host parity, differential test suites, and interactive CLI command generation.
 - **[GnuTLS Project](https://www.gnutls.org)** — Free Software implementation of SSL, TLS, and DTLS protocols providing `certtool`, `gnutls-cli`, `ocsptool`, and `p11tool` command parity and verification workflows.
 - **[sslx](https://github.com/glincker/sslx)** by glincker — A modern, ergonomic CLI toolkit for X.509 certificate inspection, grading, and expiry monitoring. The `cert-expiry` multi-host lifespan monitor, `tls-grader` CA/B Forum auditor, and `universal-decoder` cryptographic sniffer in Cipher Workbench are directly inspired by `sslx grade`, `sslx expiry`, and `sslx decode`.
