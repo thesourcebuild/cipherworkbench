@@ -65,6 +65,19 @@ clear_inherited_electron_env() {
     ELECTRON_ENABLE_STACK_DUMPING ELECTRON_DEFAULT_ERROR_MODE 2>/dev/null || true
 }
 
+# Prepends user and system crypto tool bin folders (~/.cargo/bin, /usr/local/bin, /opt/homebrew/bin)
+# to PATH if they exist on the filesystem and are not already in $PATH.
+initialize_crypto_tool_paths() {
+  local p
+  for p in "$HOME/.cargo/bin" "/usr/local/bin" "/opt/homebrew/bin"; do
+    if [[ -d "$p" ]] && [[ ":$PATH:" != *":$p:"* ]]; then
+      PATH="$p:$PATH"
+    fi
+  done
+  export PATH
+}
+
+
 assert_dependencies() {
   local root="$1"
   command -v node >/dev/null 2>&1 || die 'node is not on PATH. Install Node 20.11 or newer.'

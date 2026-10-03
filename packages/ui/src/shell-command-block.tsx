@@ -15,6 +15,7 @@ export interface ShellCommandBlockProps {
   title: string;
   commands?: ShellCommandVariants;
   sslxCommands?: ShellCommandVariants;
+  gnutlsCommands?: ShellCommandVariants;
   providers?: readonly CliProviderCommand[];
   defaultTool?: string;
   defaultShell?: CommandShell;
@@ -34,6 +35,7 @@ export function ShellCommandBlock({
   title,
   commands,
   sslxCommands,
+  gnutlsCommands,
   providers,
   defaultTool,
   defaultShell = "bash",
@@ -42,6 +44,7 @@ export function ShellCommandBlock({
   const resolvedProviders: readonly CliProviderCommand[] = providers ?? [
     ...(commands ? [{ id: "openssl", label: "OpenSSL", commands }] : []),
     ...(sslxCommands ? [{ id: "sslx", label: "sslx", commands: sslxCommands }] : []),
+    ...(gnutlsCommands ? [{ id: "gnutls", label: "GnuTLS (certtool)", commands: gnutlsCommands }] : []),
   ];
 
   const initialTool = defaultTool ?? resolvedProviders[0]?.id ?? "openssl";

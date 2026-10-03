@@ -557,6 +557,7 @@ export function EndpointProbeModal({
   const sslxGradeCmd = `sslx grade ${cleanHost}`;
   const sslxCheckCmd = `sslx check ${cleanHost}:${cleanPort}`;
   const openSslCmd = `openssl s_client -connect ${cleanHost}:${cleanPort} -servername ${cleanHost} -showcerts </dev/null`;
+  const gnutlsCmd = `gnutls-cli --print-cert -p ${cleanPort} ${cleanHost} </dev/null`;
 
   return (
     <Dialog
@@ -687,6 +688,13 @@ export function EndpointProbeModal({
                   </div>
                   <pre className="overflow-x-auto rounded bg-slate-900 p-2 font-mono text-[11px] text-sky-400">
                     {sslxCheckCmd}
+                  </pre>
+                  <div className="flex items-center justify-between text-[11px] font-medium text-slate-700 dark:text-slate-300 pt-1">
+                    <span>Or probe with GnuTLS (gnutls-cli):</span>
+                    <CopyButton value={gnutlsCmd} label="Copy GnuTLS" size="sm" />
+                  </div>
+                  <pre className="overflow-x-auto rounded bg-slate-900 p-2 font-mono text-[11px] text-violet-400">
+                    {gnutlsCmd}
                   </pre>
                 </div>
                 <div className="pt-2">

@@ -235,6 +235,7 @@ describe("Registry integration for new Certificate tools", () => {
     expect(gradeResult.cliProviders).toBeDefined();
     expect(gradeResult.cliProviders?.some((p) => p.id === "sslx")).toBe(true);
     expect(gradeResult.cliProviders?.some((p) => p.id === "openssl")).toBe(true);
+    expect(gradeResult.cliProviders?.some((p) => p.id === "gnutls")).toBe(true);
 
     const expiry = await loadTool("cert-expiry");
     const expiryResult = await expiry.compute(
@@ -243,6 +244,7 @@ describe("Registry integration for new Certificate tools", () => {
     );
     expect(expiryResult.text).toContain("Expires");
     expect(expiryResult.cliProviders?.some((p) => p.id === "sslx")).toBe(true);
+    expect(expiryResult.cliProviders?.some((p) => p.id === "gnutls")).toBe(true);
 
     const decoder = await loadTool("universal-decoder");
     const decodeResult = await decoder.compute(
@@ -251,6 +253,7 @@ describe("Registry integration for new Certificate tools", () => {
     );
     expect(decodeResult.text).toContain("X.509 Certificate");
     expect(decodeResult.cliProviders?.some((p) => p.id === "sslx")).toBe(true);
+    expect(decodeResult.cliProviders?.some((p) => p.id === "gnutls")).toBe(true);
 
     const x509 = await loadTool("x509");
     const x509Result = await x509.compute(

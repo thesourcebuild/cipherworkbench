@@ -20,6 +20,7 @@ done
 
 root="$(repo_root)"
 clear_inherited_electron_env
+initialize_crypto_tool_paths
 assert_dependencies "$root"
 
 # xdg-open on Linux, open on macOS, and neither in a container -- where saying so and carrying on

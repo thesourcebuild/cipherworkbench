@@ -110,6 +110,7 @@ export function generateCertConverterCliProviders(
 
   const opensslCommands: { comment: string; parts: string[] }[] = [];
   const sslxCommands: { comment: string; parts: string[] }[] = [];
+  const gnutlsCommands: { comment: string; parts: string[] }[] = [];
 
   const effectiveOp =
     op === "auto"
@@ -137,6 +138,15 @@ export function generateCertConverterCliProviders(
       comment: "Package certificate and key into PKCS#12 with sslx",
       parts: ["sslx pkcs12 --cert cert.pem --key key.pem --out bundle.p12"],
     });
+    gnutlsCommands.push({
+      comment: "Package certificate and private key into PKCS#12 archive with certtool",
+      parts: [
+        "certtool --to-p12",
+        "--load-certificate cert.pem",
+        "--load-privkey key.pem",
+        "--outfile bundle.p12",
+      ],
+    });
   } else if (effectiveOp === "pkcs12-to-pem") {
     opensslCommands.push(
       {
@@ -160,6 +170,10 @@ export function generateCertConverterCliProviders(
       comment: "Extract PKCS#12 bundle to PEM with sslx",
       parts: ["sslx pkcs12 --in bundle.p12 --out cert-and-key.pem"],
     });
+    gnutlsCommands.push({
+      comment: "Inspect PKCS#12 archive structure with certtool",
+      parts: ["certtool --p12-info --infile bundle.p12"],
+    });
   } else if (effectiveOp === "pkcs12-inspect") {
     opensslCommands.push({
       comment: "Inspect PKCS#12 (.p12 / .pfx) structure and certificate details",
@@ -168,6 +182,10 @@ export function generateCertConverterCliProviders(
     sslxCommands.push({
       comment: "Inspect PKCS#12 container with sslx",
       parts: ["sslx inspect bundle.p12"],
+    });
+    gnutlsCommands.push({
+      comment: "Inspect PKCS#12 container with certtool",
+      parts: ["certtool --p12-info --infile bundle.p12"],
     });
   } else if (effectiveOp === "pem-to-pkcs7") {
     opensslCommands.push(
@@ -184,6 +202,10 @@ export function generateCertConverterCliProviders(
       comment: "Package certificates into PKCS#7 with sslx",
       parts: ["sslx pkcs7 --cert cert.pem --out certs.p7b"],
     });
+    gnutlsCommands.push({
+      comment: "Inspect PKCS#7 bundle with certtool",
+      parts: ["certtool --p7-info --infile certs.p7b"],
+    });
   } else if (effectiveOp === "pkcs7-to-pem") {
     opensslCommands.push(
       {
@@ -198,6 +220,10 @@ export function generateCertConverterCliProviders(
     sslxCommands.push({
       comment: "Extract certificates from PKCS#7 with sslx",
       parts: ["sslx pkcs7 --in certs.p7b --out certs.pem"],
+    });
+    gnutlsCommands.push({
+      comment: "Inspect and extract PKCS#7 bundle certificates with certtool",
+      parts: ["certtool --p7-info --infile certs.p7b"],
     });
   } else {
     opensslCommands.push(
@@ -240,6 +266,28 @@ export function generateCertConverterCliProviders(
         parts: ["sslx spki cert.pem"],
       },
     );
+    gnutlsCommands.push(
+      {
+        comment: "Convert X.509 PEM certificate to DER binary with certtool",
+        parts: ["certtool --certificate-info --infile cert.pem --outder --outfile cert.der"],
+      },
+      {
+        comment: "Convert DER binary certificate to PEM with certtool",
+        parts: ["certtool --certificate-info --infile cert.der --inder --outfile cert.pem"],
+      },
+      {
+        comment: "Extract SubjectPublicKeyInfo (SPKI) public key with certtool",
+        parts: ["certtool --pubkey-info --load-certificate cert.pem --outfile pubkey.pem"],
+      },
+      {
+        comment: "Inspect PKCS#12 container with certtool",
+        parts: ["certtool --p12-info --infile bundle.p12"],
+      },
+      {
+        comment: "Inspect PKCS#7 bundle with certtool",
+        parts: ["certtool --p7-info --infile certs.p7b"],
+      },
+    );
   }
 
   return [
@@ -253,6 +301,11 @@ export function generateCertConverterCliProviders(
       label: "sslx",
       commands: sslxCommands,
     },
+    {
+      id: "gnutls",
+      label: "GnuTLS (certtool)",
+      commands: gnutlsCommands,
+    },
   ];
 }
 
@@ -261,6 +314,7 @@ export function generateOcspCliProviders(
   options: { opensslQueryCommand?: string } = {},
 ): CliProviderCommand[] {
   const opensslCommands: { comment: string; parts: string[] }[] = [];
+  const gnutlsCommands: { comment: string; parts: string[] }[] = [];
 
   if (op === "build-request") {
     if (options.opensslQueryCommand) {
@@ -279,6 +333,20 @@ export function generateOcspCliProviders(
         parts: ["openssl ocsp -respin ocsp.der -text -noverify"],
       },
     );
+    gnutlsCommands.push(
+      {
+        comment: "Query online OCSP responder using GnuTLS ocsptool",
+        parts: ["ocsptool --ask=<responder_url> --load-cert cert.crt --load-issuer ca.crt"],
+      },
+      {
+        comment: "Save OCSP request to DER binary with ocsptool",
+        parts: ["ocsptool --generate-request --load-cert cert.crt --load-issuer ca.crt --outfile ocsp-req.der"],
+      },
+      {
+        comment: "Inspect OCSP response with ocsptool",
+        parts: ["ocsptool --response-info --load-response ocsp.der"],
+      },
+    );
   } else if (op === "generate-staple") {
     opensslCommands.push(
       {
@@ -288,6 +356,16 @@ export function generateOcspCliProviders(
       {
         comment: "Fetch fresh OCSP staple response from live responder",
         parts: ["openssl ocsp -issuer ca.crt -cert cert.crt -url <ocsp_url> -respout staple.der"],
+      },
+    );
+    gnutlsCommands.push(
+      {
+        comment: "Fetch OCSP staple response with GnuTLS ocsptool",
+        parts: ["ocsptool --ask=<ocsp_url> --load-cert cert.crt --load-issuer ca.crt --outfile staple.der"],
+      },
+      {
+        comment: "Inspect OCSP staple response file with ocsptool",
+        parts: ["ocsptool --response-info --load-response staple.der"],
       },
     );
   } else {
@@ -301,6 +379,16 @@ export function generateOcspCliProviders(
         parts: ["openssl ocsp -respin ocsp-response.der -CAfile ca.crt -text"],
       },
     );
+    gnutlsCommands.push(
+      {
+        comment: "Inspect OCSP response DER binary with GnuTLS ocsptool",
+        parts: ["ocsptool --response-info --load-response ocsp-response.der"],
+      },
+      {
+        comment: "Verify OCSP response against issuer CA certificate with ocsptool",
+        parts: ["ocsptool --verify-response --load-response ocsp-response.der --load-trust ca.crt"],
+      },
+    );
   }
 
   return [
@@ -308,6 +396,11 @@ export function generateOcspCliProviders(
       id: "openssl",
       label: "OpenSSL",
       commands: opensslCommands,
+    },
+    {
+      id: "gnutls",
+      label: "GnuTLS (ocsptool)",
+      commands: gnutlsCommands,
     },
   ];
 }
@@ -882,6 +975,28 @@ export async function computeCertificate(
                 },
               ],
             },
+            {
+              id: "gnutls",
+              label: "GnuTLS (certtool)",
+              commands: [
+                {
+                  comment: "Inspect client PKCS#12 bundle with certtool",
+                  parts: ["certtool --p12-info --infile client.p12"],
+                },
+                {
+                  comment: "Verify server certificate against Root CA with certtool",
+                  parts: [
+                    "certtool --verify-chain --load-ca-certificate ca.crt --infile server.crt",
+                  ],
+                },
+                {
+                  comment: "Test mTLS handshake with gnutls-cli",
+                  parts: [
+                    "gnutls-cli --x509cafile ca.crt --x509certfile client.crt --x509keyfile client.key -p 8443 localhost",
+                  ],
+                },
+              ],
+            },
           ],
         };
       }
@@ -1157,6 +1272,64 @@ export async function computeCertificate(
         working: workingStr,
         workingFormat: "markdown",
         files,
+        cliProviders: [
+          {
+            id: "openssl",
+            label: "OpenSSL",
+            commands: [
+              {
+                comment: "Inspect generated certificate details",
+                parts: ["openssl x509 -in certificate.crt -text -noout"],
+              },
+              {
+                comment: "Inspect private key details",
+                parts: ["openssl pkey -in private.key -text -noout"],
+              },
+              ...(created.chainPem
+                ? [
+                    {
+                      comment: "Verify certificate against CA chain",
+                      parts: ["openssl verify -CAfile chain.pem certificate.crt"],
+                    },
+                  ]
+                : []),
+            ],
+          },
+          {
+            id: "sslx",
+            label: "sslx",
+            commands: [
+              {
+                comment: "Inspect certificate with sslx",
+                parts: ["sslx inspect certificate.crt"],
+              },
+            ],
+          },
+          {
+            id: "gnutls",
+            label: "GnuTLS (certtool)",
+            commands: [
+              {
+                comment: "Inspect certificate details with certtool",
+                parts: ["certtool --certificate-info --infile certificate.crt"],
+              },
+              {
+                comment: "Inspect private key details with certtool",
+                parts: ["certtool --key-info --infile private.key"],
+              },
+              ...(created.chainPem
+                ? [
+                    {
+                      comment: "Verify certificate against CA chain with certtool",
+                      parts: [
+                        "certtool --verify-chain --load-ca-certificate chain.pem --infile certificate.crt",
+                      ],
+                    },
+                  ]
+                : []),
+            ],
+          },
+        ],
       };
     } catch (err) {
       return {
@@ -1250,6 +1423,38 @@ export async function computeCertificate(
         working,
         workingFormat: "markdown",
         files,
+        cliProviders: [
+          {
+            id: "openssl",
+            label: "OpenSSL",
+            commands: [
+              {
+                comment: "Verify and inspect PKCS#10 CSR",
+                parts: ["openssl req -in request.csr -text -noout -verify"],
+              },
+            ],
+          },
+          {
+            id: "sslx",
+            label: "sslx",
+            commands: [
+              {
+                comment: "Inspect PKCS#10 CSR with sslx",
+                parts: ["sslx inspect request.csr"],
+              },
+            ],
+          },
+          {
+            id: "gnutls",
+            label: "GnuTLS (certtool)",
+            commands: [
+              {
+                comment: "Inspect and verify PKCS#10 CSR with certtool",
+                parts: ["certtool --crq-info --infile request.csr"],
+              },
+            ],
+          },
+        ],
       };
     } catch (err) {
       return {
@@ -1418,6 +1623,39 @@ export async function computeCertificate(
               ],
             },
           },
+          {
+            id: "gnutls",
+            label: "GnuTLS (certtool)",
+            commands: {
+              bash: [
+                {
+                  comment: "Extract and compare public key SPKI from certificate and private key",
+                  parts: [
+                    "diff -u <(certtool --pubkey-info --infile cert.pem)",
+                    "        <(certtool --pubkey-info --load-privkey private.key)",
+                  ],
+                },
+              ],
+              powershell: [
+                {
+                  comment: "Compare public key info between certificate and private key",
+                  parts: [
+                    "Compare-Object (certtool --pubkey-info --infile cert.pem)",
+                    "               (certtool --pubkey-info --load-privkey private.key)",
+                  ],
+                },
+              ],
+              cmd: [
+                {
+                  comment: "Inspect certificate and private key public key information",
+                  parts: [
+                    "certtool --pubkey-info --infile cert.pem",
+                    "certtool --pubkey-info --load-privkey private.key",
+                  ],
+                },
+              ],
+            },
+          },
         ],
       };
     } catch (err) {
@@ -1519,6 +1757,39 @@ export async function computeCertificate(
                     "openssl x509 -in cert1.pem -text -noout > c1.txt &&",
                     "openssl x509 -in cert2.pem -text -noout > c2.txt &&",
                     "fc c1.txt c2.txt",
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            id: "gnutls",
+            label: "GnuTLS (certtool)",
+            commands: {
+              bash: [
+                {
+                  comment: "Compare two certificates using certtool text dumps and diff",
+                  parts: [
+                    "diff -u <(certtool --certificate-info --infile cert1.pem)",
+                    "        <(certtool --certificate-info --infile cert2.pem)",
+                  ],
+                },
+              ],
+              powershell: [
+                {
+                  comment: "Compare two certificates using certtool and Compare-Object",
+                  parts: [
+                    "Compare-Object (certtool --certificate-info --infile cert1.pem)",
+                    "               (certtool --certificate-info --infile cert2.pem)",
+                  ],
+                },
+              ],
+              cmd: [
+                {
+                  comment: "Inspect first and second certificate details with certtool",
+                  parts: [
+                    "certtool --certificate-info --infile cert1.pem",
+                    "certtool --certificate-info --infile cert2.pem",
                   ],
                 },
               ],
@@ -1772,6 +2043,30 @@ export async function computeCertificate(
               {
                 comment: "Generate self-signed certificate directly with sslx",
                 parts: ["sslx generate --cn localhost"],
+              },
+            ],
+          },
+          {
+            id: "gnutls",
+            label: "GnuTLS (certtool)",
+            commands: [
+              {
+                comment: "Sign CSR with CA certificate and key using certtool",
+                parts: [
+                  "certtool --generate-certificate",
+                  "--load-ca-certificate ca.crt",
+                  "--load-ca-privkey ca.key",
+                  "--load-request request.csr",
+                  "--outfile cert.crt",
+                ],
+              },
+              {
+                comment: "Verify the issued certificate against the CA using certtool",
+                parts: [
+                  "certtool --verify",
+                  "--load-ca-certificate ca.crt",
+                  "--infile cert.crt",
+                ],
               },
             ],
           },
@@ -2173,6 +2468,42 @@ export async function computeCertificate(
               ],
             },
           },
+          {
+            id: "gnutls",
+            label: "GnuTLS (gnutls-cli)",
+            commands: {
+              bash: [
+                {
+                  comment: "Connect and print remote certificate chain with gnutls-cli",
+                  parts: ["gnutls-cli --print-cert -p 443 host </dev/null"],
+                },
+                {
+                  comment: "Inspect certificate details with certtool",
+                  parts: ["certtool --certificate-info --infile cert.pem"],
+                },
+              ],
+              powershell: [
+                {
+                  comment: "Connect and print remote certificate chain with gnutls-cli",
+                  parts: ["cmd /c '<nul gnutls-cli --print-cert -p 443 host'"],
+                },
+                {
+                  comment: "Inspect certificate details with certtool",
+                  parts: ["certtool --certificate-info --infile cert.pem"],
+                },
+              ],
+              cmd: [
+                {
+                  comment: "Connect and print remote certificate chain with gnutls-cli",
+                  parts: ["<nul gnutls-cli --print-cert -p 443 host"],
+                },
+                {
+                  comment: "Inspect certificate details with certtool",
+                  parts: ["certtool --certificate-info --infile cert.pem"],
+                },
+              ],
+            },
+          },
         ],
       };
     } catch (err) {
@@ -2282,6 +2613,42 @@ export async function computeCertificate(
               ],
             },
           },
+          {
+            id: "gnutls",
+            label: "GnuTLS (certtool)",
+            commands: {
+              bash: [
+                {
+                  comment: "Inspect certificate expiration and validity with certtool",
+                  parts: ["certtool --certificate-info --infile cert.pem"],
+                },
+                {
+                  comment: "Fetch remote TLS server certificate with gnutls-cli and inspect validity",
+                  parts: ["gnutls-cli --print-cert -p 443 example.com </dev/null | certtool --certificate-info"],
+                },
+              ],
+              powershell: [
+                {
+                  comment: "Inspect certificate expiration and validity with certtool",
+                  parts: ["certtool --certificate-info --infile cert.pem"],
+                },
+                {
+                  comment: "Fetch remote TLS server certificate with gnutls-cli and inspect validity",
+                  parts: ["cmd /c '<nul gnutls-cli --print-cert -p 443 example.com | certtool --certificate-info'"],
+                },
+              ],
+              cmd: [
+                {
+                  comment: "Inspect certificate expiration and validity with certtool",
+                  parts: ["certtool --certificate-info --infile cert.pem"],
+                },
+                {
+                  comment: "Fetch remote TLS server certificate with gnutls-cli and inspect validity",
+                  parts: ["<nul gnutls-cli --print-cert -p 443 example.com | certtool --certificate-info"],
+                },
+              ],
+            },
+          },
         ],
       };
     } catch (err) {
@@ -2347,6 +2714,37 @@ export async function computeCertificate(
                   decoded.kind === "jwt"
                     ? "# Visit: https://jwt.io/"
                     : "openssl asn1parse -in artifact.pem",
+                ],
+              },
+            ],
+          },
+          {
+            id: "gnutls",
+            label: decoded.kind === "pkcs11-uri" ? "GnuTLS (p11tool)" : "GnuTLS (certtool)",
+            commands: [
+              {
+                comment:
+                  decoded.kind === "jwt"
+                    ? "Decode JWT (GnuTLS certtool cannot decode JWTs -- visit jwt.io or use sslx)"
+                    : `Inspect cryptographic artifact with ${decoded.kind === "pkcs11-uri" ? "p11tool" : "certtool"}`,
+                parts: [
+                  decoded.kind === "jwt"
+                    ? "# Visit: https://jwt.io/ or use: sslx decode <token>"
+                    : decoded.kind === "pkcs11-uri"
+                      ? `p11tool --info "${decoded.properties.find((p) => p.label.includes("URI"))?.value || "<uri>"}"`
+                      : decoded.kind === "x509-certificate" || decoded.kind === "x509-bundle"
+                        ? "certtool --certificate-info --infile cert.pem"
+                        : decoded.kind === "pkcs10-csr"
+                          ? "certtool --crq-info --infile request.csr"
+                          : decoded.kind === "x509-crl"
+                            ? "certtool --crl-info --infile revoked.crl"
+                            : decoded.kind === "pkcs12-archive"
+                              ? "certtool --p12-info --infile bundle.p12"
+                              : decoded.kind === "public-key"
+                                ? "certtool --pubkey-info --infile public.key"
+                                : decoded.kind === "private-key"
+                                  ? "certtool --key-info --infile private.key"
+                                  : "certtool --certificate-info --infile artifact.pem",
                 ],
               },
             ],
@@ -2883,6 +3281,25 @@ export async function computeCertificate(
                 {
                   comment: "Inspect X.509 CRL with sslx",
                   parts: ["sslx crl crl.pem"],
+                },
+              ],
+            },
+            {
+              id: "gnutls",
+              label: "GnuTLS (certtool)",
+              commands: [
+                {
+                  comment: "Inspect X.509 CRL with certtool",
+                  parts: ["certtool --crl-info --infile crl.pem"],
+                },
+                {
+                  comment: "Verify certificate against CRL with certtool",
+                  parts: [
+                    "certtool --verify-crl",
+                    "--load-ca-certificate ca.crt",
+                    "--load-crl crl.pem",
+                    "--infile cert.pem",
+                  ],
                 },
               ],
             },

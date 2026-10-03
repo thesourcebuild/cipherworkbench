@@ -78,6 +78,29 @@ function Clear-InheritedElectronEnv {
 
 <#
 .SYNOPSIS
+Ensures known cryptography tools (GnuTLS, OpenSSL, Cargo/sslx) are present on PATH.
+#>
+function Initialize-CryptoToolPaths {
+    $candidates = @(
+        'C:\gnutls\win64-build\bin'
+        'C:\Program Files\OpenSSL-Win64\bin'
+        (Join-Path $env:USERPROFILE '.cargo\bin')
+    )
+    $current = $env:PATH -split ';'
+    $added = @()
+    foreach ($dir in $candidates) {
+        if ((Test-Path -LiteralPath $dir) -and ($current -notcontains $dir)) {
+            $env:PATH = "$dir;$env:PATH"
+            $added += $dir
+        }
+    }
+    if ($added.Count -gt 0) {
+        Write-Note "Ensured on PATH: $($added -join ', ')"
+    }
+}
+
+<#
+.SYNOPSIS
 Locates pnpm, falling back to corepack, and fails with instructions if absent.
 #>
 function Resolve-PackageManager {

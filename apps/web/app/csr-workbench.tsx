@@ -209,6 +209,24 @@ function CsrCreatorCommands({ options }: { options: OptionValues }) {
             parts: ["sslx inspect request.csr"],
           },
         ]}
+        gnutlsCommands={[
+          {
+            comment: "Generate private key with certtool",
+            parts: ["certtool --generate-privkey --outfile private.key"],
+          },
+          {
+            comment: "Generate PKCS#10 request with certtool",
+            parts: [
+              "certtool --generate-request",
+              "--load-privkey private.key",
+              "--outfile request.csr",
+            ],
+          },
+          {
+            comment: "Inspect PKCS#10 request with certtool",
+            parts: ["certtool --crq-info --infile request.csr"],
+          },
+        ]}
       />
       <p className="text-[11px] text-slate-500 dark:text-slate-400">
         Ed25519 and ML-DSA use intrinsic signing parameters, so no digest flag is emitted for
@@ -278,6 +296,30 @@ function CsrSignerCommands({ options }: { options: OptionValues }) {
           {
             comment: "Verify the issued certificate and check expiration",
             parts: ["sslx verify --ca ca.crt cert.crt", "sslx expiry cert.crt"],
+          },
+        ]}
+        gnutlsCommands={[
+          {
+            comment: "Sign certificate from CSR with certtool",
+            parts: [
+              "certtool --generate-certificate",
+              "--load-request request.csr",
+              "--load-ca-certificate ca.crt",
+              "--load-ca-privkey ca.key",
+              "--outfile cert.crt",
+            ],
+          },
+          {
+            comment: "Verify certificate chain with certtool",
+            parts: [
+              "certtool --verify-chain",
+              "--load-ca-certificate ca.crt",
+              "--infile cert.crt",
+            ],
+          },
+          {
+            comment: "Inspect certificate details with certtool",
+            parts: ["certtool --certificate-info --infile cert.crt"],
           },
         ]}
       />

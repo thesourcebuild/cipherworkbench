@@ -101,9 +101,15 @@ describe("OCSP Inspector & Builder", () => {
       expect(bash).toContain("openssl ocsp -issuer ca.crt -cert cert.crt");
       expect(bash).toContain("openssl ocsp -issuer ca.crt -cert cert.crt -reqout ocsp-req.der -text");
       expect(bash).toContain("openssl ocsp -respin ocsp.der -text -noverify");
+
+      const gnutls = result.cliProviders?.find((p) => p.id === "gnutls");
+      expect(gnutls).toBeDefined();
+      const gnutlsBash = formatShellCommands(gnutls!.commands, "bash", "single-line");
+      expect(gnutlsBash).toContain("ocsptool --generate-request --load-cert cert.crt --load-issuer ca.crt --outfile ocsp-req.der");
+      expect(gnutlsBash).toContain("ocsptool --response-info --load-response ocsp.der");
     });
 
-    it("generates OpenSSL ocsp commands for generate-staple", async () => {
+    it("generates OpenSSL and GnuTLS ocsp commands for generate-staple", async () => {
       const tool = await loadTool("ocsp");
       const spec = {
         ...tool.createSpec(),
@@ -120,9 +126,15 @@ describe("OCSP Inspector & Builder", () => {
       const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
       expect(bash).toContain("openssl ocsp -respin staple.der -text -noverify");
       expect(bash).toContain("openssl ocsp -issuer ca.crt -cert cert.crt -url <ocsp_url> -respout staple.der");
+
+      const gnutls = result.cliProviders?.find((p) => p.id === "gnutls");
+      expect(gnutls).toBeDefined();
+      const gnutlsBash = formatShellCommands(gnutls!.commands, "bash", "single-line");
+      expect(gnutlsBash).toContain("ocsptool --ask=<ocsp_url> --load-cert cert.crt --load-issuer ca.crt --outfile staple.der");
+      expect(gnutlsBash).toContain("ocsptool --response-info --load-response staple.der");
     });
 
-    it("generates OpenSSL ocsp commands for inspect-response", async () => {
+    it("generates OpenSSL and GnuTLS ocsp commands for inspect-response", async () => {
       const tool = await loadTool("ocsp");
       const spec = {
         ...tool.createSpec(),
@@ -147,6 +159,12 @@ describe("OCSP Inspector & Builder", () => {
       const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
       expect(bash).toContain("openssl ocsp -respin ocsp-response.der -text -noverify");
       expect(bash).toContain("openssl ocsp -respin ocsp-response.der -CAfile ca.crt -text");
+
+      const gnutls = result.cliProviders?.find((p) => p.id === "gnutls");
+      expect(gnutls).toBeDefined();
+      const gnutlsBash = formatShellCommands(gnutls!.commands, "bash", "single-line");
+      expect(gnutlsBash).toContain("ocsptool --response-info --load-response ocsp-response.der");
+      expect(gnutlsBash).toContain("ocsptool --verify-response --load-response ocsp-response.der --load-trust ca.crt");
     });
   });
 });

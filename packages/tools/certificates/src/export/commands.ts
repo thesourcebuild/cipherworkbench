@@ -118,9 +118,9 @@ function buildPowerShellScript(spec: VerificationScriptSpec): string {
       `    "${action.id}" {`,
       `        Write-Host "=== Running: ${action.description} ===" -ForegroundColor Cyan`,
       ...action.commands.map((cmd) => {
-        // Prefix with & if command starts with an executable like openssl or curl
+        // Prefix with & if command starts with an executable like openssl, curl, sslx, or gnutls tools
         const trimmed = cmd.trim();
-        const needsAmp = /^(openssl|curl)\b/.test(trimmed);
+        const needsAmp = /^(openssl|curl|sslx|certtool|gnutls-cli|gnutls-serv|ocsptool|p11tool|danetool)\b/.test(trimmed);
         return `        ${needsAmp ? `& ${trimmed}` : trimmed}`;
       }),
       '        Write-Host ""',
@@ -294,6 +294,15 @@ export function generateCertCommandScripts(opts: {
           ...(chainFile ? [`sslx verify "${certFile}" --ca "${chainFile}"`] : []),
         ],
       },
+      {
+        id: "gnutls",
+        description: "Inspect and verify with GnuTLS (certtool)",
+        commands: [
+          `certtool --certificate-info --infile "${certFile}"`,
+          `certtool --key-info --infile "${keyFile}"`,
+          ...(chainFile ? [`certtool --verify-chain --load-ca-certificate "${chainFile}" --infile "${certFile}"`] : []),
+        ],
+      },
     ],
     reproduceCommand: opensslCommand,
   });
@@ -358,6 +367,15 @@ export function generateMtlsCommandScripts(opts: {
           "sslx match server.crt server.key",
         ],
       },
+      {
+        id: "gnutls",
+        description: "Inspect certificates and test TLS with GnuTLS CLI",
+        commands: [
+          "certtool --certificate-info --infile server.crt",
+          "certtool --verify-chain --load-ca-certificate ca.crt --infile server.crt",
+          "gnutls-cli --x509cafile ca.crt --x509certfile client.crt --x509keyfile client.key -p 8443 localhost",
+        ],
+      },
     ],
   });
 }
@@ -400,6 +418,11 @@ export function generateCsrCommandScripts(opts: {
         description: "Inspect CSR with modern sslx CLI",
         commands: [`sslx inspect "${csrFile}"`],
       },
+      {
+        id: "gnutls",
+        description: "Inspect CSR with GnuTLS (certtool)",
+        commands: [`certtool --crq-info --infile "${csrFile}"`],
+      },
     ],
     reproduceCommand: opensslCommand,
   });
@@ -433,6 +456,11 @@ export function generateCrlCommandScripts(opts: {
         id: "sslx",
         description: "Inspect CRL with modern sslx CLI",
         commands: [`sslx inspect "${crlFile}"`],
+      },
+      {
+        id: "gnutls",
+        description: "Inspect CRL with GnuTLS (certtool)",
+        commands: [`certtool --crl-info --infile "${crlFile}"`],
       },
     ],
   });

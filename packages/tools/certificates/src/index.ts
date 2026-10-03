@@ -124,7 +124,6 @@ export {
   type RevokedCertificateInput,
   type ParsedRevocationEntry,
 } from "./asn1/crl";
-export { generateCrlCommandScripts } from "./export/commands";
 export {
   exportToPpkV3,
   parsePpk,
@@ -223,3 +222,13 @@ export {
   generateCertConverterCliProviders,
   generateOcspCliProviders,
 } from "./compute";
+export {
+  generateCertCommandScripts,
+  generateCsrCommandScripts,
+  generateCrlCommandScripts,
+  generateMtlsCommandScripts,
+  buildVerificationScripts,
+  type CommandAction,
+  type VerificationScriptSpec,
+  type CommandScripts,
+} from "./export/commands";

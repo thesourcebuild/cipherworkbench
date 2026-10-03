@@ -18,6 +18,7 @@ $ErrorActionPreference = 'Stop'
 
 $root = Get-RepoRoot
 Clear-InheritedElectronEnv
+Initialize-CryptoToolPaths
 Assert-Dependencies -RepoRoot $root
 
 Push-Location $root
