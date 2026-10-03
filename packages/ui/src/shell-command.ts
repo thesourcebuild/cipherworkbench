@@ -1,5 +1,6 @@
 export {
   formatShellCommands,
+  formatCodeExport,
   canWrapShellCommands,
   buildPipedShellVariants,
   buildFileShellVariants,
@@ -11,6 +12,8 @@ export {
   type CliTool,
   type CommandLayout,
   type CommandShell,
+  type CodeLanguage,
+  type CommandExportFormat,
   type InputExclusionInfo,
   type ShellCommand,
   type ShellCommandVariants,

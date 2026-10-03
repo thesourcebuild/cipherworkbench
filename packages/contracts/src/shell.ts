@@ -1,4 +1,6 @@
 export type CommandShell = "bash" | "powershell" | "cmd";
+export type CodeLanguage = "python" | "go" | "rust";
+export type CommandExportFormat = CommandShell | CodeLanguage;
 export type CommandLayout = "multiline" | "single-line";
 export type CliTool = string;
 
@@ -16,6 +18,7 @@ export interface CliProviderCommand {
   id: string; // e.g. "openssl", "sslx", "gnutls", "coreutils", "python"
   label: string; // e.g. "OpenSSL", "sslx", "GnuTLS (certtool)", "GNU coreutils"
   commands: ShellCommandVariants;
+  snippets?: Partial<Record<CodeLanguage, string>>;
 }
 
 const CONTINUATION: Record<CommandShell, string> = {
@@ -88,6 +91,91 @@ export function formatShellCommands(
           )
           .join("\n")
       );
+    })
+    .join("\n\n");
+}
+
+function splitCommandArgs(parts: readonly string[]): { prog: string; args: string[] } {
+  const full = parts.map((p) => p.trim()).filter(Boolean).join(" ");
+  const tokens: string[] = [];
+  const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(full)) !== null) {
+    tokens.push(match[1] ?? match[2] ?? match[0]!);
+  }
+  const prog = tokens[0] ?? "openssl";
+  const args = tokens.slice(1);
+  return { prog, args };
+}
+
+/**
+ * Generates an executable code snippet in Python, Go, or Rust for the given command variants.
+ */
+export function formatCodeExport(
+  variants: ShellCommandVariants,
+  lang: CodeLanguage,
+  customSnippet?: string,
+): string {
+  if (customSnippet) return customSnippet.trim();
+
+  const commands = commandsForShell(variants, "bash");
+  if (commands.length === 0) return "";
+
+  return commands
+    .map((cmd) => {
+      const fullCmd = cmd.parts.map((p) => p.trim()).filter(Boolean).join(" ");
+      const comment = cmd.comment ? cmd.comment.trim() : "";
+      const hasPipeOrRedirect = /[|><]/.test(fullCmd);
+
+      if (lang === "python") {
+        const commentPrefix = comment
+          ? comment
+              .split("\n")
+              .map((l) => (l.trim() ? `# ${l.trim()}` : "#"))
+              .join("\n") + "\n"
+          : "";
+        if (hasPipeOrRedirect) {
+          return `${commentPrefix}import subprocess\n\ncmd = ${JSON.stringify(fullCmd)}\nresult = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)\nprint(result.stdout)`;
+        }
+        const { prog, args } = splitCommandArgs(cmd.parts);
+        const tokens = [prog, ...args];
+        return `${commentPrefix}import subprocess\n\ncmd = [${tokens.map((t) => JSON.stringify(t)).join(", ")}]\nresult = subprocess.run(cmd, capture_output=True, text=True, check=True)\nprint(result.stdout)`;
+      }
+
+      if (lang === "go") {
+        const commentPrefix = comment
+          ? comment
+              .split("\n")
+              .map((l) => (l.trim() ? `// ${l.trim()}` : "//"))
+              .join("\n") + "\n"
+          : "";
+        if (hasPipeOrRedirect) {
+          return `${commentPrefix}package main\n\nimport (\n\t"fmt"\n\t"os/exec"\n)\n\nfunc main() {\n\tcmd := exec.Command("bash", "-c", ${JSON.stringify(fullCmd)})\n\tout, err := cmd.CombinedOutput()\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tfmt.Print(string(out))\n}`;
+        }
+        const { prog, args } = splitCommandArgs(cmd.parts);
+        const argsList = [JSON.stringify(prog), ...args.map((a) => JSON.stringify(a))].join(", ");
+        return `${commentPrefix}package main\n\nimport (\n\t"fmt"\n\t"os/exec"\n)\n\nfunc main() {\n\tcmd := exec.Command(${argsList})\n\tout, err := cmd.CombinedOutput()\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tfmt.Print(string(out))\n}`;
+      }
+
+      if (lang === "rust") {
+        const commentPrefix = comment
+          ? comment
+              .split("\n")
+              .map((l) => (l.trim() ? `// ${l.trim()}` : "//"))
+              .join("\n") + "\n"
+          : "";
+        if (hasPipeOrRedirect) {
+          return `${commentPrefix}use std::process::Command;\n\nfn main() -> Result<(), Box<dyn std::error::Error>> {\n    let output = Command::new("bash")\n        .args(["-c", ${JSON.stringify(fullCmd)}])\n        .output()?;\n\n    print!("{}", String::from_utf8_lossy(&output.stdout));\n    Ok(())\n}`;
+        }
+        const { prog, args } = splitCommandArgs(cmd.parts);
+        const argsPart =
+          args.length > 0
+            ? `\n        .args([${args.map((a) => JSON.stringify(a)).join(", ")}])`
+            : "";
+        return `${commentPrefix}use std::process::Command;\n\nfn main() -> Result<(), Box<dyn std::error::Error>> {\n    let output = Command::new(${JSON.stringify(prog)})${argsPart}\n        .output()?;\n\n    print!("{}", String::from_utf8_lossy(&output.stdout));\n    Ok(())\n}`;
+      }
+
+      return fullCmd;
     })
     .join("\n\n");
 }

@@ -186,6 +186,7 @@ const M_GRIFFIN = lazyModule("griffin", () => import("@ocs/algos/griffin"));
 const M_POSEIDON2 = lazyModule("poseidon2", () => import("@ocs/algos/poseidon2"));
 const M_MIMC = lazyModule("mimc", () => import("@ocs/algos/mimc"));
 const M_TIP5 = lazyModule("tip5", () => import("@ocs/algos/tip5"));
+const M_SINSEMILLA = lazyModule("sinsemilla", () => import("@ocs/algos/sinsemilla"));
 const M_PEARSON = lazyModule("pearson", () => import("@ocs/algos/pearson"));
 const M_MURMUR1_2 = lazyModule("murmur1-2", () => import("@ocs/algos/murmur1-2"));
 const M_LOOKUP3 = lazyModule("lookup3", () => import("@ocs/algos/lookup3"));
@@ -270,6 +271,7 @@ const griffinHash = lazyFn(M_GRIFFIN, "griffinHash");
 const poseidon2Hash = lazyFn(M_POSEIDON2, "poseidon2Hash");
 const mimcHash = lazyFn(M_MIMC, "mimcHash");
 const tip5Hash = lazyFn(M_TIP5, "tip5Hash");
+const sinsemillaHash = lazyFn(M_SINSEMILLA, "sinsemillaHash");
 
 /**
  * The one export here that is a value rather than a function, so it cannot be a `lazyFn` shim: read
@@ -859,6 +861,7 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   poseidon2: { create: () => bufferedHasher(poseidon2Hash) },
   mimc: { create: () => bufferedHasher(mimcHash) },
   tip5: { create: () => bufferedHasher(tip5Hash) },
+  sinsemilla: { create: () => bufferedHasher(sinsemillaHash) },
   pearson: { create: () => bufferedHasher((m) => pearsonHash(m)) },
   murmur1: parameterised(({ seed = 0 }) =>
     bufferedHasher((m) => {
@@ -1009,6 +1012,7 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   poseidon2: M_POSEIDON2,
   mimc: M_MIMC,
   tip5: M_TIP5,
+  sinsemilla: M_SINSEMILLA,
   pearson: M_PEARSON,
   murmur1: M_MURMUR1_2,
   murmur2: M_MURMUR1_2,

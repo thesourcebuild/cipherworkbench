@@ -131,3 +131,143 @@ export function shamirCombine(shares: ShamirShare[]): Uint8Array {
 
   return secret;
 }
+
+/**
+ * Format a Shamir share into a portable token string (e.g. "SSSS-1-a1b2c3...")
+ */
+export function formatShamirShare(share: ShamirShare): string {
+  let hex = "";
+  for (let i = 0; i < share.y.length; i++) {
+    hex += share.y[i]!.toString(16).padStart(2, "0");
+  }
+  return `SSSS-${share.x}-${hex}`;
+}
+
+/**
+ * Parse a portable share token string (e.g. "SSSS-1-a1b2...", "1:a1b2...", "1-a1b2...")
+ */
+export function parseShamirShare(str: string): ShamirShare | null {
+  const trimmed = str.trim();
+  const match = trimmed.match(/^(?:SSSS-)?(\d+)[:-]([0-9a-fA-F]+)$/);
+  if (!match) return null;
+  const x = parseInt(match[1]!, 10);
+  const hex = match[2]!;
+  if (x < 1 || x > 255 || hex.length % 2 !== 0) return null;
+  const y = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < y.length; i++) {
+    y[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return { x, y };
+}
+
+export interface TamperDetectionResult {
+  tampered: boolean;
+  tamperedShareIndices?: number[];
+  recoveredSecret?: Uint8Array;
+}
+
+/**
+ * Given M shares (where M >= threshold K), checks if all subsets of size K agree on the reconstructed secret.
+ * If M == K, returns the combined secret (no redundancy to detect tampering).
+ * If M > K and a share is corrupted, identifies which share(s) cause inconsistency.
+ */
+export function detectTamperedShares(
+  shares: ShamirShare[],
+  threshold: number,
+): TamperDetectionResult {
+  if (shares.length < threshold) {
+    throw new Error(`Need at least ${threshold} shares, got ${shares.length}`);
+  }
+  if (shares.length === threshold) {
+    return {
+      tampered: false,
+      recoveredSecret: shamirCombine(shares),
+    };
+  }
+
+  const subsets: ShamirShare[][] = [];
+  function getSubsets(start: number, current: ShamirShare[]) {
+    if (current.length === threshold) {
+      subsets.push([...current]);
+      return;
+    }
+    for (let i = start; i < shares.length; i++) {
+      current.push(shares[i]!);
+      getSubsets(i + 1, current);
+      current.pop();
+    }
+  }
+  getSubsets(0, []);
+
+  const results = subsets.map((sub) => ({
+    subset: sub,
+    secret: shamirCombine(sub),
+  }));
+
+  const baseSecret = results[0]!.secret;
+  let allMatch = true;
+  for (let i = 1; i < results.length; i++) {
+    const s = results[i]!.secret;
+    let match = s.length === baseSecret.length;
+    if (match) {
+      for (let b = 0; b < s.length; b++) {
+        if (s[b] !== baseSecret[b]) {
+          match = false;
+          break;
+        }
+      }
+    }
+    if (!match) {
+      allMatch = false;
+      break;
+    }
+  }
+
+  if (allMatch) {
+    return {
+      tampered: false,
+      recoveredSecret: baseSecret,
+    };
+  }
+
+  const voteMap = new Map<string, { count: number; secret: Uint8Array; validSubsets: ShamirShare[][] }>();
+  for (const res of results) {
+    let hex = "";
+    for (let b = 0; b < res.secret.length; b++) {
+      hex += res.secret[b]!.toString(16).padStart(2, "0");
+    }
+    const entry = voteMap.get(hex) || { count: 0, secret: res.secret, validSubsets: [] };
+    entry.count++;
+    entry.validSubsets.push(res.subset);
+    voteMap.set(hex, entry);
+  }
+
+  let bestEntry: { count: number; secret: Uint8Array; validSubsets: ShamirShare[][] } | undefined;
+  for (const entry of voteMap.values()) {
+    if (!bestEntry || entry.count > bestEntry.count) {
+      bestEntry = entry;
+    }
+  }
+
+  const validX = new Set<number>();
+  if (bestEntry) {
+    for (const sub of bestEntry.validSubsets) {
+      for (const share of sub) {
+        validX.add(share.x);
+      }
+    }
+  }
+
+  const tamperedIndices: number[] = [];
+  for (const share of shares) {
+    if (!validX.has(share.x)) {
+      tamperedIndices.push(share.x);
+    }
+  }
+
+  return {
+    tampered: true,
+    tamperedShareIndices: tamperedIndices.length > 0 ? tamperedIndices : undefined,
+    recoveredSecret: bestEntry?.secret,
+  };
+}

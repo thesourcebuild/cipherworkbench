@@ -2,7 +2,7 @@
  * Zod-free constants and accessors for the cipher family.
  */
 import type { OptionValues } from "@ocs/contracts/options";
-import { optEnumOr, optNumber, optString, setOption } from "@ocs/contracts/pure";
+import { optBool, optEnumOr, optNumber, optString, setOption } from "@ocs/contracts/pure";
 import type { PaddingScheme } from "@ocs/algos";
 
 export const SPEC_VERSION = 1;
@@ -37,6 +37,12 @@ export const OPTION_TTL = "ttl";
 /** Cobblestone: context and salt. */
 export const OPTION_CONTEXT = "context";
 export const OPTION_SALT = "salt";
+/** age (RFC age-encryption.org/v1): container format options. */
+export const OPTION_AGE_AUTH_MODE = "authMode";
+export const OPTION_AGE_RECIPIENT = "ageRecipient";
+export const OPTION_AGE_IDENTITY = "ageIdentity";
+export const OPTION_AGE_PASSPHRASE = "agePassphrase";
+export const OPTION_AGE_ARMOR = "ageArmor";
 
 /** `availableOn` tags. */
 export const TAG_AEAD = "aead";
@@ -313,3 +319,24 @@ export function readEffectiveKeyBits(options: OptionValues, keyBytes: number): n
   if (raw !== undefined && Number.isInteger(raw) && raw >= 1 && raw <= 1024) return raw;
   return Math.max(1, keyBytes * 8);
 }
+
+export function readAgeAuthMode(options: OptionValues): "recipient" | "passphrase" {
+  return optEnumOr(options, OPTION_AGE_AUTH_MODE, ["recipient", "passphrase"] as const, "recipient");
+}
+
+export function readAgeRecipient(options: OptionValues): string {
+  return optString(options, OPTION_AGE_RECIPIENT) ?? "";
+}
+
+export function readAgeIdentity(options: OptionValues): string {
+  return optString(options, OPTION_AGE_IDENTITY) ?? "";
+}
+
+export function readAgePassphrase(options: OptionValues): string {
+  return optString(options, OPTION_AGE_PASSPHRASE) ?? "";
+}
+
+export function readAgeArmor(options: OptionValues): boolean {
+  return options[OPTION_AGE_ARMOR] === undefined ? true : optBool(options, OPTION_AGE_ARMOR);
+}
+

@@ -12,6 +12,7 @@ import {
 import {
   aegisOperation,
   aesOperation,
+  ageOperation,
   asconOperation,
   blockCipherOperation,
   chacha20Operation,
@@ -231,6 +232,13 @@ function operationFor(r: ResolvedCipher): CipherOperation {
           (r.key.length === 32 ? "cobblestone256" : "cobblestone128"),
         context: r.context,
         salt: r.salt,
+      });
+    case "age":
+      return ageOperation({
+        recipient: r.ageRecipient,
+        identity: r.ageIdentity,
+        passphrase: r.agePassphrase,
+        armor: r.ageArmor,
       });
     case "des":
     case "3des":
@@ -493,6 +501,9 @@ export function constructionLabel(r: ResolvedCipher): string {
    * of four they had run. Same reasoning as `paramSet` above.
    */
   if (r.instance) return r.instance.label;
+  if (r.toolId === "age") {
+    return r.agePassphrase ? "age (Passphrase scrypt)" : "age (X25519 Recipient)";
+  }
 
   // The stream ciphers. "(raw)" is a disambiguator for the sidebar, not part of the name.
   return tool.label.replace(" (raw)", "");
@@ -641,6 +652,28 @@ function fields(r: ResolvedCipher, output: Uint8Array): ToolResultField[] {
         label: "Chunk count",
         value: `${chunks} chunks`,
         hint: "16 KiB chunks with short final chunk framing.",
+      });
+    }
+  }
+
+  if (r.toolId === "age") {
+    out.push({
+      label: "Container format",
+      value: "age-encryption.org/v1",
+      hint: "Modern authenticated container format with 64 KiB ChaCha20-Poly1305 chunks.",
+    });
+    out.push({
+      label: "Authentication mode",
+      value: r.agePassphrase ? "Passphrase (scrypt)" : "X25519 Recipient",
+      hint: r.agePassphrase
+        ? "scrypt key derivation with per-file salt."
+        : "X25519 ephemeral-static Diffie-Hellman with HKDF-SHA256.",
+    });
+    if (r.ageArmor) {
+      out.push({
+        label: "Armor",
+        value: "ASCII Armored",
+        hint: "Formatted with -----BEGIN AGE ENCRYPTED FILE----- envelope.",
       });
     }
   }

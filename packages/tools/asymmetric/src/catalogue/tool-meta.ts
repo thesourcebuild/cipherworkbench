@@ -295,6 +295,26 @@ export const ASYMMETRIC_TOOLS: readonly AsymmetricToolMeta[] = [
     summary: "Short Quaternion and Isogeny Signature scheme with ultra-compact public keys and signatures.",
     usesPem: false,
   },
+  {
+    id: "x25519mlkem768",
+    label: "X25519MLKEM768",
+    category: "Hybrid PQC",
+    operations: ["generate", "encapsulate", "decapsulate"],
+    security: "modern",
+    tags: ["x25519mlkem768", "hybrid", "pqc", "post-quantum", "mlkem", "x25519", "tls13", "kem"],
+    summary: "IETF Hybrid Post-Quantum Key Encapsulation combining classical X25519 ECDH and ML-KEM-768.",
+    usesPem: false,
+  },
+  {
+    id: "ecvrf",
+    label: "ECVRF (RFC 9381)",
+    category: "Verifiable Random Functions",
+    operations: ["generate", "sign", "verify"],
+    security: "modern",
+    tags: ["ecvrf", "vrf", "rfc9381", "verifiable-random", "zero-knowledge", "ed25519", "proof"],
+    summary: "Verifiable Random Functions using Elliptic Curves (RFC 9381) producing deterministic pseudorandom output and proof.",
+    usesPem: false,
+  },
 ];
 
 const BY_ID = new Map(ASYMMETRIC_TOOLS.map((t) => [t.id, t]));
@@ -568,6 +588,15 @@ export const ED25519_CURVE: CurveMeta = {
   summary: "RFC 8032",
 };
 
+export const ECVRF_CURVE: CurveMeta = {
+  id: "ecvrf",
+  label: "ECVRF (RFC 9381)",
+  secretLen: 32,
+  publicLen: 32,
+  signatureLen: 80,
+  summary: "RFC 9381 ECVRF-EDWARDS25519-SHA512-TAI",
+};
+
 /**
  * Digest sizes in bytes, keyed by the WebCrypto spelling and derived from `RSA_HASHES` so
  * there is one list rather than two that can drift.
@@ -839,6 +868,18 @@ export const SQISIGN_SETS: readonly PqParamSet[] = [
   { id: "sqisign-lvl1", label: "SQISign Level 1", securityCategory: 1, publicKeyLen: 64, secretKeyLen: 782, signatureLen: 177, summary: "Category 1 ultra-compact isogeny signature." },
 ];
 
+export const X25519MLKEM768_SETS: readonly PqParamSet[] = [
+  {
+    id: "x25519mlkem768",
+    label: "X25519MLKEM768",
+    securityCategory: 3,
+    publicKeyLen: 1216,
+    secretKeyLen: 2432,
+    cipherTextLen: 1120,
+    summary: "Hybrid X25519 ECDH + ML-KEM-768 for TLS 1.3.",
+  },
+];
+
 /** Every parameter set a post-quantum tool offers, by tool id. */
 export const PQ_PARAM_SETS: Record<string, readonly PqParamSet[]> = {
   mlkem: ML_KEM_SETS,
@@ -850,6 +891,7 @@ export const PQ_PARAM_SETS: Record<string, readonly PqParamSet[]> = {
   "stateful-hash-sig": STATEFUL_HASH_SIG_SETS,
   ntru: NTRU_SETS,
   sqisign: SQISIGN_SETS,
+  x25519mlkem768: X25519MLKEM768_SETS,
 };
 
 export const DEFAULT_PARAM_SETS: Record<string, string> = {
@@ -862,6 +904,7 @@ export const DEFAULT_PARAM_SETS: Record<string, string> = {
   "stateful-hash-sig": "lms-sha256-h10",
   ntru: "hrss701",
   sqisign: "sqisign-lvl1",
+  x25519mlkem768: "x25519mlkem768",
 };
 
 export function getParamSet(toolId: string, id: string): PqParamSet | undefined {

@@ -25,6 +25,11 @@ import {
   OPTION_TTL,
   OPTION_CONTEXT,
   OPTION_SALT,
+  OPTION_AGE_AUTH_MODE,
+  OPTION_AGE_RECIPIENT,
+  OPTION_AGE_IDENTITY,
+  OPTION_AGE_PASSPHRASE,
+  OPTION_AGE_ARMOR,
   TAG_CHACHA_COUNTER,
   TAG_IV_MANUAL,
   TAG_RC4,
@@ -722,6 +727,81 @@ function cobblestoneOptions(instances: readonly CipherInstance[]): readonly Opti
 }
 
 const COBBLESTONE_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = cobblestoneOptions(COBBLESTONE_INSTANCES);
+
+const AGE_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
+  DIRECTION_OPTION,
+  keyOption(
+    { exact: [32], generate: 32 },
+    "32 bytes for raw X25519 identity key, or configure Bech32/passphrase below.",
+    "A 32-byte secret key used as the X25519 identity. If left empty, the Identity secret key (AGE-SECRET-KEY-1...) or Passphrase is used.",
+  ),
+  {
+    id: OPTION_AGE_AUTH_MODE,
+    label: "Authentication mode",
+    group: "algorithm",
+    kind: "enum",
+    choices: [
+      {
+        value: "recipient",
+        label: "X25519 Recipient (age1...)",
+        summary: "Encrypt to public key; decrypt with secret key (RFC age-encryption.org/v1).",
+      },
+      {
+        value: "passphrase",
+        label: "Passphrase (scrypt)",
+        summary: "Password-based encryption using scrypt wrap key derivation.",
+      },
+    ],
+    summary: "Recipient key pair or passphrase.",
+    detail:
+      "age supports public key encryption to X25519 recipients (age1...) or passphrase encryption using scrypt.",
+    order: 15,
+  },
+  {
+    id: OPTION_AGE_RECIPIENT,
+    label: "Recipient public key (age1...)",
+    group: "key",
+    kind: "text",
+    availableOn: ["recipient"],
+    summary: "Bech32 recipient public key (age1...).",
+    detail: "The recipient's public key (age1...). Decryption uses the corresponding AGE-SECRET-KEY-1... identity.",
+    arg: { placeholder: "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p" },
+    order: 20,
+  },
+  {
+    id: OPTION_AGE_IDENTITY,
+    label: "Identity secret key (AGE-SECRET-KEY-1...)",
+    group: "key",
+    kind: "text",
+    secret: true,
+    availableOn: ["recipient"],
+    summary: "Bech32 identity secret key (AGE-SECRET-KEY-1...).",
+    detail: "Your private identity key required to decrypt X25519 recipient stanzas.",
+    arg: { placeholder: "AGE-SECRET-KEY-1..." },
+    order: 25,
+  },
+  {
+    id: OPTION_AGE_PASSPHRASE,
+    label: "Passphrase",
+    group: "key",
+    kind: "text",
+    secret: true,
+    availableOn: ["passphrase"],
+    summary: "Passphrase for scrypt encryption and decryption.",
+    detail: "Passphrase used to derive the file wrap key via scrypt.",
+    arg: { placeholder: "Enter passphrase..." },
+    order: 30,
+  },
+  {
+    id: OPTION_AGE_ARMOR,
+    label: "ASCII Armor",
+    group: "aead",
+    kind: "boolean",
+    summary: "Wrap ciphertext with standard -----BEGIN AGE ENCRYPTED FILE----- armor.",
+    detail: "ASCII armor encodes the binary container into PEM-like Base64 lines with age headers.",
+    order: 40,
+  },
+];
 
 /**
  * A block cipher this repo implements: DES, 3DES, SM4.
@@ -1540,6 +1620,7 @@ export function cipherCatalogueFor(toolId: string): OptionCatalogue<CipherOption
       ),
       fernet: FERNET_OPTIONS,
       cobblestone: COBBLESTONE_OPTIONS,
+      age: AGE_OPTIONS,
     };
 
     const options =

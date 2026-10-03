@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatShellCommands,
+  formatCodeExport,
   canWrapShellCommands,
   formatByteSize,
   getInlineTextSample,
@@ -120,4 +121,65 @@ describe("shell command formatting", () => {
       "openssl x509 -in cert.pem -text -noout",
     );
   });
+
+  describe("multi-language code exports (Python, Go, Rust)", () => {
+    const singleCmd: ShellCommandVariants = [
+      {
+        comment: "Generate certificate",
+        parts: ["openssl req -x509", "-key ca.key", "-out ca.crt"],
+      },
+    ];
+
+    it("generates runnable Python subprocess code", () => {
+      const py = formatCodeExport(singleCmd, "python");
+      expect(py).toContain("# Generate certificate");
+      expect(py).toContain("import subprocess");
+      expect(py).toContain('cmd = ["openssl", "req", "-x509", "-key", "ca.key", "-out", "ca.crt"]');
+      expect(py).toContain("subprocess.run(cmd, capture_output=True, text=True, check=True)");
+    });
+
+    it("generates runnable Go os/exec code", () => {
+      const go = formatCodeExport(singleCmd, "go");
+      expect(go).toContain("// Generate certificate");
+      expect(go).toContain("package main");
+      expect(go).toContain('"os/exec"');
+      expect(go).toContain('cmd := exec.Command("openssl", "req", "-x509", "-key", "ca.key", "-out", "ca.crt")');
+      expect(go).toContain("cmd.CombinedOutput()");
+    });
+
+    it("generates runnable Rust std::process::Command code", () => {
+      const rs = formatCodeExport(singleCmd, "rust");
+      expect(rs).toContain("// Generate certificate");
+      expect(rs).toContain("use std::process::Command;");
+      expect(rs).toContain('Command::new("openssl")');
+      expect(rs).toContain('.args(["req", "-x509", "-key", "ca.key", "-out", "ca.crt"])');
+      expect(rs).toContain(".output()?");
+    });
+
+    it("handles piped commands using shell execution in each language", () => {
+      const pipedCmd: ShellCommandVariants = [
+        {
+          parts: ["echo -n 'hello' | openssl dgst -sha256"],
+        },
+      ];
+
+      const pyPiped = formatCodeExport(pipedCmd, "python");
+      expect(pyPiped).toContain("shell=True");
+      expect(pyPiped).toContain("echo -n 'hello' | openssl dgst -sha256");
+
+      const goPiped = formatCodeExport(pipedCmd, "go");
+      expect(goPiped).toContain('exec.Command("bash", "-c", "echo -n \'hello\' | openssl dgst -sha256")');
+
+      const rsPiped = formatCodeExport(pipedCmd, "rust");
+      expect(rsPiped).toContain('Command::new("bash")');
+      expect(rsPiped).toContain('.args(["-c", "echo -n \'hello\' | openssl dgst -sha256"])');
+    });
+
+    it("honors custom snippets when provided", () => {
+      const customPy = "import my_custom_crypto\nprint('custom')";
+      const res = formatCodeExport(singleCmd, "python", customPy);
+      expect(res).toBe(customPy);
+    });
+  });
 });
+

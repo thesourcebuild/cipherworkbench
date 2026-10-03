@@ -3928,6 +3928,15 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     tags: ["multi2", "hitachi", "isdb", "arib", "scrambling", "block", "feistel"],
     summary: "Hitachi 64-bit Feistel cipher used in Japanese digital TV broadcasting (ISDB / ARIB STD-B25).",
   },
+  {
+    id: "age",
+    label: "age (Encryption Container)",
+    category: "Container formats",
+    aead: true,
+    security: "modern",
+    tags: ["age", "container", "x25519", "scrypt", "chacha20-poly1305", "filippo", "rfc"],
+    summary: "Modern, simple, and secure file encryption format (age-encryption.org/v1) supporting X25519 recipients and scrypt passphrases.",
+  },
 ];
 
 const BY_ID = new Map(CIPHER_TOOLS.map((t) => [t.id, t]));

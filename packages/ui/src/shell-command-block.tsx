@@ -4,10 +4,13 @@ import { useState } from "react";
 import { CopyButton } from "./copy-button";
 import {
   formatShellCommands,
+  formatCodeExport,
   canWrapShellCommands,
   type CliProviderCommand,
   type CommandLayout,
   type CommandShell,
+  type CodeLanguage,
+  type CommandExportFormat,
   type ShellCommandVariants,
 } from "./shell-command";
 
@@ -18,19 +21,14 @@ export interface ShellCommandBlockProps {
   gnutlsCommands?: ShellCommandVariants;
   providers?: readonly CliProviderCommand[];
   defaultTool?: string;
-  defaultShell?: CommandShell;
+  defaultShell?: CommandExportFormat;
   defaultLayout?: CommandLayout;
 }
 
-const SHELL_LABEL: Record<CommandShell, string> = {
-  bash: "Bash / zsh",
-  powershell: "PowerShell",
-  cmd: "Command Prompt",
-};
+const isCodeLanguage = (fmt: CommandExportFormat): fmt is CodeLanguage =>
+  fmt === "python" || fmt === "go" || fmt === "rust";
 
-const SHELLS: CommandShell[] = ["bash", "powershell", "cmd"];
-
-/** A copyable command preview that can be rendered for the user's current shell. */
+/** A copyable command preview that can be rendered for the user's current shell or language. */
 export function ShellCommandBlock({
   title,
   commands,
@@ -49,13 +47,16 @@ export function ShellCommandBlock({
 
   const initialTool = defaultTool ?? resolvedProviders[0]?.id ?? "openssl";
   const [tool, setTool] = useState<string>(initialTool);
-  const [shell, setShell] = useState<CommandShell>(defaultShell);
+  const [shell, setShell] = useState<CommandExportFormat>(defaultShell);
   const [layout, setLayout] = useState<CommandLayout>(defaultLayout);
 
   const activeProvider = resolvedProviders.find((p) => p.id === tool) ?? resolvedProviders[0];
   const activeCommands = activeProvider?.commands ?? [];
-  const canWrap = canWrapShellCommands(activeCommands, shell);
-  const value = formatShellCommands(activeCommands, shell, canWrap ? layout : "single-line");
+  const inCodeMode = isCodeLanguage(shell);
+  const canWrap = !inCodeMode && canWrapShellCommands(activeCommands, shell as CommandShell);
+  const value = inCodeMode
+    ? formatCodeExport(activeCommands, shell, activeProvider?.snippets?.[shell])
+    : formatShellCommands(activeCommands, shell as CommandShell, canWrap ? layout : "single-line");
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-900 p-3 font-mono text-xs text-slate-100 dark:border-slate-800">
@@ -82,14 +83,19 @@ export function ShellCommandBlock({
         <select
           aria-label={`${title} shell`}
           value={shell}
-          onChange={(event) => setShell(event.target.value as CommandShell)}
+          onChange={(event) => setShell(event.target.value as CommandExportFormat)}
           className="rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-[10px] text-slate-200"
         >
-          {SHELLS.map((option) => (
-            <option key={option} value={option}>
-              {SHELL_LABEL[option]}
-            </option>
-          ))}
+          <optgroup label="Shell">
+            <option value="bash">Bash / zsh</option>
+            <option value="powershell">PowerShell</option>
+            <option value="cmd">Command Prompt</option>
+          </optgroup>
+          <optgroup label="Code Export">
+            <option value="python">Python</option>
+            <option value="go">Go</option>
+            <option value="rust">Rust</option>
+          </optgroup>
         </select>
         {canWrap && (
           <select

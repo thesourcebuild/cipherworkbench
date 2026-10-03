@@ -1,6 +1,6 @@
 {
   "name": "cipherworkbench",
-  "version": "0.17.4",
+  "version": "0.18.0",
   "license": "GPL-3.0-only",
   "private": true,
   "//type": "The workspace root itself ships no JS; this is here so vitest.config.ts loads as ESM under Vite's native config loader instead of warning about CommonJS.",
@@ -19,8 +19,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "web": "pnpm --filter @ocs/web dev",
-    "desktop": "pnpm --filter @ocs/desktop dev",
+    "web": "pnpm --silent --dir apps/web dev",
+    "desktop": "pnpm --silent --dir apps/desktop dev",
     "//win": "Windows launchers, build and packaging scripts, reachable without typing a path. `desktop` above needs the dev server already running; `win:desktop` starts it, waits for port 3000, runs Electron, and stops the server on exit. They shell out to scripts/<area>/*.bat by *relative* path, which is also why they exist: an absolute path to this repo contains parentheses, PowerShell parses those as a subexpression, and a bare path therefore fails with \"The term 'Self' is not recognized\". No script can fix that. Not needing the path can. Every .bat forwards its arguments, so `pnpm win:package -Release -Verify` reaches create-package.ps1 intact. Note there is no `--` separator: pnpm forwards it literally and PowerShell rejects it as an ambiguous parameter name, which is why every example here omits it.",
     "win:web": "scripts\\launch\\launch_web.bat",
     "win:desktop": "scripts\\launch\\launch_desktop.bat",

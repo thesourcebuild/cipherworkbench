@@ -495,9 +495,29 @@ const PAILLIER_OPTIONS: readonly Def[] = [
   ),
 ];
 
+const ECVRF_OPTIONS: readonly Def[] = [
+  operationOption(["generate", "sign", "verify"]),
+  rawPrivateKeyOption(
+    ["sign"],
+    { exact: [32] },
+    "32-byte secret key scalar or seed for RFC 9381 ECVRF.",
+  ),
+  rawPublicKeyOption(
+    "Public key",
+    ["verify"],
+    { exact: [32] },
+    "Exactly 32 bytes. Not a secret — share it freely.",
+    "A compressed Ed25519 point representing the VRF public key.",
+  ),
+  signatureOption(
+    { exact: [80] },
+    "VRF proof pi (80 bytes: 32-byte Gamma || 16-byte challenge c || 32-byte response s).",
+  ),
+];
+
 function pqOptions(toolId: string): readonly Def[] {
   const tool = requireAsymmetricTool(toolId);
-  const isKem = toolId === "mlkem" || toolId === "mceliece" || toolId === "hqc" || toolId === "ntru";
+  const isKem = toolId === "mlkem" || toolId === "mceliece" || toolId === "hqc" || toolId === "ntru" || toolId === "x25519mlkem768";
 
   return [
     operationOption(tool.operations),
@@ -561,6 +581,8 @@ export function asymmetricCatalogueFor(toolId: string): OptionCatalogue<Asymmetr
       paillier: PAILLIER_OPTIONS,
       ntru: pqOptions("ntru"),
       sqisign: pqOptions("sqisign"),
+      x25519mlkem768: pqOptions("x25519mlkem768"),
+      ecvrf: ECVRF_OPTIONS,
     };
     const options = byTool[toolId];
     if (!options) {

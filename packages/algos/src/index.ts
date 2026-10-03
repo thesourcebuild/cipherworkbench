@@ -318,3 +318,22 @@ export * from "./multi2";
 // Error-Correcting Codes (ECC)
 export * from "./golay";
 export * from "./hadamard";
+
+// Secret Sharing & Commitments
+export * from "./shamir";
+export * from "./slip39";
+export * from "./pedersen";
+
+// HD Wallets & Mnemonics
+export * from "./bip39";
+export * from "./bip32";
+
+// ZK & Algebraic Hashes
+export * from "./sinsemilla";
+
+// Hybrid PQC & VRF
+export * from "./x25519mlkem768";
+export * from "./ecvrf";
+
+// File Encryption Containers
+export * from "./age";

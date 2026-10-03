@@ -1,6 +1,6 @@
 {
   "name": "@ocs/algos",
-  "version": "0.17.4",
+  "version": "0.18.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@noble/hashes": "^2.2.0"
+    "@noble/curves": "^2.1.0",
+    "@noble/hashes": "^2.2.0",
+    "@noble/post-quantum": "0.7.0"
   },
   "devDependencies": {
     "@ocs/config": "workspace:*",

@@ -3,6 +3,7 @@ import { optString } from "@ocs/contracts/pure";
 import { asymmetricCatalogueFor } from "./catalogue/options";
 import {
   ED25519_CURVE,
+  ECVRF_CURVE,
   getCurve,
   getParamSet,
   PQ_PARAM_SETS,
@@ -170,8 +171,8 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
 
   return tool.usesPem
     ? resolvePemKeys(spec, base)
-    : // Ed25519 has no curve option, so its fixed lengths stand in as one.
-      resolveRawKeys(spec, base, curve ?? ED25519_CURVE);
+    : // Ed25519 or ECVRF has no curve option, so its fixed lengths stand in as one.
+      resolveRawKeys(spec, base, curve ?? (spec.variant === "ecvrf" ? ECVRF_CURVE : ED25519_CURVE));
 }
 
 /** Which key each operation needs, so one table drives the requirement checks. */
@@ -358,7 +359,7 @@ function resolvePqKeys(
   base: ResolvedAsymmetric,
   set: PqParamSet,
 ): ResolveResult {
-  const isKem = spec.variant === "mlkem";
+  const isKem = spec.variant === "mlkem" || spec.variant === "mceliece" || spec.variant === "hqc" || spec.variant === "ntru" || spec.variant === "x25519mlkem768";
   const needsPrivate = isKem ? base.operation === "decapsulate" : base.operation === "sign";
   const needsPublic = isKem ? base.operation === "encapsulate" : base.operation === "verify";
 

@@ -29,6 +29,8 @@ export const RULE_CODES = [
   "CERT008",
   "CERT009",
   "CERT010",
+  "CERT011",
+  "CERT012",
 ] as const;
 
 export const RULES: readonly LintRule<CertificateSpec>[] = [
@@ -353,6 +355,72 @@ export const RULES: readonly LintRule<CertificateSpec>[] = [
             message: "Certificate Authority must have BasicConstraints extension enabled (CA:TRUE).",
             detail:
               "RFC 5280 §4.2.1.9 requires the BasicConstraints extension with isCA set to TRUE for all certificate authority certificates.",
+          },
+        ];
+      }
+      return [];
+    },
+  },
+  {
+    /**
+     * CERT011: CA/B Forum 2026 Short-Lived Validity Recommendation (90-day Target).
+     */
+    code: "CERT011",
+    check(spec) {
+      if (spec.variant !== "cert-creator") return [];
+      const mode = readCreatorMode(spec.options);
+      if (mode === "mtls-suite") return [];
+
+      const isCa = readIsCa(spec.options);
+      if (isCa) return [];
+
+      const days = readValidityDays(spec.options);
+      // If greater than 90 days and at or below 398 days
+      if (days > 90 && days <= 398) {
+        return [
+          {
+            code: "CERT011",
+            level: "info",
+            optionIds: [OPTION_VALIDITY_DAYS],
+            message: `Validity of ${days} days exceeds the 2026 CA/B Forum 90-day target for automated TLS leaf certificates.`,
+            detail:
+              "Under Google and Mozilla 2026/2027 PKI roadmap policies, public TLS leaf certificate lifespans are moving toward 90 days (and eventually 47 days) to encourage automated ACME issuance and reduce key compromise exposure.",
+            fix: {
+              id: "clamp-90-days",
+              label: "Set validity to 90 days (2026 recommended target)",
+              apply(s: CertificateSpec) {
+                return {
+                  ...s,
+                  options: {
+                    ...s.options,
+                    [OPTION_VALIDITY_DAYS]: "90",
+                  },
+                };
+              },
+            },
+          },
+        ];
+      }
+      return [];
+    },
+  },
+  {
+    /**
+     * CERT012: Post-Quantum Preparedness Advisory (CNSA 2.0 / PQC Roadmap 2026-2030).
+     */
+    code: "CERT012",
+    check(spec) {
+      if (spec.variant !== "cert-creator" && spec.variant !== "csr-creator") return [];
+      const keyType = String(spec.options["keyType"] ?? "");
+      if (keyType.startsWith("rsa-") || keyType.startsWith("ec-") || keyType === "ed25519") {
+        return [
+          {
+            code: "CERT012",
+            level: "info",
+            optionIds: ["keyType"],
+            message: `Classical key (${keyType}) is vulnerable to cryptanalytic quantum computers.`,
+            detail:
+              "NIST SP 800-227 and NSA CNSA 2.0 mandate the transition to quantum-resistant public keys (ML-DSA / FIPS 204 or SLH-DSA / FIPS 205) beginning in 2026, with full deprecation of classical RSA and ECC by 2030.",
           },
         ];
       }

@@ -174,6 +174,14 @@ import {
   type CobblestoneCrypto,
   CobblestoneEncryptor,
   CobblestoneDecryptor,
+  ageDecrypt,
+  ageEncrypt,
+  armorAge,
+  dearmorAge,
+  isArmoredAge,
+  type AgeCrypto,
+  type AgeDecryptOptions,
+  type AgeEncryptOptions,
   type CobblestoneVariant,
   type ElephantVariant,
   type IsapVariant,
@@ -185,7 +193,10 @@ import {
   type BlockMode,
 } from "@ocs/algos";
 import { hmac } from "@noble/hashes/hmac.js";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { scrypt } from "@noble/hashes/scrypt.js";
 import { sha256, sha512 } from "@noble/hashes/sha2.js";
+import { x25519 } from "@noble/curves/ed25519.js";
 import { randomBytes } from "@ocs/engine";
 
 /**
@@ -1101,3 +1112,71 @@ export function createCobblestoneStream(
     };
   }
 }
+
+export const ageCrypto: AgeCrypto = {
+  chacha20poly1305Encrypt(key, nonce, plaintext) {
+    return chacha20poly1305(key, nonce).encrypt(plaintext);
+  },
+  chacha20poly1305Decrypt(key, nonce, ciphertext) {
+    return chacha20poly1305(key, nonce).decrypt(ciphertext);
+  },
+  x25519GetPublicKey(privateKey) {
+    return x25519.getPublicKey(privateKey);
+  },
+  x25519SharedSecret(privateKey, peerPublicKey) {
+    return x25519.getSharedSecret(privateKey, peerPublicKey);
+  },
+  hkdfSha256(ikm, salt, info, length) {
+    const infoBytes = typeof info === "string" ? new TextEncoder().encode(info) : info;
+    return hkdf(sha256, ikm, salt, infoBytes, length);
+  },
+  hmacSha256(key, message) {
+    return hmac(sha256, key, message);
+  },
+  scrypt(password, salt, logN) {
+    const passBytes = typeof password === "string" ? new TextEncoder().encode(password) : password;
+    return scrypt(passBytes, salt, { N: 1 << logN, r: 8, p: 1, dkLen: 32 });
+  },
+};
+
+export interface AgeOperationOptions {
+  recipient?: string;
+  identity?: string;
+  passphrase?: string;
+  armor?: boolean;
+}
+
+export function ageOperation(options: AgeOperationOptions): CipherOperation {
+  return {
+    encrypt(plaintext: Uint8Array): Uint8Array {
+      const encOpts: AgeEncryptOptions = {};
+      if (options.passphrase && options.passphrase.trim()) {
+        encOpts.passphrase = options.passphrase.trim();
+      } else if (options.recipient && options.recipient.trim()) {
+        encOpts.recipients = [options.recipient.trim()];
+      } else {
+        throw new Error("age encryption requires a recipient or passphrase.");
+      }
+      const raw = ageEncrypt(ageCrypto, plaintext, encOpts);
+      if (options.armor) {
+        return new TextEncoder().encode(armorAge(raw));
+      }
+      return raw;
+    },
+    decrypt(ciphertext: Uint8Array): Uint8Array {
+      let raw = ciphertext;
+      if (isArmoredAge(ciphertext)) {
+        raw = dearmorAge(ciphertext);
+      }
+      const decOpts: AgeDecryptOptions = {};
+      if (options.passphrase && options.passphrase.trim()) {
+        decOpts.passphrase = options.passphrase.trim();
+      }
+      if (options.identity && options.identity.trim()) {
+        decOpts.identities = [options.identity.trim()];
+      }
+      return ageDecrypt(ageCrypto, raw, decOpts);
+    },
+  };
+}
+

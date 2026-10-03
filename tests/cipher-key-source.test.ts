@@ -391,23 +391,29 @@ describe("option reachability", () => {
           ? AES_MODES.map((m) => m.id)
           : [...(tool.block?.modes ?? [undefined])];
 
+      const authModes: readonly (string | undefined)[] =
+        tool.id === "age" ? ["recipient", "passphrase"] : [undefined];
+
       const reachable = new Set<string>();
       for (const mode of modes) {
-        for (const source of KEY_SOURCES) {
-          for (const derives of KDF_DERIVES) {
-            const spec = {
-              ...base,
-              options: {
-                ...base.options,
-                ...(mode ? { [OPTION_MODE]: mode } : {}),
-                [OPTION_KEY_SOURCE]: source,
-                [OPTION_KDF_DERIVES]: derives,
-              },
-            } as CipherSpec;
-            const tag = definition.variantTag?.(spec);
-            const tags = tag === undefined ? [] : Array.isArray(tag) ? tag : [tag];
-            for (const option of cipherCatalogueFor(tool.id).options) {
-              if (isAvailableOn(option, tags)) reachable.add(option.id);
+        for (const authMode of authModes) {
+          for (const source of KEY_SOURCES) {
+            for (const derives of KDF_DERIVES) {
+              const spec = {
+                ...base,
+                options: {
+                  ...base.options,
+                  ...(mode ? { [OPTION_MODE]: mode } : {}),
+                  ...(authMode ? { authMode } : {}),
+                  [OPTION_KEY_SOURCE]: source,
+                  [OPTION_KDF_DERIVES]: derives,
+                },
+              } as CipherSpec;
+              const tag = definition.variantTag?.(spec);
+              const tags = tag === undefined ? [] : Array.isArray(tag) ? tag : [tag];
+              for (const option of cipherCatalogueFor(tool.id).options) {
+                if (isAvailableOn(option, tags)) reachable.add(option.id);
+              }
             }
           }
         }

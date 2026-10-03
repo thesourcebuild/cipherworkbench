@@ -139,6 +139,9 @@ function Invoke-Pnpm {
 
     & $pm.Name @all
     if ($LASTEXITCODE -ne 0) {
+        if ($LASTEXITCODE -eq -1073741510 -or $LASTEXITCODE -eq 130 -or $LASTEXITCODE -eq 3221225786) {
+            return
+        }
         throw "$($pm.Name) $($all -join ' ') failed with exit code $LASTEXITCODE."
     }
 }
@@ -767,9 +770,14 @@ function Start-PnpmWindow {
     foreach ($key in $EnvVars.Keys) { $parts += "set $key=$($EnvVars[$key])" }
     $parts += "$($pm.Name) $($all -join ' ')"
 
+    $command = $parts -join ' && '
+    if ($NoNewWindow) {
+        $command = "$command <nul"
+    }
+
     $splat = @{
         FilePath         = 'cmd.exe'
-        ArgumentList     = @('/c', ($parts -join ' && '))
+        ArgumentList     = @('/c', $command)
         WorkingDirectory = $WorkingDirectory
         PassThru         = $true
     }

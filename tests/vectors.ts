@@ -1864,6 +1864,7 @@ export const NO_PUBLISHED_VECTOR: readonly string[] = [
   "poseidon2",
   "mimc",
   "tip5",
+  "sinsemilla",
   "pearson",
   "murmur1",
   "murmur2",

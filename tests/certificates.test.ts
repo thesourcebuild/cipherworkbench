@@ -890,4 +890,73 @@ describe("Full mTLS Suite Generator", () => {
       expect(created.opensslCommand).toContain("keyUsage=critical,digitalSignature,keyCertSign,cRLSign");
     });
   });
+
+  describe("Certificate Transparency SCT Decoder and CA/B Forum 2026 Rules", () => {
+    it("parses and decodes RFC 6962 Signed Certificate Timestamp (SCT) list", async () => {
+      const { parseSctList } = await import("../packages/tools/certificates/src/asn1/x509");
+      // Build sample serialized SCT list
+      // Total list length: 2 bytes
+      // SCT 1 length: 2 bytes
+      // SCT 1 data: 1 byte version (0), 32 bytes log_id, 8 bytes timestamp (ms), 2 bytes ext_len (0), 1 byte hash (4 = SHA256), 1 byte sig (3 = ECDSA), 2 bytes sig_len, sig bytes
+      const logIdHex = "293c519654c83965baaa50fc5807d4b76fbf587a2972dcaaa813083ba7658cfa"; // Cloudflare Nimbus
+      const logIdBytes = new Uint8Array(logIdHex.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)));
+      const nowMs = 1775000000000n; // 2026 timestamp
+
+      const sctData = new Uint8Array(43 + 4 + 64);
+      sctData[0] = 0x00; // v1
+      sctData.set(logIdBytes, 1);
+      for (let i = 0; i < 8; i++) {
+        sctData[33 + i] = Number((nowMs >> BigInt((7 - i) * 8)) & 0xffn);
+      }
+      sctData[41] = 0x00; // ext len MSB
+      sctData[42] = 0x00; // ext len LSB
+      sctData[43] = 0x04; // SHA-256
+      sctData[44] = 0x03; // ECDSA
+      sctData[45] = 0x00; // sig len MSB
+      sctData[46] = 64; // sig len LSB (64 bytes)
+      sctData.fill(0xaa, 47, 47 + 64);
+
+      const listBuffer = new Uint8Array(2 + 2 + sctData.length);
+      const totalLen = 2 + sctData.length;
+      listBuffer[0] = (totalLen >> 8) & 0xff;
+      listBuffer[1] = totalLen & 0xff;
+      listBuffer[2] = (sctData.length >> 8) & 0xff;
+      listBuffer[3] = sctData.length & 0xff;
+      listBuffer.set(sctData, 4);
+
+      const decoded = parseSctList(listBuffer);
+      expect(decoded.length).toBe(1);
+      expect(decoded[0]!.version).toBe(0);
+      expect(decoded[0]!.logId).toBe(logIdHex);
+      expect(decoded[0]!.logName).toBe("Cloudflare 'Nimbus2026'");
+      expect(decoded[0]!.hashAlgorithm).toBe("SHA-256");
+      expect(decoded[0]!.signatureAlgorithm).toBe("ECDSA");
+      expect(decoded[0]!.timestamp.getTime()).toBe(Number(nowMs));
+    });
+
+    it("triggers CERT011 warning when validity exceeds CA/B 2026 90-day target", async () => {
+      const { RULES } = await import("../packages/tools/certificates/src/lint/rules");
+      const rule = RULES.find((r) => r.code === "CERT011");
+      expect(rule).toBeDefined();
+
+      const spec = {
+        specVersion: 1 as const,
+        variant: "cert-creator" as const,
+        options: {
+          creatorMode: "single-cert",
+          isCa: "false",
+          validityDays: "180",
+        },
+      };
+
+      const diagnostics = rule!.check(spec);
+      expect(diagnostics.length).toBe(1);
+      expect(diagnostics[0]!.level).toBe("info");
+      expect(diagnostics[0]!.message).toContain("exceeds the 2026 CA/B Forum 90-day target");
+      expect(diagnostics[0]!.fix).toBeDefined();
+
+      const fixed = diagnostics[0]!.fix!.apply(spec);
+      expect(fixed.options["validityDays"]).toBe("90");
+    });
+  });
 });

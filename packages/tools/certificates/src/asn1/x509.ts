@@ -49,6 +49,16 @@ export interface PublicKeyDetails {
   rawBytes?: Uint8Array;
 }
 
+export interface ParsedSct {
+  version: number;
+  logId: string;
+  logName?: string;
+  timestamp: Date;
+  hashAlgorithm: string;
+  signatureAlgorithm: string;
+  signature: string;
+}
+
 export interface ParsedX509Certificate {
   version: number;
   serialNumber: string;
@@ -84,6 +94,7 @@ export interface ParsedX509Certificate {
     caIssuerUrls: string[];
     crlUrls: string[];
     spiffeIds: string[];
+    scts: ParsedSct[];
     nameConstraints?: {
       permittedSubtrees: string[];
       excludedSubtrees: string[];
@@ -256,6 +267,98 @@ export function formatIpAddress(bytes: Uint8Array): string {
   return formatHexColons(bytes);
 }
 
+export const KNOWN_CT_LOGS: Record<string, string> = {
+  "293c519654c83965baaa50fc5807d4b76fbf587a2972dcaaa813083ba7658cfa": "Cloudflare 'Nimbus2026'",
+  "5614069d2fd7c2ec43f5e0e9cc947f0e61d10e0ece8649551f5f5f0987ac7c34": "Google 'Argon2026'",
+  "63364da0f7ed40cb4593ee139a9d63818046184e5b60da93f1ce4a88f1ce1fc8": "Google 'Xenon2026'",
+  "eed2cb79047b58ce809b1f12d815ce2e70043512dc8014f78d1b025d4a7361b7": "Let's Encrypt 'Oak2026'",
+  "0ee5be6025661b7f9f3592c30d02c8928e47027ffb0f20dd081b29f04586b97f": "DigiCert Nessie2026",
+  "b73ebcc6b9774804e120ebbc5b16ddb8f307532d501981d45c183042ff64c804": "Sectigo 'Sabre2026'",
+};
+
+/**
+ * Decodes RFC 6962 Signed Certificate Timestamp (SCT) list from extension bytes.
+ */
+export function parseSctList(rawBytes: Uint8Array): ParsedSct[] {
+  let data = rawBytes;
+  // If wrapped in an ASN.1 OCTET STRING (tag 0x04)
+  if (data.length > 2 && data[0] === 0x04) {
+    let offset = 1;
+    let len = data[offset]!;
+    if (len & 0x80) {
+      const numBytes = len & 0x7f;
+      offset += 1;
+      len = 0;
+      for (let i = 0; i < numBytes; i++) {
+        len = (len << 8) | (data[offset + i] ?? 0);
+      }
+      offset += numBytes;
+    } else {
+      offset += 1;
+    }
+    if (offset + len <= data.length) {
+      data = data.subarray(offset, offset + len);
+    }
+  }
+
+  const scts: ParsedSct[] = [];
+  if (data.length < 2) return scts;
+
+  let offset = 0;
+  const listLen = ((data[offset] ?? 0) << 8) | (data[offset + 1] ?? 0);
+  offset += 2;
+  const end = Math.min(data.length, offset + listLen);
+
+  while (offset + 2 <= end) {
+    const sctLen = ((data[offset] ?? 0) << 8) | (data[offset + 1] ?? 0);
+    offset += 2;
+    if (offset + sctLen > data.length) break;
+
+    const sct = data.subarray(offset, offset + sctLen);
+    offset += sctLen;
+
+    if (sct.length < 43) continue;
+    const version = sct[0]!;
+    const logIdBytes = sct.subarray(1, 33);
+    const logId = Array.from(logIdBytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+    const logName = KNOWN_CT_LOGS[logId];
+
+    let tsMs = 0n;
+    for (let i = 33; i < 41; i++) {
+      tsMs = (tsMs << 8n) | BigInt(sct[i] ?? 0);
+    }
+    const timestamp = new Date(Number(tsMs));
+
+    const extLen = ((sct[41] ?? 0) << 8) | (sct[42] ?? 0);
+    let sigOffset = 43 + extLen;
+    if (sigOffset + 4 > sct.length) continue;
+
+    const hashAlgByte = sct[sigOffset]!;
+    const sigAlgByte = sct[sigOffset + 1]!;
+    const sigLen = ((sct[sigOffset + 2] ?? 0) << 8) | (sct[sigOffset + 3] ?? 0);
+    sigOffset += 4;
+
+    const hashAlgorithm =
+      hashAlgByte === 4 ? "SHA-256" : hashAlgByte === 5 ? "SHA-384" : hashAlgByte === 6 ? "SHA-512" : `Hash(${hashAlgByte})`;
+    const signatureAlgorithm =
+      sigAlgByte === 3 ? "ECDSA" : sigAlgByte === 1 ? "RSA" : sigAlgByte === 2 ? "DSA" : `Sig(${sigAlgByte})`;
+    const sigBytes = sct.subarray(sigOffset, sigOffset + sigLen);
+    const signature = Array.from(sigBytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+
+    scts.push({
+      version,
+      logId,
+      logName,
+      timestamp,
+      hashAlgorithm,
+      signatureAlgorithm,
+      signature,
+    });
+  }
+
+  return scts;
+}
+
 /**
  * Parses an X.509 Certificate (PEM text or DER binary).
  */
@@ -362,6 +465,7 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
   const caIssuerUrls: string[] = [];
   const crlUrls: string[] = [];
   const spiffeIds: string[] = [];
+  const scts: ParsedSct[] = [];
   let nameConstraints:
     | {
         permittedSubtrees: string[];
@@ -558,6 +662,16 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
             parsedValStr = certificatePolicies
               .map((cp) => `Policy: ${cp.policyOid}${cp.cpsUrl ? ` (${cp.cpsUrl})` : ""}`)
               .join("; ");
+          } else if (extOid === "1.3.6.1.4.1.11129.2.4.2") {
+            // Certificate Transparency SCT List (RFC 6962 §3.3)
+            const parsedScts = parseSctList(valBytes);
+            scts.push(...parsedScts);
+            parsedValStr = parsedScts
+              .map(
+                (s, idx) =>
+                  `#${idx + 1} Log: ${s.logName ?? s.logId.slice(0, 16) + "..."} (${s.timestamp.toISOString().replace("T", " ").replace(/\..+/, " UTC")}, ${s.signatureAlgorithm}/${s.hashAlgorithm})`,
+              )
+              .join("; ");
           } else {
             parsedValStr = formatHexColons(valBytes);
           }
@@ -671,6 +785,7 @@ export function parseX509Certificate(input: Uint8Array): ParsedX509Certificate {
       caIssuerUrls,
       crlUrls,
       spiffeIds,
+      scts,
       nameConstraints,
       certificatePolicies: certificatePolicies.length > 0 ? certificatePolicies : undefined,
       all: allExtensions,

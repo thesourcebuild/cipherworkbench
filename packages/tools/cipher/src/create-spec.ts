@@ -9,6 +9,9 @@ import {
   OPTION_GOST_SBOX,
   OPTION_TAG_LEN,
   OPTION_TIMESTAMP_FORMAT,
+  OPTION_AGE_AUTH_MODE,
+  OPTION_AGE_RECIPIENT,
+  OPTION_AGE_ARMOR,
   SPEC_VERSION,
 } from "./pure";
 import { cipherCatalogueFor } from "./catalogue/options";
@@ -43,6 +46,10 @@ export function createSpec(options?: { variant?: string }): CipherSpec {
      * exactly as it did.
      */
     base[OPTION_KEY_SIZE] = String(DEFAULT_AES_KEY_SIZE);
+  }
+  if (variant === "age") {
+    base[OPTION_AGE_AUTH_MODE] = "recipient";
+    base[OPTION_AGE_ARMOR] = true;
   }
   /**
    * Seed the selects the block ciphers render, for the same reason the hash family does.

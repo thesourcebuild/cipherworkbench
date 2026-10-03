@@ -10,6 +10,12 @@ import {
   lmsKeygen,
   lmsSign,
   lmsVerify,
+  x25519Mlkem768Keygen,
+  x25519Mlkem768Encap,
+  x25519Mlkem768Decap,
+  ecvrfProve,
+  ecvrfVerify,
+  ecvrfGetPublicKey,
 } from "@ocs/algos";
 import { sha256 } from "@noble/hashes/sha2.js";
 
@@ -81,6 +87,62 @@ describe("Post-Quantum Cryptography & Stateful Signatures", () => {
       const tamperedMsg = new TextEncoder().encode("Forged LMS Message");
       const invalid = lmsVerify(hashFn, kp.root, kp.iIdentifier, tamperedMsg, sig);
       expect(invalid).toBe(false);
+    });
+  });
+
+  describe("Hybrid Post-Quantum KEM (X25519MLKEM768)", () => {
+    it("generates hybrid keypair, encapsulates and decapsulates identical shared secret", () => {
+      const kp = x25519Mlkem768Keygen();
+      expect(kp.publicKey.length).toBe(1216);
+      expect(kp.secretKey.length).toBe(2432);
+
+      const encap = x25519Mlkem768Encap(kp.publicKey);
+      expect(encap.cipherText.length).toBe(1120);
+      expect(encap.sharedSecret.length).toBe(32);
+
+      const decapsulated = x25519Mlkem768Decap(encap.cipherText, kp.secretKey);
+      expect(decapsulated.length).toBe(32);
+      expect(decapsulated).toEqual(encap.sharedSecret);
+    });
+
+    it("fails decapsulation on mismatched ciphertext or key", () => {
+      const kp1 = x25519Mlkem768Keygen();
+      const kp2 = x25519Mlkem768Keygen();
+
+      const encap = x25519Mlkem768Encap(kp1.publicKey);
+      // Decap with kp2 secret key produces different secret (implicit rejection)
+      const decapOther = x25519Mlkem768Decap(encap.cipherText, kp2.secretKey);
+      expect(decapOther).not.toEqual(encap.sharedSecret);
+    });
+  });
+
+  describe("ECVRF (RFC 9381 Section 5.1)", () => {
+    it("generates verifiable random proof and verifies deterministic hash beta", () => {
+      const sk = new Uint8Array(32).fill(0x37);
+      sk[0] = 0x05;
+      const pk = ecvrfGetPublicKey(sk);
+      expect(pk.length).toBe(32);
+
+      const alpha = new TextEncoder().encode("CipherWorkbench Verifiable Random Function Input");
+      const { pi, beta } = ecvrfProve(sk, alpha);
+      expect(pi.length).toBe(80);
+      expect(beta.length).toBe(32);
+
+      // Verify proof with public key
+      const verification = ecvrfVerify(pk, alpha, pi);
+      expect(verification.valid).toBe(true);
+      expect(verification.beta).toEqual(beta);
+
+      // Verify with tampered input fails
+      const tamperedAlpha = new TextEncoder().encode("Tampered Input");
+      const badAlphaVerif = ecvrfVerify(pk, tamperedAlpha, pi);
+      expect(badAlphaVerif.valid).toBe(false);
+
+      // Verify with tampered proof fails
+      const badPi = new Uint8Array(pi);
+      badPi[10]! ^= 0x01;
+      const badPiVerif = ecvrfVerify(pk, alpha, badPi);
+      expect(badPiVerif.valid).toBe(false);
     });
   });
 });

@@ -879,6 +879,7 @@ describe("metadata and bindings agree", () => {
       "poseidon2",
       "mimc",
       "tip5",
+      "sinsemilla",
       "pearson",
       "murmur1",
       "murmur2",

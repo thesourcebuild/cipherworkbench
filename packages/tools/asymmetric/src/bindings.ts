@@ -27,6 +27,9 @@ import {
   sqisignKeygen,
   sqisignSign,
   sqisignVerify,
+  x25519Mlkem768Keygen,
+  x25519Mlkem768Encap,
+  x25519Mlkem768Decap,
   type RsaPrivateKey,
   type RsaPublicKey,
 } from "@ocs/algos";
@@ -710,6 +713,21 @@ export function pqKemFor(toolId: string, setId: string): PqKem {
       },
       decapsulate(cipherText: Uint8Array, secretKey: Uint8Array) {
         return ntruDecapsulate(cipherText, secretKey);
+      },
+    };
+  }
+  if (toolId === "x25519mlkem768") {
+    return {
+      keygen(seed?: Uint8Array) {
+        const kp = x25519Mlkem768Keygen(seed);
+        return { publicKey: kp.publicKey, secretKey: kp.secretKey };
+      },
+      encapsulate(publicKey: Uint8Array) {
+        const res = x25519Mlkem768Encap(publicKey);
+        return { cipherText: res.cipherText, sharedSecret: res.sharedSecret };
+      },
+      decapsulate(cipherText: Uint8Array, secretKey: Uint8Array) {
+        return x25519Mlkem768Decap(cipherText, secretKey);
       },
     };
   }

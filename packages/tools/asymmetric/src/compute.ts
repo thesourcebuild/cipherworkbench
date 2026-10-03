@@ -622,7 +622,7 @@ async function rsaOperate(r: ResolvedAsymmetric, input: Uint8Array): Promise<Too
  */
 function pqOperate(r: ResolvedAsymmetric, input: Uint8Array): ToolResult {
   const set = r.paramSet!;
-  const isKem = r.tool.id === "mlkem" || r.tool.id === "mceliece" || r.tool.id === "hqc" || r.tool.id === "ntru";
+  const isKem = r.tool.id === "mlkem" || r.tool.id === "mceliece" || r.tool.id === "hqc" || r.tool.id === "ntru" || r.tool.id === "x25519mlkem768";
 
   if (r.operation === "generate") {
     const api = isKem ? pqKemFor(r.tool.id, set.id) : pqSignerFor(r.tool.id, set.id);
@@ -810,6 +810,110 @@ export async function computeAsymmetric(
           bytes: new TextEncoder().encode(dec.toString()),
           fields: [
             { label: "Decrypted plaintext", value: dec.toString() },
+          ],
+        };
+      }
+    }
+    if (r.tool.id === "shamir") {
+      const { shamirSplit, shamirCombine, formatShamirShare, parseShamirShare } = await import("@ocs/algos");
+      if (r.operation === "generate") {
+        const secret = input.length > 0 ? input : new TextEncoder().encode("CipherWorkbench-Secret-Vault-Key");
+        const k = 3;
+        const n = 5;
+        const shares = shamirSplit(secret, n, k, (len) => {
+          const buf = new Uint8Array(len);
+          globalThis.crypto.getRandomValues(buf);
+          return buf;
+        });
+        const formatted = shares.map(formatShamirShare);
+        const textOut = formatted.join("\n");
+        return {
+          text: textOut,
+          bytes: shares[0]!.y,
+          fields: [
+            { label: "Threshold (k)", value: `${k} shares needed to reconstruct` },
+            { label: "Total shares (n)", value: `${n} shares generated` },
+            ...formatted.map((shareStr, idx) => ({
+              label: `Share #${idx + 1}`,
+              value: shareStr,
+              secret: true,
+            })),
+          ],
+        };
+      }
+      if (r.operation === "derive") {
+        const inputText = new TextDecoder().decode(input).trim();
+        const lines = inputText.split(/[\r\n,;]+/).map((s) => s.trim()).filter(Boolean);
+        const parsed = lines.map(parseShamirShare).filter((s): s is NonNullable<typeof s> => s !== null);
+        if (parsed.length < 2) {
+          const secret = new TextEncoder().encode("CipherWorkbench-Secret-Vault-Key");
+          const shares = shamirSplit(secret, 5, 3, (len) => {
+            const buf = new Uint8Array(len);
+            globalThis.crypto.getRandomValues(buf);
+            return buf;
+          });
+          const combined = shamirCombine([shares[0]!, shares[1]!, shares[2]!]);
+          const decoded = new TextDecoder().decode(combined);
+          return {
+            text: decoded,
+            bytes: combined,
+            fields: [
+              { label: "Status", value: "Reconstructed from 3 of 5 shares (demo)" },
+              { label: "Reconstructed secret", value: decoded },
+            ],
+          };
+        }
+        const combined = shamirCombine(parsed);
+        const text = new TextDecoder().decode(combined);
+        return {
+          text,
+          bytes: combined,
+          fields: [
+            { label: "Shares supplied", value: `${parsed.length} shares (${parsed.map((p) => `#${p.x}`).join(", ")})` },
+            { label: "Reconstructed secret", value: text },
+          ],
+        };
+      }
+    }
+    if (r.tool.id === "ecvrf") {
+      const { ecvrfProve, ecvrfVerify, ecvrfGetPublicKey } = await import("@ocs/algos");
+      if (r.operation === "generate") {
+        const sk = randomBytes(32);
+        const pk = ecvrfGetPublicKey(sk);
+        return {
+          bytes: pk,
+          fields: [
+            { label: "Private key", value: encodeHex(sk), secret: true, hint: KEEP_IT_HINT },
+            { label: "Public key", value: encodeHex(pk), hint: PUBLIC_KEY_HINT },
+          ],
+        };
+      }
+      if (r.operation === "sign") {
+        const { pi, beta } = ecvrfProve(r.privateKey, input);
+        const pk = ecvrfGetPublicKey(r.privateKey);
+        return {
+          bytes: pi,
+          fields: [
+            { label: "Scheme", value: "ECVRF-EDWARDS25519-SHA512-TAI (RFC 9381 §5.1)" },
+            { label: "VRF Proof (π)", value: encodeHex(pi), hint: "80 bytes: Gamma (32) || c (16) || s (32)" },
+            { label: "VRF Hash (β)", value: encodeHex(beta), hint: "32 bytes deterministic pseudorandom output" },
+            { label: "Public key", value: encodeHex(pk), hint: PUBLIC_KEY_HINT },
+          ],
+        };
+      }
+      if (r.operation === "verify") {
+        const pk = r.publicKey.length > 0 ? r.publicKey : (r.privateKey.length > 0 ? ecvrfGetPublicKey(r.privateKey) : new Uint8Array(0));
+        if (pk.length !== 32) {
+          return { error: "ECVRF verification requires a 32-byte public key." };
+        }
+        const verifyRes = ecvrfVerify(pk, input, r.signature);
+        return {
+          text: verifyRes.valid ? "VRF PROOF VALID" : "VRF PROOF INVALID",
+          fields: [
+            { label: "Scheme", value: "ECVRF-EDWARDS25519-SHA512-TAI (RFC 9381 §5.1)" },
+            { label: "Result", value: verifyRes.valid ? "Valid proof matching public key and alpha input." : "Invalid proof or key mismatch." },
+            ...(verifyRes.beta ? [{ label: "VRF Hash (β)", value: encodeHex(verifyRes.beta), hint: "Verified deterministic pseudorandom output" }] : []),
+            { label: "Public key", value: encodeHex(pk) },
           ],
         };
       }

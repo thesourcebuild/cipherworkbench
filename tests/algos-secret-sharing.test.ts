@@ -33,6 +33,39 @@ describe("Secret Sharing & Commitments", () => {
       const recovered3 = shamirCombine([shares[0]!, shares[2]!, shares[4]!]);
       expect(new TextDecoder().decode(recovered3)).toBe("TopSecretShamirData123!");
     });
+
+    it("formats and parses portable share tokens correctly", async () => {
+      const secret = new TextEncoder().encode("HelloToken123");
+      const { shamirSplit, formatShamirShare, parseShamirShare } = await import("@ocs/algos");
+      const shares = shamirSplit(secret, 4, 2, mockRng);
+      const token = formatShamirShare(shares[0]!);
+      expect(token).toMatch(/^SSSS-1-[0-9a-f]+$/);
+
+      const parsed = parseShamirShare(token);
+      expect(parsed).not.toBeNull();
+      expect(parsed!.x).toBe(1);
+      expect(parsed!.y).toEqual(shares[0]!.y);
+    });
+
+    it("detects tampered shares when redundant shares are provided", async () => {
+      const secret = new TextEncoder().encode("AuthenticSecretKey");
+      const { shamirSplit, detectTamperedShares } = await import("@ocs/algos");
+      const shares = shamirSplit(secret, 5, 3, mockRng);
+
+      // Untampered 4 shares (threshold 3)
+      const resClean = detectTamperedShares(shares.slice(0, 4), 3);
+      expect(resClean.tampered).toBe(false);
+      expect(new TextDecoder().decode(resClean.recoveredSecret!)).toBe("AuthenticSecretKey");
+
+      // Corrupt share 2 in 5-share set (threshold 3, 2 redundant shares)
+      const corrupted = shares.map((s) => ({ x: s.x, y: new Uint8Array(s.y) }));
+      corrupted[1]!.y[0]! ^= 0xff; // flip bits in share #2
+
+      const resTampered = detectTamperedShares(corrupted, 3);
+      expect(resTampered.tampered).toBe(true);
+      expect(resTampered.tamperedShareIndices).toContain(corrupted[1]!.x);
+      expect(new TextDecoder().decode(resTampered.recoveredSecret!)).toBe("AuthenticSecretKey");
+    });
   });
 
   describe("SLIP-0039 Shamir Mnemonic", () => {

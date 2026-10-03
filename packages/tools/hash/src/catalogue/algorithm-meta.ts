@@ -2654,6 +2654,17 @@ export const HASH_ALGORITHMS: readonly HashAlgorithmMeta[] = [
     summary: "High-throughput ZK hash function utilizing low-degree Horner evaluation layers.",
   },
   {
+    id: "sinsemilla",
+    label: "Sinsemilla",
+    category: "Zero-Knowledge",
+    outputLen: 32,
+    blockLen: 32,
+    outputMode: "fixed",
+    security: "modern",
+    tags: ["sinsemilla", "zcash", "orchard", "halo2", "plonk", "pallas", "lookup", "zk", "algebraic"],
+    summary: "Lookup-based algebraic collision-resistant hash function designed for Zcash Orchard and Halo 2 circuits.",
+  },
+  {
     id: "haraka256",
     label: "Haraka-256",
     category: "Post-Quantum",

@@ -57,6 +57,10 @@ export function cipherVariantTags(toolId: string, spec: CipherSpec): readonly st
     tags.push(TAG_CHACHA_COUNTER);
   }
   if (toolId === "rc4") tags.push(TAG_RC4);
+  if (toolId === "age") {
+    const authMode = spec.options?.authMode === "passphrase" ? "passphrase" : "recipient";
+    tags.push(authMode);
+  }
 
   const source = readKeySource(spec.options);
   tags.push(keySourceTag(source));
@@ -124,6 +128,8 @@ export {
   cobblestoneOperation,
   cobblestoneCrypto,
   createCobblestoneStream,
+  ageOperation,
+  ageCrypto,
 } from "./bindings";
 export {
   computeCipher,

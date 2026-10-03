@@ -6,6 +6,8 @@ import type { ToolDefinition, ToolSpecBase } from "@ocs/engine";
 import type { ComputeState } from "./use-compute";
 import { CertCreatorWorkbench } from "./cert-creator-workbench";
 import { CsrWorkbench } from "./csr-workbench";
+import { SecretSharingWorkbench } from "./secret-sharing-workbench";
+import { Bip39Workbench } from "./bip39-workbench";
 
 export interface CustomWorkbenchProps {
   tool: ToolDefinition<ToolSpecBase>;
@@ -24,6 +26,10 @@ const CUSTOM_WORKBENCHES: Record<string, ComponentType<CustomWorkbenchProps>> = 
   "cert-creator": CertCreatorWorkbench as ComponentType<CustomWorkbenchProps>,
   "csr-creator": CsrWorkbench as ComponentType<CustomWorkbenchProps>,
   "csr-signer": CsrWorkbench as ComponentType<CustomWorkbenchProps>,
+  "shamir": SecretSharingWorkbench as ComponentType<CustomWorkbenchProps>,
+  "secret-sharing": SecretSharingWorkbench as ComponentType<CustomWorkbenchProps>,
+  "bip39": Bip39Workbench as ComponentType<CustomWorkbenchProps>,
+  "bip32": Bip39Workbench as ComponentType<CustomWorkbenchProps>,
 };
 
 /**

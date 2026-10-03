@@ -24,6 +24,14 @@ import {
   readTagLenFrom,
   readTimestamp,
   readTtl,
+  readAgeArmor,
+  readAgeAuthMode,
+  readAgeIdentity,
+  readAgePassphrase,
+  readAgeRecipient,
+  OPTION_AGE_RECIPIENT,
+  OPTION_AGE_IDENTITY,
+  OPTION_AGE_PASSPHRASE,
   type CipherDirection,
 } from "./pure";
 import {
@@ -39,7 +47,8 @@ import {
   type AesModeMeta,
 } from "./catalogue/tool-meta";
 import type { CipherSpec } from "./spec";
-import type { PaddingScheme } from "@ocs/algos";
+import { formatAgeIdentity, formatAgeRecipient, type PaddingScheme } from "@ocs/algos";
+import { x25519 } from "@noble/curves/ed25519.js";
 import {
   keySourceParams,
   keySourceProblem,
@@ -149,6 +158,10 @@ export interface ResolvedCipher {
    * AEAD whose three disagreed would report a tag that was not the one it appended.
    */
   tagLen: number;
+  ageRecipient?: string;
+  ageIdentity?: string;
+  agePassphrase?: string;
+  ageArmor?: boolean;
 }
 
 export type ResolveResult =
@@ -187,7 +200,7 @@ export function requiredNonceLength(
     return mode.aead ? mode.nonceLen : (paramSet?.blockSize ?? tool.block.size);
   }
 
-  if (toolId === "fernet" || toolId === "cobblestone") return 0;
+  if (toolId === "fernet" || toolId === "cobblestone" || toolId === "age") return 0;
 
   /**
    * A shaped cipher declares its own nonce widths on the metadata.
@@ -249,7 +262,7 @@ export function acceptedNonceLengths(
   paramSetId?: string,
 ): readonly number[] {
   if (toolId === "fernet") return [0, 16];
-  if (toolId === "cobblestone") return [];
+  if (toolId === "cobblestone" || toolId === "age") return [];
   const tool = getCipherTool(toolId);
   const paramSet = tool ? getParamSet(tool, paramSetId) : undefined;
   if (tool?.block) {
@@ -412,6 +425,7 @@ export function cipherGenerateLength(spec: CipherSpec, optionId: string): number
    * the mode's own length is the answer -- XTS wants 32 or 64 and SIV 32, 48 or 64.
    */
   if (optionId === OPTION_KEY) {
+    if (spec.variant === "age") return undefined;
     if (spec.variant === "cobblestone") {
       const inst = COBBLESTONE_INSTANCES.find((i) => i.id === readParamSet(spec.options));
       return inst?.keyLen ?? 16;
@@ -472,16 +486,9 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
   const blockSize = paramSet?.blockSize ?? tool.block?.size;
 
   const catalogue = cipherCatalogueFor(spec.variant);
-
-  /*
-   * The key source decides whether there is a Key field to read at all.
-   *
-   * Under a KDF the field is not rendered, so demanding bytes from it would refuse every derived spec.
-   * What is checked instead is the derivation's own parameters -- `keySourceProblem` does that without
-   * deriving, which is the whole reason it is a separate function from `deriveKeySourceBytes`.
-   */
-  const keySource = readKeySource(spec.options);
   const derivedParams = keySourceParams(catalogue, spec.options);
+
+  const keySource = readKeySource(spec.options);
   const derivedProblem = keySourceProblem(derivedParams, direction);
   if (derivedProblem) {
     return { ok: false, problem: derivedProblem.problem, optionId: derivedProblem.optionId };
@@ -489,6 +496,72 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
 
   const keyResult = decodeBytesOption(catalogue, spec.options, OPTION_KEY);
   if (!keyResult.ok) return { ok: false, problem: keyResult.error, optionId: OPTION_KEY };
+
+  if (spec.variant === "age") {
+    const authMode = readAgeAuthMode(spec.options);
+    let recipient = readAgeRecipient(spec.options).trim();
+    let identity = readAgeIdentity(spec.options).trim();
+    const passphrase = readAgePassphrase(spec.options).trim();
+    const armor = readAgeArmor(spec.options);
+
+    if (keyResult.bytes.length === 32) {
+      if (!identity) {
+        identity = formatAgeIdentity(keyResult.bytes);
+      }
+      if (!recipient) {
+        recipient = formatAgeRecipient(x25519.getPublicKey(keyResult.bytes));
+      }
+    }
+
+    if (authMode === "recipient") {
+      if (direction === "encrypt" && !recipient) {
+        return { ok: false, problem: "Enter a recipient public key (age1...) or a 32-byte key.", optionId: OPTION_AGE_RECIPIENT };
+      }
+      if (direction === "decrypt" && !identity) {
+        return { ok: false, problem: "Enter an identity secret key (AGE-SECRET-KEY-1...) or a 32-byte key.", optionId: OPTION_AGE_IDENTITY };
+      }
+    } else {
+      if (!passphrase) {
+        return { ok: false, problem: "Enter a passphrase for scrypt encryption/decryption.", optionId: OPTION_AGE_PASSPHRASE };
+      }
+    }
+
+    return {
+      ok: true,
+      resolved: {
+        toolId: "age",
+        direction,
+        mode: undefined,
+        paramSet: undefined,
+        padding: "pkcs7",
+        keySource,
+        keySourceParams: derivedParams,
+        derivedKeyLength: 32,
+        derivedIvLength: 0,
+        instance: undefined,
+        blockSize: undefined,
+        key: keyResult.bytes,
+        nonce: new Uint8Array(0),
+        aad: new Uint8Array(0),
+        counter: 0,
+        effectiveKeyBits: 256,
+        rc5Rounds: 12,
+        gostSbox: "test",
+        anubisVariant: "tweaked",
+        tweak: new Uint8Array(0),
+        context: new Uint8Array(0),
+        salt: new Uint8Array(0),
+        drop: 0,
+        aead: true,
+        tagLen: 16,
+        ageRecipient: recipient,
+        ageIdentity: identity,
+        agePassphrase: passphrase,
+        ageArmor: armor,
+      },
+    };
+  }
+
   if (keySource === "directinput" && keyResult.bytes.length === 0) {
     return { ok: false, problem: "Enter a key, or press Generate.", optionId: OPTION_KEY };
   }

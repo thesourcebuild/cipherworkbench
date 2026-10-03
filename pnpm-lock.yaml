@@ -331,6 +331,12 @@ importers:
       '@next/mdx':
         specifier: ^16.3.7
         version: 16.3.7(@mdx-js/loader@3.1.1(supports-color@7.2.0))(@mdx-js/react@3.1.1(@types/react@19.2.18)(react@19.2.8))
+      '@noble/curves':
+        specifier: ^2.1.0
+        version: 2.3.0
+      '@noble/hashes':
+        specifier: ^2.2.0
+        version: 2.3.0
       '@ocs/algos':
         specifier: workspace:*
         version: link:../../packages/algos
@@ -437,9 +443,15 @@ importers:
 
   packages/algos:
     dependencies:
+      '@noble/curves':
+        specifier: ^2.1.0
+        version: 2.3.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.3.0
+      '@noble/post-quantum':
+        specifier: 0.7.0
+        version: 0.7.0
     devDependencies:
       '@ocs/config':
         specifier: workspace:*
@@ -678,6 +690,9 @@ importers:
   packages/tools/cipher:
     dependencies:
       '@noble/ciphers':
+        specifier: ^2.1.0
+        version: 2.3.0
+      '@noble/curves':
         specifier: ^2.1.0
         version: 2.3.0
       '@noble/hashes':
