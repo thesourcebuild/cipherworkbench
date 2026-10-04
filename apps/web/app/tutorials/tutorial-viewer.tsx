@@ -11,6 +11,7 @@ import { loadTutorialContent } from "./tutorial-loader";
 import type { TutorialContent } from "./tutorial-types";
 import { TutorialMarkdown } from "./tutorial-markdown";
 import { DtlsHandshakeVisual, TlsHandshakeVisual } from "./transport-handshake-visual";
+import { CryptographicFlowVisual } from "./cryptographic-flow-visual";
 
 export interface TutorialViewerProps {
   tutorialId: string;
@@ -175,6 +176,8 @@ export function TutorialViewer({ tutorialId, onSelectTutorial }: TutorialViewerP
             <TlsHandshakeVisual version={content.visualization.version} />
           ) : content.visualization?.kind === "dtls-handshake" ? (
             <DtlsHandshakeVisual version={content.visualization.version} />
+          ) : content.visualization?.kind === "cryptographic-flow" ? (
+            <CryptographicFlowVisual id={content.visualization.id} />
           ) : null}
 
           {/* Step-by-Step Scenario Walkthrough */}

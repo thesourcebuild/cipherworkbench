@@ -1,6 +1,7 @@
 ﻿import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
+  visualization: { kind: "cryptographic-flow", id: "symmetric" },
   analogy:
     "A physical safe box with one lock. Alice and Bob each hold an identical brass key. Alice can lock the box, ship it through the public postal system, and Bob can unlock it on arrival — but anyone who copies one of those keys can do the same.",
   problem:
@@ -9,7 +10,7 @@ const content: TutorialContent = {
     {
       title: "Step 1: Alice writes the Plaintext",
       speaker: "Alice",
-      content: "Alice writes: *\"Meet me at the cafeteria at noon\"*.",
+      content: 'Alice writes: *"Meet me at the cafeteria at noon"*.',
     },
     {
       title: "Step 2: The Pre-Shared Secret",
@@ -25,7 +26,7 @@ const content: TutorialContent = {
       title: "Step 3: Alice encrypts with AES-256",
       speaker: "Alice",
       content:
-        "Assuming the key has been securely shared, Alice uses it to encrypt her message. AES-256 (Advanced Encryption Standard) scrambles the plaintext through **14 substitution-permutation rounds** into unreadable ciphertext.",
+        "Assuming the key has been securely shared, Alice encrypts her message using AES-256 in a defined mode with the required fresh nonce or IV. AES transforms each block through **14 substitution-permutation rounds**, while the mode securely handles the complete message and produces unreadable ciphertext.",
     },
     {
       title: "Step 4: What Eve sees on the wire",
@@ -39,17 +40,16 @@ const content: TutorialContent = {
       content:
         "Bob receives the ciphertext. Because he holds the **same secret key** as Alice, he inputs it into Cipher Workbench and clicks **Decrypt**. The original message appears instantly.",
     },
-    {
-      title: "Step 6: The Critical Catch — Encryption is NOT Integrity",
-      speaker: "Mallory",
-      content:
-        "Even with a perfectly shared key, what if **Mallory** intercepts the ciphertext and flips a few bits before it reaches Bob? Without an authentication tag, legacy modes like AES-CBC or AES-CTR will silently decrypt into corrupted plaintext with no warning.\n\n**Encryption alone guarantees Confidentiality — it does NOT guarantee Integrity.** We solve this in Tutorial 3.3 with Authenticated Encryption (AEAD).",
-      callout: {
-        type: "warning",
-        text: "A classic security mistake: assuming encryption prevents tampering. Unauthenticated encryption is vulnerable to bit-flipping and padding oracle attacks. Always use an AEAD mode (AES-GCM, ChaCha20-Poly1305) in production.",
-      },
-    },
   ],
+  afterTimeline: {
+    title: "After the Timeline: Encryption alone is not integrity",
+    content:
+      "Mallory can modify ciphertext before it reaches Bob. Without an authentication tag, modes such as AES-CBC or AES-CTR can decrypt modified ciphertext into corrupted or attacker-influenced plaintext. Encryption alone provides confidentiality, not tamper detection. Tutorial 3.3 adds both properties with authenticated encryption (AEAD).",
+    callout: {
+      type: "warning",
+      text: "Use an AEAD mode such as AES-GCM or ChaCha20-Poly1305 in production, with a unique nonce for every encryption under the same key.",
+    },
+  },
   takeaways: [
     "Symmetric encryption uses the **same key** for both encryption and decryption — there is no public/private key split.",
     "AES-256 is the NIST-approved worldwide standard for confidential data.",
@@ -60,8 +60,7 @@ const content: TutorialContent = {
   seed: {
     toolId: "aes",
     sampleInput: "Meet me at the cafeteria at noon",
-    explanation:
-      "Open AES Workbench to test live symmetric encryption and decryption.",
+    explanation: "Open AES Workbench to test live symmetric encryption and decryption.",
   },
 };
 

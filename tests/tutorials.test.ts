@@ -4,16 +4,33 @@ import {
   TLS_VERSION_VISUALS,
   type VersionVisual,
 } from "../apps/web/app/tutorials/transport-handshake-data";
+import {
+  CRYPTOGRAPHIC_FLOWS,
+  type CryptographicFlow,
+} from "../apps/web/app/tutorials/cryptographic-flow-data";
 import { loadTutorialContent } from "../apps/web/app/tutorials/tutorial-loader";
 import { ALL_TUTORIALS_META, getTutorialMeta } from "../apps/web/app/tutorials/tutorials-meta";
 import type {
   DtlsTutorialVersion,
+  CryptographicFlowId,
   TlsTutorialVersion,
 } from "../apps/web/app/tutorials/tutorial-types";
 
 const TLS_TUTORIAL_ID = "5.1-the-complete-tls-handshake";
 const DTLS_TUTORIAL_ID = "5.3-the-dtls-handshake";
 const SSL_TUTORIAL_ID = "5.1-ssl-3.0-handshake";
+
+const CRYPTOGRAPHIC_FLOW_TUTORIALS: readonly {
+  id: string;
+  flowId: CryptographicFlowId;
+}[] = [
+  { id: "1.2-the-static-on-the-wire", flowId: "crc" },
+  { id: "1.3-the-digital-fingerprint", flowId: "hash" },
+  { id: "2.2-the-secret-handshake", flowId: "hmac" },
+  { id: "3.1-the-locked-steel-box", flowId: "symmetric" },
+  { id: "4.1-the-paint-mixing-trick", flowId: "ecdh" },
+  { id: "4.2-the-open-padlock", flowId: "rsa" },
+];
 
 const EXPECTED_TLS_VERSIONS: Readonly<Record<string, TlsTutorialVersion>> = {
   "5.1-the-complete-tls-handshake": "1.3",
@@ -45,6 +62,51 @@ const TRANSPORT_TUTORIAL_TIMELINES: readonly {
 function expectedStepTitles(visual: VersionVisual) {
   return visual.flights.map((flight) => `Step ${flight.step}: ${flight.title}`);
 }
+
+function expectedCryptographicStepTitles(flow: CryptographicFlow) {
+  return flow.events.map((event) => `Step ${event.step}: ${event.title}`);
+}
+
+describe("cryptographic concept flows", () => {
+  it.each(CRYPTOGRAPHIC_FLOW_TUTORIALS)(
+    "keeps $id synchronized with its $flowId flow",
+    async ({ id, flowId }) => {
+      const content = await loadTutorialContent(id);
+      const flow = CRYPTOGRAPHIC_FLOWS[flowId];
+
+      expect(content?.visualization).toEqual({ kind: "cryptographic-flow", id: flowId });
+      expect(content?.steps).toHaveLength(flow.events.length);
+      expect(content?.steps.map((step) => step.title)).toEqual(
+        expectedCryptographicStepTitles(flow),
+      );
+      expect(flow.events.map((event) => event.step)).toEqual(
+        Array.from({ length: flow.events.length }, (_, index) => index + 1),
+      );
+
+      const participantIds = new Set(flow.participants.map((participant) => participant.id));
+      for (const event of flow.events) {
+        expect(event.actors.length).toBeGreaterThan(0);
+        expect(event.actors.every((actorId) => participantIds.has(actorId))).toBe(true);
+      }
+    },
+  );
+
+  it("preserves each primitive's security boundary", async () => {
+    const crc = await loadTutorialContent("1.2-the-static-on-the-wire");
+    const hash = await loadTutorialContent("1.3-the-digital-fingerprint");
+    const hmac = await loadTutorialContent("2.2-the-secret-handshake");
+    const symmetric = await loadTutorialContent("3.1-the-locked-steel-box");
+    const ecdh = await loadTutorialContent("4.1-the-paint-mixing-trick");
+    const rsa = await loadTutorialContent("4.2-the-open-padlock");
+
+    expect(crc?.takeaways.join(" ")).toMatch(/forge|forg/i);
+    expect(hash?.afterTimeline?.content).toContain("trusted channel");
+    expect(hmac?.afterTimeline?.content).toContain("not confidentiality");
+    expect(symmetric?.afterTimeline?.content).toContain("not tamper detection");
+    expect(ecdh?.afterTimeline?.content).toContain("man-in-the-middle");
+    expect(rsa?.afterTimeline?.content).toContain("does not authenticate the sender");
+  });
+});
 
 describe("transport handshake timelines", () => {
   it.each(TRANSPORT_TUTORIAL_TIMELINES)(

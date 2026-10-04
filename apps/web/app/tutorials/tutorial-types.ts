@@ -32,6 +32,7 @@ export interface TutorialAfterTimeline {
 export type TutorialDifficulty = "Beginner" | "Intermediate" | "Advanced";
 export type TlsTutorialVersion = "SSL 3.0" | "1.1" | "1.2" | "1.3";
 export type DtlsTutorialVersion = "1.0" | "1.2" | "1.3";
+export type CryptographicFlowId = "crc" | "hash" | "hmac" | "symmetric" | "ecdh" | "rsa";
 
 export interface TutorialVariantMeta {
   id: string;
@@ -68,6 +69,10 @@ export interface TutorialContent {
     | {
         kind: "dtls-handshake";
         version: DtlsTutorialVersion;
+      }
+    | {
+        kind: "cryptographic-flow";
+        id: CryptographicFlowId;
       };
   steps: TutorialStep[];
   afterTimeline?: TutorialAfterTimeline;

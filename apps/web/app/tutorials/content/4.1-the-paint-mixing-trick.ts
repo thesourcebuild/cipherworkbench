@@ -1,6 +1,7 @@
 ﻿import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
+  visualization: { kind: "cryptographic-flow", id: "ecdh" },
   analogy:
     "Mixing paints is easy, but separating mixed paint back into its original ingredients is virtually impossible. Alice and Bob publicly agree on Yellow. Alice secretly picks Red (sends Orange). Bob secretly picks Blue (sends Green). Both add their secret colors to the other's mixture to arrive at the exact same secret Brown — without ever sending Brown across the wire!",
   problem:
@@ -26,23 +27,22 @@ const content: TutorialContent = {
     {
       title: "Step 4: The Shared Secret is Born",
       content:
-        "- Alice takes Bob's **Green** (Yellow + Blue) and mixes in her secret **Red** → **Brown**.\n- Bob takes Alice's **Orange** (Yellow + Red) and mixes in his secret **Blue** → **Brown**.\n\nBoth independently arrive at the exact same secret color — **Brown** — and passive Eve has no way to reproduce it!",
+        "- Alice takes Bob's **Green** (Yellow + Blue) and mixes in her secret **Red** → **Brown**.\n- Bob takes Alice's **Orange** (Yellow + Red) and mixes in his secret **Blue** → **Brown**.\n\nBoth independently arrive at the exact same secret color — **Brown** — and passive Eve has no way to reproduce it. In a real protocol, the raw ECDH result goes through a key-derivation function before becoming an encryption or authentication key.",
       callout: {
         type: "info",
-        text: "Every HTTPS connection your browser makes uses ECDH (specifically curve X25519) to establish a fresh session key in milliseconds. This is happening right now as you browse the web.",
-      },
-    },
-    {
-      title: "Step 5: The Fatal Catch — The Man-in-the-Middle (MitM) Attack",
-      speaker: "Mallory",
-      content:
-        "Notice who was watching in this scenario: **Eve, a passive eavesdropper**. What if **Mallory, an active attacker**, intercepts the wire?\n\nMallory intercepts Alice's Orange and sends Bob *Mallory's mixture* instead. Mallory intercepts Bob's Green and sends Alice *Mallory's mixture* instead.\n\nNow Alice establishes a shared Brown with Mallory — not Bob. Bob establishes a separate shared Brown with Mallory — not Alice. Mallory decrypts, reads, re-encrypts, and forwards all traffic undetected.\n\n**Unauthenticated Diffie-Hellman defeats passive Eve, but falls completely to active Mallory.** To stop Mallory, public keys must be authenticated using **Digital Signatures (Tutorial 4.3)** and **Certificates (Tutorial 5.2)**.",
-      callout: {
-        type: "security",
-        text: "A fundamental cryptographic law: Diffie-Hellman provides **secrecy**, NOT **authentication**. Without signatures or certificates, unauthenticated DH is trivially hijacked by any active attacker on the wire.",
+        text: "Modern TLS commonly uses ephemeral ECDH with X25519 or P-256, then passes the shared secret through a key-derivation function to create fresh traffic keys.",
       },
     },
   ],
+  afterTimeline: {
+    title: "After the Timeline: Authenticate ECDH to stop MitM",
+    content:
+      "The timeline defeats passive Eve, but an active man-in-the-middle attacker such as Mallory can intercept both public shares and substitute her own. Alice then derives one secret with Mallory while Bob derives another, allowing Mallory to decrypt and relay traffic. Real protocols authenticate the exchange with signatures, certificates, or a previously established secret.",
+    callout: {
+      type: "security",
+      text: "Diffie-Hellman provides key agreement, not identity. Unauthenticated ECDH is vulnerable to an active man-in-the-middle attacker.",
+    },
+  },
   takeaways: [
     "Diffie-Hellman allows two parties with no prior relationship to establish a shared secret without transmitting it.",
     "The security relies on the one-way nature of the operation: easy to mix, impossible to unmix.",
