@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadTutorialContent } from "../apps/web/app/tutorials/tutorial-loader";
 import { ALL_TUTORIALS_META, getTutorialMeta } from "../apps/web/app/tutorials/tutorials-meta";
@@ -9,6 +11,10 @@ import type {
 const TLS_TUTORIAL_ID = "5.1-the-complete-tls-handshake";
 const DTLS_TUTORIAL_ID = "5.3-the-dtls-handshake";
 const SSL_TUTORIAL_ID = "5.1-ssl-3.0-handshake";
+const TRANSPORT_VISUAL_SOURCE = readFileSync(
+  path.join(__dirname, "../apps/web/app/tutorials/transport-handshake-visual.tsx"),
+  "utf8",
+);
 
 const EXPECTED_TLS_VERSIONS: Readonly<Record<string, TlsTutorialVersion>> = {
   "5.1-the-complete-tls-handshake": "1.3",
@@ -71,6 +77,24 @@ describe("TLS handshake tutorial variants", () => {
     expect(tls13?.takeaways.join(" ")).toContain(
       "not protection for plaintext on a compromised client or server",
     );
+  });
+
+  it("keeps protocol timelines independently numbered with their natural event counts", () => {
+    const tls12Start = TRANSPORT_VISUAL_SOURCE.indexOf('  "1.2": {');
+    const tls13Start = TRANSPORT_VISUAL_SOURCE.indexOf('  "1.3": {', tls12Start);
+    const tls12Visual = TRANSPORT_VISUAL_SOURCE.slice(tls12Start, tls13Start);
+    const dtlsStart = TRANSPORT_VISUAL_SOURCE.indexOf("const DTLS_VERSION_VISUALS");
+    const tlsVisuals = TRANSPORT_VISUAL_SOURCE.slice(0, dtlsStart);
+    const dtls13Start = TRANSPORT_VISUAL_SOURCE.indexOf('  "1.3": {', dtlsStart);
+    const dtls13Visual = TRANSPORT_VISUAL_SOURCE.slice(dtls13Start);
+
+    expect(tls12Visual.match(/step: /g)).toHaveLength(6);
+    expect(tlsVisuals.match(/title: "HTTP request"/g)).toHaveLength(4);
+    expect(tlsVisuals.match(/title: "HTTP response"/g)).toHaveLength(4);
+    expect(dtls13Visual.match(/step: /g)).toHaveLength(7);
+    expect(TRANSPORT_VISUAL_SOURCE).not.toContain("badge:");
+    expect(TRANSPORT_VISUAL_SOURCE).toContain("{flight.step}");
+    expect(TRANSPORT_VISUAL_SOURCE).toContain("Timeline event ${flight.step}");
   });
 });
 

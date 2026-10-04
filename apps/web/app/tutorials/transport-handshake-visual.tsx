@@ -76,10 +76,18 @@ const VERSION_VISUALS: Record<TlsTutorialVersion, VersionVisual> = {
       {
         step: 5,
         direction: "client-to-server",
-        title: "HTTP application data",
-        messages: ["RC4 or CBC", "SSL MAC", "chained CBC IV"],
+        title: "HTTP request",
+        messages: ["GET / HTTP/1.1", "RC4 or CBC", "SSL MAC"],
         protection: "record keys",
-        note: "Legacy record designs later enabled practical attacks; SSL 3.0 must not be deployed.",
+        note: "Alice sends the request inside an SSL-protected application-data record.",
+      },
+      {
+        step: 6,
+        direction: "server-to-client",
+        title: "HTTP response",
+        messages: ["HTTP/1.1 200 OK", "RC4 or CBC", "chained CBC IV"],
+        protection: "record keys",
+        note: "Bob returns protected content using the separate server write state.",
       },
     ],
     legend: [
@@ -141,10 +149,18 @@ const VERSION_VISUALS: Record<TlsTutorialVersion, VersionVisual> = {
       {
         step: 5,
         direction: "client-to-server",
-        title: "HTTP application data",
-        messages: ["CBC encryption", "HMAC", "explicit IV"],
+        title: "HTTP request",
+        messages: ["GET / HTTP/1.1", "CBC encryption", "HMAC", "explicit IV"],
         protection: "record keys",
-        note: "Typical TLS 1.1 records use MAC-then-encrypt rather than AEAD.",
+        note: "Alice sends the request in a protected TLS application-data record.",
+      },
+      {
+        step: 6,
+        direction: "server-to-client",
+        title: "HTTP response",
+        messages: ["HTTP/1.1 200 OK", "CBC encryption", "HMAC", "explicit IV"],
+        protection: "record keys",
+        note: "Bob returns protected content using his independent server write keys.",
       },
     ],
     legend: [
@@ -206,10 +222,18 @@ const VERSION_VISUALS: Record<TlsTutorialVersion, VersionVisual> = {
       {
         step: 5,
         direction: "client-to-server",
-        title: "HTTP application data",
-        messages: ["AES-GCM / ChaCha20-Poly1305", "or legacy CBC"],
+        title: "HTTP request",
+        messages: ["GET / HTTP/1.1", "AES-GCM / ChaCha20-Poly1305", "or legacy CBC"],
         protection: "record keys",
-        note: "Modern configurations use AEAD; older CBC suites remain part of TLS 1.2's history.",
+        note: "Alice sends the request using the selected TLS 1.2 record protection.",
+      },
+      {
+        step: 6,
+        direction: "server-to-client",
+        title: "HTTP response",
+        messages: ["HTTP/1.1 200 OK", "AES-GCM / ChaCha20-Poly1305", "or legacy CBC"],
+        protection: "record keys",
+        note: "Bob returns protected content using his independent server write keys.",
       },
     ],
     legend: [
@@ -269,15 +293,23 @@ const VERSION_VISUALS: Record<TlsTutorialVersion, VersionVisual> = {
         step: 4,
         direction: "client-to-server",
         title: "Client completion",
-        messages: ["Finished", "HTTP request"],
-        protection: "handshake to application",
-        note: "Alice verifies Bob, confirms the transcript, and can send data immediately.",
+        messages: ["Finished"],
+        protection: "handshake keys",
+        note: "Alice verifies Bob and confirms that she observed the same transcript.",
       },
       {
         step: 5,
+        direction: "client-to-server",
+        title: "HTTP request",
+        messages: ["GET / HTTP/1.1", "AEAD-protected application data"],
+        protection: "application keys",
+        note: "Alice can send the request immediately after her Finished message.",
+      },
+      {
+        step: 6,
         direction: "server-to-client",
         title: "HTTP response",
-        messages: ["AEAD-protected application data"],
+        messages: ["HTTP/1.1 200 OK", "AEAD-protected application data"],
         protection: "application keys",
         note: "Bob replies with a separate server application traffic key.",
       },
@@ -648,7 +680,7 @@ function HandshakeVisual({ visual }: { visual: VersionVisual }) {
           </div>
           <div className="pt-2 text-center text-xs leading-relaxed text-slate-400">
             <span className="hidden sm:inline">{visual.summary}</span>
-            <span className="sm:hidden">Handshake flights</span>
+            <span className="sm:hidden">Protocol timeline</span>
           </div>
           <div className="text-center">
             <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-cyan-500 text-lg shadow-lg shadow-cyan-950/30">
@@ -671,7 +703,10 @@ function HandshakeVisual({ visual }: { visual: VersionVisual }) {
               >
                 <div className="relative z-10 flex justify-center">
                   {fromClient ? (
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-orange-500 text-xs font-bold shadow-md">
+                    <span
+                      aria-label={`Timeline event ${flight.step}`}
+                      className="flex h-8 min-w-8 items-center justify-center rounded-full border-2 border-white bg-orange-500 px-1 text-[9px] font-bold shadow-md"
+                    >
                       {flight.step}
                     </span>
                   ) : (
@@ -713,7 +748,10 @@ function HandshakeVisual({ visual }: { visual: VersionVisual }) {
 
                 <div className="relative z-10 flex justify-center">
                   {!fromClient ? (
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-cyan-500 text-xs font-bold shadow-md">
+                    <span
+                      aria-label={`Timeline event ${flight.step}`}
+                      className="flex h-8 min-w-8 items-center justify-center rounded-full border-2 border-white bg-cyan-500 px-1 text-[9px] font-bold shadow-md"
+                    >
                       {flight.step}
                     </span>
                   ) : (
