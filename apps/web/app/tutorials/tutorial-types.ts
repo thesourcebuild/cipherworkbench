@@ -40,6 +40,7 @@ export interface TutorialMeta {
 export interface TutorialContent {
   analogy: string;
   problem: string;
+  visualization?: "tls13-handshake";
   steps: TutorialStep[];
   takeaways: string[];
   seed: TutorialSeed;

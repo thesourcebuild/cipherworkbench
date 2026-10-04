@@ -10,6 +10,7 @@ import {
 import { loadTutorialContent } from "./tutorial-loader";
 import type { TutorialContent } from "./tutorial-types";
 import { TutorialMarkdown } from "./tutorial-markdown";
+import { Tls13HandshakeVisual } from "./tls13-handshake-visual";
 
 export interface TutorialViewerProps {
   tutorialId: string;
@@ -138,6 +139,8 @@ export function TutorialViewer({
               />
             </div>
           </section>
+
+          {content.visualization === "tls13-handshake" ? <Tls13HandshakeVisual /> : null}
 
           {/* Step-by-Step Scenario Walkthrough */}
           <section className="space-y-4">

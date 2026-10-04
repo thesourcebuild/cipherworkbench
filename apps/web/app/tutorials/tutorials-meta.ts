@@ -334,7 +334,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
         "id": "5.1-the-complete-tls-handshake",
         "number": "5.1",
         "title": "The TLS 1.3 Handshake: The Full Symphony",
-        "subtitle": "How ECDH, Digital Signatures, and AES-GCM combine to secure web browsers",
+        "subtitle": "A message-by-message 1-RTT journey from ClientHello to encrypted HTTP",
         "conceptId": "putting-it-together",
         "family": "asymmetric",
         "toolId": "ecdh",
@@ -346,7 +346,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Eve",
           "Mallory"
         ],
-        "summary": "When you type https:// into your browser, all four previous concepts execute in under 50 milliseconds! Alice (the browser) and Bob (the web server) use ECDH to agree on a session key, verify Bob's identity with Digital Signatures, and switch to AES-GCM for all webpage data."
+        "summary": "Alice and Bob negotiate fresh ephemeral keys, derive directional handshake secrets with HKDF, authenticate Bob's certificate and transcript, exchange Finished messages, and begin AEAD-protected HTTP in one round trip."
       },
       {
         "id": "5.2-the-imposter-in-the-middle",
