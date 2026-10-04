@@ -222,29 +222,25 @@ function DiagramFrame({
       )}
     >
       <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-4 sm:px-6 dark:border-white/10 dark:bg-white/[0.035]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p
-              className={cn("text-[10px] font-bold uppercase tracking-[0.2em]", styles.eyebrow)}
-            >
-              {eyebrow}
-            </p>
-            <h2
-              id={`mechanism-${id}-title`}
-              className="mt-1 text-lg font-bold tracking-tight text-slate-950 sm:text-xl dark:text-white"
-            >
-              {title}
-            </h2>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className={cn("text-[10px] font-bold uppercase tracking-[0.2em]", styles.eyebrow)}>
+            {eyebrow}
+          </p>
           <span
             className={cn(
-              "rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider",
+              "max-w-full rounded-full border px-3 py-1 text-center text-[10px] font-bold uppercase tracking-wider",
               styles.badge,
             )}
           >
             {property}
           </span>
         </div>
+        <h2
+          id={`mechanism-${id}-title`}
+          className="mt-1 text-lg font-bold tracking-tight text-slate-950 sm:text-xl dark:text-white"
+        >
+          {title}
+        </h2>
       </div>
 
       <div className="p-4 sm:p-6">{children}</div>
@@ -271,7 +267,7 @@ function CrcDiagram() {
       id="crc"
       eyebrow="CRC-32 mechanism"
       title="The frame carries a CRC-32 check value for verification"
-      property="Error detection"
+      property="Error detection + integrity"
       tone="sky"
       caption={
         <>
@@ -366,7 +362,7 @@ function HashDiagram() {
       id="hash"
       eyebrow="SHA-256 mechanism"
       title="A SHA-256 fingerprint verifies file integrity"
-      property="Integrity"
+      property="Error detection + integrity"
       tone="violet"
       caption={
         <>
@@ -399,7 +395,7 @@ function HmacDiagram() {
       id="hmac"
       eyebrow="HMAC-SHA-256 mechanism"
       title="The message and shared secret produce an authentication tag"
-      property="Integrity + authenticity"
+      property="Error detection + integrity + authenticity"
       tone="emerald"
       caption={
         <>
