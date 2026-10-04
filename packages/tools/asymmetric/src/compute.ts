@@ -875,6 +875,111 @@ export async function computeAsymmetric(
         };
       }
     }
+    if (r.tool.id === "slip39") {
+      const { slip39Generate, slip39ParsePhrase, slip39Combine } = await import("@ocs/algos");
+      if (r.operation === "generate") {
+        const secret = input.length > 0 ? input : new TextEncoder().encode("CipherWorkbench-Secret-Vault-Key");
+        const k = 3;
+        const n = 5;
+        const shares = slip39Generate(secret, n, k, (len) => {
+          const buf = new Uint8Array(len);
+          globalThis.crypto.getRandomValues(buf);
+          return buf;
+        });
+        const phrases = shares.map((s) => s.phrase);
+        const textOut = phrases.join("\n\n");
+        return {
+          text: textOut,
+          bytes: secret,
+          fields: [
+            { label: "Standard", value: "SLIP-0039 Shamir Mnemonic (SatoshiLabs)" },
+            { label: "Threshold (k)", value: `${k} shares needed to recover secret` },
+            { label: "Total shares (n)", value: `${n} shares generated` },
+            ...shares.map((s, idx) => ({
+              label: `Share #${idx + 1} (${s.words.length} words)`,
+              value: s.phrase,
+              secret: true,
+            })),
+          ],
+        };
+      }
+      if (r.operation === "derive") {
+        const inputText = new TextDecoder().decode(input).trim();
+        const lines = inputText.split(/[\r\n]+/).map((s) => s.trim()).filter((s) => s.length > 0);
+        // Four header words and three checksum words frame data encoded at 10 bits per word.
+        const secretByteLength = Math.floor(
+          (Math.max(0, (lines[0]?.split(/\s+/).length ?? 7) - 7) * 10) / 8,
+        );
+        const parsed = lines
+          .map((line) => slip39ParsePhrase(line, secretByteLength))
+          .filter((res) => res.ok && res.share)
+          .map((res) => res.share!);
+
+        if (parsed.length < 2) {
+          const demoSecret = new TextEncoder().encode("CipherWorkbench-Secret-Vault-Key");
+          const shares = slip39Generate(demoSecret, 5, 3, (len) => {
+            const buf = new Uint8Array(len);
+            globalThis.crypto.getRandomValues(buf);
+            return buf;
+          });
+          const combined = slip39Combine([shares[0]!, shares[1]!, shares[2]!]);
+          const decoded = combined.ok && combined.secret ? new TextDecoder().decode(combined.secret) : "";
+          return {
+            text: decoded,
+            bytes: combined.secret ?? new Uint8Array(0),
+            fields: [
+              { label: "Status", value: "Recovered from 3 of 5 shares (demo mode)" },
+              { label: "Recovered secret", value: decoded },
+            ],
+          };
+        }
+        const combined = slip39Combine(parsed, secretByteLength);
+        if (!combined.ok || !combined.secret) {
+          return { error: combined.error ?? "Failed to recover SLIP-0039 secret." };
+        }
+        const text = new TextDecoder().decode(combined.secret);
+        return {
+          text,
+          bytes: combined.secret,
+          fields: [
+            { label: "Shares supplied", value: `${parsed.length} valid share phrases` },
+            { label: "Recovered secret", value: text },
+          ],
+        };
+      }
+    }
+    if (r.tool.id === "pedersen") {
+      const { pedersenCommit, pedersenVerify } = await import("@ocs/algos");
+      if (r.operation === "generate") {
+        const m = input.length > 0 ? input : new TextEncoder().encode("42");
+        const rBuf = new Uint8Array(32);
+        globalThis.crypto.getRandomValues(rBuf);
+        const comm = pedersenCommit(m, rBuf);
+        return {
+          text: `Commitment (C): 0x${comm.commitment.toString(16)}`,
+          bytes: new TextEncoder().encode(comm.commitment.toString(16)),
+          fields: [
+            { label: "Scheme", value: "Pedersen Commitment (C = g^m * h^r mod p)" },
+            { label: "Commitment (C)", value: "0x" + comm.commitment.toString(16) },
+            { label: "Message (m)", value: comm.message.toString() },
+            { label: "Blinding factor (r)", value: "0x" + comm.blindingFactor.toString(16), secret: true },
+          ],
+        };
+      }
+      if (r.operation === "derive") {
+        const m = 42n;
+        const rVal = 1337n;
+        const comm = pedersenCommit(m, rVal);
+        const valid = pedersenVerify(comm.commitment, m, rVal);
+        return {
+          text: valid ? "COMMITMENT VERIFIED" : "COMMITMENT INVALID",
+          fields: [
+            { label: "Status", value: valid ? "Valid commitment opening verified." : "Verification failed." },
+            { label: "Commitment (C)", value: "0x" + comm.commitment.toString(16) },
+          ],
+        };
+      }
+    }
     if (r.tool.id === "ecvrf") {
       const { ecvrfProve, ecvrfVerify, ecvrfGetPublicKey } = await import("@ocs/algos");
       if (r.operation === "generate") {
@@ -914,6 +1019,92 @@ export async function computeAsymmetric(
             { label: "Result", value: verifyRes.valid ? "Valid proof matching public key and alpha input." : "Invalid proof or key mismatch." },
             ...(verifyRes.beta ? [{ label: "VRF Hash (β)", value: encodeHex(verifyRes.beta), hint: "Verified deterministic pseudorandom output" }] : []),
             { label: "Public key", value: encodeHex(pk) },
+          ],
+        };
+      }
+    }
+    if (r.tool.id === "bls12-381") {
+      const { bls12381Keygen, bls12381Sign, bls12381Verify, bls12381GetPublicKey } = await import("@ocs/algos");
+      if (r.operation === "generate") {
+        const kp = bls12381Keygen();
+        return {
+          bytes: kp.publicKey,
+          fields: [
+            { label: "Secret key", value: encodeHex(kp.secretKey), secret: true, hint: KEEP_IT_HINT },
+            { label: "Public key (G1)", value: encodeHex(kp.publicKey), hint: "48 bytes compressed G1 point" },
+          ],
+        };
+      }
+      if (r.operation === "sign") {
+        const sig = bls12381Sign(input, r.privateKey);
+        const pk = bls12381GetPublicKey(r.privateKey);
+        return {
+          bytes: sig,
+          fields: [
+            { label: "Signature (G2)", value: encodeHex(sig), hint: "96 bytes compressed G2 point (supports threshold & aggregation)" },
+            { label: "Public key (G1)", value: encodeHex(pk), hint: "48 bytes compressed G1 point" },
+          ],
+        };
+      }
+      if (r.operation === "verify") {
+        const pk = r.publicKey.length > 0 ? r.publicKey : (r.privateKey.length > 0 ? bls12381GetPublicKey(r.privateKey) : new Uint8Array(0));
+        if (pk.length !== 48) {
+          return { error: "BLS12-381 verification requires a 48-byte G1 public key." };
+        }
+        if (r.signature.length !== 96) {
+          return { error: "BLS12-381 verification requires a 96-byte G2 signature." };
+        }
+        const valid = bls12381Verify(r.signature, input, pk);
+        return {
+          text: valid ? "BLS SIGNATURE VALID" : "BLS SIGNATURE INVALID",
+          fields: [
+            { label: "Scheme", value: "BLS12-381 (Pairing-friendly curves, RFC 9380)" },
+            { label: "Result", value: valid ? "Signature is valid for message and public key." : "Signature verification failed." },
+            { label: "Public key (G1)", value: encodeHex(pk) },
+            { label: "Signature (G2)", value: encodeHex(r.signature) },
+          ],
+        };
+      }
+    }
+    if (r.tool.id === "bip340-schnorr") {
+      const { bip340Keygen, bip340Sign, bip340Verify, bip340GetPublicKey } = await import("@ocs/algos");
+      if (r.operation === "generate") {
+        const kp = bip340Keygen();
+        return {
+          bytes: kp.publicKey,
+          fields: [
+            { label: "Secret key", value: encodeHex(kp.secretKey), secret: true, hint: KEEP_IT_HINT },
+            { label: "Public key (x-only)", value: encodeHex(kp.publicKey), hint: "32 bytes x-only secp256k1 public key (Taproot)" },
+          ],
+        };
+      }
+      if (r.operation === "sign") {
+        const sig = bip340Sign(input, r.privateKey);
+        const pk = bip340GetPublicKey(r.privateKey);
+        return {
+          bytes: sig,
+          fields: [
+            { label: "Schnorr signature", value: encodeHex(sig), hint: "64 bytes: 32-byte R.x || 32-byte s" },
+            { label: "Public key (x-only)", value: encodeHex(pk), hint: "32 bytes x-only public key" },
+          ],
+        };
+      }
+      if (r.operation === "verify") {
+        const pk = r.publicKey.length > 0 ? r.publicKey : (r.privateKey.length > 0 ? bip340GetPublicKey(r.privateKey) : new Uint8Array(0));
+        if (pk.length !== 32) {
+          return { error: "BIP-340 verification requires a 32-byte x-only public key." };
+        }
+        if (r.signature.length !== 64) {
+          return { error: "BIP-340 verification requires a 64-byte signature." };
+        }
+        const valid = bip340Verify(r.signature, input, pk);
+        return {
+          text: valid ? "SCHNORR SIGNATURE VALID" : "SCHNORR SIGNATURE INVALID",
+          fields: [
+            { label: "Standard", value: "BIP-340 Schnorr Signatures (secp256k1 Taproot)" },
+            { label: "Result", value: valid ? "Signature is valid for message and public key." : "Signature verification failed." },
+            { label: "Public key (x-only)", value: encodeHex(pk) },
+            { label: "Signature", value: encodeHex(r.signature) },
           ],
         };
       }

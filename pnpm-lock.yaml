@@ -443,6 +443,9 @@ importers:
 
   packages/algos:
     dependencies:
+      '@noble/ciphers':
+        specifier: ^2.1.0
+        version: 2.3.0
       '@noble/curves':
         specifier: ^2.1.0
         version: 2.3.0

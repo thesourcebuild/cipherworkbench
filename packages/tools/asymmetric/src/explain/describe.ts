@@ -35,6 +35,52 @@ export function describeSpec(spec: AsymmetricSpec): string {
     }
   }
 
+  if (spec.variant === "slip39") {
+    switch (r.operation) {
+      case "generate":
+        return "Splits a master secret into SLIP-0039 Shamir Mnemonic share phrases with 10-bit word encoding and 30-bit polynomial checksum.";
+      case "derive":
+        return "Combines SLIP-0039 share phrases to verify checksums and reconstruct the master secret.";
+      default:
+        return "SLIP-0039 Shamir Mnemonic standard for threshold wallet seed backups.";
+    }
+  }
+
+  if (spec.variant === "shamir") {
+    switch (r.operation) {
+      case "generate":
+        return "Splits a master secret into N polynomial shares such that any K threshold shares can reconstruct it.";
+      case "derive":
+        return "Combines polynomial shares using Lagrange interpolation to reconstruct the secret.";
+      default:
+        return "Shamir's Secret Sharing Scheme.";
+    }
+  }
+
+  if (spec.variant === "pedersen") {
+    switch (r.operation) {
+      case "generate":
+        return "Generates a Pedersen commitment C = g^m * h^r mod p with perfect hiding and computational binding.";
+      case "derive":
+        return "Verifies that commitment C opens to message m with blinding factor r.";
+      default:
+        return "Pedersen Commitment Scheme.";
+    }
+  }
+
+  if (spec.variant === "paillier") {
+    switch (r.operation) {
+      case "generate":
+        return "Generates a fresh Paillier public key (n) and private key (λ, μ) for additively homomorphic encryption.";
+      case "encrypt":
+        return "Encrypts integer message m with Paillier homomorphic encryption c = g^m * r^n mod n^2.";
+      case "decrypt":
+        return "Decrypts ciphertext c using private key (λ, μ) to recover plaintext message m.";
+      default:
+        return "Paillier Cryptosystem.";
+    }
+  }
+
   switch (r.operation) {
     case "generate":
       return spec.variant === "rsa"

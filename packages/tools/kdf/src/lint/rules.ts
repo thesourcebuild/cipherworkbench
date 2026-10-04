@@ -39,6 +39,10 @@ export const RULE_CODES = [
 const SLOW_MEMORY_KIB = 512 * 1024;
 const SLOW_PBKDF2_ITERATIONS = 5_000_000;
 
+function isWalletTool(spec: KdfSpec): boolean {
+  return spec.variant === "bip39" || spec.variant === "bip32";
+}
+
 export const RULES: readonly LintRule<KdfSpec>[] = [
   {
     code: "K001",
@@ -210,6 +214,7 @@ export const RULES: readonly LintRule<KdfSpec>[] = [
   {
     code: "K004",
     check(spec) {
+      if (isWalletTool(spec)) return [];
       const result = resolveKdf(spec);
       if (!result.ok) return [];
       const r = result.resolved;
@@ -348,6 +353,7 @@ export const RULES: readonly LintRule<KdfSpec>[] = [
   {
     code: "K007",
     check(spec) {
+      if (isWalletTool(spec)) return [];
       const tool = requireKdfTool(spec.variant);
       const result = resolveKdf(spec);
       if (!result.ok || result.resolved.mode !== "derive") return [];
@@ -374,7 +380,7 @@ export const RULES: readonly LintRule<KdfSpec>[] = [
      */
     code: "K008",
     check(spec) {
-      if (spec.variant === "hkdf") return [];
+      if (spec.variant === "hkdf" || isWalletTool(spec)) return [];
       const result = resolveKdf(spec);
       if (!result.ok) return [];
       const r = result.resolved;

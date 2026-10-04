@@ -342,7 +342,7 @@ export function KeypairResultView({
                     Download Keypair Bundle (All Formats)
                   </span>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                    PEM, Raw Binary, Active Format, and JWK across separate files
+                    ZIP bundle containing PEM, Raw Binary, Active Format, and JWK files
                   </span>
                 </button>
               </div>

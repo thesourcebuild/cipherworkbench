@@ -249,6 +249,13 @@ export const RULES: readonly LintRule<AsymmetricSpec>[] = [
     code: "A007",
     check(spec) {
       if (operationOf(spec) !== "generate") return [];
+      if (
+        spec.variant === "shamir" ||
+        spec.variant === "slip39" ||
+        spec.variant === "pedersen"
+      ) {
+        return [];
+      }
       return [
         {
           code: "A007",

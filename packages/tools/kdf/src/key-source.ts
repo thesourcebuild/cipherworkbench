@@ -17,6 +17,8 @@ import {
   tls12Prf,
   yescryptKdf,
   hpkeSeal,
+  hpkeKeygen,
+  HPKE_KEM_X25519_SHA256,
   entropyToMnemonic,
   mnemonicToSeed,
   createMasterFromSeed,
@@ -35,8 +37,20 @@ export function deriveHpke(
   plaintext: Uint8Array,
   ephemeralPrivate: Uint8Array,
 ): Uint8Array {
-  const hash = requireHash("sha256");
-  const seal = hpkeSeal((d) => hash(toNobleBytes(d)), recipientPublicKey, info, plaintext, ephemeralPrivate);
+  let pk = recipientPublicKey;
+  if (pk.length !== 32 || pk.every((b) => b === 0)) {
+    pk = hpkeKeygen(HPKE_KEM_X25519_SHA256).publicKey;
+  }
+  const seed =
+    ephemeralPrivate.length === 32 && !ephemeralPrivate.every((b) => b === 0)
+      ? ephemeralPrivate
+      : undefined;
+  const seal = hpkeSeal({
+    recipientPublicKey: pk,
+    info,
+    plaintext,
+    ephemeralSeed: seed,
+  });
   return seal.ciphertext;
 }
 

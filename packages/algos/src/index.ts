@@ -337,3 +337,8 @@ export * from "./ecvrf";
 
 // File Encryption Containers
 export * from "./age";
+export * from "./hpke";
+
+// Advanced Signatures & Threshold Primitives
+export * from "./bls12381";
+export * from "./bip340";

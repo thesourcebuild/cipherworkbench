@@ -4,6 +4,8 @@ import { asymmetricCatalogueFor } from "./catalogue/options";
 import {
   ED25519_CURVE,
   ECVRF_CURVE,
+  BLS12381_CURVE,
+  BIP340_CURVE,
   getCurve,
   getParamSet,
   PQ_PARAM_SETS,
@@ -99,7 +101,7 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
   const catalogue = asymmetricCatalogueFor(spec.variant);
 
   const curve =
-    spec.variant === "ecdsa" || spec.variant === "ecdh" || spec.variant === "shamir" || spec.variant === "slip39" || spec.variant === "pedersen"
+    spec.variant === "ecdsa" || spec.variant === "ecdh"
       ? getCurve(spec.variant === "ecdsa" ? "ecdsa" : "ecdh", readCurve(spec.options, spec.variant))
       : undefined;
 
@@ -113,7 +115,7 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
   }
 
   // A share link can name a curve this tool does not offer.
-  if ((spec.variant === "ecdsa" || spec.variant === "ecdh" || spec.variant === "shamir" || spec.variant === "slip39" || spec.variant === "pedersen") && !curve) {
+  if ((spec.variant === "ecdsa" || spec.variant === "ecdh") && !curve) {
     return problem("curve", `${tool.label} does not offer that curve.`);
   }
 
@@ -138,6 +140,16 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
   // Generating a keypair reads nothing else, and refusing it for a missing key would make
   // the one operation that fixes a missing key unreachable.
   if (operation === "generate") return { ok: true, resolved: base };
+
+  // Secret sharing and commitments consume their operation data from the workbench input.
+  // Their "derive" operation is reconstruction/verification, not key agreement.
+  if (
+    spec.variant === "shamir" ||
+    spec.variant === "slip39" ||
+    spec.variant === "pedersen"
+  ) {
+    return { ok: true, resolved: base };
+  }
 
   const labelResult = decodeBytesOption(catalogue, spec.options, OPTION_OAEP_LABEL);
   if (!labelResult.ok) return problem(OPTION_OAEP_LABEL, labelResult.error);
@@ -171,8 +183,18 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
 
   return tool.usesPem
     ? resolvePemKeys(spec, base)
-    : // Ed25519 or ECVRF has no curve option, so its fixed lengths stand in as one.
-      resolveRawKeys(spec, base, curve ?? (spec.variant === "ecvrf" ? ECVRF_CURVE : ED25519_CURVE));
+    : resolveRawKeys(
+        spec,
+        base,
+        curve ??
+          (spec.variant === "ecvrf"
+            ? ECVRF_CURVE
+            : spec.variant === "bls12-381"
+              ? BLS12381_CURVE
+              : spec.variant === "bip340-schnorr"
+                ? BIP340_CURVE
+                : ED25519_CURVE),
+      );
 }
 
 /** Which key each operation needs, so one table drives the requirement checks. */

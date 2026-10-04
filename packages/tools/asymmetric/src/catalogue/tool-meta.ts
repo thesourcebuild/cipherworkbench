@@ -262,7 +262,7 @@ export const ASYMMETRIC_TOOLS: readonly AsymmetricToolMeta[] = [
     operations: ["generate", "derive"],
     security: "modern",
     tags: ["pedersen", "commitment", "homomorphic", "zero-knowledge", "blinding"],
-    summary: "Information-theoretically binding and computationally hiding commitment scheme.",
+    summary: "Cryptographic commitment scheme with additive homomorphism, perfect hiding, and computational binding.",
     usesPem: false,
   },
   {
@@ -313,6 +313,26 @@ export const ASYMMETRIC_TOOLS: readonly AsymmetricToolMeta[] = [
     security: "modern",
     tags: ["ecvrf", "vrf", "rfc9381", "verifiable-random", "zero-knowledge", "ed25519", "proof"],
     summary: "Verifiable Random Functions using Elliptic Curves (RFC 9381) producing deterministic pseudorandom output and proof.",
+    usesPem: false,
+  },
+  {
+    id: "bls12-381",
+    label: "BLS12-381",
+    category: "Pairing-Friendly Curves",
+    operations: ["generate", "sign", "verify"],
+    security: "modern",
+    tags: ["bls", "bls12-381", "pairing", "aggregate", "ethereum", "threshold", "sign", "verify"],
+    summary: "Pairing-friendly BLS signatures over BLS12-381 with multi-party signature aggregation (RFC 9380).",
+    usesPem: false,
+  },
+  {
+    id: "bip340-schnorr",
+    label: "BIP-340 Schnorr",
+    category: "Elliptic curve",
+    operations: ["generate", "sign", "verify"],
+    security: "modern",
+    tags: ["bip340", "schnorr", "secp256k1", "taproot", "bitcoin", "bip341", "batch-verify", "sign", "verify"],
+    summary: "Bitcoin Taproot 64-byte Schnorr signatures with 32-byte x-only public keys and batch verification.",
     usesPem: false,
   },
 ];
@@ -595,6 +615,24 @@ export const ECVRF_CURVE: CurveMeta = {
   publicLen: 32,
   signatureLen: 80,
   summary: "RFC 9381 ECVRF-EDWARDS25519-SHA512-TAI",
+};
+
+export const BLS12381_CURVE: CurveMeta = {
+  id: "bls12-381",
+  label: "BLS12-381",
+  secretLen: 32,
+  publicLen: 48,
+  signatureLen: 96,
+  summary: "RFC 9380 & IETF draft-irtf-cfrg-bls-signature (G1 pubkey, G2 signature)",
+};
+
+export const BIP340_CURVE: CurveMeta = {
+  id: "bip340-schnorr",
+  label: "BIP-340 Schnorr",
+  secretLen: 32,
+  publicLen: 32,
+  signatureLen: 64,
+  summary: "BIP-340 Taproot 64-byte Schnorr signatures over secp256k1 with 32-byte x-only public keys",
 };
 
 /**

@@ -51,6 +51,9 @@ function specFor(variant: string, options: AsymmetricSpec["options"] = {}): Asym
   return { ...base, options: { ...base.options, ...options } };
 }
 
+const NON_KEYPAIR_IDS = new Set(["shamir", "slip39", "pedersen"]);
+const KEYPAIR_TOOLS = ASYMMETRIC_TOOLS.filter((tool) => !NON_KEYPAIR_IDS.has(tool.id));
+
 async function run(
   variant: string,
   options: AsymmetricSpec["options"],
@@ -1033,8 +1036,8 @@ describe("lint rules", () => {
     expect(diagnostic?.message).toContain("190");
   });
 
-  it("A007 warns that a generated key is not stored, for every tool", () => {
-    for (const tool of ASYMMETRIC_TOOLS) {
+  it("A007 warns that a generated key is not stored, for every keypair tool", () => {
+    for (const tool of KEYPAIR_TOOLS) {
       const spec = specFor(tool.id, { [OPTION_OPERATION]: "generate" });
       expect(
         lint(spec).diagnostics.some((d) => d.code === "A007"),
@@ -1068,7 +1071,7 @@ describe("lint rules", () => {
 // ── Catalogue and manifests ─────────────────────────────────────────────
 
 describe("catalogue integrity", () => {
-  for (const tool of ASYMMETRIC_TOOLS) {
+  for (const tool of KEYPAIR_TOOLS) {
     it(`${tool.id} has a well-formed option catalogue`, () => {
       const catalogue = asymmetricCatalogueFor(tool.id);
       expect(validateCatalogue(catalogue.options)).toEqual([]);
@@ -1155,8 +1158,8 @@ describe("manifests", () => {
 });
 
 describe("describe", () => {
-  it("says something specific for every operation of every tool", () => {
-    for (const tool of ASYMMETRIC_TOOLS) {
+  it("says something specific for every operation of every keypair tool", () => {
+    for (const tool of KEYPAIR_TOOLS) {
       for (const operation of tool.operations) {
         const text = describeSpec(specFor(tool.id, { [OPTION_OPERATION]: operation }));
         expect(text.length, `${tool.id}/${operation}`).toBeGreaterThan(20);

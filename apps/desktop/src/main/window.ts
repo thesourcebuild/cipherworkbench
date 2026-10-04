@@ -79,6 +79,14 @@ export function createMainWindow({ devUrl, preloadPath }: CreateWindowOptions): 
   // No WebView tags, no attaching arbitrary preloads.
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
 
+  // Support file downloads initiated by the renderer (blobs, exports, key bundles)
+  window.webContents.session.on("will-download", (_event, item) => {
+    if (!item.getSavePath()) {
+      const downloadsDir = app.getPath("downloads");
+      item.setSavePath(path.join(downloadsDir, item.getFilename()));
+    }
+  });
+
   /**
    * Refuse every network request the renderer might make. Packaged builds only.
    *

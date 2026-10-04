@@ -515,6 +515,46 @@ const ECVRF_OPTIONS: readonly Def[] = [
   ),
 ];
 
+const BLS12381_OPTIONS: readonly Def[] = [
+  operationOption(["generate", "sign", "verify"]),
+  rawPrivateKeyOption(
+    ["sign"],
+    { exact: [32] },
+    "32-byte secret key scalar for BLS12-381 pairing signatures.",
+  ),
+  rawPublicKeyOption(
+    "Public key",
+    ["verify"],
+    { exact: [48] },
+    "Exactly 48 bytes (G1 compressed point).",
+    "A compressed G1 point representing the BLS12-381 verification public key.",
+  ),
+  signatureOption(
+    { exact: [96] },
+    "BLS12-381 signature (96 bytes: G2 compressed point). Multi-party signatures can be aggregated into this same 96-byte size.",
+  ),
+];
+
+const BIP340_OPTIONS: readonly Def[] = [
+  operationOption(["generate", "sign", "verify"]),
+  rawPrivateKeyOption(
+    ["sign"],
+    { exact: [32] },
+    "32-byte secret key scalar for BIP-340 Schnorr signatures.",
+  ),
+  rawPublicKeyOption(
+    "Public key",
+    ["verify"],
+    { exact: [32] },
+    "Exactly 32 bytes (x-only public key, per BIP-340).",
+    "A 32-byte x-only public key representing the Taproot internal or output key.",
+  ),
+  signatureOption(
+    { exact: [64] },
+    "64-byte BIP-340 Schnorr signature (32-byte R.x || 32-byte s).",
+  ),
+];
+
 function pqOptions(toolId: string): readonly Def[] {
   const tool = requireAsymmetricTool(toolId);
   const isKem = toolId === "mlkem" || toolId === "mceliece" || toolId === "hqc" || toolId === "ntru" || toolId === "x25519mlkem768";
@@ -549,6 +589,14 @@ function pqOptions(toolId: string): readonly Def[] {
   ];
 }
 
+const SECRET_SHARING_OPTIONS: readonly Def[] = [
+  operationOption(["generate", "derive"]),
+];
+
+const PEDERSEN_OPTIONS: readonly Def[] = [
+  operationOption(["generate", "derive"]),
+];
+
 const CACHE = new Map<string, OptionCatalogue<AsymmetricOptionGroup>>();
 
 export function asymmetricCatalogueFor(toolId: string): OptionCatalogue<AsymmetricOptionGroup> {
@@ -575,14 +623,16 @@ export function asymmetricCatalogueFor(toolId: string): OptionCatalogue<Asymmetr
       mceliece: pqOptions("mceliece"),
       hqc: pqOptions("hqc"),
       "stateful-hash-sig": pqOptions("stateful-hash-sig"),
-      shamir: ECDH_OPTIONS,
-      slip39: ECDH_OPTIONS,
-      pedersen: ECDH_OPTIONS,
+      shamir: SECRET_SHARING_OPTIONS,
+      slip39: SECRET_SHARING_OPTIONS,
+      pedersen: PEDERSEN_OPTIONS,
       paillier: PAILLIER_OPTIONS,
       ntru: pqOptions("ntru"),
       sqisign: pqOptions("sqisign"),
       x25519mlkem768: pqOptions("x25519mlkem768"),
       ecvrf: ECVRF_OPTIONS,
+      "bls12-381": BLS12381_OPTIONS,
+      "bip340-schnorr": BIP340_OPTIONS,
     };
     const options = byTool[toolId];
     if (!options) {

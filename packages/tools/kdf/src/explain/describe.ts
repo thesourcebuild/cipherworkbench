@@ -32,6 +32,10 @@ export function describeSpec(spec: KdfSpec): string {
       return `Hashes the password with bcrypt at cost ${r.bcryptCost} — 2^${r.bcryptCost} rounds.`;
     case "bcryptpbkdf":
       return `Derives ${size} with bcrypt-PBKDF over ${r.rounds.toLocaleString()} rounds.`;
+    case "bip39":
+      return "Generates 12–24 word mnemonic recovery phrases and derives 512-bit master seeds via PBKDF2-HMAC-SHA512.";
+    case "bip32":
+      return "Hierarchical deterministic key derivation (BIP-32/BIP-44) for multi-chain wallet accounts on secp256k1.";
     default:
       return `${tool.label} — ${size}.`;
   }

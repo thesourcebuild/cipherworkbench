@@ -73,7 +73,52 @@ describe("Secret Sharing & Commitments", () => {
       const secret = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
       const shares = slip39Generate(secret, 5, 3, mockRng);
       expect(shares.length).toBe(5);
-      expect(shares[0]!.words.length).toBeGreaterThanOrEqual(10);
+      expect(shares[0]!.words.length).toBe(20); // 4 header + 13 data + 3 checksum = 20 words for 128-bit
+    });
+
+    it("parses and validates SLIP-0039 phrases and detects corrupted checksum", async () => {
+      const { slip39ParsePhrase } = await import("@ocs/algos");
+      const secret = new TextEncoder().encode("TrezorMasterSeedData");
+      const shares = slip39Generate(secret, 4, 2, mockRng);
+
+      // Valid phrase parse
+      const parsed = slip39ParsePhrase(shares[0]!.phrase, secret.length);
+      expect(parsed.ok).toBe(true);
+      expect(parsed.share).toBeDefined();
+      expect(parsed.share!.memberIndex).toBe(shares[0]!.memberIndex);
+
+      // 1. Detect unknown word outside 1024 dictionary
+      const invalidWords = shares[0]!.phrase.split(" ");
+      invalidWords[0] = "zebra"; // not in 1024 SLIP-39 dictionary
+      const unknownWordRes = slip39ParsePhrase(invalidWords.join(" "), secret.length);
+      expect(unknownWordRes.ok).toBe(false);
+      expect(unknownWordRes.error).toContain("is not in the SLIP-0039 wordlist");
+
+      // 2. Detect checksum mismatch when word is in dictionary but altered
+      const alteredWords = shares[0]!.phrase.split(" ");
+      alteredWords[alteredWords.length - 1] = alteredWords[alteredWords.length - 1] === "abandon" ? "ability" : "abandon";
+      const corruptedRes = slip39ParsePhrase(alteredWords.join(" "), secret.length);
+      expect(corruptedRes.ok).toBe(false);
+      expect(corruptedRes.error).toContain("checksum failed");
+    });
+
+    it("reconstructs secret from any K valid SLIP-0039 share phrases", async () => {
+      const { slip39ParsePhrase, slip39Combine } = await import("@ocs/algos");
+      const secret = new TextEncoder().encode("TrezorRecoveryMnemonicSecret2026");
+      const shares = slip39Generate(secret, 5, 3, mockRng);
+
+      // Parse 3 out of 5 shares (e.g. shares 0, 2, 4)
+      const subset = [shares[0]!, shares[2]!, shares[4]!];
+      const parsedSubset = subset.map((s) => slip39ParsePhrase(s.phrase, secret.length).share!);
+
+      const combineRes = slip39Combine(parsedSubset, secret.length);
+      expect(combineRes.ok).toBe(true);
+      expect(new TextDecoder().decode(combineRes.secret)).toBe("TrezorRecoveryMnemonicSecret2026");
+
+      // Insufficient shares (2 of 3 needed)
+      const insufficient = slip39Combine([parsedSubset[0]!, parsedSubset[1]!], secret.length);
+      expect(insufficient.ok).toBe(false);
+      expect(insufficient.error).toContain("Threshold not reached");
     });
   });
 

@@ -866,7 +866,18 @@ describe("lint rules", () => {
         ikmEncoding: "hex",
       });
       const codes = lint(spec).diagnostics.map((d) => d.code);
-      expect(codes.includes("K007"), meta.id).toBe(!meta.supportsVerify);
+      expect(codes.includes("K007"), meta.id).toBe(
+        !meta.supportsVerify && meta.id !== "bip39" && meta.id !== "bip32",
+      );
+    }
+  });
+
+  it("does not apply password-storage diagnostics to BIP-39 or BIP-32", () => {
+    for (const toolId of ["bip39", "bip32"]) {
+      const codes = lint(specFor(toolId)).diagnostics.map((diagnostic) => diagnostic.code);
+      expect(codes, toolId).not.toContain("K004");
+      expect(codes, toolId).not.toContain("K007");
+      expect(codes, toolId).not.toContain("K008");
     }
   });
 

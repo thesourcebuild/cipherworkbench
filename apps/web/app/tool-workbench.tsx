@@ -9,6 +9,7 @@ import {
   isAvailableOn,
   lint,
   type ToolDefinition,
+  type ToolResult,
   type ToolSample,
   type ToolSpecBase,
 } from "@ocs/engine";
@@ -96,6 +97,10 @@ export function ToolWorkbench({
   const [loadError, setLoadError] = useState<string | undefined>();
   const [guideOpen, setGuideOpen] = useState(false);
   const [GuideContent, setGuideContent] = useState<ComponentType | undefined>();
+  const [customResultState, setCustomResultState] = useState<{
+    toolId: string;
+    result: ToolResult;
+  }>();
 
   const guideDef = useMemo(() => getToolGuide(toolId), [toolId]);
 
@@ -211,6 +216,11 @@ export function ToolWorkbench({
         prev ? { ...prev, options: setOption(prev.options, id, value) } : prev,
       ),
     [],
+  );
+
+  const handleCustomResultChange = useCallback(
+    (result: ToolResult) => setCustomResultState({ toolId, result }),
+    [toolId],
   );
 
   const [secondaryInput, setSecondaryInput] = useState<InputState>(() => ({
@@ -500,6 +510,8 @@ export function ToolWorkbench({
    */
   const acceptedByteLengths = (optionId: string) => tool.acceptedByteLengths?.(spec, optionId);
   const CustomWorkbench = tool ? getCustomWorkbench(tool.id) : undefined;
+  const customResult = customResultState?.toolId === tool.id ? customResultState.result : undefined;
+  const resultState = customResult ? { status: "done" as const, result: customResult } : state;
 
   const hasSettings =
     visibleOptionGroups(tool.catalogue, tool.groups, tag, "settings").length > 0;
@@ -780,6 +792,7 @@ export function ToolWorkbench({
             tag={tag}
             generateLength={generateLength}
             acceptedByteLengths={acceptedByteLengths}
+            onResultChange={handleCustomResultChange}
             inputStep={
               effectiveReadsInput ? (
                 <InputPanel
@@ -907,10 +920,10 @@ export function ToolWorkbench({
         ))}
 
         <ResultPanel
-          state={state}
+          state={resultState}
           manifest={tool}
           spec={spec}
-          input={input}
+          input={customResult ? undefined : input}
           infoFields={infoFields}
           outputEncodings={tool.outputEncodings}
           outputEncoding={outputEncoding}
@@ -930,7 +943,7 @@ export function ToolWorkbench({
         */}
         {tool.supportsVerify && (
           <VerifyPanel
-            result={state.result}
+            result={resultState.result}
             expected={expected}
             onExpectedChange={setExpected}
             /**

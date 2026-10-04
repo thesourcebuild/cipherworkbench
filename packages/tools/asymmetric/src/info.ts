@@ -274,5 +274,74 @@ export function asymmetricInfo(spec: AsymmetricSpec): ToolResultField[] {
     return fields;
   }
 
+  // 5. SLIP-0039
+  if (spec.variant === "slip39") {
+    fields.push(
+      {
+        label: "Standard",
+        value: "SLIP-0039 (SatoshiLabs)",
+        hint: "Shamir's Secret Sharing for Mnemonic Codes",
+      },
+      {
+        label: "Wordlist size",
+        value: "1024 words (10 bits per word)",
+      },
+      {
+        label: "Checksum",
+        value: "30-bit polynomial checksum (3 words)",
+        hint: "Reed-Solomon / BCH polynomial checksum detecting transpositions and substitutions.",
+      },
+      {
+        label: "Threshold security",
+        value: "Information-theoretically secure against < K compromised shares",
+      },
+    );
+    return fields;
+  }
+
+  // 6. Shamir Secret Sharing
+  if (spec.variant === "shamir") {
+    fields.push(
+      {
+        label: "Algorithm",
+        value: "Shamir's Secret Sharing Scheme (1979)",
+        hint: "Polynomial interpolation over finite field GF(256).",
+      },
+      {
+        label: "Mathematical foundation",
+        value: "Lagrange Polynomial Interpolation",
+      },
+      {
+        label: "Security guarantee",
+        value: "Information-theoretic (perfect secrecy for < K shares)",
+      },
+    );
+    return fields;
+  }
+
+  // 7. Pedersen Commitments
+  if (spec.variant === "pedersen") {
+    fields.push(
+      {
+        label: "Scheme",
+        value: "Pedersen Commitment Scheme",
+        hint: "C = g^m * h^r mod p",
+      },
+      {
+        label: "Hiding property",
+        value: "Perfect hiding (information-theoretically hides message m)",
+      },
+      {
+        label: "Binding property",
+        value: "Computationally binding (under discrete logarithm assumption)",
+      },
+      {
+        label: "Homomorphism",
+        value: "Additively homomorphic: C(m₁ + m₂, r₁ + r₂) = C(m₁, r₁) · C(m₂, r₂)",
+      },
+    );
+    return fields;
+  }
+
   return fields;
 }

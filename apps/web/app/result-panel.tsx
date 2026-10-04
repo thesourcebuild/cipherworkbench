@@ -90,7 +90,10 @@ export function ResultPanel({
    */
   const [hexPrefix, setHexPrefix] = useState<HexPrefix>("");
 
-  const isKeygen = manifest?.family === "asymmetric" && spec?.options?.operation === "generate";
+  const isKeygen =
+    manifest?.family === "asymmetric" &&
+    spec?.options?.operation === "generate" &&
+    !["shamir", "slip39", "pedersen", "paillier"].includes(manifest.id);
 
   const isCertDiff = Boolean(state.result?.tableRows?.length);
 

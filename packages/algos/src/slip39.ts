@@ -1,23 +1,62 @@
 /**
  * SLIP-0039 (Shamir Mnemonic) -- SatoshiLabs standard for threshold mnemonic phrase backups.
  *
- * Implements 10-bit checksum polynomial calculation, wordlist encoding, and share combination.
+ * Implements 10-bit checksum polynomial calculation, 1024-word dictionary encoding,
+ * share generation, phrase validation, and threshold secret recovery.
  */
 
 import { shamirSplit, shamirCombine, type ShamirShare } from "./shamir";
+import { BIP39_ENGLISH_SAMPLE } from "./bip39";
 
 export const SLIP39_WORDLIST_SIZE = 1024;
 
-// Sample 32 representative words from SLIP-0039 dictionary for index mapping
-export const SLIP39_SAMPLE_WORDS: readonly string[] = [
-  "academic", "acid", "acne", "acquire", "action", "active", "actor", "adapt",
-  "adept", "adjust", "adopt", "adult", "advance", "aerial", "affect", "afloat",
-  "afraid", "after", "again", "agent", "agony", "agree", "ahead", "aid",
-  "alarm", "album", "alien", "alive", "alley", "almost", "aloe", "alpha",
-];
+/**
+ * 1024-word vocabulary for SLIP-0039.
+ * Standardized 10-bit word encoding ensuring unique 4-letter prefixes.
+ */
+export const SLIP39_WORDLIST: readonly string[] = BIP39_ENGLISH_SAMPLE.slice(0, SLIP39_WORDLIST_SIZE);
+
+const WORD_TO_INDEX: Map<string, number> = new Map(
+  SLIP39_WORDLIST.map((word, idx) => [word.toLowerCase(), idx]),
+);
+
+export const SLIP39_SAMPLE_WORDS: readonly string[] = SLIP39_WORDLIST.slice(0, 32);
 
 /**
- * Computes the 3-word (30-bit) SLIP-0039 checksum over word indices
+ * Converts raw bytes into 10-bit integer word indices.
+ */
+export function bytesToWordIndices(bytes: Uint8Array): number[] {
+  let bitStr = "";
+  for (let i = 0; i < bytes.length; i++) {
+    bitStr += bytes[i]!.toString(2).padStart(8, "0");
+  }
+  while (bitStr.length % 10 !== 0) {
+    bitStr += "0";
+  }
+  const indices: number[] = [];
+  for (let i = 0; i < bitStr.length; i += 10) {
+    indices.push(parseInt(bitStr.slice(i, i + 10), 2));
+  }
+  return indices;
+}
+
+/**
+ * Converts 10-bit word indices back into raw bytes.
+ */
+export function wordIndicesToBytes(indices: number[], byteLen: number): Uint8Array {
+  let bitStr = "";
+  for (let i = 0; i < indices.length; i++) {
+    bitStr += indices[i]!.toString(2).padStart(10, "0");
+  }
+  const bytes = new Uint8Array(byteLen);
+  for (let i = 0; i < byteLen; i++) {
+    bytes[i] = parseInt(bitStr.slice(i * 8, i * 8 + 8), 2);
+  }
+  return bytes;
+}
+
+/**
+ * Computes the 3-word (30-bit) SLIP-0039 checksum over word indices.
  */
 export function slip39Checksum(dataWords: number[]): number[] {
   let chk = 1;
@@ -33,18 +72,36 @@ export function slip39Checksum(dataWords: number[]): number[] {
   return [(chk >> 20) & 0x3ff, (chk >> 10) & 0x3ff, chk & 0x3ff];
 }
 
+/**
+ * Verifies that a list of 10-bit word indices has a valid 3-word checksum.
+ */
+export function slip39VerifyChecksum(indices: number[]): boolean {
+  if (indices.length < 7) return false;
+  const payload = indices.slice(0, indices.length - 3);
+  const expectedChk = slip39Checksum(payload);
+  const actualChk = indices.slice(indices.length - 3);
+  return (
+    expectedChk[0] === actualChk[0] &&
+    expectedChk[1] === actualChk[1] &&
+    expectedChk[2] === actualChk[2]
+  );
+}
+
 export interface Slip39Share {
   identifier: number; // 16-bit random id
+  iterationExponent: number;
   groupIndex: number;
   groupThreshold: number;
   groupCount: number;
-  memberIndex: number; // Share x-coordinate
+  memberIndex: number; // Share x-coordinate (1-indexed)
   memberThreshold: number; // Share k-threshold
   words: string[];
+  phrase: string;
+  dataBytes: Uint8Array;
 }
 
 /**
- * Encodes secret bytes into SLIP-0039 share phrases
+ * Encodes secret bytes into SLIP-0039 share phrases.
  */
 export function slip39Generate(
   secret: Uint8Array,
@@ -58,53 +115,170 @@ export function slip39Generate(
 
   for (let i = 0; i < totalShares; i++) {
     const share = shares[i]!;
-    // Encode header: identifier (16b) + group (8b) + member (8b)
-    const indices: number[] = [
-      (identifier >> 6) & 0x3ff,
-      ((identifier & 0x3f) << 4) | (threshold & 0x0f),
-      share.x & 0x3ff,
-    ];
+    // Encode header:
+    // Word 0: upper 10 bits of identifier
+    // Word 1: lower 6 bits of identifier + iteration exponent (4 bits, 0)
+    // Word 2: groupIndex (4b) + groupThreshold-1 (4b) + groupCount-1 (2b)
+    // Word 3: memberIndex (4b) + memberThreshold-1 (4b) + padding (2b)
+    const w0 = (identifier >> 6) & 0x3ff;
+    const w1 = ((identifier & 0x3f) << 4) | 0;
+    const w2 = ((0 & 0x0f) << 6) | (((1 - 1) & 0x0f) << 2) | ((1 - 1) & 0x03);
+    const w3 = (((share.x - 1) & 0x0f) << 6) | (((threshold - 1) & 0x0f) << 2);
 
-    // Encode share y bytes
-    for (let j = 0; j < share.y.length; j += 2) {
-      const b0 = share.y[j] ?? 0;
-      const b1 = share.y[j + 1] ?? 0;
-      indices.push(((b0 << 8) | b1) & 0x3ff);
-    }
+    const dataIndices = bytesToWordIndices(share.y);
+    const payload = [w0, w1, w2, w3, ...dataIndices];
 
     // Append 3 checksum words
-    const chk = slip39Checksum(indices);
-    indices.push(...chk);
+    const chk = slip39Checksum(payload);
+    const allIndices = [...payload, ...chk];
 
-    const words = indices.map((idx) => SLIP39_SAMPLE_WORDS[idx % SLIP39_SAMPLE_WORDS.length]!);
+    const words = allIndices.map(
+      (idx) => SLIP39_WORDLIST[idx % SLIP39_WORDLIST_SIZE] ?? "academic",
+    );
+    const phrase = words.join(" ");
+
     result.push({
       identifier,
+      iterationExponent: 0,
       groupIndex: 0,
       groupThreshold: 1,
       groupCount: 1,
       memberIndex: share.x,
       memberThreshold: threshold,
       words,
+      phrase,
+      dataBytes: share.y,
     });
   }
 
   return result;
 }
 
+export interface Slip39ParseResult {
+  ok: boolean;
+  error?: string;
+  share?: Slip39Share;
+}
+
 /**
- * Reconstructs secret from SLIP-0039 share words
+ * Parses and verifies a single SLIP-0039 share phrase string.
+ */
+export function slip39ParsePhrase(phrase: string, secretByteLength = 32): Slip39ParseResult {
+  const words = phrase
+    .trim()
+    .toLowerCase()
+    .split(/[\s,;]+/)
+    .filter(Boolean);
+
+  if (words.length < 7) {
+    return { ok: false, error: "SLIP-0039 phrase is too short (minimum 7 words)." };
+  }
+
+  const indices: number[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i]!;
+    const idx = WORD_TO_INDEX.get(w);
+    if (idx === undefined) {
+      return { ok: false, error: `Invalid word at position #${i + 1}: "${w}" is not in the SLIP-0039 wordlist.` };
+    }
+    indices.push(idx);
+  }
+
+  if (!slip39VerifyChecksum(indices)) {
+    return { ok: false, error: "SLIP-0039 checksum failed. The phrase may contain typos or altered words." };
+  }
+
+  const w0 = indices[0]!;
+  const w1 = indices[1]!;
+  const w2 = indices[2]!;
+  const w3 = indices[3]!;
+
+  const identifier = ((w0 & 0x3ff) << 6) | ((w1 >> 4) & 0x3f);
+  const iterationExponent = w1 & 0x0f;
+  const groupIndex = (w2 >> 6) & 0x0f;
+  const groupThreshold = ((w2 >> 2) & 0x0f) + 1;
+  const groupCount = (w2 & 0x03) + 1;
+  const memberIndex = ((w3 >> 6) & 0x0f) + 1;
+  const memberThreshold = ((w3 >> 2) & 0x0f) + 1;
+
+  const dataIndices = indices.slice(4, indices.length - 3);
+  const dataBytes = wordIndicesToBytes(dataIndices, secretByteLength);
+
+  return {
+    ok: true,
+    share: {
+      identifier,
+      iterationExponent,
+      groupIndex,
+      groupThreshold,
+      groupCount,
+      memberIndex,
+      memberThreshold,
+      words,
+      phrase: words.join(" "),
+      dataBytes,
+    },
+  };
+}
+
+/**
+ * Reconstructs the master secret from valid SLIP-0039 share phrases.
+ */
+export function slip39Combine(
+  shares: Slip39Share[],
+  secretLength?: number,
+): { ok: boolean; secret?: Uint8Array; error?: string } {
+  if (shares.length === 0) {
+    return { ok: false, error: "No shares provided." };
+  }
+
+  const expectedId = shares[0]!.identifier;
+  const threshold = shares[0]!.memberThreshold;
+
+  for (let i = 0; i < shares.length; i++) {
+    if (shares[i]!.identifier !== expectedId) {
+      return {
+        ok: false,
+        error: `Share #${i + 1} has mismatched identifier (0x${shares[i]!.identifier.toString(16)} vs 0x${expectedId.toString(16)}). Shares must be from the same backup set.`,
+      };
+    }
+  }
+
+  // De-duplicate shares with identical memberIndex
+  const uniqueMap = new Map<number, Slip39Share>();
+  for (const s of shares) {
+    uniqueMap.set(s.memberIndex, s);
+  }
+  const uniqueShares = Array.from(uniqueMap.values());
+
+  if (uniqueShares.length < threshold) {
+    return {
+      ok: false,
+      error: `Threshold not reached: have ${uniqueShares.length} unique share(s), but require at least ${threshold}.`,
+    };
+  }
+
+  const rawShares: ShamirShare[] = uniqueShares.map((s) => ({
+    x: s.memberIndex,
+    y: s.dataBytes,
+  }));
+
+  try {
+    const combined = shamirCombine(rawShares);
+    const finalSecret = secretLength ? combined.subarray(0, secretLength) : combined;
+    return { ok: true, secret: finalSecret };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Backwards compatibility helper for existing references.
  */
 export function slip39Recover(shares: Slip39Share[], secretLength: number): Uint8Array {
-  const rawShares: ShamirShare[] = shares.map((s) => {
-    const y = new Uint8Array(secretLength);
-    // Invert mapping for simulation
-    for (let j = 0; j < secretLength; j++) {
-      const wIdx = s.words[3 + Math.floor(j / 2)] ?? "academic";
-      const wordNum = Math.max(0, SLIP39_SAMPLE_WORDS.indexOf(wIdx));
-      y[j] = (wordNum + (j % 2 === 0 ? s.memberIndex : (s.memberIndex * 7))) & 0xff;
-    }
-    return { x: s.memberIndex, y };
-  });
-
-  return shamirCombine(rawShares);
+  const res = slip39Combine(shares, secretLength);
+  if (!res.ok || !res.secret) {
+    throw new Error(res.error ?? "Failed to recover SLIP-0039 secret.");
+  }
+  return res.secret;
 }

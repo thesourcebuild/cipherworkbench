@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveKeypairData,
   getKeypairView,
+  collectKeypairBundleFiles,
   hexToBytes,
   bytesToHex,
   bytesToBase64,
@@ -139,5 +140,59 @@ describe("Keypair Formats and Result View Resolution", () => {
     expect(jwkView.publicVal).toBe(pubJwk);
     expect(jwkView.privateLabel).toBe("Private key (JWK)");
     expect(jwkView.publicLabel).toBe("Public key (JWK)");
+  });
+
+  it("collects complete keypair bundle files for Shamir's Secret Sharing (X25519) without missing formats", () => {
+    // Exact fields produced by Shamir when operation is generate
+    const privHex = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
+    const pubHex = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+
+    const fields = [
+      { label: "Curve", value: "X25519" },
+      { label: "Private key", value: privHex, secret: true },
+      { label: "Public key", value: pubHex },
+    ];
+
+    const data = resolveKeypairData(fields, { id: "shamir", label: "Shamir's Secret Sharing" });
+    const bundleFiles = collectKeypairBundleFiles("shamir-test", data);
+
+    const filenames = bundleFiles.map((f) => f.name);
+
+    // Must include PEM pair
+    expect(filenames).toContain("shamir-test-private.pem");
+    expect(filenames).toContain("shamir-test-public.pem");
+
+    // Must include Raw Binary pair
+    expect(filenames).toContain("shamir-test-private.bin");
+    expect(filenames).toContain("shamir-test-public.bin");
+
+    // Must include JWK pair
+    expect(filenames).toContain("shamir-test-private.jwk.json");
+    expect(filenames).toContain("shamir-test-public.jwk.json");
+
+    // Must include Hex pair
+    expect(filenames).toContain("shamir-test-private.hex");
+    expect(filenames).toContain("shamir-test-public.hex");
+
+    // Must include Base64 pair
+    expect(filenames).toContain("shamir-test-private.b64");
+    expect(filenames).toContain("shamir-test-public.b64");
+
+    expect(bundleFiles.length).toBe(10);
+  });
+
+  it("handles non-keypair asymmetric outputs without crashing", () => {
+    // Shamir / SLIP-39 output has threshold and shares, not private/public keys
+    const shamirFields = [
+      { label: "Threshold (k)", value: "3 shares needed to reconstruct" },
+      { label: "Total shares (n)", value: "5 shares generated" },
+      { label: "Share #1", value: "SSSS-1-abcdef0123456789" },
+    ];
+
+    const data = resolveKeypairData(shamirFields, { id: "shamir", label: "Shamir's Secret Sharing" });
+    expect(data.rawPrivate).toBeUndefined();
+    expect(data.rawPublic).toBeUndefined();
+    expect(data.hasPem).toBe(false);
+    expect(data.hasJwk).toBe(false);
   });
 });

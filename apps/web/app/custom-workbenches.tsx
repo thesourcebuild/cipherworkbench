@@ -2,12 +2,13 @@
 
 import type { ComponentType, ReactNode } from "react";
 import type { OptionValue } from "@ocs/contracts";
-import type { ToolDefinition, ToolSpecBase } from "@ocs/engine";
+import type { ToolDefinition, ToolResult, ToolSpecBase } from "@ocs/engine";
 import type { ComputeState } from "./use-compute";
 import { CertCreatorWorkbench } from "./cert-creator-workbench";
 import { CsrWorkbench } from "./csr-workbench";
 import { SecretSharingWorkbench } from "./secret-sharing-workbench";
 import { Bip39Workbench } from "./bip39-workbench";
+import { Slip39Workbench } from "./slip39-workbench";
 
 export interface CustomWorkbenchProps {
   tool: ToolDefinition<ToolSpecBase>;
@@ -20,6 +21,7 @@ export interface CustomWorkbenchProps {
   inputStep?: ReactNode;
   generateLength?: (optionId: string) => number | undefined;
   acceptedByteLengths?: (optionId: string) => readonly number[] | undefined;
+  onResultChange: (result: ToolResult) => void;
 }
 
 const CUSTOM_WORKBENCHES: Record<string, ComponentType<CustomWorkbenchProps>> = {
@@ -30,6 +32,7 @@ const CUSTOM_WORKBENCHES: Record<string, ComponentType<CustomWorkbenchProps>> = 
   "secret-sharing": SecretSharingWorkbench as ComponentType<CustomWorkbenchProps>,
   "bip39": Bip39Workbench as ComponentType<CustomWorkbenchProps>,
   "bip32": Bip39Workbench as ComponentType<CustomWorkbenchProps>,
+  "slip39": Slip39Workbench as ComponentType<CustomWorkbenchProps>,
 };
 
 /**

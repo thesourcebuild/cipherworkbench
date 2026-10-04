@@ -12,6 +12,7 @@ import {
 import type { ToolManifest, ToolResultField } from "@ocs/engine";
 import { PUBLIC_KEY_HINT } from "@ocs/asymmetric/pure";
 import { downloadBinaryFile, downloadTextFile } from "./export-json";
+import { downloadZipArchive, type ExportableFile } from "./export-folder";
 
 export type KeypairFormat = "hex" | "base64" | "pem" | "jwk" | "raw";
 
@@ -492,24 +493,22 @@ export function downloadActiveKeypairFiles(
       downloadBinaryFile(`${baseFilename}-private.bin`, data.rawPrivate);
     }
     if (data.rawPublic) {
-      setTimeout(() => {
-        downloadBinaryFile(`${baseFilename}-public.bin`, data.rawPublic!);
-      }, 150);
+      downloadBinaryFile(`${baseFilename}-public.bin`, data.rawPublic);
     }
   } else {
-    downloadTextFile(`${baseFilename}-private.${view.fileExt}`, view.privateVal, view.mimeType);
-    setTimeout(() => {
+    if (view.privateVal) {
+      downloadTextFile(`${baseFilename}-private.${view.fileExt}`, view.privateVal, view.mimeType);
+    }
+    if (view.publicVal) {
       downloadTextFile(`${baseFilename}-public.${view.fileExt}`, view.publicVal, view.mimeType);
-    }, 150);
+    }
   }
 }
 
 export function downloadPemPairFiles(baseFilename: string, data: ResolvedKeypairData): void {
   if (!data.privatePem || !data.publicPem) return;
   downloadTextFile(`${baseFilename}-private.pem`, data.privatePem, "application/x-pem-file");
-  setTimeout(() => {
-    downloadTextFile(`${baseFilename}-public.pem`, data.publicPem!, "application/x-pem-file");
-  }, 150);
+  downloadTextFile(`${baseFilename}-public.pem`, data.publicPem, "application/x-pem-file");
 }
 
 export function downloadRawBinaryPairFiles(baseFilename: string, data: ResolvedKeypairData): void {
@@ -517,67 +516,107 @@ export function downloadRawBinaryPairFiles(baseFilename: string, data: ResolvedK
     downloadBinaryFile(`${baseFilename}-private.bin`, data.rawPrivate);
   }
   if (data.rawPublic) {
-    setTimeout(() => {
-      downloadBinaryFile(`${baseFilename}-public.bin`, data.rawPublic!);
-    }, 150);
+    downloadBinaryFile(`${baseFilename}-public.bin`, data.rawPublic);
   }
 }
 
 export function downloadJwkPairFiles(baseFilename: string, data: ResolvedKeypairData): void {
   if (!data.privateJwk || !data.publicJwk) return;
   downloadTextFile(`${baseFilename}-private.jwk.json`, data.privateJwk, "application/json");
-  setTimeout(() => {
-    downloadTextFile(`${baseFilename}-public.jwk.json`, data.publicJwk!, "application/json");
-  }, 150);
+  downloadTextFile(`${baseFilename}-public.jwk.json`, data.publicJwk, "application/json");
+}
+
+export function collectKeypairBundleFiles(
+  baseFilename: string,
+  data: ResolvedKeypairData,
+): ExportableFile[] {
+  const files: ExportableFile[] = [];
+
+  // 1. PEM pair
+  if (data.privatePem) {
+    files.push({
+      name: `${baseFilename}-private.pem`,
+      content: data.privatePem,
+      mimeType: "application/x-pem-file",
+    });
+  }
+  if (data.publicPem) {
+    files.push({
+      name: `${baseFilename}-public.pem`,
+      content: data.publicPem,
+      mimeType: "application/x-pem-file",
+    });
+  }
+
+  // 2. Raw Binary pair
+  if (data.rawPrivate) {
+    files.push({
+      name: `${baseFilename}-private.bin`,
+      content: data.rawPrivate,
+      mimeType: "application/octet-stream",
+    });
+  }
+  if (data.rawPublic) {
+    files.push({
+      name: `${baseFilename}-public.bin`,
+      content: data.rawPublic,
+      mimeType: "application/octet-stream",
+    });
+  }
+
+  // 3. JWK pair
+  if (data.privateJwk) {
+    files.push({
+      name: `${baseFilename}-private.jwk.json`,
+      content: data.privateJwk,
+      mimeType: "application/json",
+    });
+  }
+  if (data.publicJwk) {
+    files.push({
+      name: `${baseFilename}-public.jwk.json`,
+      content: data.publicJwk,
+      mimeType: "application/json",
+    });
+  }
+
+  // 4. Hex pair
+  if (data.privateHex) {
+    files.push({
+      name: `${baseFilename}-private.hex`,
+      content: data.privateHex,
+      mimeType: "text/plain",
+    });
+  }
+  if (data.publicHex) {
+    files.push({
+      name: `${baseFilename}-public.hex`,
+      content: data.publicHex,
+      mimeType: "text/plain",
+    });
+  }
+
+  // 5. Base64 pair
+  if (data.privateBase64) {
+    files.push({
+      name: `${baseFilename}-private.b64`,
+      content: data.privateBase64,
+      mimeType: "text/plain",
+    });
+  }
+  if (data.publicBase64) {
+    files.push({
+      name: `${baseFilename}-public.b64`,
+      content: data.publicBase64,
+      mimeType: "text/plain",
+    });
+  }
+
+  return files;
 }
 
 export function downloadKeypairBundleFiles(baseFilename: string, data: ResolvedKeypairData): void {
-  let delay = 0;
-
-  // 1. Download PEM pair
-  if (data.privatePem && data.publicPem) {
-    setTimeout(() => {
-      downloadTextFile(`${baseFilename}-private.pem`, data.privatePem!, "application/x-pem-file");
-    }, delay);
-    delay += 150;
-    setTimeout(() => {
-      downloadTextFile(`${baseFilename}-public.pem`, data.publicPem!, "application/x-pem-file");
-    }, delay);
-    delay += 150;
-  }
-
-  // 2. Download Raw Binary pair
-  if (data.rawPrivate && data.rawPublic) {
-    setTimeout(() => {
-      downloadBinaryFile(`${baseFilename}-private.bin`, data.rawPrivate!);
-    }, delay);
-    delay += 150;
-    setTimeout(() => {
-      downloadBinaryFile(`${baseFilename}-public.bin`, data.rawPublic!);
-    }, delay);
-    delay += 150;
-  }
-
-  // 3. Download JWK pair if available
-  if (data.privateJwk && data.publicJwk) {
-    setTimeout(() => {
-      downloadTextFile(`${baseFilename}-private.jwk.json`, data.privateJwk!, "application/json");
-    }, delay);
-    delay += 150;
-    setTimeout(() => {
-      downloadTextFile(`${baseFilename}-public.jwk.json`, data.publicJwk!, "application/json");
-    }, delay);
-    delay += 150;
-  }
-
-  // 4. Download Hex pair if available
-  if (data.privateHex && data.publicHex) {
-    setTimeout(() => {
-      downloadTextFile(`${baseFilename}-private.hex`, data.privateHex!, "text/plain");
-    }, delay);
-    delay += 150;
-    setTimeout(() => {
-      downloadTextFile(`${baseFilename}-public.hex`, data.publicHex!, "text/plain");
-    }, delay);
-  }
+  const files = collectKeypairBundleFiles(baseFilename, data);
+  if (files.length === 0) return;
+  downloadZipArchive(`${baseFilename}-keypair-bundle.zip`, files);
 }

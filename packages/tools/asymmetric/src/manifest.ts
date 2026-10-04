@@ -32,7 +32,13 @@ function toManifest(meta: AsymmetricToolMeta): ToolManifest {
      * every keyed family here. ECDH has neither -- derive has no opposite, and claiming one
      * would put a direction toggle in the header that does nothing.
      */
-    directions: meta.operations.includes("verify") ? ["forward", "inverse"] : ["forward"],
+    directions:
+      meta.operations.includes("verify") ||
+      meta.id === "shamir" ||
+      meta.id === "slip39" ||
+      meta.operations.includes("decrypt")
+        ? ["forward", "inverse"]
+        : ["forward"],
     security: meta.security,
     outputEncodings: ASYMMETRIC_OUTPUT_ENCODINGS,
     /**

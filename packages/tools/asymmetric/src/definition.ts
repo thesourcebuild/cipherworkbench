@@ -44,9 +44,13 @@ export function asymmetricToolDefinition(toolId: string): ToolDefinition<Asymmet
     /**
      * Key generation reads no message input. Marking it false lets the workbench drop the
      * input text box, source selector, encoding selector, and auto-update toggle, presenting
-     * a clean generator card with a "Generate" action button.
+     * a clean generator card with a "Generate" action button. Secret splitting and commitment
+     * creation also use the generate operation name, but their payload is the workbench input.
      */
-    readsInputForSpec: (spec) => readOperation(spec.options, meta.operations) !== "generate",
+    readsInputForSpec: (spec) =>
+      meta.id === "shamir" || meta.id === "slip39" || meta.id === "pedersen"
+        ? true
+        : readOperation(spec.options, meta.operations) !== "generate",
   };
 }
 

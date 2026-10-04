@@ -11,10 +11,9 @@ import {
   formatHkdfLabel,
   hkdfExpandLabel,
 } from "@ocs/algos";
-import { sha256, sha512 } from "@noble/hashes/sha2.js";
+import { sha512 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
 
-const hashFn = (d: Uint8Array) => sha256(d);
 const hmac512Fn = (k: Uint8Array, d: Uint8Array) => hmac(sha512, k, d);
 
 describe("Modern Key Exchange & Protocols", () => {
@@ -26,10 +25,20 @@ describe("Modern Key Exchange & Protocols", () => {
       const info = new TextEncoder().encode("HPKE App Info Context");
       const plaintext = new TextEncoder().encode("Hello HPKE RFC 9180!");
 
-      const sealed = hpkeSeal(hashFn, recipientPub, info, plaintext, ephemPriv);
+      const sealed = hpkeSeal({
+        recipientPublicKey: recipientPub,
+        plaintext,
+        info,
+        ephemeralSeed: ephemPriv,
+      });
       expect(sealed.ciphertext.length).toBe(plaintext.length + 16);
 
-      const opened = hpkeOpen(hashFn, recipientPriv, sealed.encapsulatedKey, info, sealed.ciphertext);
+      const opened = hpkeOpen({
+        recipientSecretKey: recipientPriv,
+        encapsulatedKey: sealed.encapsulatedKey,
+        ciphertext: sealed.ciphertext,
+        info,
+      });
       expect(new TextDecoder().decode(opened)).toBe("Hello HPKE RFC 9180!");
     });
   });
