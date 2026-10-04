@@ -323,11 +323,13 @@ function HashPath({
   label,
   input,
   digest,
+  digestDetail,
   tone,
 }: {
   label: string;
   input: string;
   digest: string;
+  digestDetail: string;
   tone: "sky" | "rose";
 }) {
   return (
@@ -346,11 +348,11 @@ function HashPath({
         <MechanismNode
           icon="digest"
           title="SHA-256"
-          detail="Deterministic one-way compression"
+          detail="The public hash function processes every input byte; no secret key is used"
           tone="violet"
         />
         <FlowArrow label="output" tone="violet" />
-        <MechanismNode icon="tag" title={digest} detail="Fixed 256-bit digest" tone={tone} />
+        <MechanismNode icon="tag" title={digest} detail={digestDetail} tone={tone} />
       </div>
     </div>
   );
@@ -361,7 +363,7 @@ function HashDiagram() {
     <DiagramFrame
       id="hash"
       eyebrow="SHA-256 mechanism"
-      title="A SHA-256 fingerprint verifies file integrity"
+      title="A trusted SHA-256 digest helps verify payload integrity"
       property="Error detection + integrity"
       tone="violet"
       caption={
@@ -371,12 +373,49 @@ function HashDiagram() {
         </>
       }
     >
+      <div className="mb-4 flex flex-col items-stretch lg:flex-row lg:items-center">
+        <MechanismNode
+          icon="document"
+          title="Payload bytes"
+          detail="The exact payload Alice wants Bob to verify"
+          tone="sky"
+        />
+        <FlowArrow label="input" tone="violet" breakpoint="lg" />
+        <MechanismNode
+          icon="processor"
+          title="SHA-256 calculation"
+          detail="The public hash function processes every input byte"
+          tone="violet"
+        />
+        <FlowArrow label="output" tone="violet" breakpoint="lg" />
+        <MechanismNode
+          icon="digest"
+          title="SHA-256 digest"
+          detail="A fixed-length 256-bit digest is computed from the payload"
+          tone="amber"
+        />
+        <FlowArrow label="compare" tone="violet" breakpoint="lg" />
+        <MechanismNode
+          icon="verify"
+          title="Integrity check"
+          detail="Bob compares the computed digest with a trusted expected digest"
+          tone="emerald"
+        />
+      </div>
+
       <div className="grid gap-3">
-        <HashPath label="Official file" input="Installer v1" digest="474c60ba..." tone="sky" />
+        <HashPath
+          label="Official file"
+          input="Installer v1"
+          digest="474c60ba..."
+          digestDetail="Matches the trusted digest, so Bob accepts the file as intact"
+          tone="sky"
+        />
         <HashPath
           label="One bit changed"
           input="Tampered file"
           digest="d9f3a1c2..."
+          digestDetail="Different digest reveals tampering, so Bob rejects the file"
           tone="rose"
         />
       </div>
