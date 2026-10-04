@@ -15,7 +15,7 @@ import {
 } from "@ocs/engine";
 import { loadTool } from "@ocs/registry";
 import { platform } from "@ocs/platform";
-import { Button, GuideOverlay, MonoBlock, Panel, cn } from "@ocs/ui";
+import { Button, GuideOverlay, MonoBlock, Panel, cn, useToast } from "@ocs/ui";
 
 function encodePemDirect(label: string, bytes: Uint8Array): string {
   let binary = "";
@@ -90,6 +90,7 @@ export function ToolWorkbench({
   restore,
   onRestoreConsumed,
 }: ToolWorkbenchProps) {
+  const { showToast } = useToast();
   const [tool, setTool] = useState<ToolDefinition<ToolSpecBase> | undefined>();
   const [spec, setSpec] = useState<ToolSpecBase | undefined>();
   const [outputEncoding, setOutputEncoding] = useState<OutputEncoding>("hex-upper");
@@ -439,6 +440,42 @@ export function ToolWorkbench({
     input,
     effectiveAutoUpdate,
   );
+  const manualComputePendingRef = useRef(false);
+
+  const handleRecompute = useCallback(() => {
+    manualComputePendingRef.current = true;
+    recompute();
+  }, [recompute]);
+
+  useEffect(() => {
+    manualComputePendingRef.current = false;
+  }, [toolId]);
+
+  useEffect(() => {
+    if (!manualComputePendingRef.current) return;
+    if (state.status !== "done" && state.status !== "error") return;
+
+    manualComputePendingRef.current = false;
+    const resultError = state.status === "done" ? state.result?.error : undefined;
+    const error = state.error ?? resultError;
+    if (error) {
+      showToast({
+        title: generates
+          ? `Could not generate ${tool?.label ?? "result"}`
+          : `Could not compute ${tool?.label ?? "result"}`,
+        description: error,
+        tone: "error",
+      });
+      return;
+    }
+
+    showToast({
+      title: generates
+        ? `${tool?.label ?? "Value"} generated`
+        : `${tool?.label ?? "Result"} computed`,
+      tone: "success",
+    });
+  }, [generates, showToast, state, tool?.label]);
 
   /**
    * Its own hook, deliberately: not driven by `autoUpdate`, not by the Result panel's `Compute`, and
@@ -754,7 +791,7 @@ export function ToolWorkbench({
           size="sm"
           className="w-full"
           disabled={!canRecompute}
-          onClick={recompute}
+          onClick={handleRecompute}
           title={
             generates
               ? "Produce another value. Nothing here depends on an input, so this is the whole interaction."
@@ -786,7 +823,7 @@ export function ToolWorkbench({
             tool={tool}
             spec={spec}
             setOptionValue={setOptionValue}
-            recompute={recompute}
+            recompute={handleRecompute}
             canRecompute={canRecompute}
             state={state}
             tag={tag}

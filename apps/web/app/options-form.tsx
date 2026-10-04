@@ -30,7 +30,16 @@ import {
   randomBytesValue,
   redundantOptionIds,
 } from "@ocs/engine";
-import { Button, ClearButton, CopyIconButton, SecretField, StringListEditor, Toggle, cn } from "@ocs/ui";
+import {
+  Button,
+  ClearButton,
+  CopyIconButton,
+  SecretField,
+  StringListEditor,
+  Toggle,
+  cn,
+  useToast,
+} from "@ocs/ui";
 import { platform } from "@ocs/platform";
 import { formatBytes } from "./input-state";
 
@@ -886,6 +895,7 @@ function BytesControl({
   generateLength?: (optionId: string) => number | undefined;
   acceptedByteLengths?: (optionId: string) => readonly number[] | undefined;
 }) {
+  const { showToast } = useToast();
   const decoded = decodeBytesValue(value, encoding);
   const length = decoded.ok ? decoded.bytes.length : undefined;
   /*
@@ -945,6 +955,11 @@ function BytesControl({
           onChange(encodingOptionId(option.id), produced.encoding);
         }
         onChange(option.id, produced.value);
+        showToast({
+          title: `${option.label} generated`,
+          description: `${generate}-byte value`,
+          tone: "success",
+        });
       }}
       /*
        * The tooltip states what will happen *before* the button is pressed, and the two cases differ in

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { OptionValue } from "@ocs/contracts";
 import type { ToolDefinition, ToolResult, ToolSpecBase } from "@ocs/engine";
-import { Button, CopyButton, Panel, cn } from "@ocs/ui";
+import { Button, CopyButton, Panel, cn, useToast } from "@ocs/ui";
 import {
   slip39Generate,
   slip39ParsePhrase,
@@ -109,6 +109,7 @@ export function Slip39Workbench({
   state: _state,
   onResultChange,
 }: CustomWorkbenchProps) {
+  const { showToast } = useToast();
   const [tab, setTab] = useState<TabMode>("split");
 
   // Generator State
@@ -161,6 +162,11 @@ export function Slip39Workbench({
       setSecretText(bytesToHex(randomBuf).slice(0, bytesCount));
     }
     setIdentifier(Math.floor(Math.random() * 0xffff));
+    showToast({
+      title: `${n} SLIP-39 shares generated`,
+      description: `${k} shares are required to recover the ${bytesCount}-byte secret`,
+      tone: "success",
+    });
   };
 
   // Export all shares to text file

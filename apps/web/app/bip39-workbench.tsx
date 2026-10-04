@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { OptionValue } from "@ocs/contracts";
 import type { ToolDefinition, ToolResult, ToolSpecBase } from "@ocs/engine";
-import { Button, CopyButton, CopyIconButton, Panel, cn } from "@ocs/ui";
+import { Button, CopyButton, CopyIconButton, Panel, cn, useToast } from "@ocs/ui";
 import {
   entropyToMnemonic,
   mnemonicToSeed,
@@ -275,6 +275,7 @@ const SAMPLE_PRESETS = [
 ];
 
 export function Bip39Workbench({ tool, onResultChange }: CustomWorkbenchProps) {
+  const { showToast } = useToast();
   // Synchronize initial active tab with tool ID (bip32 lands on derivation, bip39 lands on mnemonic)
   const [activeTab, setActiveTab] = useState<TabMode>(() => {
     return tool?.id === "bip32" ? "derivation" : "mnemonic";
@@ -314,6 +315,11 @@ export function Bip39Workbench({ tool, onResultChange }: CustomWorkbenchProps) {
     setWordCount(count);
     setEntropyBytes(buf);
     setInputMode("generate");
+    showToast({
+      title: "Recovery phrase generated",
+      description: `${count} BIP-39 words from ${byteLen * 8} bits of entropy`,
+      tone: "success",
+    });
   };
 
   // Derive mnemonic from entropy (or use custom phrase)

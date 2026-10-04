@@ -54,3 +54,43 @@
     @apply bg-white text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
   }
 }
+
+@keyframes ocs-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ocs-toast-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+  }
+}
+
+.ocs-toast-enter {
+  animation: ocs-toast-enter 220ms ease-out both;
+}
+
+.ocs-toast-exit {
+  pointer-events: none;
+  animation: ocs-toast-exit 160ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ocs-toast-enter,
+  .ocs-toast-exit {
+    animation-name: none;
+  }
+}

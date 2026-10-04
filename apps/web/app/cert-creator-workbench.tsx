@@ -12,6 +12,7 @@ import {
   type CommandShell,
   type ShellCommand,
   type ShellCommandVariants,
+  useToast,
 } from "@ocs/ui";
 import { OptionsForm } from "./options-form";
 import type { ComputeState } from "./use-compute";
@@ -334,6 +335,7 @@ export function CertCreatorWorkbench({
   generateLength,
   acceptedByteLengths,
 }: CertCreatorWorkbenchProps) {
+  const { showToast } = useToast();
   const creatorMode = readCreatorMode(spec.options);
   const issuanceMode = readIssuanceMode(spec.options);
   const pkiHierarchy = readPkiHierarchy(spec.options);
@@ -365,6 +367,13 @@ export function CertCreatorWorkbench({
       });
       setOptionValue(OPTION_CA_CERT, caResult.certPem);
       setOptionValue(OPTION_CA_PRIVATE_KEY, caResult.privateKeyPem);
+      showToast({ title: "Test CA certificate and key generated", tone: "success" });
+    } catch (error) {
+      showToast({
+        title: "Could not generate the test CA",
+        description: error instanceof Error ? error.message : String(error),
+        tone: "error",
+      });
     } finally {
       setIsGeneratingCa(false);
     }
@@ -384,6 +393,13 @@ export function CertCreatorWorkbench({
         isCa: true,
       });
       setOptionValue(OPTION_CA_PRIVATE_KEY, caResult.privateKeyPem);
+      showToast({ title: "CA private key generated", tone: "success" });
+    } catch (error) {
+      showToast({
+        title: "Could not generate the CA key",
+        description: error instanceof Error ? error.message : String(error),
+        tone: "error",
+      });
     } finally {
       setIsGeneratingCa(false);
     }

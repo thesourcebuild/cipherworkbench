@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { OptionValue } from "@ocs/contracts";
 import type { ToolDefinition, ToolResult, ToolSpecBase } from "@ocs/engine";
-import { Button, CopyButton, CopyIconButton, Panel, cn } from "@ocs/ui";
+import { Button, CopyButton, CopyIconButton, Panel, cn, useToast } from "@ocs/ui";
 import {
   shamirSplit,
   shamirCombine,
@@ -97,6 +97,7 @@ export function SecretSharingWorkbench({
   tool: _tool,
   onResultChange,
 }: CustomWorkbenchProps) {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<TabMode>("split");
 
   // --- Split State ---
@@ -140,17 +141,35 @@ export function SecretSharingWorkbench({
     }
     setSecretText(hex);
     setIsHexSecret(true);
+    showToast({
+      title: "Random secret generated",
+      description: `${bytes * 8}-bit secret ready to split`,
+      tone: "success",
+    });
   };
 
   // Handle Split
   const handleSplit = () => {
     try {
       const bytes = getSecretBytes();
-      if (bytes.length === 0) return;
+      if (bytes.length === 0) {
+        showToast({ title: "Enter a secret before splitting", tone: "warning" });
+        return;
+      }
       const shares = shamirSplit(bytes, totalSharesN, thresholdK, cryptoRng);
       setGeneratedShares(shares);
+      showToast({
+        title: `${shares.length} Shamir shares generated`,
+        description: `${thresholdK} shares are required to reconstruct the secret`,
+        tone: "success",
+      });
     } catch (e) {
       console.error("Shamir split failed:", e);
+      showToast({
+        title: "Could not split the secret",
+        description: e instanceof Error ? e.message : String(e),
+        tone: "error",
+      });
     }
   };
 
