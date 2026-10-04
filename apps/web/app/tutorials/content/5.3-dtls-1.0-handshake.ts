@@ -8,58 +8,63 @@ const content: TutorialContent = {
     "How did DTLS 1.0 adapt TLS 1.1 to unreliable UDP using cookies, numbered fragments, epochs, replay windows, and retransmission—and why must it no longer be negotiated?",
   steps: [
     {
-      title: "Step 1: Alice sends ClientHello in a UDP datagram",
+      title: "Step 1: Initial ClientHello (cookie path)",
       speaker: "Alice",
       content:
-        "Alice sends a plaintext DTLS 1.0 `ClientHello` containing a random value, session ID, cipher suites, compression choices, and an empty cookie. DTLS 1.0 is based on TLS 1.1; there was never a DTLS 1.1 protocol version.\n\nUDP may lose, duplicate, reorder, or fragment the datagram, and its source address can be forged. DTLS records therefore carry explicit epoch and sequence fields, while handshake messages carry `message_seq`, `fragment_offset`, and `fragment_length`.",
+        "On the optional cookie-verified path, Alice sends a plaintext DTLS 1.0 `ClientHello` containing a random value, session ID, cipher suites, compression choices, and an empty cookie. If Bob does not enforce the cookie DoS check, this same initial ClientHello proceeds directly to the plaintext server flight instead. DTLS 1.0 is based on TLS 1.1; there was never a DTLS 1.1 protocol version.\n\nUDP may lose, duplicate, reorder, or fragment the datagram, and its source address can be forged. DTLS records therefore carry explicit epoch and sequence fields, while handshake messages carry `message_seq`, `fragment_offset`, and `fragment_length`.",
       callout: {
         type: "warning",
         text: "DTLS 1.0 is historical. RFC 8996 moved it to Historic status and requires that it not be used or negotiated.",
       },
     },
     {
-      title: "Step 2: Bob optionally validates Alice's address",
+      title: "Step 2: HelloVerifyRequest (optional DoS)",
       speaker: "Bob",
       content:
-        "Bob normally responds with `HelloVerifyRequest` containing a stateless cookie. Alice repeats `ClientHello` with that cookie. These are DTLS flights 1–3 in the cookie-verified path: initial ClientHello, HelloVerifyRequest, and ClientHello plus cookie. Echoing the cookie proves that Alice can receive traffic at the claimed source address before Bob allocates costly state or sends a larger response.\n\nThe extra first ClientHello and HelloVerifyRequest are present only when Bob enforces this DoS protection. Without them, Bob answers the original ClientHello directly with the server flight. The two cookie messages are not included in the authenticated transcript. With cookie validation, a full handshake normally needs three round trips.",
+        "When Bob enforces stateless cookie DoS protection, he responds with `HelloVerifyRequest` containing a cookie derived from Alice's apparent address. This optional flight lets Bob defer costly state and a larger response. Without the cookie check, Bob does not send HelloVerifyRequest and answers the original ClientHello directly with the plaintext server flight.\n\nThe initial ClientHello and HelloVerifyRequest are the first two flights only on the cookie-verified path, and neither cookie message is included in the authenticated transcript.",
       callout: {
         type: "security",
         text: "A cookie limits spoofed-source denial-of-service and amplification. It does not authenticate Alice's identity and is not a replacement for certificates or Finished.",
       },
     },
     {
-      title: "Step 3: Bob selects parameters and authenticates",
+      title: "Step 3: ClientHello + cookie",
+      speaker: "Alice",
+      content:
+        "Only after receiving HelloVerifyRequest, Alice repeats `ClientHello` with Bob's cookie. Echoing the cookie proves that Alice can receive traffic at the claimed source address before Bob allocates costly state or sends a larger response.\n\nThese are DTLS flights 1–3 in the cookie-verified path: initial ClientHello, HelloVerifyRequest, and ClientHello plus cookie. With cookie validation, a full handshake normally needs three round trips.",
+    },
+    {
+      title: "Step 4: Plaintext server flight",
       speaker: "Bob",
       content:
         "Bob sends `ServerHello`, `Certificate`, an optional `ServerKeyExchange`, optional `CertificateRequest`, and `ServerHelloDone`. RSA key transport normally omits `ServerKeyExchange`; ephemeral DHE or ECDHE sends signed parameters and can provide forward secrecy. `CertificateRequest` asks Alice to authenticate with a client certificate. All of these messages remain plaintext.\n\nFragments can arrive in any order, but Alice waits for a complete logical message and processes `message_seq` values in order. Signatures and the later Finished proofs detect substitution rather than hiding the flight.",
     },
     {
-      title: "Step 4: Alice verifies Bob and establishes shared keys",
+      title: "Step 5: Client key exchange and completion",
       speaker: "Alice",
       content:
-        "Alice validates Bob's certificate and expected identity. In RSA key transport she encrypts a random premaster secret to Bob's long-term key; in an ephemeral DHE/ECDHE suite she verifies Bob's signature, returns her public share, and computes the same secret. If Bob requested mutual authentication, Alice sends `Certificate` before `ClientKeyExchange` and `CertificateVerify` afterward to prove possession of the client private key.\n\nThe inherited TLS 1.1 PRF combines MD5 and SHA-1 output to derive a 48-byte master secret, then expands directional MAC secrets, encryption keys, and IV material. RSA key transport lacks forward secrecy; ephemeral key exchange only provides it when selected and implemented correctly.",
+        "Alice validates Bob's certificate and expected identity. In RSA key transport she encrypts a random premaster secret to Bob's long-term key; in an ephemeral DHE/ECDHE suite she verifies Bob's signature, returns her public share, and computes the same secret. If Bob requested mutual authentication, Alice sends `Certificate` before `ClientKeyExchange` and `CertificateVerify` afterward to prove possession of the client private key.\n\nThe inherited TLS 1.1 PRF combines MD5 and SHA-1 output to derive a 48-byte master secret, then expands directional MAC secrets, encryption keys, and IV material. RSA key transport lacks forward secrecy; ephemeral key exchange only provides it when selected and implemented correctly. Alice then sends `ChangeCipherSpec`, advancing from epoch 0 to the negotiated record state, followed by protected `Finished`.",
     },
     {
-      title: "Step 5: Alice and Bob finish, then application datagrams begin",
-      speaker: "Alice",
+      title: "Step 6: Server completion",
+      speaker: "Bob",
       content:
-        "Alice sends `ChangeCipherSpec`, advancing from epoch 0 to the negotiated record state, followed by protected `Finished`. Bob verifies Alice's optional certificate proof and Finished, then returns his own `ChangeCipherSpec` and `Finished`. Application datagrams use the selected record protection.\n\nDTLS 1.0 forbids RC4 and other stream ciphers because lost records would desynchronize stream state. Representative deployments instead used TLS 1.1-style CBC with an explicit IV and MAC-then-encrypt, retaining CBC padding and timing hazards.",
+        "Bob verifies Alice's optional certificate proof and Finished, then returns his own `ChangeCipherSpec` and `Finished`. Application datagrams use the selected record protection.\n\nDTLS 1.0 forbids RC4 and other stream ciphers because lost records would desynchronize stream state. Representative deployments instead used TLS 1.1-style CBC with an explicit IV and MAC-then-encrypt, retaining CBC padding and timing hazards.",
       callout: {
         type: "warning",
         text: "DTLS 1.0 defines no AEAD suites. Explicit IVs do not repair the broader weaknesses of legacy CBC, MD5/SHA-1 constructions, and obsolete cipher-suite choices.",
       },
     },
-    {
-      title: "Step 6: DTLS recovers handshake loss and resumes sessions",
-      speaker: "Bob",
-      content:
-        "DTLS groups handshake messages into flights and retransmits an entire flight when its timer expires, using exponential backoff. The logical handshake `message_seq` stays the same, but each retransmission receives a fresh record sequence number. Reassembly and retransmission apply only to the handshake.\n\nAn abbreviated session-ID handshake can reuse cached master-secret state and skip certificates and key exchange. It adds no fresh forward-secret contribution. Per-epoch sliding windows can reject authenticated replayed records, but replay filtering is optional and application delivery stays unordered and unreliable.",
-      callout: {
-        type: "security",
-        text: "Use DTLS 1.2 only where compatibility requires it and prefer DTLS 1.3. DTLS 1.0 must not be enabled as a fallback.",
-      },
-    },
   ],
+  afterTimeline: {
+    title: "After the Timeline: DTLS recovers handshake loss and resumes sessions",
+    content:
+      "DTLS groups handshake messages into flights and retransmits an entire flight when its timer expires, using exponential backoff. The logical handshake `message_seq` stays the same, but each retransmission receives a fresh record sequence number. Reassembly and retransmission apply only to the handshake.\n\nAn abbreviated session-ID handshake can reuse cached master-secret state and skip certificates and key exchange. It adds no fresh forward-secret contribution. Per-epoch sliding windows can reject authenticated replayed records, but replay filtering is optional and application delivery stays unordered and unreliable.",
+    callout: {
+      type: "security",
+      text: "Use DTLS 1.2 only where compatibility requires it and prefer DTLS 1.3. DTLS 1.0 must not be enabled as a fallback.",
+    },
+  },
   takeaways: [
     "DTLS 1.0 adapted TLS 1.1 to datagrams with stateless cookies, explicit record numbers, handshake fragments, and flight retransmission.",
     "HelloVerifyRequest limited spoofed-source amplification but did not authenticate the peer's identity.",

@@ -8,7 +8,7 @@ const content: TutorialContent = {
     "How did SSL 3.0 negotiate a cipher suite, authenticate a server, establish shared keys, and protect web traffic, and why is that once-pioneering protocol now prohibited?",
   steps: [
     {
-      title: "Step 1: Alice sends the SSL 3.0 ClientHello in plaintext",
+      title: "Step 1: ClientHello",
       speaker: "Alice",
       content:
         "Alice sends `ClientHello` with the highest protocol version she supports, a fresh `client_random`, an optional session ID, a list of cipher suites, and compression choices. A cipher suite bundles the key-exchange method, bulk cipher, and MAC algorithm, for example RSA key transport with RC4 and MD5.\n\nThis negotiation is visible to Eve because no shared keys exist yet.",
@@ -18,44 +18,49 @@ const content: TutorialContent = {
       },
     },
     {
-      title: "Step 2: Bob selects one bundled cipher suite",
+      title: "Step 2: Plaintext server flight",
       speaker: "Bob",
       content:
         "Bob returns `ServerHello` with SSL 3.0, a `server_random`, a session ID, one cipher suite, and one compression method. In a representative RSA handshake he then sends his X.509 `Certificate` and `ServerHelloDone`. Other suites can add `ServerKeyExchange`, and mutual authentication can add `CertificateRequest`.\n\nUnlike TLS 1.3, Bob's certificate and the rest of this server flight remain plaintext.",
     },
     {
-      title: "Step 3: Alice verifies Bob's certificate",
+      title: "Step 3: Client key exchange and completion",
       speaker: "Alice",
       content:
-        "Alice validates Bob's certificate chain and checks that the certificate identity matches the server she intended to reach. This establishes which RSA public key belongs to Bob.\n\nThe certificate does not itself create record keys. It authenticates the public key that Alice will use for the next key-exchange step.",
+        "Alice validates Bob's certificate chain and checks that the certificate identity matches the server she intended to reach. This establishes which RSA public key belongs to Bob.\n\nThe certificate does not itself create record keys. It authenticates the public key that Alice will use for the next key-exchange step.\n\nFor RSA key transport, Alice generates a 48-byte `pre_master_secret`, encrypts it with Bob's RSA public key, and prepares it for `ClientKeyExchange`. She combines the pre-master secret with `client_random` and `server_random` using SSL 3.0's MD5/SHA-1 construction to derive a 48-byte master secret, MAC secrets, encryption keys, and IV material.\n\nAlice sends the encrypted pre-master secret in `ClientKeyExchange`. Bob decrypts it with his private key and performs the same derivation. Alice then sends `ChangeCipherSpec`, promoting her pending write state to the negotiated keys, followed by an encrypted `Finished` proof over the handshake.\n\nBecause the server's long-term RSA key unwraps the secret, later theft of that key can expose recorded sessions. This common mode does not provide forward secrecy.",
       callout: {
         type: "security",
         text: "Skipping certificate or hostname validation turns encrypted traffic into an authenticated connection with the wrong party, allowing Mallory to stand between Alice and Bob.",
       },
     },
     {
-      title: "Step 4: Alice transports the pre-master secret",
-      speaker: "Alice",
+      title: "Step 4: Server completion",
+      speaker: "Bob",
       content:
-        "For RSA key transport, Alice generates a 48-byte `pre_master_secret`, encrypts it with Bob's RSA public key, and sends it in `ClientKeyExchange`. Bob decrypts it with his private key. Both sides combine the pre-master secret with `client_random` and `server_random` using SSL 3.0's MD5/SHA-1 construction to derive a 48-byte master secret, MAC secrets, encryption keys, and IV material.\n\nBecause the server's long-term RSA key unwraps the secret, later theft of that key can expose recorded sessions. This common mode does not provide forward secrecy.",
+        "Bob verifies Alice's `Finished`, sends his own `ChangeCipherSpec`, and returns his protected `Finished`. Alice verifies it, completing the handshake so the connection can carry HTTP records.",
     },
     {
-      title: "Step 5: ChangeCipherSpec and Finished activate protection",
+      title: "Step 5: HTTP request",
       speaker: "Alice",
       content:
-        "Alice sends `ChangeCipherSpec`, promoting her pending write state to the negotiated keys, followed by an encrypted `Finished` proof over the handshake. Bob verifies it, sends his own `ChangeCipherSpec`, and returns his protected `Finished`. The connection can then carry HTTP records.\n\nSSL 3.0 protects records with a separate legacy MAC and then encrypts them using ciphers such as RC4 or CBC. CBC records chain the previous ciphertext block as the next IV, and SSL 3.0's loose padding rules contributed to the POODLE padding-oracle attack.",
+        "Alice sends the HTTP request inside an SSL-protected application-data record using her client write state. SSL 3.0 protects records with a separate legacy MAC and then encrypts them using ciphers such as RC4 or CBC.",
+    },
+    {
+      title: "Step 6: HTTP response",
+      speaker: "Bob",
+      content:
+        "Bob returns the HTTP response in a protected application-data record using his separate server write state. CBC records chain the previous ciphertext block as the next IV, and SSL 3.0's loose padding rules contributed to the POODLE padding-oracle attack.",
       callout: {
         type: "warning",
         text: "SSL 3.0 is a historical protocol, not a compatibility option. RFC 7568 prohibits its use; modern systems should negotiate TLS 1.2 or TLS 1.3 instead.",
       },
     },
-    {
-      title: "Step 6: Session IDs resume an earlier session",
-      speaker: "Bob",
-      content:
-        "Bob can cache the session's master secret under a session ID. On a later connection Alice offers that ID; if Bob accepts it, both sides reuse the session state, exchange fresh random values, and move quickly to `ChangeCipherSpec` and `Finished` without repeating certificate processing and RSA key transport.\n\nResumption reduced expensive public-key work, but it did not repair SSL 3.0's obsolete cryptography or record-layer weaknesses.",
-    },
   ],
+  afterTimeline: {
+    title: "After the Timeline: Session IDs resume an earlier session",
+    content:
+      "Bob can cache the session's master secret under a session ID. On a later connection Alice offers that ID; if Bob accepts it, both sides reuse the session state, exchange fresh random values, and move quickly to `ChangeCipherSpec` and `Finished` without repeating certificate processing and RSA key transport.\n\nResumption reduced expensive public-key work, but it did not repair SSL 3.0's obsolete cryptography or record-layer weaknesses.",
+  },
   takeaways: [
     "SSL 3.0 established the recognizable hello, certificate, key-exchange, ChangeCipherSpec, Finished, and application-data sequence inherited by early TLS.",
     "SSL 3.0 was published in 1996 and became the foundation for TLS 1.0, standardized in RFC 2246 in 1999.",

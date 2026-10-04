@@ -23,6 +23,12 @@ export interface TutorialStep {
   };
 }
 
+export interface TutorialAfterTimeline {
+  title: string;
+  content: string;
+  callout?: TutorialStep["callout"];
+}
+
 export type TutorialDifficulty = "Beginner" | "Intermediate" | "Advanced";
 export type TlsTutorialVersion = "SSL 3.0" | "1.1" | "1.2" | "1.3";
 export type DtlsTutorialVersion = "1.0" | "1.2" | "1.3";
@@ -64,6 +70,7 @@ export interface TutorialContent {
         version: DtlsTutorialVersion;
       };
   steps: TutorialStep[];
+  afterTimeline?: TutorialAfterTimeline;
   takeaways: string[];
   seed: TutorialSeed;
 }

@@ -18,10 +18,7 @@ export interface TutorialViewerProps {
   onLaunchTool?: (toolId: string, sampleInput: string) => void;
 }
 
-export function TutorialViewer({
-  tutorialId,
-  onSelectTutorial,
-}: TutorialViewerProps) {
+export function TutorialViewer({ tutorialId, onSelectTutorial }: TutorialViewerProps) {
   const meta = useMemo(() => {
     return getTutorialMeta(tutorialId) ?? ALL_TUTORIALS[0]!;
   }, [tutorialId]);
@@ -80,7 +77,7 @@ export function TutorialViewer({
                 ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
                 : displayMeta.difficulty === "Intermediate"
                   ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
-                  : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                  : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300",
             )}
           >
             {displayMeta.difficulty}
@@ -128,7 +125,7 @@ export function TutorialViewer({
                 key={name}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-2xs",
-                  char ? char.color : "border-slate-300 bg-slate-100 text-slate-800"
+                  char ? char.color : "border-slate-300 bg-slate-100 text-slate-800",
                 )}
               >
                 <span>{char?.avatar ?? "👤"}</span>
@@ -206,7 +203,7 @@ export function TutorialViewer({
                         <span
                           className={cn(
                             "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold shrink-0",
-                            char.color
+                            char.color,
                           )}
                         >
                           <span>{char.avatar}</span>
@@ -225,7 +222,7 @@ export function TutorialViewer({
                             ? "border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
                             : step.callout.type === "warning"
                               ? "border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
-                              : "border-indigo-500 bg-indigo-50 text-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200"
+                              : "border-indigo-500 bg-indigo-50 text-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200",
                         )}
                       >
                         <span className="font-bold">
@@ -243,6 +240,40 @@ export function TutorialViewer({
               })}
             </div>
           </section>
+
+          {content.afterTimeline ? (
+            <section className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-5 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900 dark:text-white">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/60 dark:text-indigo-400">
+                  ↻
+                </span>
+                {content.afterTimeline.title}
+              </h2>
+              <TutorialMarkdown content={content.afterTimeline.content} className="mt-3" />
+
+              {content.afterTimeline.callout ? (
+                <div
+                  className={cn(
+                    "mt-3 rounded-lg border-l-4 p-3 text-xs leading-relaxed",
+                    content.afterTimeline.callout.type === "security"
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+                      : content.afterTimeline.callout.type === "warning"
+                        ? "border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                        : "border-indigo-500 bg-indigo-50 text-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-200",
+                  )}
+                >
+                  <span className="font-bold">
+                    {content.afterTimeline.callout.type === "security"
+                      ? "🛡️ Security Note: "
+                      : content.afterTimeline.callout.type === "warning"
+                        ? "⚠️ Important Catch: "
+                        : "💡 Key Insight: "}
+                  </span>
+                  <TutorialMarkdown content={content.afterTimeline.callout.text} inline />
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           {/* Key Takeaways */}
           <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-900/60">

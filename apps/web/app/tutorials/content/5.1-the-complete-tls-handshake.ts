@@ -8,7 +8,7 @@ const content: TutorialContent = {
     "How does TLS 1.3 establish fresh keys, authenticate a server, detect handshake tampering, and begin encrypted HTTP traffic in a single network round trip?",
   steps: [
     {
-      title: "Step 1: Alice sends ClientHello in plaintext",
+      title: "Step 1: ClientHello",
       speaker: "Alice",
       content:
         "Alice's browser sends `ClientHello`, offering TLS 1.3, AEAD/HKDF cipher suites such as `TLS_AES_128_GCM_SHA256`, supported signature algorithms, key-exchange groups, and an ephemeral `key_share` (commonly X25519). Web connections also carry extensions such as SNI and ALPN.\n\nThe cipher-suite name selects the **record cipher and transcript hash**; it does not select the certificate algorithm or the key-exchange group.",
@@ -18,7 +18,7 @@ const content: TutorialContent = {
       },
     },
     {
-      title: "Step 2: Bob selects parameters and both derive handshake keys",
+      title: "Step 2: ServerHello",
       speaker: "Bob",
       content:
         "Bob replies with a plaintext `ServerHello` selecting TLS 1.3, one cipher suite, and a compatible ephemeral key share. Alice and Bob combine the two ephemeral shares to compute the same (EC)DHE shared secret.\n\nTLS feeds that shared secret and the handshake transcript into HKDF. It first derives separate **client handshake** and **server handshake** traffic secrets, then distinct AEAD keys and IVs for each direction. The ECDHE output is an input to this schedule; it is not itself the TLS `master_secret`.",
@@ -28,7 +28,7 @@ const content: TutorialContent = {
       },
     },
     {
-      title: "Step 3: Bob authenticates inside the encrypted server flight",
+      title: "Step 3: Encrypted server authentication",
       speaker: "Bob",
       content:
         "Everything after `ServerHello` is encrypted with server handshake keys. Bob sends:\n\n1. `EncryptedExtensions` — negotiated options that do not belong in `ServerHello`.\n2. `Certificate` — the server certificate chain.\n3. `CertificateVerify` — a signature over the handshake transcript, proving possession of the certificate private key and binding that identity to this exact exchange.\n4. `Finished` — an HMAC-based authenticator over the transcript.\n\nThe certificate and signature are **not fields inside ServerHello**; they are separate encrypted handshake messages.",
@@ -38,32 +38,37 @@ const content: TutorialContent = {
       },
     },
     {
-      title: "Step 4: Alice verifies Bob and the complete transcript",
+      title: "Step 4: Client completion",
       speaker: "Alice",
       content:
-        "Alice validates the certificate chain to a trusted root, validity dates, constraints, key usage, and the requested website hostname. She then verifies `CertificateVerify` and Bob's `Finished` value.\n\nA valid certificate chain alone is not enough: the hostname must match, the signature must bind the certificate key to this handshake, and `Finished` must authenticate the same transcript Alice observed.",
-    },
-    {
-      title: "Step 5: Alice sends Finished, then HTTP begins",
-      speaker: "Alice",
-      content:
-        "Alice sends her encrypted `Finished` using the client handshake keys. She may immediately follow it with an HTTP request protected by client application traffic keys. Bob's HTTP response uses a separate server application traffic key.\n\nTLS 1.3 record protection uses an AEAD cipher: AES-GCM, ChaCha20-Poly1305, or AES-CCM. Eve can still observe sizes and timing. Mallory can alter or drop packets, but altered ciphertext fails authentication and is rejected rather than accepted as valid data.",
+        "Alice validates the certificate chain to a trusted root, validity dates, constraints, key usage, and the requested website hostname. She then verifies `CertificateVerify` and Bob's `Finished` value.\n\nA valid certificate chain alone is not enough: the hostname must match, the signature must bind the certificate key to this handshake, and `Finished` must authenticate the same transcript Alice observed.\n\nAlice sends her encrypted `Finished` using the client handshake keys, completing her side of the handshake.",
       callout: {
         type: "security",
         text: "In a full certificate-authenticated (EC)DHE handshake, erasing the ephemeral private keys gives forward secrecy: later theft of Bob's certificate private key does not reveal recorded sessions.",
       },
     },
     {
-      title: "Step 6: Session tickets make later connections faster",
+      title: "Step 5: HTTP request",
+      speaker: "Alice",
+      content:
+        "Alice may immediately follow her `Finished` with an HTTP request protected by client application traffic keys. TLS 1.3 record protection uses an AEAD cipher: AES-GCM, ChaCha20-Poly1305, or AES-CCM. Eve can still observe sizes and timing.",
+    },
+    {
+      title: "Step 6: HTTP response",
       speaker: "Bob",
       content:
-        "After the handshake, Bob can send one or more `NewSessionTicket` messages. A later connection can use that ticket as a pre-shared key (PSK) for resumption, optionally combined with a new (EC)DHE exchange for fresh forward secrecy.\n\nTLS 1.3 also permits **0-RTT early data** on resumed sessions. It arrives before the new handshake is authenticated, can be replayed, and does not gain forward secrecy from the new key exchange. Applications must restrict it to replay-safe operations.",
-      callout: {
-        type: "warning",
-        text: "Never treat 0-RTT as safe for non-idempotent actions such as charging a card, transferring money, or changing account state.",
-      },
+        "Bob's HTTP response uses a separate server application traffic key. Mallory can alter or drop packets, but altered ciphertext fails authentication and is rejected rather than accepted as valid data.",
     },
   ],
+  afterTimeline: {
+    title: "After the Timeline: Session tickets make later connections faster",
+    content:
+      "After the handshake, Bob can send one or more `NewSessionTicket` messages. A later connection can use that ticket as a pre-shared key (PSK) for resumption, optionally combined with a new (EC)DHE exchange for fresh forward secrecy.\n\nTLS 1.3 also permits **0-RTT early data** on resumed sessions. It arrives before the new handshake is authenticated, can be replayed, and does not gain forward secrecy from the new key exchange. Applications must restrict it to replay-safe operations.",
+    callout: {
+      type: "warning",
+      text: "Never treat 0-RTT as safe for non-idempotent actions such as charging a card, transferring money, or changing account state.",
+    },
+  },
   takeaways: [
     "TLS 1.3 completes a normal certificate-authenticated handshake in one round trip; application data can follow the client's Finished.",
     "`ServerHello` completes parameter selection and enables handshake encryption; the certificate, signature, and server Finished follow as separate encrypted messages.",

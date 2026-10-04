@@ -1,6 +1,9 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  DTLS_VERSION_VISUALS,
+  TLS_VERSION_VISUALS,
+  type VersionVisual,
+} from "../apps/web/app/tutorials/transport-handshake-data";
 import { loadTutorialContent } from "../apps/web/app/tutorials/tutorial-loader";
 import { ALL_TUTORIALS_META, getTutorialMeta } from "../apps/web/app/tutorials/tutorials-meta";
 import type {
@@ -11,10 +14,6 @@ import type {
 const TLS_TUTORIAL_ID = "5.1-the-complete-tls-handshake";
 const DTLS_TUTORIAL_ID = "5.3-the-dtls-handshake";
 const SSL_TUTORIAL_ID = "5.1-ssl-3.0-handshake";
-const TRANSPORT_VISUAL_SOURCE = readFileSync(
-  path.join(__dirname, "../apps/web/app/tutorials/transport-handshake-visual.tsx"),
-  "utf8",
-);
 
 const EXPECTED_TLS_VERSIONS: Readonly<Record<string, TlsTutorialVersion>> = {
   "5.1-the-complete-tls-handshake": "1.3",
@@ -27,6 +26,45 @@ const EXPECTED_DTLS_VERSIONS: Readonly<Record<string, DtlsTutorialVersion>> = {
   "5.3-dtls-1.2-handshake": "1.2",
   "5.3-dtls-1.0-handshake": "1.0",
 };
+
+const TRANSPORT_TUTORIAL_TIMELINES: readonly {
+  id: string;
+  visual: VersionVisual;
+}[] = [
+  { id: SSL_TUTORIAL_ID, visual: TLS_VERSION_VISUALS["SSL 3.0"] },
+  ...Object.entries(EXPECTED_TLS_VERSIONS).map(([id, version]) => ({
+    id,
+    visual: TLS_VERSION_VISUALS[version],
+  })),
+  ...Object.entries(EXPECTED_DTLS_VERSIONS).map(([id, version]) => ({
+    id,
+    visual: DTLS_VERSION_VISUALS[version],
+  })),
+];
+
+function expectedStepTitles(visual: VersionVisual) {
+  return visual.flights.map((flight) => `Step ${flight.step}: ${flight.title}`);
+}
+
+describe("transport handshake timelines", () => {
+  it.each(TRANSPORT_TUTORIAL_TIMELINES)(
+    "keeps $id synchronized with its visual timeline",
+    async ({ id, visual }) => {
+      const content = await loadTutorialContent(id);
+
+      expect(content?.steps).toHaveLength(visual.flights.length);
+      expect(content?.steps.map((step) => step.title)).toEqual(expectedStepTitles(visual));
+      expect(content?.afterTimeline).toBeDefined();
+
+      const numberedSteps = content?.steps
+        .map((step) => `${step.title}\n${step.content}`)
+        .join("\n");
+      expect(numberedSteps).not.toMatch(
+        /NewSessionTicket|abbreviated handshake|\bresum(?:e|ed|es|ing|ption)\b/i,
+      );
+    },
+  );
+});
 
 describe("TLS handshake tutorial variants", () => {
   const tutorial = getTutorialMeta(TLS_TUTORIAL_ID);
@@ -48,18 +86,14 @@ describe("TLS handshake tutorial variants", () => {
   });
 
   it.each(Object.entries(EXPECTED_TLS_VERSIONS))(
-    "loads %s with the shared six-step teaching flow",
+    "loads %s with its six-event visual timeline",
     async (id, version) => {
       const content = await loadTutorialContent(id);
+      const visual = TLS_VERSION_VISUALS[version];
 
       expect(content?.visualization).toEqual({ kind: "tls-handshake", version });
-      expect(content?.steps).toHaveLength(6);
-      expect(content?.steps[0]?.title).toBe("Step 1: Alice sends ClientHello in plaintext");
-      expect(content?.steps[1]?.title).toMatch(/^Step 2: Bob selects parameters/);
-      expect(content?.steps[2]?.title).toMatch(/^Step 3: Bob authenticates/);
-      expect(content?.steps[3]?.title).toMatch(/^Step 4: Alice verifies Bob/);
-      expect(content?.steps[4]?.title).toMatch(/^Step 5: Alice/);
-      expect(content?.steps[5]?.title).toMatch(/^Step 6: Session tickets/);
+      expect(content?.steps).toHaveLength(visual.flights.length);
+      expect(content?.steps.map((step) => step.title)).toEqual(expectedStepTitles(visual));
     },
   );
 
@@ -80,21 +114,38 @@ describe("TLS handshake tutorial variants", () => {
   });
 
   it("keeps protocol timelines independently numbered with their natural event counts", () => {
-    const tls12Start = TRANSPORT_VISUAL_SOURCE.indexOf('  "1.2": {');
-    const tls13Start = TRANSPORT_VISUAL_SOURCE.indexOf('  "1.3": {', tls12Start);
-    const tls12Visual = TRANSPORT_VISUAL_SOURCE.slice(tls12Start, tls13Start);
-    const dtlsStart = TRANSPORT_VISUAL_SOURCE.indexOf("const DTLS_VERSION_VISUALS");
-    const tlsVisuals = TRANSPORT_VISUAL_SOURCE.slice(0, dtlsStart);
-    const dtls13Start = TRANSPORT_VISUAL_SOURCE.indexOf('  "1.3": {', dtlsStart);
-    const dtls13Visual = TRANSPORT_VISUAL_SOURCE.slice(dtls13Start);
+    expect(Object.values(TLS_VERSION_VISUALS).map((visual) => visual.flights.length)).toEqual([
+      6, 6, 6, 6,
+    ]);
+    expect(Object.values(DTLS_VERSION_VISUALS).map((visual) => visual.flights.length)).toEqual([
+      6, 6, 7,
+    ]);
 
-    expect(tls12Visual.match(/step: /g)).toHaveLength(6);
-    expect(tlsVisuals.match(/title: "HTTP request"/g)).toHaveLength(4);
-    expect(tlsVisuals.match(/title: "HTTP response"/g)).toHaveLength(4);
-    expect(dtls13Visual.match(/step: /g)).toHaveLength(7);
-    expect(TRANSPORT_VISUAL_SOURCE).not.toContain("badge:");
-    expect(TRANSPORT_VISUAL_SOURCE).toContain("{flight.step}");
-    expect(TRANSPORT_VISUAL_SOURCE).toContain("Timeline event ${flight.step}");
+    for (const visual of Object.values(TLS_VERSION_VISUALS)) {
+      expect(visual.flights.map((flight) => flight.step)).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(visual.flights.map((flight) => flight.title)).toContain("HTTP request");
+      expect(visual.flights.map((flight) => flight.title)).toContain("HTTP response");
+      expect(visual.flights.every((flight) => !("badge" in flight))).toBe(true);
+    }
+
+    for (const visual of Object.values(DTLS_VERSION_VISUALS)) {
+      expect(visual.flights.map((flight) => flight.step)).toEqual(
+        Array.from({ length: visual.flights.length }, (_, index) => index + 1),
+      );
+      expect(visual.flights.every((flight) => !("badge" in flight))).toBe(true);
+    }
+  });
+
+  it("shows the production-compatible TLS 1.2 path as ECDHE plus AEAD", () => {
+    const visual = TLS_VERSION_VISUALS["1.2"];
+    const applicationMessages = visual.flights
+      .slice(4)
+      .flatMap((flight) => flight.messages)
+      .join(" ");
+
+    expect(visual.eyebrow).toContain("Production-compatible ECDHE + AEAD");
+    expect(applicationMessages).toMatch(/AES-GCM|ChaCha20-Poly1305/);
+    expect(applicationMessages).not.toContain("CBC");
   });
 });
 
@@ -118,20 +169,14 @@ describe("DTLS handshake tutorial variants", () => {
   });
 
   it.each(Object.entries(EXPECTED_DTLS_VERSIONS))(
-    "loads %s with the shared six-step teaching flow",
+    "loads %s with its visual timeline",
     async (id, version) => {
       const content = await loadTutorialContent(id);
+      const visual = DTLS_VERSION_VISUALS[version];
 
       expect(content?.visualization).toEqual({ kind: "dtls-handshake", version });
-      expect(content?.steps).toHaveLength(6);
-      expect(content?.steps.map((step) => step.title)).toEqual([
-        "Step 1: Alice sends ClientHello in a UDP datagram",
-        "Step 2: Bob optionally validates Alice's address",
-        "Step 3: Bob selects parameters and authenticates",
-        "Step 4: Alice verifies Bob and establishes shared keys",
-        "Step 5: Alice and Bob finish, then application datagrams begin",
-        "Step 6: DTLS recovers handshake loss and resumes sessions",
-      ]);
+      expect(content?.steps).toHaveLength(visual.flights.length);
+      expect(content?.steps.map((step) => step.title)).toEqual(expectedStepTitles(visual));
       const walkthrough = content?.steps.map((step) => step.content).join("\n") ?? "";
       expect(walkthrough).toContain("`CertificateRequest`");
       expect(walkthrough).toContain("`Certificate`");
@@ -141,23 +186,41 @@ describe("DTLS handshake tutorial variants", () => {
 
   it("requires an ACK for the terminal DTLS 1.3 client flight", async () => {
     const content = await loadTutorialContent(DTLS_TUTORIAL_ID);
+    const visual = DTLS_VERSION_VISUALS["1.3"];
+    const ackStep = content?.steps[6];
 
-    expect(content?.steps[4]?.content).toContain("Bob sends an explicit `ACK`");
-    expect(content?.steps[5]?.content).toContain("unacknowledged handshake records");
-    expect(content?.steps[4]?.content).not.toContain("can explicitly acknowledge");
+    expect(visual.rtt).toBe("1 RTT / 2 with HRR");
+    expect(ackStep?.title).toBe("Step 7: Selective acknowledgement");
+    expect(ackStep?.content).toContain("Bob sends an explicit `ACK`");
+    expect(ackStep?.content).toContain("omit acknowledged handshake messages or fragments");
+    expect(ackStep?.content).toContain("normally with epoch-3 application keys");
+    expect(ackStep?.content).not.toContain("If a timer expires");
+    expect(content?.afterTimeline?.content).toContain("If a timer expires");
+    expect(
+      content?.steps
+        .slice(0, 6)
+        .map((step) => step.content)
+        .join("\n"),
+    ).not.toContain("explicit `ACK`");
   });
 
   it.each(["5.3-dtls-1.0-handshake", "5.3-dtls-1.2-handshake"])(
     "marks the initial cookie flights as optional in %s",
     async (id) => {
       const content = await loadTutorialContent(id);
-      const cookieStep = content?.steps[1]?.content ?? "";
+      const initialClientHello = content?.steps[0]?.content ?? "";
+      const helloVerifyRequest = content?.steps[1]?.content ?? "";
+      const retriedClientHello = content?.steps[2]?.content ?? "";
 
-      expect(cookieStep).toContain("flights 1–3 in the cookie-verified path");
-      expect(cookieStep).toContain("present only when Bob enforces this DoS protection");
-      expect(cookieStep).toContain(
-        "Without them, Bob answers the original ClientHello directly",
-      );
+      expect(initialClientHello).toContain("optional cookie-verified path");
+      expect(initialClientHello).toContain("does not enforce the cookie DoS check");
+      expect(helloVerifyRequest).toContain("When Bob enforces stateless cookie DoS protection");
+      expect(helloVerifyRequest).toContain("Without the cookie check");
+      expect(retriedClientHello).toContain("Only after receiving HelloVerifyRequest");
+      expect(retriedClientHello).toContain("flights 1–3 in the cookie-verified path");
+      expect(content?.steps.map((step) => step.content).join("\n")).not.toMatch(/retransmi/i);
+      expect(content?.afterTimeline?.content).toMatch(/retransmi/i);
+      expect(content?.afterTimeline?.content).toMatch(/session|resum/i);
     },
   );
 
@@ -208,9 +271,12 @@ describe("section 5 tutorial sequence", () => {
 
   it("loads the SSL 3.0 lesson and its historical handshake visual", async () => {
     const content = await loadTutorialContent(SSL_TUTORIAL_ID);
+    const visual = TLS_VERSION_VISUALS["SSL 3.0"];
 
     expect(content?.visualization).toEqual({ kind: "tls-handshake", version: "SSL 3.0" });
-    expect(content?.steps).toHaveLength(6);
+    expect(content?.steps).toHaveLength(visual.flights.length);
+    expect(content?.steps.map((step) => step.title)).toEqual(expectedStepTitles(visual));
+    expect(content?.afterTimeline).toBeDefined();
     expect(content?.takeaways).toContain(
       "RFC 7568 prohibits SSL 3.0. Study it to understand TLS history, never to configure a live service.",
     );
