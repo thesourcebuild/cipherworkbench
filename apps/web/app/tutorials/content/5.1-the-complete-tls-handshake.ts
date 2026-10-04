@@ -1,9 +1,9 @@
 import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
-  visualization: "tls13-handshake",
+  visualization: { kind: "tls-handshake", version: "1.3" },
   analogy:
-    "Imagine Alice calling an embassy. She begins on an open line by proposing a fresh one-use code system and sending her half of it. Bob chooses compatible settings and returns his half. At that instant they can independently calculate the same temporary secret.\n\nBob then uses the new private line to show his **CA-signed passport** and sign the complete conversation so far. Alice checks the passport, the hostname, the signature, and a final transcript authenticator. Only then does she send her own `Finished` seal and the HTTP request.\n\nNormal HTTPS authenticates **the server**. Alice presents a certificate only when Bob explicitly requests mutual TLS (mTLS).",
+    "Imagine Alice calling an embassy. She begins on an open line by proposing a fresh one-use code system and sending her half of it. Bob chooses compatible settings and returns his half. At that instant they can independently calculate the same temporary secret.\n\nBob then uses the new private line to show his **CA-signed passport** and sign the complete conversation so far. Alice checks the passport, the hostname, the signature, and a final transcript authenticator. Only then does she send her own `Finished` seal and the HTTP request.\n\nNormal HTTPS authenticates **the server**. Alice presents a certificate only when Bob explicitly requests mutual TLS (mTLS). TLS 1.3 can also protect other application protocols over a reliable transport, but it secures data only while in transit; compromised endpoints can still read plaintext after decryption.",
   problem:
     "How does TLS 1.3 establish fresh keys, authenticate a server, detect handshake tampering, and begin encrypted HTTP traffic in a single network round trip?",
   steps: [
@@ -70,6 +70,9 @@ const content: TutorialContent = {
     "HKDF derives independent client/server handshake and application traffic secrets from the shared secret and transcript.",
     "Certificates establish trust and hostname identity, `CertificateVerify` proves private-key possession, and `Finished` authenticates the transcript.",
     "Full ephemeral (EC)DHE provides forward secrecy. PSK-only resumption and replayable 0-RTT require separate risk decisions.",
+    "TLS 1.3 was standardized in RFC 8446 in 2018 and removes static RSA/DH key exchange, CBC record suites, RC4, compression, and renegotiation.",
+    "Only resumed sessions can offer 0-RTT early data; a normal full TLS 1.3 handshake is 1-RTT, and early data remains replayable.",
+    "TLS provides connection confidentiality, authentication, and integrity—not protection for plaintext on a compromised client or server.",
   ],
   seed: {
     toolId: "ecdh",

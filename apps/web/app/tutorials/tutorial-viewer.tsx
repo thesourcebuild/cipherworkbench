@@ -10,7 +10,7 @@ import {
 import { loadTutorialContent } from "./tutorial-loader";
 import type { TutorialContent } from "./tutorial-types";
 import { TutorialMarkdown } from "./tutorial-markdown";
-import { Tls13HandshakeVisual } from "./tls13-handshake-visual";
+import { DtlsHandshakeVisual, TlsHandshakeVisual } from "./transport-handshake-visual";
 
 export interface TutorialViewerProps {
   tutorialId: string;
@@ -26,16 +26,28 @@ export function TutorialViewer({
     return getTutorialMeta(tutorialId) ?? ALL_TUTORIALS[0]!;
   }, [tutorialId]);
 
+  const [variantSelections, setVariantSelections] = useState<Record<string, string>>({});
+  const selectedContentId = useMemo(() => {
+    const selected = variantSelections[meta.id];
+    return selected && meta.variants?.some((variant) => variant.id === selected)
+      ? selected
+      : meta.id;
+  }, [meta, variantSelections]);
+  const selectedVariant = meta.variants?.find((variant) => variant.id === selectedContentId);
+  const displayMeta = selectedVariant ?? meta;
+
   const [content, setContent] = useState<TutorialContent | null>(null);
+  const [loadedContentId, setLoadedContentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
 
-    loadTutorialContent(meta.id).then((data) => {
+    loadTutorialContent(selectedContentId).then((data) => {
       if (active) {
         setContent(data);
+        setLoadedContentId(selectedContentId);
         setLoading(false);
       }
     });
@@ -43,7 +55,7 @@ export function TutorialViewer({
     return () => {
       active = false;
     };
-  }, [meta.id]);
+  }, [selectedContentId]);
 
   const currentIndex = ALL_TUTORIALS.findIndex((t) => t.id === meta.id);
   const prevTutorial = currentIndex > 0 ? ALL_TUTORIALS[currentIndex - 1] : null;
@@ -59,27 +71,49 @@ export function TutorialViewer({
             Scenario {meta.number}
           </span>
           <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-            {meta.readTime}
+            {displayMeta.readTime}
           </span>
           <span
             className={cn(
               "rounded-md border px-2 py-0.5 text-xs font-semibold",
-              meta.difficulty === "Beginner"
+              displayMeta.difficulty === "Beginner"
                 ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
-                : meta.difficulty === "Intermediate"
+                : displayMeta.difficulty === "Intermediate"
                   ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
                   : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
             )}
           >
-            {meta.difficulty}
+            {displayMeta.difficulty}
           </span>
+          {meta.variants ? (
+            <label className="ml-auto flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+              <span className="whitespace-nowrap">Explanation:</span>
+              <select
+                aria-label="Handshake version"
+                value={selectedContentId}
+                onChange={(event) =>
+                  setVariantSelections((current) => ({
+                    ...current,
+                    [meta.id]: event.target.value,
+                  }))
+                }
+                className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-900 shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              >
+                {meta.variants.map((variant) => (
+                  <option key={variant.id} value={variant.id}>
+                    {variant.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
 
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl dark:text-white">
-          {meta.title}
+          {displayMeta.title}
         </h1>
         <p className="mt-2 text-base text-slate-600 dark:text-slate-300">
-          {meta.subtitle}
+          {displayMeta.subtitle}
         </p>
 
         {/* Character Badges */}
@@ -108,7 +142,7 @@ export function TutorialViewer({
         </div>
       </div>
 
-      {loading || !content ? (
+      {loading || !content || loadedContentId !== selectedContentId ? (
         <div className="space-y-6 animate-pulse">
           <div className="h-32 rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-800/50" />
           <div className="space-y-4">
@@ -140,7 +174,11 @@ export function TutorialViewer({
             </div>
           </section>
 
-          {content.visualization === "tls13-handshake" ? <Tls13HandshakeVisual /> : null}
+          {content.visualization?.kind === "tls-handshake" ? (
+            <TlsHandshakeVisual version={content.visualization.version} />
+          ) : content.visualization?.kind === "dtls-handshake" ? (
+            <DtlsHandshakeVisual version={content.visualization.version} />
+          ) : null}
 
           {/* Step-by-Step Scenario Walkthrough */}
           <section className="space-y-4">

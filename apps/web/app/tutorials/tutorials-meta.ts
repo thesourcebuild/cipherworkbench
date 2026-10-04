@@ -327,14 +327,33 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
   {
     "id": "putting-it-together",
     "title": "5. Putting It All Together: The Real-World Symphony",
-    "description": "TLS 1.3, Certificate Authorities, password vaults, threshold cryptography, and Post-Quantum.",
+    "description": "SSL 3.0, TLS, DTLS, Certificate Authorities, password vaults, threshold cryptography, and Post-Quantum.",
     "badge": "Systems",
     "tutorials": [
       {
-        "id": "5.1-the-complete-tls-handshake",
+        "id": "5.1-ssl-3.0-handshake",
         "number": "5.1",
-        "title": "The TLS 1.3 Handshake: The Full Symphony",
-        "subtitle": "A message-by-message 1-RTT journey from ClientHello to encrypted HTTP",
+        "title": "SSL 3.0: The Handshake Before TLS",
+        "subtitle": "How the 1996 protocol negotiated RSA, RC4 or CBC, MACs, and resumable sessions",
+        "conceptId": "putting-it-together",
+        "family": "asymmetric",
+        "toolId": "rsa",
+        "difficulty": "Intermediate",
+        "readTime": "6 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Eve",
+          "Mallory"
+        ],
+        "summary": "Trace the historical SSL 3.0 handshake from plaintext negotiation through RSA key transport, ChangeCipherSpec, Finished, and protected HTTP, then see why obsolete ciphers, brittle CBC records, and POODLE forced the protocol into retirement."
+      },
+      // Existing IDs remain stable because tutorial completion is persisted by ID.
+      {
+        "id": "5.1-the-complete-tls-handshake",
+        "number": "5.2",
+        "title": "The TLS Handshake: The Full Symphony",
+        "subtitle": "Compare the same HTTPS handshake across three protocol generations",
         "conceptId": "putting-it-together",
         "family": "asymmetric",
         "toolId": "ecdh",
@@ -346,11 +365,81 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Eve",
           "Mallory"
         ],
-        "summary": "Alice and Bob negotiate fresh ephemeral keys, derive directional handshake secrets with HKDF, authenticate Bob's certificate and transcript, exchange Finished messages, and begin AEAD-protected HTTP in one round trip."
+        "summary": "Compare how TLS 1.1, TLS 1.2, and TLS 1.3 negotiate keys, authenticate Bob, exchange Finished messages, protect HTTP, and reduce a full handshake from two round trips to one.",
+        "variants": [
+          {
+            "id": "5.1-the-complete-tls-handshake",
+            "label": "TLS 1.3 (Current)",
+            "title": "The TLS Handshake: The Full Symphony",
+            "subtitle": "A message-by-message 1-RTT journey from ClientHello to encrypted HTTP",
+            "difficulty": "Intermediate",
+            "readTime": "6 min"
+          },
+          {
+            "id": "5.1-tls-1.2-handshake",
+            "label": "TLS 1.2 (Compatibility)",
+            "title": "The TLS 1.2 Handshake: The Transitional Workhorse",
+            "subtitle": "How ECDHE, certificates, ChangeCipherSpec, and AEAD complete a 2-RTT handshake",
+            "difficulty": "Intermediate",
+            "readTime": "6 min"
+          },
+          {
+            "id": "5.1-tls-1.1-handshake",
+            "label": "TLS 1.1 (Deprecated)",
+            "title": "The TLS 1.1 Handshake: The Legacy Baseline",
+            "subtitle": "How RSA or ephemeral DH, CBC records, and the legacy PRF secured older connections",
+            "difficulty": "Intermediate",
+            "readTime": "6 min"
+          }
+        ]
+      },
+      {
+        "id": "5.3-the-dtls-handshake",
+        "number": "5.3",
+        "title": "The DTLS Handshake: The Datagram Symphony",
+        "subtitle": "How TLS-style security survives UDP loss, reordering, duplication, and fragmentation",
+        "conceptId": "putting-it-together",
+        "family": "asymmetric",
+        "toolId": "ecdh",
+        "difficulty": "Advanced",
+        "readTime": "7 min",
+        "characters": [
+          "Alice",
+          "Bob",
+          "Eve",
+          "Mallory"
+        ],
+        "summary": "Compare how DTLS 1.0, DTLS 1.2, and DTLS 1.3 adapt authenticated key exchange to unreliable datagrams using stateless cookies, numbered fragments, retransmitted flights, epochs, replay windows, and selective acknowledgements.",
+        "variants": [
+          {
+            "id": "5.3-the-dtls-handshake",
+            "label": "DTLS 1.3 (Current)",
+            "title": "The DTLS Handshake: The Datagram Symphony",
+            "subtitle": "A 1-RTT authenticated handshake with epochs, encrypted record numbers, and selective ACKs",
+            "difficulty": "Advanced",
+            "readTime": "7 min"
+          },
+          {
+            "id": "5.3-dtls-1.2-handshake",
+            "label": "DTLS 1.2 (Compatibility)",
+            "title": "The DTLS 1.2 Handshake: TLS over Unreliable UDP",
+            "subtitle": "How cookies, numbered fragments, retransmitted flights, ECDHE, and AEAD secure datagrams",
+            "difficulty": "Advanced",
+            "readTime": "7 min"
+          },
+          {
+            "id": "5.3-dtls-1.0-handshake",
+            "label": "DTLS 1.0 (Deprecated)",
+            "title": "The DTLS 1.0 Handshake: The Deprecated Datagram Baseline",
+            "subtitle": "How the first DTLS adapted TLS 1.1 with cookies, epochs, fragments, and CBC records",
+            "difficulty": "Advanced",
+            "readTime": "7 min"
+          }
+        ]
       },
       {
         "id": "5.2-the-imposter-in-the-middle",
-        "number": "5.2",
+        "number": "5.4",
         "title": "The Imposter in the Middle: Trent & Certificates",
         "subtitle": "Why public keys alone are vulnerable, and how Certificate Authorities solve trust",
         "conceptId": "putting-it-together",
@@ -368,7 +457,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         "id": "5.3-the-password-vault",
-        "number": "5.3",
+        "number": "5.5",
         "title": "The Password Vault: Memory-Hard Argon2id",
         "subtitle": "Why Bob never stores plain passwords, and how salts and memory-hardness defeat GPU farms",
         "conceptId": "putting-it-together",
@@ -385,7 +474,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         "id": "5.4-the-pirate-treasure-chest",
-        "number": "5.4",
+        "number": "5.6",
         "title": "The Pirate Treasure Chest: Shamir's Secret Sharing",
         "subtitle": "Splitting a master key so any 3 of 5 lieutenants can unlock the vault",
         "conceptId": "putting-it-together",
@@ -402,7 +491,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         "id": "5.5-the-quantum-spy",
-        "number": "5.5",
+        "number": "5.7",
         "title": "The Quantum Spy: Post-Quantum ML-KEM",
         "subtitle": "Defeating Shor's algorithm and 'Store Now, Decrypt Later' attacks with lattice crystals",
         "conceptId": "putting-it-together",
