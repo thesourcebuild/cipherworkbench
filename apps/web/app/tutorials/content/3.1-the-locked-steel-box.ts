@@ -1,6 +1,7 @@
 ﻿import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
+  mechanismDiagram: "symmetric",
   visualization: { kind: "cryptographic-flow", id: "symmetric" },
   analogy:
     "A physical safe box with one lock. Alice and Bob each hold an identical brass key. Alice can lock the box, ship it through the public postal system, and Bob can unlock it on arrival — but anyone who copies one of those keys can do the same.",

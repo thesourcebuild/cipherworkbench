@@ -1,6 +1,7 @@
 import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
+  mechanismDiagram: "hmac",
   visualization: { kind: "cryptographic-flow", id: "hmac" },
   analogy:
     "Imagine a club secret handshake. Before delivering news, Alice performs the secret handshake. If someone doesn't know the exact grip, Bob rejects whatever they say, even if their document looks neat and tidy. However, Alice is speaking out loud — anyone in the room can still hear the words!",

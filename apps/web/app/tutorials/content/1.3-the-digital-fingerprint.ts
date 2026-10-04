@@ -1,6 +1,7 @@
 import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
+  mechanismDiagram: "hash",
   visualization: { kind: "cryptographic-flow", id: "hash" },
   analogy:
     "A human fingerprint uniquely identifies an individual. A cryptographic hash takes any message — from one word to an entire operating system ISO — and compresses it into a 64-character hexadecimal digest. Unlike CRC, changing even one single bit completely explodes the hash into unrecognizably different characters (The Avalanche Effect).",

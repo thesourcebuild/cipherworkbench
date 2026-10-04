@@ -1,6 +1,7 @@
 import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
+  mechanismDiagram: "crc",
   visualization: { kind: "cryptographic-flow", id: "crc" },
   analogy:
     "Imagine a long mathematical division problem. You divide a huge number by a predetermined generator polynomial and keep only the remainder (like the change left over in your pocket). If even a tiny cluster of bits flips, the remainder completely changes.",

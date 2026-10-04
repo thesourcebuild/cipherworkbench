@@ -78,6 +78,14 @@ const NETWORK: CryptographicFlowParticipant = {
   tone: "neutral",
 };
 
+const TRENT: CryptographicFlowParticipant = {
+  id: "trent",
+  name: "Trent",
+  role: "Certificate Authority",
+  initial: "T",
+  tone: "emerald",
+};
+
 export const CRYPTOGRAPHIC_FLOWS: Record<CryptographicFlowId, CryptographicFlow> = {
   crc: {
     eyebrow: "CRC-32 · Accidental corruption detection",
@@ -472,6 +480,94 @@ export const CRYPTOGRAPHIC_FLOWS: Record<CryptographicFlowId, CryptographicFlow>
       {
         title: "No sender proof",
         description: "Encryption for Bob does not authenticate who created the ciphertext.",
+        tone: "amber",
+      },
+    ],
+  },
+  certificate: {
+    eyebrow: "X.509 PKI · Authenticated public-key distribution",
+    title: "A certificate chain connects Bob's key to a trusted root",
+    property: "Authentication",
+    summary:
+      "detect key substitution → request certificate → issue chain → validate → prove key",
+    participants: [ALICE, MALLORY, BOB, TRENT],
+    events: [
+      {
+        step: 1,
+        title: "Mallory substitutes an unauthenticated public key",
+        actors: ["alice", "mallory"],
+        route: "Untrusted network",
+        artifacts: ["key request", "Mallory's public key", "false identity"],
+        status: "MitM possible",
+        tone: "rose",
+        note: "Encryption cannot expose a substituted key when Alice has no authenticated reference.",
+      },
+      {
+        step: 2,
+        title: "Bob creates a keypair and certificate request",
+        actors: ["bob"],
+        route: "Local generation",
+        artifacts: ["private key", "public key", "signed CSR", "SAN request"],
+        status: "request prepared",
+        tone: "violet",
+        note: "Bob keeps the private key and asks a CA to certify the public key and DNS name.",
+      },
+      {
+        step: 3,
+        title: "Trent validates Bob and issues a certificate",
+        actors: ["bob", "trent"],
+        route: "CA validation and issuance",
+        artifacts: ["domain control", "leaf certificate", "intermediate signature"],
+        status: "identity bound",
+        tone: "emerald",
+        note: "The CA validates authorization and signs a certificate binding Bob's key to the name.",
+      },
+      {
+        step: 4,
+        title: "Bob presents the certificate chain",
+        actors: ["bob", "alice"],
+        route: "TLS handshake",
+        artifacts: ["leaf certificate", "intermediate certificates", "root omitted"],
+        status: "chain presented",
+        tone: "cyan",
+        note: "Bob sends the public chain needed to reach a root already trusted by Alice.",
+      },
+      {
+        step: 5,
+        title: "Alice validates the chain and server identity",
+        actors: ["alice", "trent"],
+        route: "Local policy checks",
+        artifacts: ["trusted root", "signatures", "validity", "SAN hostname", "key usage"],
+        status: "identity verified",
+        tone: "amber",
+        note: "Alice accepts only a valid path whose leaf certificate authorizes the requested hostname.",
+      },
+      {
+        step: 6,
+        title: "Bob proves possession of the private key",
+        actors: ["bob", "alice"],
+        route: "TLS CertificateVerify",
+        artifacts: ["handshake transcript", "private-key signature", "Finished"],
+        status: "peer authenticated",
+        tone: "emerald",
+        note: "Bob signs the transcript so a thief holding only the public certificate cannot impersonate him.",
+      },
+    ],
+    legend: [
+      {
+        title: "Chain of trust",
+        description:
+          "Each CA signature links the leaf certificate toward a locally trusted root.",
+        tone: "emerald",
+      },
+      {
+        title: "Identity checks",
+        description: "The SAN hostname and certificate policy must match the intended server.",
+        tone: "cyan",
+      },
+      {
+        title: "Trust boundary",
+        description: "Misissuance or an unsafe trust store can still authorize an attacker.",
         tone: "amber",
       },
     ],

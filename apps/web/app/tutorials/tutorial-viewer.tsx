@@ -12,6 +12,7 @@ import type { TutorialContent } from "./tutorial-types";
 import { TutorialMarkdown } from "./tutorial-markdown";
 import { DtlsHandshakeVisual, TlsHandshakeVisual } from "./transport-handshake-visual";
 import { CryptographicFlowVisual } from "./cryptographic-flow-visual";
+import { MechanismDiagramVisual } from "./mechanism-diagram-visual";
 
 export interface TutorialViewerProps {
   tutorialId: string;
@@ -171,6 +172,10 @@ export function TutorialViewer({ tutorialId, onSelectTutorial }: TutorialViewerP
               />
             </div>
           </section>
+
+          {content.mechanismDiagram ? (
+            <MechanismDiagramVisual id={content.mechanismDiagram} />
+          ) : null}
 
           {content.visualization?.kind === "tls-handshake" ? (
             <TlsHandshakeVisual version={content.visualization.version} />

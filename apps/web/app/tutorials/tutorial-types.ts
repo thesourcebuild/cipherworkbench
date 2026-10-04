@@ -32,7 +32,9 @@ export interface TutorialAfterTimeline {
 export type TutorialDifficulty = "Beginner" | "Intermediate" | "Advanced";
 export type TlsTutorialVersion = "SSL 3.0" | "1.1" | "1.2" | "1.3";
 export type DtlsTutorialVersion = "1.0" | "1.2" | "1.3";
-export type CryptographicFlowId = "crc" | "hash" | "hmac" | "symmetric" | "ecdh" | "rsa";
+export type MechanismDiagramId = "crc" | "hash" | "hmac" | "symmetric" | "rsa";
+export type CryptographicFlowId =
+  "crc" | "hash" | "hmac" | "symmetric" | "ecdh" | "rsa" | "certificate";
 
 export interface TutorialVariantMeta {
   id: string;
@@ -61,6 +63,7 @@ export interface TutorialMeta {
 export interface TutorialContent {
   analogy: string;
   problem: string;
+  mechanismDiagram?: MechanismDiagramId;
   visualization?:
     | {
         kind: "tls-handshake";

@@ -1,6 +1,7 @@
 import type { TutorialContent } from "../tutorial-types";
 
 const content: TutorialContent = {
+  mechanismDiagram: "rsa",
   visualization: { kind: "cryptographic-flow", id: "rsa" },
   analogy:
     "Think of a physical street mailbox with a drop slot. Anyone can walk by and drop a letter in (Public Key). But only the mail carrier has the physical key to unlock the rear door and retrieve the mail (Private Key).",

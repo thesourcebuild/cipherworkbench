@@ -13,6 +13,7 @@ import { ALL_TUTORIALS_META, getTutorialMeta } from "../apps/web/app/tutorials/t
 import type {
   DtlsTutorialVersion,
   CryptographicFlowId,
+  MechanismDiagramId,
   TlsTutorialVersion,
 } from "../apps/web/app/tutorials/tutorial-types";
 
@@ -30,6 +31,18 @@ const CRYPTOGRAPHIC_FLOW_TUTORIALS: readonly {
   { id: "3.1-the-locked-steel-box", flowId: "symmetric" },
   { id: "4.1-the-paint-mixing-trick", flowId: "ecdh" },
   { id: "4.2-the-open-padlock", flowId: "rsa" },
+  { id: "5.2-the-imposter-in-the-middle", flowId: "certificate" },
+];
+
+const MECHANISM_DIAGRAM_TUTORIALS: readonly {
+  id: string;
+  diagramId: MechanismDiagramId;
+}[] = [
+  { id: "1.2-the-static-on-the-wire", diagramId: "crc" },
+  { id: "1.3-the-digital-fingerprint", diagramId: "hash" },
+  { id: "2.2-the-secret-handshake", diagramId: "hmac" },
+  { id: "3.1-the-locked-steel-box", diagramId: "symmetric" },
+  { id: "4.2-the-open-padlock", diagramId: "rsa" },
 ];
 
 const EXPECTED_TLS_VERSIONS: Readonly<Record<string, TlsTutorialVersion>> = {
@@ -98,6 +111,7 @@ describe("cryptographic concept flows", () => {
     const symmetric = await loadTutorialContent("3.1-the-locked-steel-box");
     const ecdh = await loadTutorialContent("4.1-the-paint-mixing-trick");
     const rsa = await loadTutorialContent("4.2-the-open-padlock");
+    const certificate = await loadTutorialContent("5.2-the-imposter-in-the-middle");
 
     expect(crc?.takeaways.join(" ")).toMatch(/forge|forg/i);
     expect(hash?.afterTimeline?.content).toContain("trusted channel");
@@ -105,7 +119,21 @@ describe("cryptographic concept flows", () => {
     expect(symmetric?.afterTimeline?.content).toContain("not tamper detection");
     expect(ecdh?.afterTimeline?.content).toContain("man-in-the-middle");
     expect(rsa?.afterTimeline?.content).toContain("does not authenticate the sender");
+    expect(certificate?.afterTimeline?.content).toContain("does **not encrypt");
+    expect(certificate?.takeaways.join(" ")).toContain("SAN");
   });
+});
+
+describe("standalone mechanism diagrams", () => {
+  it.each(MECHANISM_DIAGRAM_TUTORIALS)(
+    "gives $id its own $diagramId mechanism diagram before the scenario flow",
+    async ({ id, diagramId }) => {
+      const content = await loadTutorialContent(id);
+
+      expect(content?.mechanismDiagram).toBe(diagramId);
+      expect(content?.visualization).toEqual({ kind: "cryptographic-flow", id: diagramId });
+    },
+  );
 });
 
 describe("transport handshake timelines", () => {
@@ -301,7 +329,16 @@ describe("section 5 tutorial sequence", () => {
     (tutorial) => tutorial.conceptId === "putting-it-together",
   );
 
-  it("starts with SSL 3.0, TLS, and DTLS", () => {
+  it("starts with certificate trust, SSL 3.0, TLS, and DTLS", () => {
+    expect(sectionTutorials.map((tutorial) => tutorial.id)).toEqual([
+      "5.2-the-imposter-in-the-middle",
+      SSL_TUTORIAL_ID,
+      TLS_TUTORIAL_ID,
+      DTLS_TUTORIAL_ID,
+      "5.3-the-password-vault",
+      "5.4-the-pirate-treasure-chest",
+      "5.5-the-quantum-spy",
+    ]);
     expect(sectionTutorials.map((tutorial) => tutorial.number)).toEqual([
       "5.1",
       "5.2",
@@ -312,21 +349,25 @@ describe("section 5 tutorial sequence", () => {
       "5.7",
     ]);
     expect(sectionTutorials[0]).toMatchObject({
+      id: "5.2-the-imposter-in-the-middle",
+      title: "The Imposter in the Middle: Digital Certificates",
+    });
+    expect(sectionTutorials[1]).toMatchObject({
       id: SSL_TUTORIAL_ID,
       title: "SSL 3.0: The Handshake Before TLS",
     });
-    expect(sectionTutorials[1]).toMatchObject({
+    expect(sectionTutorials[2]).toMatchObject({
       id: TLS_TUTORIAL_ID,
       title: "The TLS Handshake: The Full Symphony",
     });
-    expect(sectionTutorials[1]?.variants?.[0]?.title).toBe(
+    expect(sectionTutorials[2]?.variants?.[0]?.title).toBe(
       "The TLS Handshake: The Full Symphony",
     );
-    expect(sectionTutorials[2]).toMatchObject({
+    expect(sectionTutorials[3]).toMatchObject({
       id: DTLS_TUTORIAL_ID,
       title: "The DTLS Handshake: The Datagram Symphony",
     });
-    expect(sectionTutorials[2]?.variants?.[0]?.title).toBe(
+    expect(sectionTutorials[3]?.variants?.[0]?.title).toBe(
       "The DTLS Handshake: The Datagram Symphony",
     );
   });
