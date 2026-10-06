@@ -282,7 +282,7 @@ export function generateCertCommandScripts(opts: {
         id: "client",
         description: "Test HTTPS TLS connection with cURL",
         commands: [
-          `curl -vk https://localhost:8443 --cacert "${chainFile ?? certFile}"`,
+          `curl -v https://localhost:8443 --cacert "${chainFile ?? certFile}"`,
         ],
       },
       {

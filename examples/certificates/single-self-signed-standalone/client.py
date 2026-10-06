@@ -5,12 +5,12 @@ import sys
 import argparse
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-CA_FILE = os.path.join(DIR, "ca.crt")
+CERT_FILE = os.path.join(DIR, "server.crt")
 HOST = "127.0.0.1"
 PORT = 8443
 
 def create_ssl_context(tls_version="auto"):
-    ctx = ssl.create_default_context(cafile=CA_FILE)
+    ctx = ssl.create_default_context(cafile=CERT_FILE)
     if tls_version == "1.1":
         ctx.minimum_version = ssl.TLSVersion.TLSv1_1
         ctx.maximum_version = ssl.TLSVersion.TLSv1_1
@@ -24,7 +24,7 @@ def create_ssl_context(tls_version="auto"):
     return ctx
 
 def run_single_test(tls_version="auto"):
-    print(f"Connecting to https://{HOST}:{PORT} (TLS: {tls_version}) verifying against Root CA...")
+    print(f"Connecting to https://{HOST}:{PORT} (TLS: {tls_version})...")
     ctx = create_ssl_context(tls_version)
 
     conn = http.client.HTTPSConnection(HOST, PORT, context=ctx, timeout=5)
@@ -38,7 +38,7 @@ def run_single_test(tls_version="auto"):
         res = conn.getresponse()
         body = res.read().decode("utf-8")
 
-        print(f"  ✓ PASS: CA-Signed TLS Handshake Successful!")
+        print(f"  ✓ PASS: Handshake Successful!")
         print(f"    - Protocol:    {negotiated_proto}")
         print(f"    - Cipher:      {cipher_tuple[0]}")
         print(f"    - HTTP Status: {res.status}")
@@ -54,16 +54,16 @@ def run_single_test(tls_version="auto"):
         conn.close()
 
 def main():
-    if not os.path.exists(CA_FILE):
-        print(f"Error: {CA_FILE} not found. Run 'npx tsx run.ts' first.")
+    if not os.path.exists(CERT_FILE):
+        print(f"Error: {CERT_FILE} not found. Run 'npx tsx run.ts' first.")
         sys.exit(1)
 
-    parser = argparse.ArgumentParser(description="Python HTTPS Client for CA-Signed Cert")
+    parser = argparse.ArgumentParser(description="Python HTTPS Client for Self-Signed Cert")
     parser.add_argument("--tls-version", choices=["auto", "1.1", "1.2", "1.3", "all"], default="auto", help="TLS version to request")
     args = parser.parse_args()
 
     print("=================================================")
-    print("   PYTHON CLIENT: SINGLE CA-SIGNED TEST          ")
+    print("   PYTHON CLIENT: SINGLE SELF-SIGNED TEST        ")
     print("=================================================")
 
     if args.tls_version == "all":

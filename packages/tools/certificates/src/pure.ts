@@ -35,8 +35,8 @@ export const OPTION_CODE_SIGNING = "codeSigning";
 
 export const OPTION_CREATOR_MODE = "creatorMode";
 export const OPTION_WORKFLOW_LAYOUT = "workflowLayout";
-export const OPTION_ISSUANCE_MODE = "issuanceMode";
 export const OPTION_PKI_HIERARCHY = "pkiHierarchy";
+export const OPTION_SINGLE_CERT_MODE = "singleCertificateMode";
 export const OPTION_INTERMEDIATE_COMMON_NAME = "intermediateCommonName";
 export const OPTION_CA_CERT = "caCert";
 export const OPTION_CA_PRIVATE_KEY = "caPrivateKey";
@@ -47,6 +47,7 @@ export const OPTION_NAME_CONSTRAINTS_PERMITTED = "nameConstraintsPermitted";
 export const OPTION_NAME_CONSTRAINTS_EXCLUDED = "nameConstraintsExcluded";
 export const OPTION_CERTIFICATE_POLICY_OID = "certificatePolicyOid";
 export const OPTION_CERTIFICATE_POLICY_CPS_URL = "certificatePolicyCpsUrl";
+export const OPTION_ROOT_CA_CERT = "rootCaCert";
 
 export const OPTION_PASSWORD = "password";
 export const OPTION_PRIVATE_KEY = "privateKey";
@@ -54,8 +55,45 @@ export const OPTION_COMPARISON_CERT = "comparisonCert";
 
 export type CreatorModeOption = "single-cert" | "mtls-suite";
 export type WorkflowLayoutOption = "panels";
-export type IssuanceModeOption = "self-signed" | "ca-signed";
 export type PkiHierarchyOption = "2-tier" | "3-tier";
+export type SingleCertificateModeOption = "standalone" | "generated-ca" | "existing-ca";
+
+export interface CertificateStudioFilenames {
+  rootPrefix: "ca" | "root-ca";
+  issuerPrefix: "ca" | "root-ca" | "intermediate";
+  rootKey: string;
+  rootCertificate: string;
+  issuerKey: string;
+  issuerCertificate: string;
+  leafKey: "private.key" | "server.key";
+  leafCsr: "certificate.csr" | "server.csr";
+  leafCertificate: "server.crt";
+}
+
+export function certificateStudioFilenames(
+  creatorMode: CreatorModeOption,
+  singleCertificateMode: SingleCertificateModeOption,
+  pkiHierarchy: PkiHierarchyOption,
+): CertificateStudioFilenames {
+  const singleCertificate = creatorMode === "single-cert";
+  const rootPrefix =
+    singleCertificate && (singleCertificateMode === "generated-ca" || pkiHierarchy === "3-tier")
+      ? "root-ca"
+      : "ca";
+  const issuerPrefix = pkiHierarchy === "3-tier" ? "intermediate" : rootPrefix;
+
+  return {
+    rootPrefix,
+    issuerPrefix,
+    rootKey: `${rootPrefix}.key`,
+    rootCertificate: `${rootPrefix}.crt`,
+    issuerKey: `${issuerPrefix}.key`,
+    issuerCertificate: `${issuerPrefix}.crt`,
+    leafKey: singleCertificate ? "private.key" : "server.key",
+    leafCsr: singleCertificate ? "certificate.csr" : "server.csr",
+    leafCertificate: "server.crt",
+  };
+}
 
 export function readWorkflowLayout(
   _options?: OptionValues,
@@ -306,7 +344,10 @@ export function readIsCa(options: OptionValues, defaultVal = false): boolean {
   return optBool(options, OPTION_IS_CA) ?? defaultVal;
 }
 
-export function readSan(options: OptionValues, defaultVal = "localhost, 127.0.0.1, ::1"): string {
+export function readSan(
+  options: OptionValues,
+  defaultVal = "localhost, 127.0.0.1, ::1",
+): string {
   return optString(options, OPTION_SAN) ?? defaultVal;
 }
 
@@ -328,10 +369,11 @@ export function readCreatorMode(options: OptionValues): CreatorModeOption {
   return "single-cert";
 }
 
-export function readIssuanceMode(options: OptionValues): IssuanceModeOption {
-  const val = optString(options, OPTION_ISSUANCE_MODE);
-  if (val === "ca-signed") return "ca-signed";
-  return "self-signed";
+export function readSingleCertificateMode(options: OptionValues): SingleCertificateModeOption {
+  const mode = optString(options, OPTION_SINGLE_CERT_MODE);
+  if (mode === "generated-ca") return "generated-ca";
+  if (mode === "existing-ca") return "existing-ca";
+  return "standalone";
 }
 
 export function readCaCert(options: OptionValues): string {
@@ -391,6 +433,10 @@ export function readCertificatePolicyOid(options: OptionValues): string {
 
 export function readCertificatePolicyCpsUrl(options: OptionValues): string {
   return optString(options, OPTION_CERTIFICATE_POLICY_CPS_URL) ?? "";
+}
+
+export function readRootCaCert(options: OptionValues): string {
+  return optString(options, OPTION_ROOT_CA_CERT) ?? "";
 }
 
 export const OPTION_CA_MODE = "caMode";

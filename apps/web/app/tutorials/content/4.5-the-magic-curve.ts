@@ -46,7 +46,7 @@ const content: TutorialContent = {
     "A 256-bit EC key provides equivalent security to a 3072-bit RSA key.",
     "Smaller EC keys mean faster operations, less bandwidth, and lower power consumption.",
     "X25519 (key exchange) and Ed25519 (signatures) are the modern recommended curves — safe, fast, and patent-free.",
-    "TLS 1.3 removed RSA key exchange — ECDH is now mandatory for all new connections.",
+    "TLS 1.3 removed static RSA key exchange — ephemeral Diffie-Hellman (predominantly ECDHE, alongside standardized FFDHE) is now mandatory for all new connections.",
   ],
   seed: {
     toolId: "ecdh",

@@ -24,11 +24,11 @@ case "$ACTION" in
     ;;
   verify)
     echo "=== Verifying Certificate with OpenSSL ==="
-    openssl x509 -in "./certificate.crt" -text -noout
+    openssl x509 -in "./server.crt" -text -noout
     ;;
   info)
     echo "=== Inspecting Certificate Subject & SANs ==="
-    openssl x509 -in "./certificate.crt" -noout -subject -issuer -dates -ext subjectAltName,basicConstraints,keyUsage
+    openssl x509 -in "./server.crt" -noout -subject -issuer -dates -ext subjectAltName,basicConstraints,keyUsage
     ;;
   key)
     echo "=== Validating Private Key Parameters ==="
@@ -49,10 +49,10 @@ case "$ACTION" in
   trust)
     echo "=== Trusting Self-Signed Certificate on macOS / Linux ==="
     if [ "$(uname)" = "Darwin" ]; then
-      sudo security add-trusted-cert -d -r trustAsRoot -k /Library/Keychains/System.keychain ./certificate.crt
+      sudo security add-trusted-cert -d -r trustAsRoot -k /Library/Keychains/System.keychain ./server.crt
       echo "[SUCCESS] Certificate trusted in macOS System Keychain!"
     elif [ -d /usr/local/share/ca-certificates ]; then
-      sudo cp ./certificate.crt /usr/local/share/ca-certificates/single-self-signed.crt
+      sudo cp ./server.crt /usr/local/share/ca-certificates/single-self-signed.crt
       sudo update-ca-certificates
       echo "[SUCCESS] Certificate added to Linux CA trust store!"
     else

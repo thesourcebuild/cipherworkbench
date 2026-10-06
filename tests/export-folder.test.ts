@@ -65,7 +65,7 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(files.length).toBeGreaterThanOrEqual(5);
 
     const fileNames = files.map((f) => f.name);
-    expect(fileNames).toContain("certificate.crt");
+    expect(fileNames).toContain("server.crt");
     expect(fileNames).toContain("private.key");
     expect(fileNames).toContain("public.key");
     expect(fileNames).toContain("commands.sh");
@@ -74,7 +74,7 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(fileNames).toContain("cert-info.txt");
 
     // Check content
-    const certFile = files.find((f) => f.name === "certificate.crt")!;
+    const certFile = files.find((f) => f.name === "server.crt")!;
     expect(typeof certFile.content).toBe("string");
     expect(certFile.content).toContain("-----BEGIN CERTIFICATE-----");
 
@@ -113,7 +113,7 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
         const extAttr = view.getUint32(i + 38, true);
         if (fileName === "commands.sh") {
           expect(extAttr).toBe(0x81ed0000); // 0o100755
-        } else if (fileName === "certificate.crt") {
+        } else if (fileName === "server.crt") {
           expect(extAttr).toBe(0x81a40000); // 0o100644
         }
       }

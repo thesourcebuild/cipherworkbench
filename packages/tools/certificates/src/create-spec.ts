@@ -3,7 +3,7 @@ import {
   OPTION_CONVERTER_OP,
   OPTION_CREATOR_MODE,
   OPTION_DETAIL_LEVEL,
-  OPTION_ISSUANCE_MODE,
+  OPTION_SINGLE_CERT_MODE,
   OPTION_HASH_TYPE,
   OPTION_PKI_HIERARCHY,
   OPTION_VERIFY_CSR_SIG,
@@ -58,7 +58,7 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts[OPTION_CRL_REASON] = "0";
   } else if (variant === "cert-creator") {
     opts[OPTION_CREATOR_MODE] = "single-cert";
-    opts[OPTION_ISSUANCE_MODE] = "self-signed";
+    opts[OPTION_SINGLE_CERT_MODE] = "standalone";
     opts[OPTION_PKI_HIERARCHY] = "2-tier";
     opts["commonName"] = "localhost";
     opts["san"] = "localhost, 127.0.0.1, ::1";
@@ -80,7 +80,7 @@ export function createSpec(options?: { variant?: string }): CertificateSpec {
     opts["validityDays"] = "365";
     opts["isCa"] = false;
     opts["serverAuth"] = true;
-    opts["clientAuth"] = true;
+    opts["clientAuth"] = false;
     opts["codeSigning"] = false;
   } else if (variant === "csr-creator") {
     opts["commonName"] = "example.com";

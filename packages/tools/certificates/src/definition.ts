@@ -11,9 +11,9 @@ import {
   OPTION_CA_MODE,
   OPTION_CONVERTER_OP,
   OPTION_CREATOR_MODE,
-  OPTION_ISSUANCE_MODE,
   OPTION_CRL_OP,
   OPTION_CRL_CA_MODE,
+  readSingleCertificateMode,
 } from "./pure";
 import { samplesFor } from "./samples";
 import { CertificateSpec } from "./spec";
@@ -40,11 +40,7 @@ export function certificatesToolDefinition(toolId: string): ToolDefinition<Certi
         if (creatorMode === "mtls-suite") {
           return ["mtls-suite"];
         }
-        const issuanceMode = String(spec.options[OPTION_ISSUANCE_MODE] ?? "self-signed");
-        if (issuanceMode === "ca-signed") {
-          return ["single-cert", "ca-signed"];
-        }
-        return ["single-cert"];
+        return ["single-cert", readSingleCertificateMode(spec.options)];
       }
       if (toolId === "csr-signer") {
         return [String(spec.options[OPTION_CA_MODE] ?? "ephemeral-ca")];

@@ -446,7 +446,7 @@ describe("End-to-End cert-creator Tool Execution", () => {
     expect(res.files).toBeDefined();
 
     const fileNames = res.files!.map((f: { name: string }) => f.name);
-    expect(fileNames).toContain("certificate.crt");
+    expect(fileNames).toContain("server.crt");
     expect(fileNames).toContain("private.key");
     expect(fileNames).toContain("k8s-tls-secret.yaml");
     expect(fileNames).toContain("nginx.conf");

@@ -13,7 +13,7 @@ export {
   OPTION_CONVERTER_OP,
   OPTION_WORKFLOW_LAYOUT,
   OPTION_CREATOR_MODE,
-  OPTION_ISSUANCE_MODE,
+  OPTION_SINGLE_CERT_MODE,
   OPTION_PKI_HIERARCHY,
   OPTION_CA_CERT,
   OPTION_CA_PRIVATE_KEY,
@@ -52,6 +52,7 @@ export {
   OPTION_NAME_CONSTRAINTS_EXCLUDED,
   OPTION_CERTIFICATE_POLICY_OID,
   OPTION_CERTIFICATE_POLICY_CPS_URL,
+  OPTION_ROOT_CA_CERT,
   OPTION_OCSP_OP,
   OPTION_ISSUER_CERT,
   readNameConstraintsPermitted,
@@ -66,9 +67,10 @@ export {
   readIssuerCert,
   readWorkflowLayout,
   readCreatorMode,
-  readIssuanceMode,
+  readSingleCertificateMode,
   readPkiHierarchy,
   readCaCert,
+  readRootCaCert,
   readCaPrivateKey,
   readCaKeyType,
   readCaCommonName,
@@ -80,9 +82,11 @@ export {
   readServerHashType,
   readClientKeyType,
   readClientHashType,
+  certificateStudioFilenames,
   type WorkflowLayoutOption,
   type CreatorModeOption,
-  type IssuanceModeOption,
+  type SingleCertificateModeOption,
+  type CertificateStudioFilenames,
   type PkiHierarchyOption,
 } from "./pure";
 export { CertificateSpec } from "./spec";
@@ -101,10 +105,7 @@ export {
   generateCloudImportCommands,
   type IacTemplateParams,
 } from "./export/iac";
-export {
-  generatePkiHierarchyDiagram,
-  type PkiGraphNode,
-} from "./export/chain-graph";
+export { generatePkiHierarchyDiagram, type PkiGraphNode } from "./export/chain-graph";
 export { parseX509Certificate, type ParsedX509Certificate } from "./asn1/x509";
 export { parseCsr } from "./asn1/csr";
 export { convertCertificate } from "./asn1/converter";

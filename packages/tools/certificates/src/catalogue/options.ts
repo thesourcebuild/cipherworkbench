@@ -28,7 +28,7 @@ import {
   OPTION_CLIENT_AUTH,
   OPTION_CODE_SIGNING,
   OPTION_CREATOR_MODE,
-  OPTION_ISSUANCE_MODE,
+  OPTION_SINGLE_CERT_MODE,
   OPTION_PKI_HIERARCHY,
   OPTION_INTERMEDIATE_COMMON_NAME,
   OPTION_CA_CERT,
@@ -52,6 +52,7 @@ import {
   OPTION_CRL_CA_KEY_TYPE,
   OPTION_CRL_HASH_TYPE,
   OPTION_CRL_VALIDITY_DAYS,
+  OPTION_ROOT_CA_CERT,
 } from "../pure";
 import type { CertificateOptionGroup } from "./groups";
 import type { CertificateToolMeta } from "./tool-meta";
@@ -413,7 +414,6 @@ const ROOT_KEY_TYPE: OptionDef<CertificateOptionGroup> = {
   ...KEY_TYPE,
   id: OPTION_ROOT_KEY_TYPE,
   label: "Root Key Algorithm",
-  availableOn: ["mtls-suite"],
   order: 30,
 };
 
@@ -421,7 +421,6 @@ const ROOT_HASH_TYPE: OptionDef<CertificateOptionGroup> = {
   ...HASH_TYPE,
   id: OPTION_ROOT_HASH_TYPE,
   label: "Root Self-Sign Hash",
-  availableOn: ["mtls-suite"],
   order: 40,
 };
 
@@ -429,7 +428,6 @@ const INTERMEDIATE_KEY_TYPE: OptionDef<CertificateOptionGroup> = {
   ...KEY_TYPE,
   id: OPTION_INTERMEDIATE_KEY_TYPE,
   label: "Intermediate Key Algorithm",
-  availableOn: ["mtls-suite"],
   order: 50,
 };
 
@@ -438,7 +436,6 @@ const INTERMEDIATE_HASH_TYPE: OptionDef<CertificateOptionGroup> = {
   id: OPTION_INTERMEDIATE_HASH_TYPE,
   label: "Intermediate Certificate Hash",
   summary: "Digest used by the Root CA when signing the Intermediate CA certificate.",
-  availableOn: ["mtls-suite"],
   order: 60,
 };
 
@@ -504,7 +501,8 @@ const SAN: OptionDef<CertificateOptionGroup> = {
   kind: "text",
   arg: { placeholder: "localhost, 127.0.0.1, ::1" },
   summary: "Comma-separated domain names or IP addresses.",
-  detail: "Alternative identities (e.g. localhost, 127.0.0.1, ::1, example.com, admin@example.com).",
+  detail:
+    "Alternative identities (e.g. localhost, 127.0.0.1, ::1, example.com, admin@example.com).",
   order: 15,
 };
 
@@ -561,27 +559,32 @@ const CREATOR_MODE: OptionDef<CertificateOptionGroup> = {
   order: 10,
 };
 
-const ISSUANCE_MODE: OptionDef<CertificateOptionGroup> = {
-  id: OPTION_ISSUANCE_MODE,
-  label: "Issuance Mode",
+const SINGLE_CERT_MODE: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_SINGLE_CERT_MODE,
+  label: "Single Certificate Mode",
   group: "mode",
   kind: "enum",
   availableOn: ["single-cert"],
   choices: [
     {
-      value: "self-signed",
-      label: "Self-Signed",
-      summary: "Certificate signs itself (or serves as Root CA)",
+      value: "standalone",
+      label: "Self-Signed Standalone",
+      summary: "Generate one certificate that signs itself",
     },
     {
-      value: "ca-signed",
-      label: "CA-Signed",
-      summary: "Sign child certificate using an existing CA certificate and private key",
+      value: "generated-ca",
+      label: "Generated Private CA",
+      summary: "Generate a private CA hierarchy and a signed server certificate",
+    },
+    {
+      value: "existing-ca",
+      label: "Existing CA",
+      summary: "Sign a server certificate using provided CA credentials",
     },
   ],
-  summary: "Issue a self-signed certificate or sign with an existing CA authority.",
+  summary: "Choose standalone, generated private CA, or existing CA issuance.",
   detail:
-    "When CA-Signed is selected, provide the issuing CA certificate and private key in the CA Signing Authority section below.",
+    "The selected hierarchy determines whether generated or existing CA issuance uses a direct 2-tier path or an intermediate 3-tier path.",
   order: 20,
 };
 
@@ -758,7 +761,8 @@ const CRL_NUMBER: OptionDef<CertificateOptionGroup> = {
   availableOn: ["create-crl"],
   arg: { placeholder: "1" },
   summary: "Monotonically increasing sequence number for this CRL (RFC 5280 §5.2.3).",
-  detail: "The CRL Number extension allows relying parties to track whether a newer CRL exists.",
+  detail:
+    "The CRL Number extension allows relying parties to track whether a newer CRL exists.",
   order: 10,
 };
 
@@ -786,14 +790,32 @@ const CRL_REASON: OptionDef<CertificateOptionGroup> = {
     { value: "1", label: "Key Compromise (1)", summary: "Private key is compromised" },
     { value: "2", label: "CA Compromise (2)", summary: "CA private key is compromised" },
     { value: "3", label: "Affiliation Changed (3)", summary: "Subject affiliation changed" },
-    { value: "4", label: "Superseded (4)", summary: "Certificate replaced by a newer certificate" },
-    { value: "5", label: "Cessation of Operation (5)", summary: "Subject server or service terminated" },
-    { value: "6", label: "Certificate Hold (6)", summary: "Temporary suspension of certificate" },
-    { value: "9", label: "Privilege Withdrawn (9)", summary: "Certificate privileges withdrawn" },
+    {
+      value: "4",
+      label: "Superseded (4)",
+      summary: "Certificate replaced by a newer certificate",
+    },
+    {
+      value: "5",
+      label: "Cessation of Operation (5)",
+      summary: "Subject server or service terminated",
+    },
+    {
+      value: "6",
+      label: "Certificate Hold (6)",
+      summary: "Temporary suspension of certificate",
+    },
+    {
+      value: "9",
+      label: "Privilege Withdrawn (9)",
+      summary: "Certificate privileges withdrawn",
+    },
     { value: "10", label: "AA Compromise (10)", summary: "Attribute Authority compromised" },
   ],
-  summary: "Default RFC 5280 Reason Code applied to revoked certificates without explicit reason.",
-  detail: "Reason codes are encoded into each entry in the CRL via the id-ce-cRLReason extension.",
+  summary:
+    "Default RFC 5280 Reason Code applied to revoked certificates without explicit reason.",
+  detail:
+    "Reason codes are encoded into each entry in the CRL via the id-ce-cRLReason extension.",
   order: 20,
 };
 
@@ -802,7 +824,7 @@ const CA_CERT: OptionDef<CertificateOptionGroup> = {
   label: "CA Certificate (PEM)",
   group: "ca",
   kind: "text",
-  availableOn: ["ca-signed", "custom-ca"],
+  availableOn: ["existing-ca", "custom-ca"],
   arg: { placeholder: "-----BEGIN CERTIFICATE-----\n...", multiline: true },
   summary: "Issuing CA certificate in PEM format.",
   detail: "The CA certificate whose Subject DN and SKI will be used as Issuer and AKI.",
@@ -815,61 +837,70 @@ const CA_PRIVATE_KEY: OptionDef<CertificateOptionGroup> = {
   group: "ca",
   kind: "password",
   secret: true,
-  availableOn: ["ca-signed", "custom-ca"],
+  availableOn: ["existing-ca", "custom-ca"],
   arg: { placeholder: "-----BEGIN PRIVATE KEY-----\n...", multiline: true },
   summary: "Issuing CA's private key to sign the child certificate.",
   detail: "The private key corresponding to the CA certificate (PKCS#8 PEM format).",
   order: 20,
 };
 
+const ROOT_CA_CERT: OptionDef<CertificateOptionGroup> = {
+  id: OPTION_ROOT_CA_CERT,
+  label: "Root CA Certificate (PEM)",
+  group: "ca",
+  kind: "text",
+  availableOn: ["existing-ca", "custom-ca"],
+  arg: { placeholder: "-----BEGIN CERTIFICATE-----\n...", multiline: true },
+  summary: "Root CA certificate required to complete an existing 3-tier chain.",
+  detail:
+    "Provide the Root CA certificate separately from the Intermediate CA certificate and signing key.",
+  order: 15,
+};
+
 const PKI_HIERARCHY: OptionDef<CertificateOptionGroup> = {
   id: OPTION_PKI_HIERARCHY,
   label: "PKI Architecture",
-  group: "mtls",
+  group: "mode",
   kind: "enum",
-  availableOn: ["mtls-suite"],
   choices: [
     {
       value: "2-tier",
       label: "2-Tier (Root CA ➔ Leaf)",
-      summary: "Root CA directly signs Server and Client certificates.",
+      summary: "Root CA directly signs the certificate(s).",
     },
     {
       value: "3-tier",
       label: "3-Tier (Root CA ➔ Intermediate CA ➔ Leaf)",
-      summary:
-        "Root CA signs an Intermediate Issuing CA, which signs Server and Client certificates.",
+      summary: "Root CA signs an Intermediate Issuing CA, which signs the leaf certificate(s).",
     },
   ],
   summary: "PKI hierarchy depth: 2-tier simple or 3-tier enterprise with Intermediate CA.",
   detail:
     "In 3-tier enterprise PKI, the offline Root CA delegates issuance to an Intermediate Issuing CA with path length constraints, and the server chain bundles the intermediate.",
-  order: 5,
+  order: 25,
 };
 
 const CA_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
   id: OPTION_CA_COMMON_NAME,
   label: "Root CA Common Name (CN)",
-  group: "mtls",
+  group: "mode",
   kind: "text",
-  availableOn: ["mtls-suite"],
   arg: { placeholder: "Internal Root CA" },
   summary: "Subject Common Name for the Root Certificate Authority trust anchor.",
   detail: "Identity of the Root CA (e.g. MyPrivateRootCA or Internal Root CA).",
-  order: 6,
+  order: 26,
 };
 
 const INTERMEDIATE_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
   id: OPTION_INTERMEDIATE_COMMON_NAME,
   label: "Intermediate CA Common Name",
-  group: "mtls",
+  group: "mode",
   kind: "text",
-  availableOn: ["mtls-suite"],
   arg: { placeholder: "Internal Issuing CA" },
   summary: "Common Name for the Intermediate Certificate Authority in 3-tier PKI mode.",
   detail:
     "The Subject Common Name (CN) for the issuing CA that directly signs server and client certificates.",
-  order: 12,
+  order: 27,
 };
 
 const CLIENT_COMMON_NAME: OptionDef<CertificateOptionGroup> = {
@@ -908,7 +939,7 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   PRIVATE_KEY,
   CONVERTER_PRIVATE_KEY,
   CREATOR_MODE,
-  ISSUANCE_MODE,
+  SINGLE_CERT_MODE,
   PKI_HIERARCHY,
   CA_COMMON_NAME,
   INTERMEDIATE_COMMON_NAME,
@@ -936,6 +967,7 @@ export const ALL_CERTIFICATE_OPTIONS: readonly OptionDef<CertificateOptionGroup>
   CLIENT_AUTH,
   CODE_SIGNING,
   CA_CERT,
+  ROOT_CA_CERT,
   CA_PRIVATE_KEY,
   CLIENT_COMMON_NAME,
   MTLS_P12_PASSWORD,
@@ -967,7 +999,7 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
   } else if (meta.id === "cert-creator") {
     options.push(
       CREATOR_MODE,
-      ISSUANCE_MODE,
+      SINGLE_CERT_MODE,
       PKI_HIERARCHY,
       CA_COMMON_NAME,
       INTERMEDIATE_COMMON_NAME,
@@ -994,6 +1026,7 @@ export function certificateCatalogueFor(meta: CertificateToolMeta): OptionCatalo
       CLIENT_AUTH,
       CODE_SIGNING,
       CA_CERT,
+      ROOT_CA_CERT,
       CA_PRIVATE_KEY,
       CLIENT_COMMON_NAME,
       MTLS_P12_PASSWORD,

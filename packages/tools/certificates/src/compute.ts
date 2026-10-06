@@ -5,7 +5,7 @@ import { convertCertificate } from "./asn1/converter";
 import { parseCsr } from "./asn1/csr";
 import { detectInputBytes, encodePem, type PemBlock } from "./asn1/pem";
 import { parseX509Certificate } from "./asn1/x509";
-import { createCertificate } from "./asn1/create-cert";
+import { createCertificate, type CreatedCertificateResult } from "./asn1/create-cert";
 import { createCsr } from "./asn1/create-csr";
 import { generateMtlsSuite } from "./asn1/mtls";
 import { parseX509Crl, createCrl, parseRevocationInputText, CrlReasonCode } from "./asn1/crl";
@@ -39,6 +39,7 @@ import {
   generateCrlCommandScripts,
 } from "./export/commands";
 import {
+  certificateStudioFilenames,
   readInputFormat,
   readConverterOp,
   readDetailLevel,
@@ -68,8 +69,9 @@ import {
   readPassword,
   readPrivateKey,
   readCreatorMode,
-  readIssuanceMode,
+  readSingleCertificateMode,
   readCaCert,
+  readRootCaCert,
   readCaKeyType,
   readCaPrivateKey,
   readCaCommonName,
@@ -125,10 +127,13 @@ export function generateCertConverterCliProviders(
     opensslCommands.push(
       {
         comment: "Package PEM certificate and private key into PKCS#12 (.p12 / .pfx) archive",
-        parts: [`openssl pkcs12 -export -out bundle.p12 -inkey key.pem -in cert.pem${passOutArg}`],
+        parts: [
+          `openssl pkcs12 -export -out bundle.p12 -inkey key.pem -in cert.pem${passOutArg}`,
+        ],
       },
       {
-        comment: "Package certificate, private key, and CA certificate chain into PKCS#12 archive",
+        comment:
+          "Package certificate, private key, and CA certificate chain into PKCS#12 archive",
         parts: [
           `openssl pkcs12 -export -out bundle.p12 -inkey key.pem -in cert.pem -certfile chain.pem${passOutArg}`,
         ],
@@ -195,7 +200,9 @@ export function generateCertConverterCliProviders(
       },
       {
         comment: "Package multiple certificates into PKCS#7 / P7B bundle",
-        parts: ["openssl crl2pkcs7 -nocrl -certfile cert.pem -certfile chain.pem -out certs.p7b"],
+        parts: [
+          "openssl crl2pkcs7 -nocrl -certfile cert.pem -certfile chain.pem -out certs.p7b",
+        ],
       },
     );
     sslxCommands.push({
@@ -340,7 +347,9 @@ export function generateOcspCliProviders(
       },
       {
         comment: "Save OCSP request to DER binary with ocsptool",
-        parts: ["ocsptool --generate-request --load-cert cert.crt --load-issuer ca.crt --outfile ocsp-req.der"],
+        parts: [
+          "ocsptool --generate-request --load-cert cert.crt --load-issuer ca.crt --outfile ocsp-req.der",
+        ],
       },
       {
         comment: "Inspect OCSP response with ocsptool",
@@ -355,13 +364,17 @@ export function generateOcspCliProviders(
       },
       {
         comment: "Fetch fresh OCSP staple response from live responder",
-        parts: ["openssl ocsp -issuer ca.crt -cert cert.crt -url <ocsp_url> -respout staple.der"],
+        parts: [
+          "openssl ocsp -issuer ca.crt -cert cert.crt -url <ocsp_url> -respout staple.der",
+        ],
       },
     );
     gnutlsCommands.push(
       {
         comment: "Fetch OCSP staple response with GnuTLS ocsptool",
-        parts: ["ocsptool --ask=<ocsp_url> --load-cert cert.crt --load-issuer ca.crt --outfile staple.der"],
+        parts: [
+          "ocsptool --ask=<ocsp_url> --load-cert cert.crt --load-issuer ca.crt --outfile staple.der",
+        ],
       },
       {
         comment: "Inspect OCSP staple response file with ocsptool",
@@ -386,7 +399,9 @@ export function generateOcspCliProviders(
       },
       {
         comment: "Verify OCSP response against issuer CA certificate with ocsptool",
-        parts: ["ocsptool --verify-response --load-response ocsp-response.der --load-trust ca.crt"],
+        parts: [
+          "ocsptool --verify-response --load-response ocsp-response.der --load-trust ca.crt",
+        ],
       },
     );
   }
@@ -405,10 +420,7 @@ export function generateOcspCliProviders(
   ];
 }
 
-async function handleCreateCrl(
-  spec: CertificateSpec,
-  input: Uint8Array,
-): Promise<ToolResult> {
+async function handleCreateCrl(spec: CertificateSpec, input: Uint8Array): Promise<ToolResult> {
   try {
     const caMode = readCrlCaMode(spec.options);
     const caKeyType = readCrlCaKeyType(spec.options, "ecdsa-p256");
@@ -951,7 +963,9 @@ export async function computeCertificate(
               commands: [
                 {
                   comment: "Inspect client PKCS#12 bundle",
-                  parts: [`openssl pkcs12 -in client.p12 -info -noout -passin "pass:${p12Password}"`],
+                  parts: [
+                    `openssl pkcs12 -in client.p12 -info -noout -passin "pass:${p12Password}"`,
+                  ],
                 },
                 {
                   comment: "Export client certificate and key from PKCS#12 bundle",
@@ -1002,43 +1016,383 @@ export async function computeCertificate(
       }
 
       // Single Certificate Mode
+      const pkiHierarchy = readPkiHierarchy(spec.options);
       const keyType = readKeyType(spec.options, "ecdsa-p256");
       const hashType = readHashType(spec.options, "sha256");
       const isCa = readIsCa(spec.options, false);
       const serverAuth = readServerAuth(spec.options, true);
-      const clientAuth = readClientAuth(spec.options, true);
+      const clientAuth = readClientAuth(spec.options, false);
       const codeSigning = readCodeSigning(spec.options, false);
-      const issuanceMode = readIssuanceMode(spec.options);
+      const singleCertificateMode = readSingleCertificateMode(spec.options);
       const caCertPem = readCaCert(spec.options);
       const caPrivateKeyPem = readCaPrivateKey(spec.options);
+      const rootCaCertPem = readRootCaCert(spec.options);
       const nameConstraintsPermitted = readNameConstraintsPermitted(spec.options);
       const nameConstraintsExcluded = readNameConstraintsExcluded(spec.options);
       const certificatePolicyOid = readCertificatePolicyOid(spec.options);
       const certificatePolicyCpsUrl = readCertificatePolicyCpsUrl(spec.options);
 
-      const created = await createCertificate({
-        commonName,
-        san,
-        organization,
-        organizationalUnit,
-        country,
-        state,
-        locality,
-        keyType,
-        hashType,
-        validityDays,
-        isCa,
-        serverAuth,
-        clientAuth,
-        codeSigning,
-        issuanceMode,
-        caCertPem: caCertPem || undefined,
-        caPrivateKeyPem: caPrivateKeyPem || undefined,
-        nameConstraintsPermitted: nameConstraintsPermitted || undefined,
-        nameConstraintsExcluded: nameConstraintsExcluded || undefined,
-        certificatePolicyOid: certificatePolicyOid || undefined,
-        certificatePolicyCpsUrl: certificatePolicyCpsUrl || undefined,
-      });
+      let created: CreatedCertificateResult;
+      let rootCertResult: CreatedCertificateResult | undefined;
+      let interCertResult: CreatedCertificateResult | undefined;
+      let fullChainPem: string | undefined;
+      let serverChainPem: string | undefined;
+      const singleGraphNodes: PkiGraphNode[] = [];
+      const extraFiles: ToolExportFile[] = [];
+
+      if (singleCertificateMode === "generated-ca" && pkiHierarchy === "3-tier") {
+        // Ephemeral 3-Tier Enterprise PKI Hierarchy: Root CA ➔ Intermediate CA ➔ Leaf Certificate
+        const caCommonName = readCaCommonName(spec.options, "Internal Root CA");
+        const intermediateCommonName = readIntermediateCommonName(
+          spec.options,
+          "Internal Issuing CA",
+        );
+        const rootKeyType = readRootKeyType(spec.options, "ecdsa-p256");
+        const rootHashType = readRootHashType(spec.options, "sha256");
+        const intermediateKeyType = readIntermediateKeyType(spec.options, "ecdsa-p256");
+        const intermediateHashType = readIntermediateHashType(spec.options, "sha256");
+
+        // 1. Root CA
+        rootCertResult = await createCertificate({
+          commonName: caCommonName,
+          organization,
+          organizationalUnit,
+          country,
+          state,
+          locality,
+          keyType: rootKeyType,
+          hashType: rootHashType,
+          validityDays: Math.max(validityDays, 3650),
+          isCa: true,
+          pathLenConstraint: 1,
+        });
+
+        // 2. Intermediate CA (signed by Root CA)
+        interCertResult = await createCertificate({
+          commonName: intermediateCommonName,
+          organization,
+          organizationalUnit,
+          country,
+          state,
+          locality,
+          keyType: intermediateKeyType,
+          hashType: intermediateHashType,
+          validityDays: Math.max(validityDays, 1825),
+          isCa: true,
+          pathLenConstraint: 0,
+          issuanceMode: "ca-signed",
+          caCertPem: rootCertResult.certPem,
+          caPrivateKeyPem: rootCertResult.privateKeyPem,
+        });
+
+        // 3. Leaf Certificate (signed by Intermediate CA)
+        created = await createCertificate({
+          commonName,
+          san,
+          organization,
+          organizationalUnit,
+          country,
+          state,
+          locality,
+          keyType,
+          hashType,
+          validityDays,
+          isCa,
+          serverAuth,
+          clientAuth,
+          codeSigning,
+          issuanceMode: "ca-signed",
+          caCertPem: interCertResult.certPem,
+          caPrivateKeyPem: interCertResult.privateKeyPem,
+          nameConstraintsPermitted: nameConstraintsPermitted || undefined,
+          nameConstraintsExcluded: nameConstraintsExcluded || undefined,
+          certificatePolicyOid: certificatePolicyOid || undefined,
+          certificatePolicyCpsUrl: certificatePolicyCpsUrl || undefined,
+        });
+
+        fullChainPem = `${created.certPem}\n${interCertResult.certPem}\n${rootCertResult.certPem}`;
+        serverChainPem = `${created.certPem}\n${interCertResult.certPem}`;
+        created.chainPem = fullChainPem;
+
+        extraFiles.push(
+          { name: "intermediate.crt", content: interCertResult.certPem },
+          { name: "intermediate.key", content: interCertResult.privateKeyPem },
+          { name: "root-ca.crt", content: rootCertResult.certPem },
+          { name: "root-ca.key", content: rootCertResult.privateKeyPem },
+          { name: "server-chain.pem", content: serverChainPem },
+        );
+
+        singleGraphNodes.push(
+          {
+            title: caCommonName,
+            role: "Root CA",
+            subjectDn: rootCertResult.subjectDn,
+            keyType: `${rootKeyType.toUpperCase()} / ${rootHashType.toUpperCase()}`,
+            fingerprintSha256: rootCertResult.fingerprintSha256,
+            validityRange: `${Math.max(validityDays, 3650)} days`,
+            isCa: true,
+          },
+          {
+            title: intermediateCommonName,
+            role: "Intermediate CA",
+            subjectDn: interCertResult.subjectDn,
+            keyType: `${intermediateKeyType.toUpperCase()} / ${intermediateHashType.toUpperCase()}`,
+            fingerprintSha256: interCertResult.fingerprintSha256,
+            validityRange: `${Math.max(validityDays, 1825)} days`,
+            isCa: true,
+            pathLenConstraint: 0,
+          },
+          {
+            title: commonName || "Server Certificate",
+            role: "Server Leaf",
+            subjectDn: created.subjectDn,
+            keyType: `${keyType.toUpperCase()} / ${hashType.toUpperCase()}`,
+            fingerprintSha256: created.fingerprintSha256,
+            validityRange: `${validityDays} days`,
+            san: san || undefined,
+          },
+        );
+      } else if (singleCertificateMode === "generated-ca") {
+        const caCommonName = readCaCommonName(spec.options, "Internal Root CA");
+        const rootKeyType = readRootKeyType(spec.options, "ecdsa-p256");
+        const rootHashType = readRootHashType(spec.options, "sha256");
+
+        rootCertResult = await createCertificate({
+          commonName: caCommonName,
+          organization,
+          organizationalUnit,
+          country,
+          state,
+          locality,
+          keyType: rootKeyType,
+          hashType: rootHashType,
+          validityDays: Math.max(validityDays, 3650),
+          isCa: true,
+          pathLenConstraint: 0,
+        });
+
+        created = await createCertificate({
+          commonName,
+          san,
+          organization,
+          organizationalUnit,
+          country,
+          state,
+          locality,
+          keyType,
+          hashType,
+          validityDays,
+          isCa,
+          serverAuth,
+          clientAuth,
+          codeSigning,
+          issuanceMode: "ca-signed",
+          caCertPem: rootCertResult.certPem,
+          caPrivateKeyPem: rootCertResult.privateKeyPem,
+          nameConstraintsPermitted: nameConstraintsPermitted || undefined,
+          nameConstraintsExcluded: nameConstraintsExcluded || undefined,
+          certificatePolicyOid: certificatePolicyOid || undefined,
+          certificatePolicyCpsUrl: certificatePolicyCpsUrl || undefined,
+        });
+
+        fullChainPem = `${created.certPem}\n${rootCertResult.certPem}`;
+        created.chainPem = fullChainPem;
+        extraFiles.push(
+          { name: "root-ca.crt", content: rootCertResult.certPem },
+          { name: "root-ca.key", content: rootCertResult.privateKeyPem },
+        );
+
+        singleGraphNodes.push(
+          {
+            title: caCommonName,
+            role: "Root CA",
+            subjectDn: rootCertResult.subjectDn,
+            keyType: `${rootKeyType.toUpperCase()} / ${rootHashType.toUpperCase()}`,
+            fingerprintSha256: rootCertResult.fingerprintSha256,
+            validityRange: `${Math.max(validityDays, 3650)} days`,
+            isCa: true,
+            pathLenConstraint: 0,
+          },
+          {
+            title: commonName || "Server Certificate",
+            role: "Server Leaf",
+            subjectDn: created.subjectDn,
+            keyType: `${keyType.toUpperCase()} / ${hashType.toUpperCase()}`,
+            fingerprintSha256: created.fingerprintSha256,
+            validityRange: `${validityDays} days`,
+            san: san || undefined,
+          },
+        );
+      } else if (singleCertificateMode === "existing-ca") {
+        const signingCaCertPem = caCertPem.trim();
+        const rootCertPem = rootCaCertPem.trim();
+        if (!signingCaCertPem || !caPrivateKeyPem.trim()) {
+          return {
+            error:
+              "CA-signed issuance requires both a CA certificate and its matching private key.",
+          };
+        }
+        if (pkiHierarchy === "3-tier" && !rootCertPem) {
+          return { error: "3-tier CA-signed issuance requires a Root CA certificate." };
+        }
+
+        created = await createCertificate({
+          commonName,
+          san,
+          organization,
+          organizationalUnit,
+          country,
+          state,
+          locality,
+          keyType,
+          hashType,
+          validityDays,
+          isCa,
+          serverAuth,
+          clientAuth,
+          codeSigning,
+          issuanceMode: "ca-signed",
+          caCertPem: signingCaCertPem,
+          caPrivateKeyPem: caPrivateKeyPem.trim(),
+          nameConstraintsPermitted: nameConstraintsPermitted || undefined,
+          nameConstraintsExcluded: nameConstraintsExcluded || undefined,
+          certificatePolicyOid: certificatePolicyOid || undefined,
+          certificatePolicyCpsUrl: certificatePolicyCpsUrl || undefined,
+        });
+
+        if (pkiHierarchy === "3-tier") {
+          fullChainPem = `${created.certPem}\n${signingCaCertPem}\n${rootCertPem}`;
+          serverChainPem = `${created.certPem}\n${signingCaCertPem}`;
+          created.chainPem = fullChainPem;
+          extraFiles.push(
+            { name: "server-chain.pem", content: serverChainPem },
+            { name: "root-ca.crt", content: rootCertPem },
+          );
+        } else {
+          fullChainPem = `${created.certPem}\n${signingCaCertPem}`;
+          created.chainPem = fullChainPem;
+        }
+
+        let signingCaKeyType = "CA";
+        let signingCaFingerprint = "CA-SIGNER";
+        let signingCaValidity = "Active";
+        let signingCaSubject = created.issuerDn;
+        try {
+          const signerDer = detectInputBytes(signingCaCertPem).der;
+          const parsedSigner = parseX509Certificate(signerDer);
+          signingCaKeyType =
+            parsedSigner.publicKey.algorithmName ||
+            parsedSigner.publicKey.keyType.toUpperCase();
+          signingCaFingerprint = parsedSigner.fingerprints.sha256;
+          signingCaValidity = `${parsedSigner.validity.notBefore.toISOString().split("T")[0]} to ${parsedSigner.validity.notAfter.toISOString().split("T")[0]}`;
+          signingCaSubject = parsedSigner.subject.dn || created.issuerDn;
+        } catch {
+          // ignore
+        }
+
+        if (pkiHierarchy === "3-tier") {
+          let rootKeyTypeStr = "Root CA";
+          let rootFingerprint = "ROOT-CA";
+          let rootValidity = "Active";
+          let rootSubject = "Root CA";
+          try {
+            const rootDer = detectInputBytes(rootCertPem).der;
+            const parsedRoot = parseX509Certificate(rootDer);
+            rootKeyTypeStr =
+              parsedRoot.publicKey.algorithmName || parsedRoot.publicKey.keyType.toUpperCase();
+            rootFingerprint = parsedRoot.fingerprints.sha256;
+            rootValidity = `${parsedRoot.validity.notBefore.toISOString().split("T")[0]} to ${parsedRoot.validity.notAfter.toISOString().split("T")[0]}`;
+            rootSubject = parsedRoot.subject.dn || "Root CA";
+          } catch {
+            // ignore
+          }
+
+          singleGraphNodes.push(
+            {
+              title: "Root CA",
+              role: "Root CA",
+              subjectDn: rootSubject,
+              keyType: rootKeyTypeStr,
+              fingerprintSha256: rootFingerprint,
+              validityRange: rootValidity,
+              isCa: true,
+            },
+            {
+              title: "Intermediate CA",
+              role: "Intermediate CA",
+              subjectDn: signingCaSubject,
+              keyType: signingCaKeyType,
+              fingerprintSha256: signingCaFingerprint,
+              validityRange: signingCaValidity,
+              isCa: true,
+              pathLenConstraint: 0,
+            },
+            {
+              title: commonName || "Server Certificate",
+              role: "Server Leaf",
+              subjectDn: created.subjectDn,
+              keyType: `${keyType.toUpperCase()} / ${hashType.toUpperCase()}`,
+              fingerprintSha256: created.fingerprintSha256,
+              validityRange: `${validityDays} days`,
+              san: san || undefined,
+            },
+          );
+        } else {
+          singleGraphNodes.push(
+            {
+              title: "Signing CA",
+              role: "Root CA",
+              subjectDn: created.issuerDn,
+              keyType: signingCaKeyType,
+              fingerprintSha256: signingCaFingerprint,
+              validityRange: signingCaValidity,
+              isCa: true,
+            },
+            {
+              title: commonName || "Server Certificate",
+              role: "Server Leaf",
+              subjectDn: created.subjectDn,
+              keyType: `${keyType.toUpperCase()} / ${hashType.toUpperCase()}`,
+              fingerprintSha256: created.fingerprintSha256,
+              validityRange: `${validityDays} days`,
+              san: san || undefined,
+            },
+          );
+        }
+      } else {
+        // Standard Self-Signed (1-tier)
+        created = await createCertificate({
+          commonName,
+          san,
+          organization,
+          organizationalUnit,
+          country,
+          state,
+          locality,
+          keyType,
+          hashType,
+          validityDays,
+          isCa,
+          serverAuth,
+          clientAuth,
+          codeSigning,
+          issuanceMode: "self-signed",
+          nameConstraintsPermitted: nameConstraintsPermitted || undefined,
+          nameConstraintsExcluded: nameConstraintsExcluded || undefined,
+          certificatePolicyOid: certificatePolicyOid || undefined,
+          certificatePolicyCpsUrl: certificatePolicyCpsUrl || undefined,
+        });
+
+        singleGraphNodes.push({
+          title: commonName || "Self-Signed Certificate",
+          role: "Self-Signed",
+          subjectDn: created.subjectDn,
+          keyType: `${keyType.toUpperCase()} / ${hashType.toUpperCase()}`,
+          fingerprintSha256: created.fingerprintSha256,
+          validityRange: `${validityDays} days`,
+          san: san || undefined,
+        });
+      }
 
       const fields: ToolResultField[] = [
         { label: "Subject", value: created.subjectDn, hint: "Subject Distinguished Name" },
@@ -1049,6 +1403,14 @@ export async function computeCertificate(
             created.issuanceMode === "ca-signed"
               ? "Signed by CA Authority"
               : "Issuer Distinguished Name (Self-Signed)",
+        },
+        {
+          label: "Hierarchy",
+          value: singleGraphNodes.some((n) => n.role === "Intermediate CA")
+            ? "3-Tier (Root CA ➔ Intermediate CA ➔ Server)"
+            : created.issuanceMode === "ca-signed"
+              ? "2-Tier (CA ➔ Server)"
+              : "1-Tier (Self-Signed)",
         },
         {
           label: "Validity",
@@ -1072,79 +1434,51 @@ export async function computeCertificate(
         value: isCa ? "CA:TRUE (Certificate Authority)" : "CA:FALSE (End-Entity)",
       });
 
+      const studioFiles = certificateStudioFilenames(
+        "single-cert",
+        singleCertificateMode,
+        pkiHierarchy,
+      );
+      const opensslCommand = created.opensslCommand
+        .replaceAll("request.csr", studioFiles.leafCsr)
+        .replaceAll("certificate.crt", studioFiles.leafCertificate)
+        .replaceAll("-CA ca.crt", `-CA ${studioFiles.issuerCertificate}`)
+        .replaceAll("-CAkey ca.key", `-CAkey ${studioFiles.issuerKey}`);
+
       const working = [
-        "### Generated X.509 v3 Certificate",
+        `### Generated X.509 v3 Certificate (${singleGraphNodes.some((n) => n.role === "Intermediate CA") ? "3-Tier Enterprise PKI" : created.issuanceMode === "ca-signed" ? "CA-Signed" : "Self-Signed"})`,
         `**Subject**: ${created.subjectDn}`,
-        `**Issuer**: ${created.issuerDn} (${created.issuanceMode === "ca-signed" ? "CA-Signed" : "Self-Signed"})`,
+        `**Issuer**: ${created.issuerDn}`,
         `**Key Type**: ${keyType.toUpperCase()} | **Hash**: ${hashType.toUpperCase()}`,
         `**Serial**: 0x${created.serialNumberHex}`,
         `**Validity**: ${created.notBefore.toISOString()} -> ${created.notAfter.toISOString()} (${validityDays} days)`,
         `**Fingerprint (SHA-256)**: ${created.fingerprintSha256}`,
         "",
-        "#### Generated Private Key (PKCS#8 PEM):",
+        ...(rootCertResult && interCertResult
+          ? [
+              "#### 1. Root Certificate Authority (`root-ca.crt`):",
+              `- **Subject**: ${rootCertResult.subjectDn}`,
+              `- **Fingerprint (SHA-256)**: ${rootCertResult.fingerprintSha256}`,
+              "",
+              "#### 2. Intermediate Issuing CA (`intermediate.crt`):",
+              `- **Subject**: ${interCertResult.subjectDn}`,
+              `- **Fingerprint (SHA-256)**: ${interCertResult.fingerprintSha256}`,
+              "",
+              "#### 3. Server Certificate Private Key (PKCS#8 PEM):",
+            ]
+          : ["#### Generated Private Key (PKCS#8 PEM):"]),
         "```pem",
         created.privateKeyPem,
         "```",
         "",
         created.chainPem
-          ? [
-              "#### Full Certificate Chain (End-Entity + CA):",
-              "```pem",
-              created.chainPem,
-              "```",
-              "",
-            ].join("\n")
+          ? ["#### Full Certificate Chain:", "```pem", created.chainPem, "```", ""].join("\n")
           : "",
         "#### Equivalent OpenSSL Workflow:",
         "```bash",
-        created.opensslCommand,
+        opensslCommand,
         "```",
-      ]
-        .filter(Boolean);
-
-      const singleGraphNodes: PkiGraphNode[] = [];
-      if (created.issuanceMode === "ca-signed" && caCertPem) {
-        let caKeyType = "CA";
-        let caFingerprint = "CA-SIGNER";
-        let caValidity = "Active";
-        try {
-          const caDer = detectInputBytes(new TextEncoder().encode(caCertPem)).der;
-          const parsedCa = parseX509Certificate(caDer);
-          caKeyType = parsedCa.publicKey.algorithmName || parsedCa.publicKey.keyType.toUpperCase();
-          caFingerprint = parsedCa.fingerprints.sha256;
-          caValidity = `${parsedCa.validity.notBefore.toISOString().split("T")[0]} to ${parsedCa.validity.notAfter.toISOString().split("T")[0]}`;
-        } catch {
-          // fallback to defaults if caCertPem is unparseable
-        }
-        singleGraphNodes.push({
-          title: "Signing CA",
-          role: "Root CA",
-          subjectDn: created.issuerDn,
-          keyType: caKeyType,
-          fingerprintSha256: caFingerprint,
-          validityRange: caValidity,
-          isCa: true,
-        });
-        singleGraphNodes.push({
-          title: commonName || "Leaf Certificate",
-          role: "Server Leaf",
-          subjectDn: created.subjectDn,
-          keyType: `${keyType.toUpperCase()} / ${hashType.toUpperCase()}`,
-          fingerprintSha256: created.fingerprintSha256,
-          validityRange: `${validityDays} days`,
-          san: san || undefined,
-        });
-      } else {
-        singleGraphNodes.push({
-          title: commonName || "Self-Signed Certificate",
-          role: "Self-Signed",
-          subjectDn: created.subjectDn,
-          keyType: `${keyType.toUpperCase()} / ${hashType.toUpperCase()}`,
-          fingerprintSha256: created.fingerprintSha256,
-          validityRange: `${validityDays} days`,
-          san: san || undefined,
-        });
-      }
+      ].filter(Boolean);
 
       working.push(
         "",
@@ -1157,17 +1491,18 @@ export async function computeCertificate(
       const workingStr = working.join("\n");
 
       const cmdScripts = generateCertCommandScripts({
-        certFile: "certificate.crt",
+        certFile: studioFiles.leafCertificate,
         keyFile: "private.key",
         chainFile: created.chainPem ? "chain.pem" : undefined,
-        opensslCommand: created.opensslCommand,
+        opensslCommand,
       });
 
       const files: ToolExportFile[] = [
-        { name: "certificate.crt", content: created.certPem },
+        { name: studioFiles.leafCertificate, content: created.certPem },
         { name: "private.key", content: created.privateKeyPem },
         { name: "public.key", content: created.publicKeyPem },
         ...(created.chainPem ? [{ name: "chain.pem", content: created.chainPem }] : []),
+        ...extraFiles,
         { name: "commands.sh", content: cmdScripts.sh },
         { name: "commands.ps1", content: cmdScripts.ps1 },
         { name: "commands.bat", content: cmdScripts.bat },
@@ -1198,7 +1533,7 @@ export async function computeCertificate(
           name: "nginx.conf",
           content: generateNginxTlsConfig({
             serverName: commonName || "localhost",
-            certFilename: "certificate.crt",
+            certFilename: studioFiles.leafCertificate,
             keyFilename: "private.key",
             chainFilename: created.chainPem ? "chain.pem" : undefined,
           }),
@@ -1207,14 +1542,14 @@ export async function computeCertificate(
           name: "Caddyfile",
           content: generateCaddyTlsConfig({
             serverName: commonName || "localhost",
-            certFilename: "certificate.crt",
+            certFilename: studioFiles.leafCertificate,
             keyFilename: "private.key",
           }),
         },
         {
           name: "docker-compose.yaml",
           content: generateDockerComposeConfig({
-            certFilename: "certificate.crt",
+            certFilename: studioFiles.leafCertificate,
             keyFilename: "private.key",
             caFilename: created.chainPem ? "chain.pem" : undefined,
           }),
@@ -1223,7 +1558,7 @@ export async function computeCertificate(
           name: "httpd-ssl.conf",
           content: generateApacheTlsConfig({
             serverName: commonName || "localhost",
-            certFilename: "certificate.crt",
+            certFilename: studioFiles.leafCertificate,
             keyFilename: "private.key",
             chainFilename: created.chainPem ? "chain.pem" : undefined,
           }),
@@ -1231,7 +1566,7 @@ export async function computeCertificate(
         {
           name: "cloud-import.sh",
           content: generateCloudImportCommands({
-            certFilename: "certificate.crt",
+            certFilename: studioFiles.leafCertificate,
             keyFilename: "private.key",
             chainFilename: created.chainPem ? "chain.pem" : undefined,
             alias: commonName || "cert",
@@ -1240,7 +1575,7 @@ export async function computeCertificate(
         {
           name: "main.tf",
           content: generateTerraformConfig({
-            certFilename: "certificate.crt",
+            certFilename: studioFiles.leafCertificate,
             keyFilename: "private.key",
             caFilename: "ca.crt",
           }),
@@ -1248,7 +1583,7 @@ export async function computeCertificate(
         {
           name: "deploy-playbook.yaml",
           content: generateAnsiblePlaybook({
-            certFilename: "certificate.crt",
+            certFilename: studioFiles.leafCertificate,
             keyFilename: "private.key",
             caFilename: "ca.crt",
           }),
@@ -1279,7 +1614,7 @@ export async function computeCertificate(
             commands: [
               {
                 comment: "Inspect generated certificate details",
-                parts: ["openssl x509 -in certificate.crt -text -noout"],
+                parts: [`openssl x509 -in ${studioFiles.leafCertificate} -text -noout`],
               },
               {
                 comment: "Inspect private key details",
@@ -1289,7 +1624,9 @@ export async function computeCertificate(
                 ? [
                     {
                       comment: "Verify certificate against CA chain",
-                      parts: ["openssl verify -CAfile chain.pem certificate.crt"],
+                      parts: [
+                        `openssl verify -CAfile chain.pem ${studioFiles.leafCertificate}`,
+                      ],
                     },
                   ]
                 : []),
@@ -1301,7 +1638,7 @@ export async function computeCertificate(
             commands: [
               {
                 comment: "Inspect certificate with sslx",
-                parts: ["sslx inspect certificate.crt"],
+                parts: [`sslx inspect ${studioFiles.leafCertificate}`],
               },
             ],
           },
@@ -1311,7 +1648,7 @@ export async function computeCertificate(
             commands: [
               {
                 comment: "Inspect certificate details with certtool",
-                parts: ["certtool --certificate-info --infile certificate.crt"],
+                parts: [`certtool --certificate-info --infile ${studioFiles.leafCertificate}`],
               },
               {
                 comment: "Inspect private key details with certtool",
@@ -1322,7 +1659,7 @@ export async function computeCertificate(
                     {
                       comment: "Verify certificate against CA chain with certtool",
                       parts: [
-                        "certtool --verify-chain --load-ca-certificate chain.pem --infile certificate.crt",
+                        `certtool --verify-chain --load-ca-certificate chain.pem --infile ${studioFiles.leafCertificate}`,
                       ],
                     },
                   ]
@@ -1629,7 +1966,8 @@ export async function computeCertificate(
             commands: {
               bash: [
                 {
-                  comment: "Extract and compare public key SPKI from certificate and private key",
+                  comment:
+                    "Extract and compare public key SPKI from certificate and private key",
                   parts: [
                     "diff -u <(certtool --pubkey-info --infile cert.pem)",
                     "        <(certtool --pubkey-info --load-privkey private.key)",
@@ -1743,7 +2081,8 @@ export async function computeCertificate(
               ],
               powershell: [
                 {
-                  comment: "Compare two certificates using OpenSSL text dumps and Compare-Object",
+                  comment:
+                    "Compare two certificates using OpenSSL text dumps and Compare-Object",
                   parts: [
                     "Compare-Object (openssl x509 -in cert1.pem -text -noout)",
                     "               (openssl x509 -in cert2.pem -text -noout)",
@@ -2038,7 +2377,9 @@ export async function computeCertificate(
             commands: [
               {
                 comment: "Sign CSR with sslx CLI",
-                parts: [`sslx sign request.csr --ca ca.crt --key ca.key --days ${validityDays}`],
+                parts: [
+                  `sslx sign request.csr --ca ca.crt --key ca.key --days ${validityDays}`,
+                ],
               },
               {
                 comment: "Generate self-signed certificate directly with sslx",
@@ -2337,7 +2678,11 @@ export async function computeCertificate(
 
       const fields: ToolResultField[] = [
         { label: "Letter Grade", value: grade.grade, hint: "Overall Security & Health Grade" },
-        { label: "Score", value: `${grade.score} / 100`, hint: "Weighted baseline compliance score" },
+        {
+          label: "Score",
+          value: `${grade.score} / 100`,
+          hint: "Weighted baseline compliance score",
+        },
         { label: "Subject", value: grade.cert.subject.dn },
         { label: "Public Key", value: keyDisplay },
         { label: "Signature Algorithm", value: grade.cert.signatureAlgorithmName },
@@ -2386,7 +2731,11 @@ export async function computeCertificate(
             const isRoot =
               idx === grade.chainCerts!.length - 1 &&
               (c.subject.dn === c.issuer.dn || Boolean(c.extensions.basicConstraints?.isCa));
-            const role = isLeaf ? "🌿 Leaf (Server)" : isRoot ? "🏛️ Root CA" : "⛓️ Intermediate CA";
+            const role = isLeaf
+              ? "🌿 Leaf (Server)"
+              : isRoot
+                ? "🏛️ Root CA"
+                : "⛓️ Intermediate CA";
             const sub = c.subject.commonName || c.subject.dn;
             const iss = c.issuer.commonName || c.issuer.dn;
             const exp = c.validity.notAfter.toISOString().split("T")[0];
@@ -2457,9 +2806,7 @@ export async function computeCertificate(
               cmd: [
                 {
                   comment: "Inspect remote TLS handshake and certificate chain",
-                  parts: [
-                    "<nul openssl s_client -connect host:443 2>nul | openssl x509 -text",
-                  ],
+                  parts: ["<nul openssl s_client -connect host:443 2>nul | openssl x509 -text"],
                 },
                 {
                   comment: "Online TLS grading (OpenSSL has no grader; use SSL Labs)",
@@ -2623,8 +2970,11 @@ export async function computeCertificate(
                   parts: ["certtool --certificate-info --infile cert.pem"],
                 },
                 {
-                  comment: "Fetch remote TLS server certificate with gnutls-cli and inspect validity",
-                  parts: ["gnutls-cli --print-cert -p 443 example.com </dev/null | certtool --certificate-info"],
+                  comment:
+                    "Fetch remote TLS server certificate with gnutls-cli and inspect validity",
+                  parts: [
+                    "gnutls-cli --print-cert -p 443 example.com </dev/null | certtool --certificate-info",
+                  ],
                 },
               ],
               powershell: [
@@ -2633,8 +2983,11 @@ export async function computeCertificate(
                   parts: ["certtool --certificate-info --infile cert.pem"],
                 },
                 {
-                  comment: "Fetch remote TLS server certificate with gnutls-cli and inspect validity",
-                  parts: ["cmd /c '<nul gnutls-cli --print-cert -p 443 example.com | certtool --certificate-info'"],
+                  comment:
+                    "Fetch remote TLS server certificate with gnutls-cli and inspect validity",
+                  parts: [
+                    "cmd /c '<nul gnutls-cli --print-cert -p 443 example.com | certtool --certificate-info'",
+                  ],
                 },
               ],
               cmd: [
@@ -2643,8 +2996,11 @@ export async function computeCertificate(
                   parts: ["certtool --certificate-info --infile cert.pem"],
                 },
                 {
-                  comment: "Fetch remote TLS server certificate with gnutls-cli and inspect validity",
-                  parts: ["<nul gnutls-cli --print-cert -p 443 example.com | certtool --certificate-info"],
+                  comment:
+                    "Fetch remote TLS server certificate with gnutls-cli and inspect validity",
+                  parts: [
+                    "<nul gnutls-cli --print-cert -p 443 example.com | certtool --certificate-info",
+                  ],
                 },
               ],
             },
@@ -2895,14 +3251,27 @@ export async function computeCertificate(
                 const isLeaf = idx === 0;
                 const isRoot =
                   idx === certBlocks.length - 1 &&
-                  (c.subject.dn === c.issuer.dn || Boolean(c.extensions.basicConstraints?.isCa));
+                  (c.subject.dn === c.issuer.dn ||
+                    Boolean(c.extensions.basicConstraints?.isCa));
                 const role = isLeaf ? "Leaf (Server)" : isRoot ? "Root CA" : "Intermediate CA";
                 return { index: idx + 1, role, cert: c };
               } catch {
                 return null;
               }
             })
-            .filter((c: { index: number; role: string; cert: ReturnType<typeof parseX509Certificate> } | null): c is { index: number; role: string; cert: ReturnType<typeof parseX509Certificate> } => c !== null);
+            .filter(
+              (
+                c: {
+                  index: number;
+                  role: string;
+                  cert: ReturnType<typeof parseX509Certificate>;
+                } | null,
+              ): c is {
+                index: number;
+                role: string;
+                cert: ReturnType<typeof parseX509Certificate>;
+              } => c !== null,
+            );
 
           workingContent = [
             `### 📦 Multi-Certificate Bundle Detected (${certBlocks.length} Certificates)`,
@@ -2911,14 +3280,20 @@ export async function computeCertificate(
             "",
             "| # | Role | Subject CN | Issuer CN | Valid Until | Days Left | Key Algorithm |",
             "|---|------|------------|-----------|-------------|-----------|---------------|",
-            ...allCerts.map((item: { index: number; role: string; cert: ReturnType<typeof parseX509Certificate> }) => {
-              const sub = item.cert.subject.commonName || item.cert.subject.dn;
-              const iss = item.cert.issuer.commonName || item.cert.issuer.dn;
-              const exp = item.cert.validity.notAfter.toISOString().split("T")[0];
-              const days = `${item.cert.validity.daysRemaining}d`;
-              const key = `${item.cert.publicKey.algorithmName} (${item.cert.publicKey.details})`;
-              return `| **#${item.index}** | ${item.role} | \`${sub}\` | \`${iss}\` | ${exp} | ${days} | ${key} |`;
-            }),
+            ...allCerts.map(
+              (item: {
+                index: number;
+                role: string;
+                cert: ReturnType<typeof parseX509Certificate>;
+              }) => {
+                const sub = item.cert.subject.commonName || item.cert.subject.dn;
+                const iss = item.cert.issuer.commonName || item.cert.issuer.dn;
+                const exp = item.cert.validity.notAfter.toISOString().split("T")[0];
+                const days = `${item.cert.validity.daysRemaining}d`;
+                const key = `${item.cert.publicKey.algorithmName} (${item.cert.publicKey.details})`;
+                return `| **#${item.index}** | ${item.role} | \`${sub}\` | \`${iss}\` | ${exp} | ${days} | ${key} |`;
+              },
+            ),
             "",
             "> 💡 **Tip**: To cryptographically verify this entire certificate chain path from leaf to root, open the **[Chain Verifier](/tools/cert-verifier)** or monitor fleet expiration in **[Certificate Expiry Monitor](/tools/cert-expiry)**.",
             "",
@@ -2961,12 +3336,7 @@ export async function computeCertificate(
               commands: [
                 {
                   comment: "Inspect X.509 certificate details",
-                  parts: [
-                    "openssl x509",
-                    "-in cert.pem",
-                    "-text",
-                    "-noout",
-                  ],
+                  parts: ["openssl x509", "-in cert.pem", "-text", "-noout"],
                 },
               ],
             },
@@ -2986,11 +3356,7 @@ export async function computeCertificate(
               commands: [
                 {
                   comment: "Inspect certificate details with certtool",
-                  parts: [
-                    "certtool",
-                    "--certificate-info",
-                    "--infile cert.pem",
-                  ],
+                  parts: ["certtool", "--certificate-info", "--infile cert.pem"],
                 },
               ],
             },
@@ -3473,7 +3839,7 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
 
     case "cert-creator": {
       const mode = readCreatorMode(spec.options);
-      const issuance = readIssuanceMode(spec.options);
+      const singleCertificateMode = readSingleCertificateMode(spec.options);
       const hierarchy = readPkiHierarchy(spec.options);
       const isCa = readIsCa(spec.options);
       const keyType = readKeyType(spec.options);
@@ -3519,9 +3885,11 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
           value:
             mode === "mtls-suite"
               ? `${hierarchy.toUpperCase()} mTLS hierarchy`
-              : issuance === "self-signed"
-                ? "Self-Signed Trust Anchor"
-                : "Signed by Specified CA Keypair",
+              : singleCertificateMode === "standalone"
+                ? "Standalone Self-Signed Certificate"
+                : singleCertificateMode === "generated-ca"
+                  ? `${hierarchy.toUpperCase()} Generated Private CA Hierarchy`
+                  : `${hierarchy.toUpperCase()} Existing CA Hierarchy`,
         },
         {
           label: "Key & Signature",
@@ -3680,7 +4048,8 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
           },
           {
             label: "CA Authority",
-            value: caMode === "custom-ca" ? "Custom CA Certificate & Key" : "Ephemeral Micro-CA",
+            value:
+              caMode === "custom-ca" ? "Custom CA Certificate & Key" : "Ephemeral Micro-CA",
           },
           {
             label: "CRL Number",
@@ -3734,7 +4103,8 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Standards",
-          value: "RFC 7468 (PEM), RFC 5280 (DER), RFC 7292 (PKCS#12), RFC 2315 (PKCS#7), PuTTY PPK",
+          value:
+            "RFC 7468 (PEM), RFC 5280 (DER), RFC 7292 (PKCS#12), RFC 2315 (PKCS#7), PuTTY PPK",
         },
       );
       break;
@@ -3818,7 +4188,8 @@ export function certificateInfo(spec: CertificateSpec): ToolResultField[] {
         },
         {
           label: "Audit Dimensions",
-          value: "Validity Period (398d limit), Key Algorithm & Size, Hash Strength, SAN Coverage, Critical Extensions",
+          value:
+            "Validity Period (398d limit), Key Algorithm & Size, Hash Strength, SAN Coverage, Critical Extensions",
         },
       );
       break;

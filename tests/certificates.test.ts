@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CA_CERTIFICATE_PEM,
   CERTIFICATE_CHAIN_PEM,
+  certificateStudioFilenames,
   convertCertificate,
   createCertificate,
   createCsr,
@@ -586,11 +587,112 @@ describe("CA-Signed Certificate Issuance", () => {
 });
 
 describe("Full mTLS Suite Generator", () => {
+  it("uses one canonical filename set for each Certificate Studio flow", () => {
+    const flows = [
+      {
+        name: "single standalone",
+        creatorMode: "single-cert",
+        singleMode: "standalone",
+        hierarchy: "2-tier",
+        expected: ["ca.key", "ca.crt", "private.key", "certificate.csr", "server.crt"],
+      },
+      {
+        name: "single generated 2-tier",
+        creatorMode: "single-cert",
+        singleMode: "generated-ca",
+        hierarchy: "2-tier",
+        expected: [
+          "root-ca.key",
+          "root-ca.crt",
+          "private.key",
+          "certificate.csr",
+          "server.crt",
+        ],
+      },
+      {
+        name: "single generated 3-tier",
+        creatorMode: "single-cert",
+        singleMode: "generated-ca",
+        hierarchy: "3-tier",
+        expected: [
+          "root-ca.key",
+          "root-ca.crt",
+          "intermediate.key",
+          "intermediate.crt",
+          "private.key",
+          "certificate.csr",
+          "server.crt",
+        ],
+      },
+      {
+        name: "single existing CA 2-tier",
+        creatorMode: "single-cert",
+        singleMode: "existing-ca",
+        hierarchy: "2-tier",
+        expected: ["ca.key", "ca.crt", "private.key", "certificate.csr", "server.crt"],
+      },
+      {
+        name: "single existing CA 3-tier",
+        creatorMode: "single-cert",
+        singleMode: "existing-ca",
+        hierarchy: "3-tier",
+        expected: [
+          "root-ca.key",
+          "root-ca.crt",
+          "intermediate.key",
+          "intermediate.crt",
+          "private.key",
+          "certificate.csr",
+          "server.crt",
+        ],
+      },
+      {
+        name: "mTLS 2-tier",
+        creatorMode: "mtls-suite",
+        singleMode: "standalone",
+        hierarchy: "2-tier",
+        expected: ["ca.key", "ca.crt", "server.key", "server.csr", "server.crt"],
+      },
+      {
+        name: "mTLS 3-tier",
+        creatorMode: "mtls-suite",
+        singleMode: "standalone",
+        hierarchy: "3-tier",
+        expected: [
+          "ca.key",
+          "ca.crt",
+          "intermediate.key",
+          "intermediate.crt",
+          "server.key",
+          "server.csr",
+          "server.crt",
+        ],
+      },
+    ] as const;
+
+    for (const flow of flows) {
+      const files = certificateStudioFilenames(
+        flow.creatorMode,
+        flow.singleMode,
+        flow.hierarchy,
+      );
+      const actual = [
+        files.rootKey,
+        files.rootCertificate,
+        ...(flow.hierarchy === "3-tier" ? [files.issuerKey, files.issuerCertificate] : []),
+        files.leafKey,
+        files.leafCsr,
+        files.leafCertificate,
+      ];
+      expect(actual, flow.name).toEqual(flow.expected);
+    }
+  });
+
   it("defaults Certificate Creator to a valid self-signed workflow", async () => {
     const def = await loadTool("cert-creator");
     const spec = def.createSpec();
 
-    expect(spec.options.issuanceMode).toBe("self-signed");
+    expect(spec.options.singleCertificateMode).toBe("standalone");
     expect(spec.options).toMatchObject({
       rootKeyType: "ecdsa-p256",
       rootHashType: "sha256",
@@ -605,12 +707,15 @@ describe("Full mTLS Suite Generator", () => {
     expect(result.error).toBeUndefined();
     expect(result.working).toContain("(Self-Signed)");
     expect(result.working).toContain("#### Equivalent OpenSSL Workflow:");
+    const commands = result.files?.find((file) => file.name === "commands.sh")?.content;
+    expect(commands).toContain("-key private.key");
+    expect(commands).toContain("-out server.crt");
   });
 
   it("does not label an incomplete CA-signed request as a generated certificate", async () => {
     const def = await loadTool("cert-creator");
     const spec = def.createSpec();
-    spec.options = { ...spec.options, issuanceMode: "ca-signed" };
+    spec.options = { ...spec.options, singleCertificateMode: "existing-ca" };
 
     const result = await def.compute(spec, new Uint8Array(0));
     expect(result.text).toBeUndefined();
@@ -791,13 +896,15 @@ describe("Full mTLS Suite Generator", () => {
 
     // 1. Single Certificate Mode (Self-Signed)
     const singleSpec = def.createSpec();
+    expect(singleSpec.options["serverAuth"]).toBe(true);
+    expect(singleSpec.options["clientAuth"]).toBe(false);
     singleSpec.options = {
       ...singleSpec.options,
       creatorMode: "single-cert",
-      issuanceMode: "self-signed",
+      singleCertificateMode: "standalone",
     };
     const singleTag = def.variantTag!(singleSpec);
-    expect(singleTag).toEqual(["single-cert"]);
+    expect(singleTag).toEqual(["single-cert", "standalone"]);
 
     const mtlsOptions = def.catalogue.inGroup("mtls");
     expect(mtlsOptions.length).toBeGreaterThan(0);
@@ -848,7 +955,9 @@ describe("Full mTLS Suite Generator", () => {
 
       // OpenSSL workflow verification
       expect(created.opensslCommand).toContain("keyUsage=critical,digitalSignature");
-      expect(created.opensslCommand).toContain("subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1");
+      expect(created.opensslCommand).toContain(
+        "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1",
+      );
       expect(created.opensslCommand).toContain("subjectKeyIdentifier=hash");
     });
 
@@ -867,7 +976,9 @@ describe("Full mTLS Suite Generator", () => {
       expect(parsed.extensions.keyUsages).toContain("keyEncipherment");
       expect(parsed.extensions.basicConstraints?.isCa).toBe(false);
 
-      expect(created.opensslCommand).toContain("keyUsage=critical,digitalSignature,keyEncipherment");
+      expect(created.opensslCommand).toContain(
+        "keyUsage=critical,digitalSignature,keyEncipherment",
+      );
     });
 
     it("emits keyCertSign and cRLSign for CA certificates", async () => {
@@ -887,7 +998,9 @@ describe("Full mTLS Suite Generator", () => {
       expect(parsed.extensions.keyUsages).toContain("digitalSignature");
 
       expect(created.opensslCommand).toContain("basicConstraints=critical,CA:TRUE");
-      expect(created.opensslCommand).toContain("keyUsage=critical,digitalSignature,keyCertSign,cRLSign");
+      expect(created.opensslCommand).toContain(
+        "keyUsage=critical,digitalSignature,keyCertSign,cRLSign",
+      );
     });
   });
 
@@ -957,6 +1070,204 @@ describe("Full mTLS Suite Generator", () => {
 
       const fixed = diagnostics[0]!.fix!.apply(spec);
       expect(fixed.options["validityDays"]).toBe("90");
+    });
+  });
+
+  describe("Single Certificate Creation Flows", () => {
+    it("generates a 2-tier private CA and server certificate", async () => {
+      const tool = await loadTool("cert-creator");
+      const spec = tool.createSpec();
+      spec.options = {
+        ...spec.options,
+        creatorMode: "single-cert",
+        singleCertificateMode: "generated-ca",
+        pkiHierarchy: "2-tier",
+        commonName: "service.internal",
+        caCommonName: "Private Root CA",
+      };
+
+      const result = await tool.compute(spec, new Uint8Array(0));
+      expect(result.error).toBeUndefined();
+      const fileMap = new Map((result.files ?? []).map((file) => [file.name, file.content]));
+      expect(fileMap.has("root-ca.crt")).toBe(true);
+      expect(fileMap.has("root-ca.key")).toBe(true);
+      expect(fileMap.has("intermediate.crt")).toBe(false);
+      expect(fileMap.get("commands.sh")).toContain("-out certificate.csr");
+      expect(fileMap.get("commands.sh")).toContain("-CA root-ca.crt");
+      expect(fileMap.get("commands.sh")).toContain("-CAkey root-ca.key");
+
+      const server = parseX509Certificate(
+        new TextEncoder().encode(fileMap.get("server.crt") as string),
+      );
+      const root = parseX509Certificate(
+        new TextEncoder().encode(fileMap.get("root-ca.crt") as string),
+      );
+      expect(server.issuer.commonName).toBe("Private Root CA");
+      expect(root.subject.commonName).toBe("Private Root CA");
+      expect(root.extensions.basicConstraints?.pathLenConstraint).toBe(0);
+    });
+
+    it("generates a private 3-tier hierarchy (Root CA ➔ Intermediate CA ➔ Server)", async () => {
+      const tool = await loadTool("cert-creator");
+      const spec = tool.createSpec();
+      spec.options = {
+        ...spec.options,
+        creatorMode: "single-cert",
+        singleCertificateMode: "generated-ca",
+        pkiHierarchy: "3-tier",
+        commonName: "api.internal.service",
+        caCommonName: "Internal Enterprise Root CA",
+        intermediateCommonName: "Internal Enterprise Issuing CA",
+        keyType: "ecdsa-p256",
+        rootKeyType: "ecdsa-p256",
+        intermediateKeyType: "ecdsa-p256",
+      };
+
+      const result = await tool.compute(spec, new Uint8Array(0));
+      expect(result.files).toBeDefined();
+
+      const fileMap = new Map((result.files ?? []).map((f) => [f.name, f.content]));
+      expect(fileMap.has("server.crt")).toBe(true);
+      expect(fileMap.has("private.key")).toBe(true);
+      expect(fileMap.has("intermediate.crt")).toBe(true);
+      expect(fileMap.has("intermediate.key")).toBe(true);
+      expect(fileMap.has("root-ca.crt")).toBe(true);
+      expect(fileMap.has("root-ca.key")).toBe(true);
+      expect(fileMap.has("server-chain.pem")).toBe(true);
+      expect(fileMap.get("commands.sh")).toContain("-out certificate.csr");
+      expect(fileMap.get("commands.sh")).toContain("-CA intermediate.crt");
+      expect(fileMap.get("commands.sh")).toContain("-CAkey intermediate.key");
+
+      // Verify certificate structures
+      const leafParsed = parseX509Certificate(
+        new TextEncoder().encode(fileMap.get("server.crt") as string),
+      );
+      const interParsed = parseX509Certificate(
+        new TextEncoder().encode(fileMap.get("intermediate.crt") as string),
+      );
+      const rootParsed = parseX509Certificate(
+        new TextEncoder().encode(fileMap.get("root-ca.crt") as string),
+      );
+
+      expect(rootParsed.extensions.basicConstraints?.isCa).toBe(true);
+      expect(rootParsed.extensions.basicConstraints?.pathLenConstraint).toBe(1);
+
+      expect(interParsed.extensions.basicConstraints?.isCa).toBe(true);
+      expect(interParsed.extensions.basicConstraints?.pathLenConstraint).toBe(0);
+
+      expect(leafParsed.extensions.basicConstraints?.isCa).toBe(false);
+
+      // Verify Subject/Issuer linkage
+      expect(leafParsed.issuer.commonName).toBe("Internal Enterprise Issuing CA");
+      expect(interParsed.issuer.commonName).toBe("Internal Enterprise Root CA");
+      expect(rootParsed.issuer.commonName).toBe("Internal Enterprise Root CA");
+
+      // Verify visual hierarchy diagram in working
+      expect(result.working).toContain("Visual Trust Hierarchy");
+      expect(result.working).toContain("Internal Enterprise Root CA");
+      expect(result.working).toContain("Internal Enterprise Issuing CA");
+      expect(result.working).toContain("api.internal.service");
+    });
+
+    it("signs a server certificate directly with an existing CA in 2-tier mode", async () => {
+      const ca = await createCertificate({
+        commonName: "Existing Root CA",
+        keyType: "ecdsa-p256",
+        hashType: "sha256",
+        validityDays: 3650,
+        isCa: true,
+        pathLenConstraint: 0,
+      });
+      const tool = await loadTool("cert-creator");
+      const spec = tool.createSpec();
+      spec.options = {
+        ...spec.options,
+        creatorMode: "single-cert",
+        singleCertificateMode: "existing-ca",
+        pkiHierarchy: "2-tier",
+        commonName: "direct.internal",
+        caCert: ca.certPem,
+        caPrivateKey: ca.privateKeyPem,
+      };
+
+      const result = await tool.compute(spec, new Uint8Array(0));
+      expect(result.error).toBeUndefined();
+      const fileMap = new Map((result.files ?? []).map((file) => [file.name, file.content]));
+      const server = parseX509Certificate(
+        new TextEncoder().encode(fileMap.get("server.crt") as string),
+      );
+      expect(server.issuer.commonName).toBe("Existing Root CA");
+      expect(fileMap.has("intermediate.crt")).toBe(false);
+      expect(fileMap.has("server-chain.pem")).toBe(false);
+      expect(fileMap.get("commands.sh")).toContain("-out certificate.csr");
+      expect(fileMap.get("commands.sh")).toContain("-CA ca.crt");
+      expect(fileMap.get("commands.sh")).toContain("-CAkey ca.key");
+    });
+
+    it("uses explicit Intermediate and Root CA inputs to produce a complete 3-tier chain", async () => {
+      // 1. Create a Root CA
+      const root = await createCertificate({
+        commonName: "Custom Enterprise Root CA",
+        keyType: "ecdsa-p256",
+        hashType: "sha256",
+        validityDays: 3650,
+        isCa: true,
+        pathLenConstraint: 1,
+      });
+
+      // 2. Create an Intermediate CA signed by Root CA
+      const intermediate = await createCertificate({
+        commonName: "Custom Operational Subordinate CA",
+        keyType: "ecdsa-p256",
+        hashType: "sha256",
+        validityDays: 1825,
+        isCa: true,
+        pathLenConstraint: 0,
+        issuanceMode: "ca-signed",
+        caCertPem: root.certPem,
+        caPrivateKeyPem: root.privateKeyPem,
+      });
+
+      const tool = await loadTool("cert-creator");
+      const spec = tool.createSpec();
+      spec.options = {
+        ...spec.options,
+        creatorMode: "single-cert",
+        singleCertificateMode: "existing-ca",
+        pkiHierarchy: "3-tier",
+        commonName: "vault.company.lan",
+        caCert: intermediate.certPem,
+        caPrivateKey: intermediate.privateKeyPem,
+        rootCaCert: root.certPem,
+      };
+
+      const result = await tool.compute(spec, new Uint8Array(0));
+      const fileMap = new Map((result.files ?? []).map((f) => [f.name, f.content]));
+
+      expect(fileMap.has("server.crt")).toBe(true);
+      expect(fileMap.has("private.key")).toBe(true);
+      expect(fileMap.has("chain.pem")).toBe(true);
+      expect(fileMap.has("server-chain.pem")).toBe(true);
+      expect(fileMap.get("commands.sh")).toContain("-out certificate.csr");
+      expect(fileMap.get("commands.sh")).toContain("-CA intermediate.crt");
+      expect(fileMap.get("commands.sh")).toContain("-CAkey intermediate.key");
+
+      const chainContent = fileMap.get("chain.pem") as string;
+      // Chain must contain 3 certificate PEM blocks
+      const certCount = (chainContent.match(/-----BEGIN CERTIFICATE-----/g) || []).length;
+      expect(certCount).toBe(3);
+
+      // Verify leaf is signed by intermediate
+      const leafParsed = parseX509Certificate(
+        new TextEncoder().encode(fileMap.get("server.crt") as string),
+      );
+      expect(leafParsed.issuer.commonName).toBe("Custom Operational Subordinate CA");
+
+      // Verify visual hierarchy in working
+      expect(result.working).toContain("Visual Trust Hierarchy");
+      expect(result.working).toContain("Custom Enterprise Root CA");
+      expect(result.working).toContain("Custom Operational Subordinate CA");
+      expect(result.working).toContain("vault.company.lan");
     });
   });
 });

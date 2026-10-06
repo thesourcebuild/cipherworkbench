@@ -26,11 +26,11 @@ switch ($Action) {
     }
     "verify" {
         Write-Host "=== Verifying Certificate with OpenSSL ===" -ForegroundColor Cyan
-        & openssl x509 -in ".\certificate.crt" -text -noout
+        & openssl x509 -in ".\server.crt" -text -noout
     }
     "info" {
         Write-Host "=== Inspecting Certificate Subject & SANs ===" -ForegroundColor Cyan
-        & openssl x509 -in ".\certificate.crt" -noout -subject -issuer -dates -ext subjectAltName,basicConstraints,keyUsage
+        & openssl x509 -in ".\server.crt" -noout -subject -issuer -dates -ext subjectAltName,basicConstraints,keyUsage
     }
     "key" {
         Write-Host "=== Validating Private Key Parameters ===" -ForegroundColor Cyan
@@ -51,8 +51,8 @@ switch ($Action) {
     "trust" {
         Write-Host "=== Importing Certificate to Windows 'Trusted People' Store ===" -ForegroundColor Cyan
         Write-Host "Note: Leaf certificates (CA:FALSE) must be imported into TrustedPeople, not Root." -ForegroundColor Yellow
-        Import-Certificate -FilePath ".\certificate.crt" -CertStoreLocation Cert:\CurrentUser\TrustedPeople
-        Write-Host "[SUCCESS] Imported certificate.crt to Cert:\CurrentUser\TrustedPeople!" -ForegroundColor Green
+        Import-Certificate -FilePath ".\server.crt" -CertStoreLocation Cert:\CurrentUser\TrustedPeople
+        Write-Host "[SUCCESS] Imported server.crt to Cert:\CurrentUser\TrustedPeople!" -ForegroundColor Green
     }
     "help" {
         Write-Host "Usage: .\commands.ps1 [run | verify | info | key | server | client | trust]"

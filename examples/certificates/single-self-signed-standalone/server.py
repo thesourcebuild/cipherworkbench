@@ -6,7 +6,7 @@ import argparse
 
 PORT = 8443
 DIR = os.path.dirname(os.path.abspath(__file__))
-CERT_FILE = os.path.join(DIR, "certificate.crt")
+CERT_FILE = os.path.join(DIR, "server.crt")
 KEY_FILE = os.path.join(DIR, "private.key")
 
 class HelloHandler(http.server.SimpleHTTPRequestHandler):

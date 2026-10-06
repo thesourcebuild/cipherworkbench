@@ -235,7 +235,7 @@ describe("GnuTLS Tooling Integration", () => {
       expect(gnutls).toBeDefined();
       expect(gnutls!.label).toBe("GnuTLS (certtool)");
       const bash = formatShellCommands(gnutls!.commands, "bash", "single-line");
-      expect(bash).toContain("certtool --certificate-info --infile certificate.crt");
+      expect(bash).toContain("certtool --certificate-info --infile server.crt");
       expect(bash).toContain("certtool --key-info --infile private.key");
     });
 

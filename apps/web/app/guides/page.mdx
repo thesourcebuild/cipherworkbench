@@ -35,7 +35,7 @@ In Windows CMD, single quotes `'` are passed literally to OpenSSL, causing exten
 
 | Architecture | Chain Length | Trust Model | Client Auth (mTLS) | Root Key Exposure | Browser Status | Python Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1. Single (Self-Signed)** | 1 (Self-Issued) | Direct Cert Pinning | No (Server only) | N/A (No Root) | Warning unless bypassed | `verify="cert.crt"` |
+| **1. Single (Self-Signed)** | 1 (Self-Issued) | Direct Cert Pinning | No (Server only) | N/A (No Root) | Warning unless bypassed | `verify="server.crt"` |
 | **2. Single (CA-Signed)** | 2 (Leaf -> CA) | Trust via existing CA | Optional | Depends on external CA | **Trusted** if CA in store | `verify="ca.crt"` |
 | **3. mTLS (2-Tier Suite)** | 2 (Leaf -> Root CA) | Trust via local Root CA | **Yes** (Bundled `.p12` + CRL) | Root CA signs leaf directly | **Trusted** with Root in store | `verify="ca.crt"`, `cert=(cli, key)` |
 | **4. mTLS Enterprise (3-Tier)** | 3 (Leaf -> Interm -> Root) | Trust via Root CA | **Yes** (Enterprise `.p12` + CRL) | **Air-gapped** (Root only signs Interm) | **Trusted** with Root in store | `verify="ca.crt"`, `cert=(cli, key)` |
@@ -53,11 +53,11 @@ A single private key generates a public key and signs its own certificate (`Subj
 #### Generate Certificate (PowerShell):
 ```powershell
 openssl req -x509 -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
-  -keyout private.key -out certificate.crt -days 365 -sha256 `
+  -keyout private.key -out server.crt -days 365 -sha256 `
   -subj "/C=US/ST=California/L=San Francisco/O=Cipher Workbench/OU=Security/CN=localhost" `
   -addext "basicConstraints=CA:FALSE" `
   -addext "keyUsage=critical,digitalSignature" `
-  -addext "extendedKeyUsage=serverAuth,clientAuth" `
+  -addext "extendedKeyUsage=serverAuth" `
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1" `
   -addext "subjectKeyIdentifier=hash"
 ```
@@ -66,12 +66,12 @@ openssl req -x509 -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
 - **Python:**
   ```python
   import requests
-  res = requests.get("https://localhost:8443", verify="certificate.crt")
+  res = requests.get("https://localhost:8443", verify="server.crt")
   ```
 - **Windows / Chrome / Edge:**
   Because `CA:FALSE` cannot be imported into Root CAs, import it into the Windows **"Trusted People"** store:
   ```powershell
-  Import-Certificate -FilePath .\certificate.crt -CertStoreLocation Cert:\CurrentUser\TrustedPeople
+  Import-Certificate -FilePath .\server.crt -CertStoreLocation Cert:\CurrentUser\TrustedPeople
   ```
   *(Note: Chrome 119+ removed `#allow-insecure-localhost`; to test without certificate warnings, install the cert into the store above or use `chrome://flags/#unsafely-treat-insecure-origin-as-secure` with `https://localhost:8443`).*
 
@@ -79,11 +79,12 @@ openssl req -x509 -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
 
 ### Mode 2: Single (CA-Signed)
 
-> **"Use an existing Authority to stamp a new Server or Client identity."**
+> **"Use an existing Authority to issue a new Server identity."**
 
-You already have an authority (`ca.crt` and `ca.key` from an internal corporate CA or a shared team authority). You supply the CA credentials and issue an individual leaf certificate.
+You already have an authority (`ca.crt` and `ca.key` from an internal corporate CA or a shared team authority). You supply the CA credentials and issue an individual server certificate.
 
-#### Step 2a: Generate Private Key & CSR
+#### Step 2a: Generate Server Key and CSR
+
 ```powershell
 openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes `
   -keyout server.key -out server.csr `
@@ -95,7 +96,7 @@ Create a temporary extension file `server_ext.cnf`:
 ```ini
 basicConstraints = CA:FALSE
 keyUsage = critical, digitalSignature
-extendedKeyUsage = serverAuth, clientAuth
+extendedKeyUsage = serverAuth
 subjectAltName = DNS:localhost, IP:127.0.0.1, IP:::1
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid, issuer
@@ -256,7 +257,7 @@ httpd.serve_forever()
 import requests
 import httpx
 
-CA_BUNDLE = "ca.crt" # or "certificate.crt"
+CA_BUNDLE = "ca.crt" # or "server.crt"
 
 print("--- Testing with requests ---")
 res = requests.get("https://localhost:8443", verify=CA_BUNDLE)
