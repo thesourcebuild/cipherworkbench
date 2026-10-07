@@ -32,7 +32,7 @@ const content: TutorialContent = {
       title: "Step 4: CBC Mode — Chaining Solves Repetition",
       speaker: "Alice",
       content:
-        "**CBC (Cipher Block Chaining)** XORs each plaintext block with the previous ciphertext block before encrypting:\n\n`Cipher Block N = Encrypt(Key, Plaintext Block N ⊕ Cipher Block N-1)`\n\nIdentical plaintext blocks now produce **different ciphertext** because each block depends on all blocks before it. The structure is hidden.\n\n**But:** CBC is sequential (slow to parallelise), requires padding (vulnerable to padding oracle attacks — Tutorial 6.3), and still has no authentication.",
+        "**CBC (Cipher Block Chaining)** XORs each plaintext block with the previous ciphertext block before encrypting:\n\n`Cipher Block N = Encrypt(Key, Plaintext Block N ⊕ Cipher Block N-1)`\n\nIdentical plaintext blocks now produce **different ciphertext** because each block depends on all blocks before it. The structure is hidden.\n\n**But:** CBC is sequential (slow to parallelise), requires padding (vulnerable to padding oracle attacks — Tutorial 7.3), and still has no authentication.",
     },
     {
       title: "Step 5: CTR Mode — The Stream Cipher Approach",
@@ -44,7 +44,7 @@ const content: TutorialContent = {
       title: "Step 6: GCM Mode — The Modern Answer",
       speaker: "Bob",
       content:
-        "**GCM (Galois/Counter Mode)** = CTR encryption + GHASH polynomial authentication in one pass. It provides **Confidentiality + Integrity + Authenticity** simultaneously. This is AEAD — covered in Tutorial 3.3.\n\nThe right choice in 2025:\n- **Symmetric encryption:** AES-256-GCM or ChaCha20-Poly1305\n- **Never use:** ECB (ever), raw CBC without HMAC, or CTR without authentication",
+        "**GCM (Galois/Counter Mode)** = CTR encryption + GHASH polynomial authentication in one pass. It provides **Confidentiality + Integrity + Authenticity** simultaneously. This is AEAD — covered in Tutorial 3.3.\n\nThe modern standard:\n- **Symmetric encryption:** AES-256-GCM or ChaCha20-Poly1305\n- **Never use:** ECB (ever), raw CBC without HMAC, or CTR without authentication",
       callout: {
         type: "security",
         text: "Mode of operation is not a detail — it is the entire security model. AES-ECB with a 256-bit key is weaker than AES-GCM with a 128-bit key for any real-world message.",

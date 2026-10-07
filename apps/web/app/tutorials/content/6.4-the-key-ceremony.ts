@@ -19,14 +19,14 @@ const content: TutorialContent = {
         "A **Hardware Security Module (HSM)** is a tamper-resistant physical device designed to generate, store, and use cryptographic keys — but never export them in plaintext.\n\n- If Mallory drills into the HSM, it destroys the key.\n- If she applies a voltage surge, it destroys the key.\n- If she attempts too many wrong PINs, it destroys the key.\n- The key can be used (to sign) but never read, copied, or extracted.\n\nRoot CA keys are generated inside an HSM and never leave it — ever.",
       callout: {
         type: "security",
-        text: "FIPS 140-2 Level 3 (physical tamper-resistance) or Level 4 (environmental tamper-resistance) HSMs are required for Root CA operations by the CA/Browser Forum Baseline Requirements.",
+        text: "FIPS 140-2 or FIPS 140-3 Level 3 (physical tamper-resistance) or Level 4 (environmental tamper-resistance) HSMs are required for Root CA operations by the CA/Browser Forum Baseline Requirements.",
       },
     },
     {
       title: "Step 3: The Ceremony — Zero Single Points of Failure",
       speaker: "Trent",
       content:
-        "A Root CA key generation ceremony is a formal, audited, multi-person ritual:\n\n1. **Air-gapped room** — no network connections, no phones, Faraday cage against RF exfiltration.\n2. **Video recording** — a notary and multiple independent auditors film every action.\n3. **M-of-N activation cards** — the HSM's master activation is split using Shamir's Secret Sharing (Tutorial 5.4) across N smart cards held by N different trusted individuals in different countries. M cards are required to activate the HSM. No single person can activate it.\n4. **Script-driven** — every command is pre-written, reviewed, and read aloud before execution. No improvisation.\n5. **Signed transcript** — the ceremony produces a signed, timestamped audit log that is publicly published.",
+        "A Root CA key generation ceremony is a formal, audited, multi-person ritual:\n\n1. **Air-gapped room** — no network connections, no phones, Faraday cage against RF exfiltration.\n2. **Video recording** — a notary and multiple independent auditors film every action.\n3. **M-of-N activation cards** — the HSM's master activation is split using Shamir's Secret Sharing (Tutorial 6.5) across N smart cards held by N different trusted individuals in different countries. M cards are required to activate the HSM. No single person can activate it.\n4. **Script-driven** — every command is pre-written, reviewed, and read aloud before execution. No improvisation.\n5. **Signed transcript** — the ceremony produces a signed, timestamped audit log that is publicly published.",
     },
     {
       title: "Step 4: Certificate Transparency — Public Accountability",

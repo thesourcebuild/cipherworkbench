@@ -31,7 +31,7 @@ const content: TutorialContent = {
     {
       "title": "Step 5: The Critical Catches — No Secrecy & Key Distribution",
       "speaker": "Eve",
-      "content": "1. **Zero Confidentiality:** Alice's signed message is public. Eve reads every single word! Digital signatures verify *who wrote the text*, not *hide the text*.\n2. **The Public Key Trust Problem:** Bob verified using 'Alice's Public Key'. But how does Bob know that public key truly belongs to Alice? If Mallory had uploaded her own key labeled 'Alice', Bob would have been deceived!\nTo solve this, we need **Trent & Certificate Authorities (Tutorial 5.2)**.",
+      "content": "1. **Zero Confidentiality:** Alice's signed message is public. Eve reads every single word! Digital signatures verify *who wrote the text*, not *hide the text*.\n2. **The Public Key Trust Problem:** Bob verified using 'Alice's Public Key'. But how does Bob know that public key truly belongs to Alice? If Mallory had uploaded her own key labeled 'Alice', Bob would have been deceived!\nTo solve this, we need **Trent & Certificate Authorities (Section 5: Certificates & PKI)**.",
       "callout": {
         "type": "warning",
         "text": "A signature is only as trustworthy as your certainty of who owns the public key. This is why web browsers use Certificate Authorities (X.509 PKI)."
@@ -42,7 +42,7 @@ const content: TutorialContent = {
     "Digital signatures provide both Authenticity (who sent it) and Integrity (it wasn't modified).",
     "You sign with your Private Key; anyone in the world verifies with your Public Key.",
     "Signatures do NOT conceal data: the message remains completely unencrypted and readable.",
-    "Verifying a signature requires trustworthy public key distribution, solved by X.509 PKI (Stage 5)."
+    "Verifying a signature requires trustworthy public key distribution, solved by X.509 PKI (Section 5)."
   ],
   "seed": {
     "toolId": "ed25519",

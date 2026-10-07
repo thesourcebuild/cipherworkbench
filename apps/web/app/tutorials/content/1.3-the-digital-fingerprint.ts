@@ -34,7 +34,7 @@ const content: TutorialContent = {
   afterTimeline: {
     title: "After the Timeline: What if the hash travels with the message?",
     content:
-      "This scenario depends on Bob learning Alice's expected fingerprint through an independent, trusted channel such as Alice's authenticated official site. If Alice instead sends the file and its hash together over the same insecure channel, Mallory can replace both. That leads directly to the Tampered Hash Trap in Stage 2.",
+      "This scenario depends on Bob learning Alice's expected fingerprint through an independent, trusted channel such as Alice's authenticated official site. If Alice instead sends the file and its hash together over the same insecure channel, Mallory can replace both. That leads directly to the Tampered Hash Trap in Section 2 (Authenticity).",
     callout: {
       type: "warning",
       text: "A standalone hash does not prove who supplied it. If Mallory controls both the message and reference digest, Bob needs an authenticated channel, HMAC, or digital signature.",

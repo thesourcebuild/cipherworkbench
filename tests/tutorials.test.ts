@@ -324,14 +324,53 @@ describe("DTLS handshake tutorial variants", () => {
   });
 });
 
-describe("section 5 tutorial sequence", () => {
+describe("section 5 (certificates) tutorial sequence", () => {
+  const certTutorials = ALL_TUTORIALS_META.filter(
+    (tutorial) => tutorial.conceptId === "certificates",
+  );
+
+  it("covers identity, trust chains, CSRs, revocation, ACME, and key ceremonies", () => {
+    expect(certTutorials.map((tutorial) => tutorial.id)).toEqual([
+      "5.2-the-imposter-in-the-middle",
+      "5.2-the-chain-of-trust",
+      "5.3-asking-for-permission-csr",
+      "5.4-when-trust-breaks-revocation",
+      "5.5-automated-trust-acme",
+      "6.4-the-key-ceremony",
+    ]);
+    expect(certTutorials.map((tutorial) => tutorial.number)).toEqual([
+      "5.1",
+      "5.2",
+      "5.3",
+      "5.4",
+      "5.5",
+      "5.6",
+    ]);
+  });
+
+  it.each([
+    "5.2-the-chain-of-trust",
+    "5.3-asking-for-permission-csr",
+    "5.4-when-trust-breaks-revocation",
+    "5.5-automated-trust-acme",
+  ])("loads %s with valid tutorial content", async (id) => {
+    const content = await loadTutorialContent(id);
+    expect(content).toBeDefined();
+    expect(content?.steps.length).toBeGreaterThan(0);
+    expect(content?.takeaways.length).toBeGreaterThan(0);
+    expect(content?.analogy).toBeDefined();
+    expect(content?.problem).toBeDefined();
+    expect(content?.seed.toolId).toBeDefined();
+  });
+});
+
+describe("section 6 (transport protocols) tutorial sequence", () => {
   const sectionTutorials = ALL_TUTORIALS_META.filter(
     (tutorial) => tutorial.conceptId === "putting-it-together",
   );
 
-  it("starts with certificate trust, SSL 3.0, TLS, and DTLS", () => {
+  it("starts with SSL 3.0, TLS, and DTLS", () => {
     expect(sectionTutorials.map((tutorial) => tutorial.id)).toEqual([
-      "5.2-the-imposter-in-the-middle",
       SSL_TUTORIAL_ID,
       TLS_TUTORIAL_ID,
       DTLS_TUTORIAL_ID,
@@ -340,34 +379,29 @@ describe("section 5 tutorial sequence", () => {
       "5.5-the-quantum-spy",
     ]);
     expect(sectionTutorials.map((tutorial) => tutorial.number)).toEqual([
-      "5.1",
-      "5.2",
-      "5.3",
-      "5.4",
-      "5.5",
-      "5.6",
-      "5.7",
+      "6.1",
+      "6.2",
+      "6.3",
+      "6.4",
+      "6.5",
+      "6.6",
     ]);
     expect(sectionTutorials[0]).toMatchObject({
-      id: "5.2-the-imposter-in-the-middle",
-      title: "The Imposter in the Middle: Digital Certificates",
-    });
-    expect(sectionTutorials[1]).toMatchObject({
       id: SSL_TUTORIAL_ID,
       title: "SSL 3.0: The Handshake Before TLS",
     });
-    expect(sectionTutorials[2]).toMatchObject({
+    expect(sectionTutorials[1]).toMatchObject({
       id: TLS_TUTORIAL_ID,
       title: "The TLS Handshake: The Full Symphony",
     });
-    expect(sectionTutorials[2]?.variants?.[0]?.title).toBe(
+    expect(sectionTutorials[1]?.variants?.[0]?.title).toBe(
       "The TLS Handshake: The Full Symphony",
     );
-    expect(sectionTutorials[3]).toMatchObject({
+    expect(sectionTutorials[2]).toMatchObject({
       id: DTLS_TUTORIAL_ID,
       title: "The DTLS Handshake: The Datagram Symphony",
     });
-    expect(sectionTutorials[3]?.variants?.[0]?.title).toBe(
+    expect(sectionTutorials[2]?.variants?.[0]?.title).toBe(
       "The DTLS Handshake: The Datagram Symphony",
     );
   });

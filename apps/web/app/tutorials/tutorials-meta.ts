@@ -291,11 +291,11 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
     ],
   },
   {
-    id: "putting-it-together",
-    title: "5. Putting It All Together: The Real-World Symphony",
+    id: "certificates",
+    title: "5. Certificates & Public Key Infrastructure (PKI)",
     description:
-      "Certificate Authorities, SSL 3.0, TLS, DTLS, password vaults, threshold cryptography, and Post-Quantum.",
-    badge: "Systems",
+      "Binding identity to public keys: X.509 certificates, trust chains, CSRs, revocation, and automated issuance.",
+    badge: "Certificates",
     tutorials: [
       // Existing IDs remain stable because tutorial completion is persisted by ID.
       {
@@ -304,7 +304,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
         title: "The Imposter in the Middle: Digital Certificates",
         subtitle:
           "How X.509 certificate chains bind public keys to identities and stop key-substitution attacks",
-        conceptId: "putting-it-together",
+        conceptId: "certificates",
         family: "certificates",
         toolId: "cert-creator",
         difficulty: "Intermediate",
@@ -314,8 +314,92 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
           "Mallory can replace an unauthenticated public key with her own and silently relay traffic. Follow Bob's key from a certificate signing request through CA issuance, chain validation, hostname checks, and TLS proof of private-key possession.",
       },
       {
-        id: "5.1-ssl-3.0-handshake",
+        id: "5.2-the-chain-of-trust",
         number: "5.2",
+        title: "The Chain of Trust: Roots, Intermediates, and Trust Stores",
+        subtitle:
+          "Why root CAs sleep in vaults, how intermediate CAs issue leaf certificates, and how clients verify trust paths",
+        conceptId: "certificates",
+        family: "certificates",
+        toolId: "cert-verifier",
+        difficulty: "Intermediate",
+        readTime: "6 min",
+        characters: ["Alice", "Bob", "Trent"],
+        summary:
+          "Why don't Root CAs directly sign website certificates? Alice discovers how a hierarchical PKI isolates risk: an offline Root CA delegates day-to-day issuance to Intermediate CAs. Bob traces how his browser uses Authority Key Identifiers (AKI), Subject Key Identifiers (SKI), and local root stores to build and verify a trusted cryptographic path.",
+      },
+      {
+        id: "5.3-asking-for-permission-csr",
+        number: "5.3",
+        title: "Asking for Permission: Certificate Signing Requests (CSR)",
+        subtitle:
+          "How PKCS#10 requests prove key ownership and bind domain identities without leaking private keys",
+        conceptId: "certificates",
+        family: "certificates",
+        toolId: "csr-creator",
+        difficulty: "Intermediate",
+        readTime: "5 min",
+        characters: ["Bob", "Trent", "Mallory"],
+        summary:
+          "Bob needs a certificate from CA Trent. Does Bob send his private key? Never! Bob creates a PKCS#10 Certificate Signing Request (CSR) containing only his public key, Subject DN, and requested SANs (Subject Alternative Names), signed with his private key as Proof-of-Possession (PoP). Mallory tries to request a cert for Bob's domain, but fails Trent's domain challenge.",
+      },
+      {
+        id: "5.4-when-trust-breaks-revocation",
+        number: "5.4",
+        title: "When Trust Breaks: Revocation (CRLs vs OCSP & Stapling)",
+        subtitle:
+          "What happens when a private key leaks before expiration, why CRLs failed, and how OCSP Stapling preserves privacy",
+        conceptId: "certificates",
+        family: "certificates",
+        toolId: "crl",
+        difficulty: "Intermediate",
+        readTime: "6 min",
+        characters: ["Alice", "Bob", "Eve", "Trent"],
+        summary:
+          "A server hard drive is stolen! Bob's certificate doesn't expire for 9 months, but its private key is compromised. Alice learns why certificates cannot be 'deleted', how Certificate Revocation Lists (CRLs) grew too large and slow, why real-time OCSP queries leaked browsing history to CAs, and how modern TLS solves both with OCSP Stapling.",
+      },
+      {
+        id: "5.5-automated-trust-acme",
+        number: "5.5",
+        title: "Automating the Web: ACME & Certificate Transparency",
+        subtitle:
+          "How Let's Encrypt automated HTTPS via HTTP-01/DNS-01 challenges and how CT logs expose rogue CAs",
+        conceptId: "certificates",
+        family: "certificates",
+        toolId: "acme",
+        difficulty: "Intermediate",
+        readTime: "6 min",
+        characters: ["Alice", "Bob", "Trent"],
+        summary:
+          "Web certificates used to cost hundreds of dollars and require manual paperwork every year. RFC 8555 (ACME) transformed the web by automating domain validation through HTTP-01 and DNS-01 challenges. Meanwhile, Certificate Transparency (CT) append-only Merkle tree logs ensure that no CA on Earth can issue a secret cert behind a domain owner's back.",
+      },
+      {
+        id: "6.4-the-key-ceremony",
+        number: "5.6",
+        title: "The Key Ceremony: HSMs & Root of Trust",
+        subtitle:
+          "Air-gapped rooms, Shamir activation, and Certificate Transparency — protecting the keys that secure the internet",
+        conceptId: "certificates",
+        family: "certificates",
+        toolId: "cert-creator",
+        difficulty: "Advanced",
+        readTime: "7 min",
+        characters: ["Alice", "Bob", "Mallory", "Trent"],
+        summary:
+          "Root CA private keys secure every HTTPS connection on earth. If Mallory steals one, she can forge certificates for any website. This is how the internet protects them: Hardware Security Modules, air-gapped ceremonies, M-of-N Shamir activation, and Certificate Transparency logs.",
+      },
+    ],
+  },
+  {
+    id: "putting-it-together",
+    title: "6. Secure Transport & Protocols: The Real-World Symphony",
+    description:
+      "SSL 3.0, TLS, DTLS, password vaults, threshold cryptography, and Post-Quantum.",
+    badge: "Protocols",
+    tutorials: [
+      {
+        id: "5.1-ssl-3.0-handshake",
+        number: "6.1",
         title: "SSL 3.0: The Handshake Before TLS",
         subtitle:
           "How the 1996 protocol negotiated RSA, RC4 or CBC, MACs, and resumable sessions",
@@ -330,7 +414,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         id: "5.1-the-complete-tls-handshake",
-        number: "5.3",
+        number: "6.2",
         title: "The TLS Handshake: The Full Symphony",
         subtitle: "Compare the same HTTPS handshake across three protocol generations",
         conceptId: "putting-it-together",
@@ -372,7 +456,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         id: "5.3-the-dtls-handshake",
-        number: "5.4",
+        number: "6.3",
         title: "The DTLS Handshake: The Datagram Symphony",
         subtitle:
           "How TLS-style security survives UDP loss, reordering, duplication, and fragmentation",
@@ -416,7 +500,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         id: "5.3-the-password-vault",
-        number: "5.5",
+        number: "6.4",
         title: "The Password Vault: Memory-Hard Argon2id",
         subtitle:
           "Why Bob never stores plain passwords, and how salts and memory-hardness defeat GPU farms",
@@ -431,7 +515,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         id: "5.4-the-pirate-treasure-chest",
-        number: "5.6",
+        number: "6.5",
         title: "The Pirate Treasure Chest: Shamir's Secret Sharing",
         subtitle: "Splitting a master key so any 3 of 5 lieutenants can unlock the vault",
         conceptId: "putting-it-together",
@@ -445,7 +529,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         id: "5.5-the-quantum-spy",
-        number: "5.7",
+        number: "6.6",
         title: "The Quantum Spy: Post-Quantum ML-KEM",
         subtitle:
           "Defeating Shor's algorithm and 'Store Now, Decrypt Later' attacks with lattice crystals",
@@ -462,14 +546,14 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
   },
   {
     id: "attacks-defenses",
-    title: "6. Attacks & Defences: How Cryptography Breaks in the Real World",
+    title: "7. Attacks & Defences: How Cryptography Breaks in the Real World",
     description:
-      "Birthday collisions, side-channel attacks, padding oracles, and protecting root CA keys.",
+      "Birthday collisions, side-channel attacks, and padding oracles.",
     badge: "Attacks",
     tutorials: [
       {
         id: "6.1-the-birthday-collision",
-        number: "6.1",
+        number: "7.1",
         title: "The Birthday Problem: Hash Collision Attacks",
         subtitle:
           "Why MD5 and SHA-1 are broken, and how the birthday paradox explains collision resistance",
@@ -484,7 +568,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         id: "6.2-the-rubber-hose",
-        number: "6.2",
+        number: "7.2",
         title: "The Rubber Hose: Side-Channel & Timing Attacks",
         subtitle:
           "How Mallory breaks crypto by measuring time, power, and cache — without touching the math",
@@ -499,7 +583,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         id: "6.3-the-padding-oracle",
-        number: "6.3",
+        number: "7.3",
         title: "The Padding Oracle: How One Error Message Broke TLS",
         subtitle:
           "The POODLE and Lucky Thirteen attacks: decrypting AES-CBC ciphertext with padding oracle queries",
@@ -512,33 +596,18 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
         summary:
           "Bob's server returns two different error messages: 'decryption failed' vs 'invalid padding'. Mallory uses that single bit of difference as an oracle, sending 4096 crafted requests per block to decrypt Alice's session cookie without ever knowing the key. The attack behind POODLE, Lucky Thirteen, and Vaudenay's oracle.",
       },
-      {
-        id: "6.4-the-key-ceremony",
-        number: "6.4",
-        title: "The Key Ceremony: HSMs & Root of Trust",
-        subtitle:
-          "Air-gapped rooms, Shamir activation, and Certificate Transparency — protecting the keys that secure the internet",
-        conceptId: "attacks-defenses",
-        family: "certificates",
-        toolId: "cert-creator",
-        difficulty: "Advanced",
-        readTime: "7 min",
-        characters: ["Alice", "Bob", "Mallory", "Trent"],
-        summary:
-          "Root CA private keys secure every HTTPS connection on earth. If Mallory steals one, she can forge certificates for any website. This is how the internet protects them: Hardware Security Modules, air-gapped ceremonies, M-of-N Shamir activation, and Certificate Transparency logs.",
-      },
     ],
   },
   {
     id: "encoding-advanced",
-    title: "7. Encoding & Advanced Concepts",
+    title: "8. Encoding & Advanced Concepts",
     description:
       "Encoding vs encryption, Zero-Knowledge Proofs, and the future of privacy-preserving cryptography.",
     badge: "Advanced",
     tutorials: [
       {
         id: "7.1-lost-in-translation",
-        number: "7.1",
+        number: "8.1",
         title: "Lost in Translation: Encoding vs Encryption",
         subtitle:
           "Why Base64 is not encryption, and how this mistake causes real-world breaches",
@@ -553,7 +622,7 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       },
       {
         id: "7.2-the-magic-wax",
-        number: "7.2",
+        number: "8.2",
         title: "The Magic Wax: Zero-Knowledge Proofs",
         subtitle:
           "Proving you know a secret without revealing it — zk-SNARKs, zk-STARKs, and the cave of Ali Baba",
