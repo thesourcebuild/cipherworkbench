@@ -26,7 +26,11 @@ const content: TutorialContent = {
       title: "Step 3: The Ceremony — Zero Single Points of Failure",
       speaker: "Trent",
       content:
-        "A Root CA key generation ceremony is a formal, audited, multi-person ritual:\n\n1. **Air-gapped room** — no network connections, no phones, Faraday cage against RF exfiltration.\n2. **Video recording** — a notary and multiple independent auditors film every action.\n3. **M-of-N activation cards** — the HSM's master activation is split using Shamir's Secret Sharing (Tutorial 6.5) across N smart cards held by N different trusted individuals in different countries. M cards are required to activate the HSM. No single person can activate it.\n4. **Script-driven** — every command is pre-written, reviewed, and read aloud before execution. No improvisation.\n5. **Signed transcript** — the ceremony produces a signed, timestamped audit log that is publicly published.",
+        "A Root CA key generation ceremony is a formal, audited, multi-person ritual:\n\n1. **Air-gapped room** — no network connections, no phones, Faraday cage against RF exfiltration.\n2. **Video recording** — a notary and multiple independent auditors film every action.\n3. **M-of-N activation cards** — Shamir's Secret Sharing (Tutorial 6.5) splits the HSM's master domain key / activation secret across N smart cards held by trusted key custodians in different locations. M cards are required to activate or authorize the HSM. No single person can activate it.\n4. **Script-driven** — every command is pre-written, reviewed, and read aloud before execution. No improvisation.\n5. **Signed transcript** — the ceremony produces a signed, timestamped audit log that is publicly published.",
+      callout: {
+        type: "security",
+        text: "In practice, Shamir's Secret Sharing is used to split the HSM's master domain key / activation secret, rather than the raw RSA/ECDSA private key directly. The Root CA private key is generated purely inside the HSM's cryptographic boundary and never leaves it in plaintext under any circumstances.",
+      },
     },
     {
       title: "Step 4: Certificate Transparency — Public Accountability",
@@ -39,18 +43,22 @@ const content: TutorialContent = {
       },
     },
     {
-      title: "Step 5: Key Rotation and Revocation",
+      title: "Step 5: Key Lifecycles and Three-Tier Revocation",
       speaker: "Trent",
       content:
-        "Root CA private keys are rotated every 20–25 years. But what happens if a certificate in the chain is compromised?\n\n- **Intermediate & Leaf Revocation (CRL & OCSP):** CAs publish Certificate Revocation Lists (CRLs) or provide OCSP responders (and OCSP Stapling in TLS) to revoke subordinate certificates without changing root trust.\n- **Root CA Compromise (Root Store Updates):** Because a Root CA is a self-signed trust anchor, it cannot be revoked via its own CRL or OCSP! If a Root CA key is compromised, it must be untrusted globally via emergency OS and browser root-store updates (such as Chrome's CRLSet, Firefox's OneCRL, and Apple/Microsoft trust store patches).",
+        "Root CA certificates are issued with long lifespans (typically **20–25 years**, such as Let's Encrypt's `ISRG Root X1` or `DigiCert Global Root CA`). This extended period is necessary because achieving universal trust across billions of devices—smartphones, laptops, smart TVs, and embedded IoT—requires a 5–10 year 'root proliferation' phase.\n\nRoot keys are **not rotated in-place**: you cannot simply replace the private key of an existing trust anchor without breaking every client certificate. Instead, CAs generate a brand new Root CA in a ceremony, cross-sign it with the existing root for backwards compatibility, and operate both in parallel over a decade-long transition.\n\n**What happens if a certificate in the chain is compromised?**\n\n1. **Leaf (Website) Certificate:** The issuing Intermediate CA revokes the certificate via **CRL** or **OCSP / OCSP Stapling** (RFC 6066). Modern short certificate lifespans (90 days) ensure exposure is strictly limited even if revocation fails.\n2. **Intermediate CA (Sub-CA):** The Root CA publishes a CRL revoking the subordinate CA, and browser vendors immediately push out-of-band blocks directly to users via **Chrome CRLSets** and **Firefox OneCRL** within hours.\n3. **Root CA Compromise:** Because a Root CA is a self-signed **trust anchor**, it cannot be revoked via its own CRL or OCSP (an attacker holding the key could forge valid status responses). It must be untrusted globally via **emergency OS and browser root-store updates** (e.g., Windows Update, Apple Software Update, Chrome Root Store), as occurred during the catastrophic DigiNotar breach in 2011.",
+      callout: {
+        type: "security",
+        text: "Self-signed trust anchors cannot revoke themselves: if a Root CA key is compromised, CRL and OCSP are useless because the attacker can forge signed 'Good' responses. Only out-of-band root store updates from OS and browser vendors can strip trust from a compromised Root CA.",
+      },
     },
   ],
   takeaways: [
     "Root CA private keys are the most critical secrets in the internet's trust infrastructure — compromise means global forgery.",
-    "Hardware Security Modules (HSMs) generate and use keys without ever exporting them in plaintext.",
-    "Key ceremonies use air-gapped rooms, video auditors, and M-of-N Shamir activation to eliminate single points of failure.",
+    "Hardware Security Modules (HSMs) generate and protect keys within a physical tamper-resistant cryptographic boundary.",
+    "Key ceremonies use air-gapped rooms, video auditors, and M-of-N Shamir activation cards to eliminate single points of failure.",
     "Certificate Transparency logs make every issued certificate publicly auditable — rogue certificates are detectable in minutes.",
-    "OCSP Stapling is the modern revocation mechanism — eliminates third-party queries while keeping revocation real-time.",
+    "Leaf certs revoke via OCSP Stapling and CRLs, but a compromised Root CA requires emergency OS and browser root store updates.",
   ],
   seed: {
     toolId: "cert-creator",
