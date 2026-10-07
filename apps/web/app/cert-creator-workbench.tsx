@@ -8,7 +8,6 @@ import {
   CopyIconButton,
   SecretField,
   ShellCommandBlock,
-  cn,
   type CommandShell,
   type ShellCommand,
   type ShellCommandVariants,
@@ -69,35 +68,54 @@ export interface CertCreatorWorkbenchProps {
   acceptedByteLengths?: (optionId: string) => readonly number[] | undefined;
 }
 
-const SINGLE_CERTIFICATE_FLOW_PRESETS = [
+const CERTIFICATE_WORKFLOW_PRESETS = [
   {
     id: "single-self-standalone",
     label: "Single (Self-Signed | Standalone)",
+    creatorMode: "single-cert",
     singleMode: "standalone",
     hierarchy: "2-tier",
   },
   {
     id: "single-self-2-tier",
     label: "Single (Self-Signed | 2-Tier)",
+    creatorMode: "single-cert",
     singleMode: "generated-ca",
     hierarchy: "2-tier",
   },
   {
     id: "single-self-3-tier",
     label: "Single (Self-Signed | 3-Tier)",
+    creatorMode: "single-cert",
     singleMode: "generated-ca",
     hierarchy: "3-tier",
   },
   {
     id: "single-ca-2-tier",
     label: "Single (CA-Signed | 2-Tier)",
+    creatorMode: "single-cert",
     singleMode: "existing-ca",
     hierarchy: "2-tier",
   },
   {
     id: "single-ca-3-tier",
     label: "Single (CA-Signed | 3-Tier)",
+    creatorMode: "single-cert",
     singleMode: "existing-ca",
+    hierarchy: "3-tier",
+  },
+  {
+    id: "mtls-2-tier",
+    label: "mTLS (2-Tier)",
+    creatorMode: "mtls-suite",
+    singleMode: "generated-ca",
+    hierarchy: "2-tier",
+  },
+  {
+    id: "mtls-enterprise-3-tier",
+    label: "mTLS Enterprise (3-Tier)",
+    creatorMode: "mtls-suite",
+    singleMode: "generated-ca",
     hierarchy: "3-tier",
   },
 ] as const;
@@ -407,23 +425,33 @@ export function CertCreatorWorkbench({
     singleCertificateMode === "existing-ca" &&
     !caCredentialsReady;
 
-  const selectSingleCertificateFlow = (
-    preset: (typeof SINGLE_CERTIFICATE_FLOW_PRESETS)[number],
-  ) => {
-    setOptionValue(OPTION_CREATOR_MODE, "single-cert");
-    setOptionValue(OPTION_PKI_HIERARCHY, preset.hierarchy);
-    setOptionValue(OPTION_SINGLE_CERT_MODE, preset.singleMode);
-    setOptionValue(OPTION_CLIENT_AUTH, false);
-  };
+  const activeWorkflowPresetId = useMemo(() => {
+    if (creatorMode === "mtls-suite") {
+      return pkiHierarchy === "3-tier" ? "mtls-enterprise-3-tier" : "mtls-2-tier";
+    }
+    if (singleCertificateMode === "standalone") {
+      return "single-self-standalone";
+    }
+    if (singleCertificateMode === "generated-ca") {
+      return pkiHierarchy === "3-tier" ? "single-self-3-tier" : "single-self-2-tier";
+    }
+    if (singleCertificateMode === "existing-ca") {
+      return pkiHierarchy === "3-tier" ? "single-ca-3-tier" : "single-ca-2-tier";
+    }
+    return "single-self-standalone";
+  }, [creatorMode, pkiHierarchy, singleCertificateMode]);
 
-  const isSingleCertificateFlowActive = (
-    preset: (typeof SINGLE_CERTIFICATE_FLOW_PRESETS)[number],
-  ) => {
-    return (
-      creatorMode === "single-cert" &&
-      pkiHierarchy === preset.hierarchy &&
-      singleCertificateMode === preset.singleMode
-    );
+  const selectWorkflowPreset = (presetId: string) => {
+    const preset = CERTIFICATE_WORKFLOW_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    setOptionValue(OPTION_CREATOR_MODE, preset.creatorMode);
+    setOptionValue(OPTION_PKI_HIERARCHY, preset.hierarchy);
+    if (preset.creatorMode === "single-cert") {
+      setOptionValue(OPTION_SINGLE_CERT_MODE, preset.singleMode);
+      setOptionValue(OPTION_CLIENT_AUTH, false);
+    } else {
+      setOptionValue(OPTION_CLIENT_AUTH, true);
+    }
   };
 
   const handleClearCa = () => {
@@ -1925,60 +1953,26 @@ ssl_verify_depth        2;`}
             <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               Certificate &amp; PKI Studio
             </h2>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {SINGLE_CERTIFICATE_FLOW_PRESETS.map((preset, index) => (
-                <div key={preset.id} className="flex items-center gap-1.5">
-                  {index > 0 ? (
-                    <span className="text-slate-300 dark:text-slate-700">|</span>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => selectSingleCertificateFlow(preset)}
-                    className={cn(
-                      "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
-                      isSingleCertificateFlowActive(preset)
-                        ? "bg-indigo-100 font-semibold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300"
-                        : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
-                    )}
-                  >
+            <div className="mt-1.5 flex items-center gap-2">
+              <label
+                htmlFor="cert-workflow-preset-select"
+                className="text-[11px] font-medium text-slate-500 dark:text-slate-400"
+              >
+                Workflow:
+              </label>
+              <select
+                id="cert-workflow-preset-select"
+                aria-label="Certificate workflow preset"
+                value={activeWorkflowPresetId}
+                onChange={(e) => selectWorkflowPreset(e.target.value)}
+                className="h-7 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs font-semibold text-slate-900 shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 cursor-pointer"
+              >
+                {CERTIFICATE_WORKFLOW_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
                     {preset.label}
-                  </button>
-                </div>
-              ))}
-              <span className="text-slate-300 dark:text-slate-700">|</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setOptionValue(OPTION_CREATOR_MODE, "mtls-suite");
-                  setOptionValue(OPTION_PKI_HIERARCHY, "2-tier");
-                  setOptionValue(OPTION_CLIENT_AUTH, true);
-                }}
-                className={cn(
-                  "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
-                  creatorMode === "mtls-suite" && pkiHierarchy === "2-tier"
-                    ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 font-semibold"
-                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
-                )}
-              >
-                mTLS (2-Tier)
-              </button>
-              <span className="text-slate-300 dark:text-slate-700">|</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setOptionValue(OPTION_CREATOR_MODE, "mtls-suite");
-                  setOptionValue(OPTION_PKI_HIERARCHY, "3-tier");
-                  setOptionValue(OPTION_CLIENT_AUTH, true);
-                }}
-                className={cn(
-                  "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
-                  creatorMode === "mtls-suite" && pkiHierarchy === "3-tier"
-                    ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 font-semibold"
-                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200",
-                )}
-              >
-                mTLS Enterprise (3-Tier)
-              </button>
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
