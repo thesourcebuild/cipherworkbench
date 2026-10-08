@@ -262,7 +262,13 @@ export function OptionsForm({
               </p>
             )}
             {isOpen && (
-              <div className="flex flex-col gap-3">
+              <div
+                className={cn(
+                  group.columns === 2
+                    ? "grid grid-cols-1 md:grid-cols-2 gap-3"
+                    : "flex flex-col gap-3",
+                )}
+              >
                 {groupOptions.map((option) => (
                   /**
                    * `data-ocs-option` is a test hook, matching `data-ocs-input` and
@@ -271,7 +277,14 @@ export function OptionsForm({
                    * reach are two components deep and sometimes masked, so there is
                    * nothing stable to select on otherwise.
                    */
-                  <div key={option.id} data-ocs-option={option.id}>
+                  <div
+                    key={option.id}
+                    data-ocs-option={option.id}
+                    className={cn(
+                      "min-w-0",
+                      group.columns === 2 && option.colSpan === 2 && "col-span-1 md:col-span-2",
+                    )}
+                  >
                     <OptionControl
                       option={option}
                       value={options[option.id]}
@@ -290,6 +303,7 @@ export function OptionsForm({
                       supersededBy={redundant.get(option.id)}
                       catalogue={catalogue}
                       onChange={onChange}
+                      groupColumns={group.columns}
                     />
                   </div>
                 ))}
@@ -315,6 +329,7 @@ interface OptionControlProps {
   generateLength?: (optionId: string) => number | undefined;
   /** Threaded to `BytesControl`; see `OptionsFormProps.acceptedByteLengths`. */
   acceptedByteLengths?: (optionId: string) => readonly number[] | undefined;
+  groupColumns?: 1 | 2;
 }
 
 function OptionControl({
@@ -328,6 +343,7 @@ function OptionControl({
   onChange,
   generateLength,
   acceptedByteLengths,
+  groupColumns,
 }: OptionControlProps) {
   const supersededLabel = supersededBy ? catalogue.get(supersededBy)?.label : undefined;
 
@@ -377,7 +393,7 @@ function OptionControl({
       // to give the long text somewhere to wrap, and once the dropdown could show it again it was
       // the same words twice, one line apart.
       return (
-        <Field option={option} problem={undefined}>
+        <Field option={option} problem={undefined} inline={false}>
           <select
             value={typeof value === "string" ? value : ""}
             onChange={(event) => onChange(option.id, event.target.value || undefined)}
@@ -424,7 +440,7 @@ function OptionControl({
     case "number": {
       const numeric = typeof value === "number" ? value : "";
       return (
-        <Field option={option} problem={undefined} inline>
+        <Field option={option} problem={undefined} inline={groupColumns !== 2}>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -462,7 +478,7 @@ function OptionControl({
         );
       }
       return (
-        <Field option={option} problem={undefined} inline={true}>
+        <Field option={option} problem={undefined} inline={groupColumns !== 2}>
           <input
             type="text"
             value={typeof value === "string" ? value : ""}

@@ -422,7 +422,7 @@ export function InputPanel({
             // panel and not back in the right-hand rail. Layout is not usually worth a probe; this
             // is, because moving it back would break nothing that any other check can see.
             data-ocs-material=""
-            className="border-t border-slate-200 pt-3 dark:border-slate-800"
+            className={cn(readsInput && "border-t border-slate-200 pt-3 dark:border-slate-800")}
           >
             {material}
           </div>

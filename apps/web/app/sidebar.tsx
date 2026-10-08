@@ -25,6 +25,7 @@ const FAMILY_LABEL: Record<ToolFamily, string> = {
   classical: "Classical",
   asymmetric: "Public key",
   certificates: "Certificates",
+  openssh: "OpenSSH",
   encoding: "Encodings",
   format: "Formats",
 };
@@ -63,6 +64,8 @@ const FAMILY_STYLE: Record<ToolFamily, string> = {
     "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300",
   certificates:
     "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300",
+  openssh:
+    "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300",
   encoding:
     "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300",
   format:
@@ -121,6 +124,7 @@ const FAMILY_BADGE: Record<ToolFamily, string> = {
   classical: "classic",
   asymmetric: "key",
   certificates: "cert",
+  openssh: "ssh",
   encoding: "enc",
   format: "fmt",
 };

@@ -28,6 +28,8 @@ export interface OptionGroupMeta<TGroup extends string = string> {
    * rule would split the pair across the screen.
    */
   placement?: "input" | "panel";
+  /** Optional layout columns in options form (defaults to 1). */
+  columns?: 1 | 2;
 }
 
 /** Sort a tool's group metadata record into display order. */

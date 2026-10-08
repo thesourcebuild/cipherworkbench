@@ -226,6 +226,9 @@ importers:
       '@ocs/mac':
         specifier: workspace:*
         version: link:packages/tools/mac
+      '@ocs/openssh':
+        specifier: workspace:*
+        version: link:packages/tools/openssh
       '@ocs/parity':
         specifier: workspace:*
         version: link:packages/tools/parity
@@ -385,6 +388,9 @@ importers:
       '@ocs/mac':
         specifier: workspace:*
         version: link:../../packages/tools/mac
+      '@ocs/openssh':
+        specifier: workspace:*
+        version: link:../../packages/tools/openssh
       '@ocs/parity':
         specifier: workspace:*
         version: link:../../packages/tools/parity
@@ -526,6 +532,9 @@ importers:
       '@ocs/mac':
         specifier: workspace:*
         version: link:../tools/mac
+      '@ocs/openssh':
+        specifier: workspace:*
+        version: link:../tools/openssh
       '@ocs/parity':
         specifier: workspace:*
         version: link:../tools/parity
@@ -903,6 +912,40 @@ importers:
       '@ocs/engine':
         specifier: workspace:*
         version: link:../../cipher-engine
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@ocs/config':
+        specifier: workspace:*
+        version: link:../../config
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/tools/openssh:
+    dependencies:
+      '@noble/ciphers':
+        specifier: ^2.1.0
+        version: 2.3.0
+      '@noble/curves':
+        specifier: ^2.1.0
+        version: 2.3.0
+      '@noble/hashes':
+        specifier: ^2.2.0
+        version: 2.3.0
+      '@ocs/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@ocs/engine':
+        specifier: workspace:*
+        version: link:../../cipher-engine
+      '@scure/base':
+        specifier: ^1.2.6
+        version: 1.2.6
+      bcrypt-pbkdf:
+        specifier: ^1.0.2
+        version: 1.0.2
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -2257,6 +2300,9 @@ packages:
     resolution: {integrity: sha512-FwMjJJ7HnyZpWe+oWxegG0fezZyBZUagI5LZEoO3GCbtbKNwRfMH9Ue5d5v01PNePBy1QSfPSDTTeVL0Hb9EzA==}
     engines: {node: '>=6.0.0'}
     hasBin: true
+
+  bcrypt-pbkdf@1.0.2:
+    resolution: {integrity: sha512-qeFIXtP4MSoi6NLqO12WfqARWWuCKi2Rn/9hJLEmtB5yTNr9DqFWkJRCf2qShWzPeAMRnOgCrq0sg/KLv5ES9w==}
 
   bcryptjs@3.0.3:
     resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
@@ -4109,6 +4155,9 @@ packages:
     resolution: {integrity: sha512-/90KTW+USzvYOPmafRZHVKLBsHXQ5810Ao/HdtJYAqguIhZ+XruS6eIUjqJUDtrSxaZYynNFht68qckGKAOWTA==}
     hasBin: true
 
+  tweetnacl@0.14.5:
+    resolution: {integrity: sha512-KXXFFdAbFXY4geFIwoyNK+f5Z1b7swfXABfL7HXCmoIWMKU3dmS26672A4EeQtDzLKy7SXmfBu51JolvEKwtGA==}
+
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
@@ -5518,6 +5567,10 @@ snapshots:
   base64-js@1.5.1: {}
 
   baseline-browser-mapping@2.11.15: {}
+
+  bcrypt-pbkdf@1.0.2:
+    dependencies:
+      tweetnacl: 0.14.5
 
   bcryptjs@3.0.3: {}
 
@@ -7804,6 +7857,8 @@ snapshots:
       '@turbo/linux-arm64': 2.10.10
       '@turbo/windows-64': 2.10.10
       '@turbo/windows-arm64': 2.10.10
+
+  tweetnacl@0.14.5: {}
 
   type-check@0.4.0:
     dependencies:

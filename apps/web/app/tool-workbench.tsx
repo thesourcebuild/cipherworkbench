@@ -213,10 +213,14 @@ export function ToolWorkbench({
 
   const setOptionValue = useCallback(
     (id: string, value: OptionValue | undefined) =>
-      setSpec((prev) =>
-        prev ? { ...prev, options: setOption(prev.options, id, value) } : prev,
-      ),
-    [],
+      setSpec((prev) => {
+        if (!prev) return prev;
+        if (tool?.onOptionChange) {
+          return tool.onOptionChange(prev, id, value);
+        }
+        return { ...prev, options: setOption(prev.options, id, value) };
+      }),
+    [tool],
   );
 
   const handleCustomResultChange = useCallback(
@@ -778,9 +782,9 @@ export function ToolWorkbench({
 
   const computeFooter = (
     <div className="space-y-2">
-      {/* Bytes read of bytes available, which a generator has neither of. */}
-      {!generates && <ProgressReadout state={state} />}
-      {(!effectiveAutoUpdate || generates) && (
+      {/* Bytes read of bytes available, which a tool that does not read input has neither of. */}
+      {effectiveReadsInput && !generates && <ProgressReadout state={state} />}
+      {(!effectiveAutoUpdate || generates || !effectiveReadsInput) && (
         <Button
           data-ocs-compute=""
           variant="primary"
@@ -793,7 +797,7 @@ export function ToolWorkbench({
           disabled={!canRecompute}
           onClick={handleRecompute}
           title={
-            generates
+            generates || !effectiveReadsInput
               ? "Produce another value. Nothing here depends on an input, so this is the whole interaction."
               : "Auto update is off — nothing recomputes until you ask."
           }
@@ -801,7 +805,7 @@ export function ToolWorkbench({
           {/* "Compute" over a box you filled in; "Generate" where the button is the whole
               interaction. The KDFs keep "Compute": they read no box either, but their
               password comes from a field, so there is still an input being processed. */}
-          {generates ? "Generate" : "Compute"}
+          {generates || !effectiveReadsInput ? "Generate" : "Compute"}
         </Button>
       )}
     </div>

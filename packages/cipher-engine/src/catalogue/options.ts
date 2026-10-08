@@ -146,6 +146,8 @@ export interface OptionDef<TGroup extends string = string> {
   availableOn?: readonly string[];
   /** Display order within the group. Gaps left for future insertions. */
   order: number;
+  /** Column span in multi-column group layouts (1 or 2). */
+  colSpan?: 1 | 2;
 }
 
 export interface OptionCatalogue<TGroup extends string = string> {

@@ -54,6 +54,7 @@ export const FAMILY_LABEL: Record<string, string> = {
   classical: "Classical",
   asymmetric: "Public key",
   certificates: "Certificates",
+  openssh: "OpenSSH",
   encoding: "Encodings",
   format: "Formats",
 };

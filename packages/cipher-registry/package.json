@@ -1,6 +1,6 @@
 {
   "name": "@ocs/registry",
-  "version": "0.19.11",
+  "version": "0.20.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -25,6 +25,7 @@
     "@ocs/hash": "workspace:*",
     "@ocs/kdf": "workspace:*",
     "@ocs/mac": "workspace:*",
+    "@ocs/openssh": "workspace:*",
     "@ocs/parity": "workspace:*"
   },
   "devDependencies": {

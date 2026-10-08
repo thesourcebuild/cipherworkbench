@@ -77,6 +77,7 @@ const config: NextConfig = {
     "@ocs/hash",
     "@ocs/kdf",
     "@ocs/mac",
+    "@ocs/openssh",
     "@ocs/parity",
     "@ocs/platform",
     "@ocs/registry",

@@ -1,7 +1,7 @@
 import type { ZodType } from "zod";
 import type { LintRule } from "@ocs/contracts/diagnostic";
 import type { OutputEncoding } from "@ocs/contracts/encoding";
-import type { OptionValues } from "@ocs/contracts/options";
+import type { OptionValue, OptionValues } from "@ocs/contracts/options";
 import type { CliProviderCommand } from "@ocs/contracts/shell";
 import type { OptionCatalogue } from "./catalogue/options";
 import type { OptionGroupMeta } from "./catalogue/groups";
@@ -59,6 +59,7 @@ export type ToolFamily =
   | "classical"
   | "asymmetric"
   | "certificates"
+  | "openssh"
   | "encoding"
   | "format";
 
@@ -536,5 +537,11 @@ export interface ToolDefinition<TSpec extends ToolSpecBase> extends ToolManifest
    * "Generate" action button.
    */
   readsInputForSpec?(spec: TSpec): boolean;
+  /**
+   * Optional spec transformation when an option is changed by the user.
+   * Allows a tool to cascade changes (such as selecting a configuration preset)
+   * or normalize related options.
+   */
+  onOptionChange?(spec: TSpec, id: string, value: OptionValue | undefined): TSpec;
 }
 
