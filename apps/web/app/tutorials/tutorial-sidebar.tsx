@@ -143,7 +143,7 @@ export function TutorialSidebar({
             </p>
           </div>
           <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-            {ALL_TUTORIALS.length} Alice &amp; Bob Scenarios
+            {ALL_TUTORIALS.length} Overviews &amp; Scenarios
           </p>
         </div>
         <button

@@ -468,7 +468,9 @@ describe(".0 concept overview tutorials", () => {
       expect(stepTitles).toMatch(/What It Does/i);
       expect(stepTitles).toMatch(/What It Can Do/i);
       expect(stepTitles).toMatch(/What It Does NOT Do/i);
+      expect(stepTitles).not.toMatch(/Step\s*\d/i);
 
+      expect(content?.sectionTitle).toBe("Core Principles & Security Boundaries");
       expect(content?.takeaways.length).toBeGreaterThan(0);
       expect(content?.analogy).toBeDefined();
       expect(content?.problem).toBeDefined();

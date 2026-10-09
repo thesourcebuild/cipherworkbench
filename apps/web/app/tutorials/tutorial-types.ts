@@ -61,6 +61,7 @@ export interface TutorialMeta {
 }
 
 export interface TutorialContent {
+  sectionTitle?: string;
   analogy: string;
   problem: string;
   mechanismDiagram?: MechanismDiagramId;
