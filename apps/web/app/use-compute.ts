@@ -121,7 +121,10 @@ export function useCompute(
   const debounce = useDebouncedTrigger();
   const [manualTrigger, setManualTrigger] = useState(0);
 
-  const recompute = useCallback(() => setManualTrigger((n) => n + 1), []);
+  const recompute = useCallback(() => {
+    setState(markPending);
+    setManualTrigger((n) => n + 1);
+  }, []);
 
   // Serialised so the effect below re-runs on a value change rather than on every
   // parent render — the spec object is rebuilt on each keystroke.
@@ -180,10 +183,17 @@ export function useCompute(
             input.file?.name && result.cliProviders
               ? {
                   ...result,
-                  cliProviders: formatProvidersForFileName(result.cliProviders, input.file.name),
+                  cliProviders: formatProvidersForFileName(
+                    result.cliProviders,
+                    input.file.name,
+                  ),
                 }
               : result;
-          return commit({ status: "done", result: finalResult, inputByteLength: input.file.size });
+          return commit({
+            status: "done",
+            result: finalResult,
+            inputByteLength: input.file.size,
+          });
         }
 
         if (!decoded) return;
@@ -309,7 +319,7 @@ export function useCompute(
    */
   useEffect(() => {
     if (!debounce.pending) return;
-    setState((prev) => (prev.status === "pending" ? prev : { ...prev, status: "pending" }));
+    setState((prev) => (prev.status === "pending" ? prev : markPending(prev)));
   }, [debounce.pending]);
 
   // File path: compute when the file itself changes, and on an explicit request.
@@ -393,6 +403,16 @@ export function useCompute(
   };
 }
 
+function markPending(previous: ComputeState): ComputeState {
+  return {
+    status: "pending",
+    ...(previous.result === undefined ? {} : { result: previous.result }),
+    ...(previous.inputByteLength === undefined
+      ? {}
+      : { inputByteLength: previous.inputByteLength }),
+  };
+}
+
 function formatProvidersForFileName(
   providers: readonly CliProviderCommand[] | undefined,
   fileName: string,
@@ -430,6 +450,3 @@ function formatProvidersForFileName(
     };
   });
 }
-
-
-

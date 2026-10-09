@@ -2,6 +2,7 @@
 
 import { cn } from "@ocs/ui";
 import { formatBytes, formatBytesShort } from "./input-state";
+import { progressPresentation } from "./progress-presentation";
 import type { ComputeState } from "./use-compute";
 
 /**
@@ -24,32 +25,7 @@ import type { ComputeState } from "./use-compute";
  * jumped every time a computation started or finished.
  */
 export function ProgressReadout({ state }: { state: ComputeState }) {
-  const busy = state.status === "computing";
-  /**
-   * `state.result !== undefined` rather than `status === "done"`, and that is what stops the bar
-   * flickering: with auto-update on, every keystroke passes through `pending` with the previous
-   * digest still on screen, and a bar keyed on `done` would empty and refill on each one. A finished
-   * value is a finished value; `stale` is one too -- superseded, not stopped halfway.
-   */
-  const finished = state.result !== undefined;
-
-  /**
-   * How much there is to read: a streaming file says so itself, and everything else is the decoded
-   * input, which `useCompute` reports whether or not anything has computed.
-   *
-   * A typed input has no intermediate positions, so it goes 0 to 100% in one step. That is honest --
-   * the work was one synchronous call. Only a streamed file reports bytes as it goes.
-   */
-  const total = state.progress?.totalBytes ?? state.inputByteLength ?? 0;
-  const consumed = busy ? (state.progress?.bytesProcessed ?? 0) : finished ? total : 0;
-  const fraction = total > 0 ? Math.min(consumed / total, 1) : finished ? 1 : 0;
-  /**
-   * Working, over an amount nobody can state -- a legacy encoding's tables still loading over text
-   * that does not decode yet. A fixed-width pulse says "working" without claiming a position it does
-   * not know. Nearly theoretical now that the total comes from the input rather than only from a
-   * file handle, and cheap enough to keep for the case that remains.
-   */
-  const indeterminate = busy && total === 0;
+  const { total, consumed, percent, indeterminate } = progressPresentation(state);
 
   return (
     <div className="space-y-1.5">
@@ -60,14 +36,14 @@ export function ProgressReadout({ state }: { state: ComputeState }) {
         aria-valuemax={100}
         // Omitted while indeterminate, which is what tells assistive technology the position is
         // unknown rather than zero.
-        aria-valuenow={indeterminate ? undefined : Math.round(fraction * 100)}
+        aria-valuenow={indeterminate ? undefined : percent}
       >
         <div
           className={cn(
-            "h-full rounded-full bg-slate-900 transition-[width] duration-150 dark:bg-slate-100",
+            "h-full rounded-full bg-slate-900 dark:bg-slate-100",
             indeterminate && "w-1/3 animate-pulse",
           )}
-          style={indeterminate ? undefined : { width: `${fraction * 100}%` }}
+          style={indeterminate ? undefined : { width: `${percent}%` }}
         />
       </div>
       {/*
@@ -78,7 +54,9 @@ export function ProgressReadout({ state }: { state: ComputeState }) {
         data-ocs-progress-stats=""
         className="min-h-4 text-[11px] text-slate-500 dark:text-slate-400"
       >
-        {`${formatBytesShort(consumed)} of ${formatBytes(total)} — ${Math.round(fraction * 100)}%`}
+        {indeterminate
+          ? `${formatBytesShort(consumed)} processed — Working…`
+          : `${formatBytesShort(consumed)} of ${formatBytes(total)} — ${percent}%`}
       </p>
     </div>
   );
