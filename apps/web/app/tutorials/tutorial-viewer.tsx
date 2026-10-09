@@ -66,9 +66,11 @@ export function TutorialViewer({ tutorialId, onSelectTutorial }: TutorialViewerP
       {/* Top Banner / Header (Instant from Metadata) */}
       <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white via-slate-50/50 to-indigo-50/20 p-6 shadow-xs dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/20">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-md bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white shadow-2xs dark:bg-indigo-500">
-            {meta.number.endsWith(".0") ? `Overview ${meta.number}` : `Scenario ${meta.number}`}
-          </span>
+          {!meta.number.endsWith(".0") && (
+            <span className="rounded-md bg-indigo-600 px-2 py-0.5 text-xs font-bold text-white shadow-2xs dark:bg-indigo-500">
+              Scenario {meta.number}
+            </span>
+          )}
           <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
             {displayMeta.readTime}
           </span>

@@ -318,14 +318,16 @@ export function TutorialSidebar({
                             >
                               {tutorial.title}
                             </span>
-                            <span
-                              className={cn(
-                                "rounded-sm border px-1 py-0.2 text-[9px] font-mono shrink-0",
-                                FAMILY_STYLE[tutorial.family]
-                              )}
-                            >
-                              {FAMILY_BADGE[tutorial.family]}
-                            </span>
+                            {!tutorial.number.endsWith(".0") && (
+                              <span
+                                className={cn(
+                                  "rounded-sm border px-1 py-0.2 text-[9px] font-mono shrink-0",
+                                  FAMILY_STYLE[tutorial.family]
+                                )}
+                              >
+                                {FAMILY_BADGE[tutorial.family]}
+                              </span>
+                            )}
                           </div>
 
                           <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500 dark:text-slate-400">
