@@ -329,8 +329,9 @@ describe("section 5 (certificates) tutorial sequence", () => {
     (tutorial) => tutorial.conceptId === "certificates",
   );
 
-  it("covers identity, trust chains, CSRs, revocation, ACME, and key ceremonies", () => {
+  it("covers overview, identity, trust chains, CSRs, revocation, ACME, and key ceremonies", () => {
     expect(certTutorials.map((tutorial) => tutorial.id)).toEqual([
+      "5.0-overview-certificates-pki",
       "5.2-the-imposter-in-the-middle",
       "5.2-the-chain-of-trust",
       "5.3-asking-for-permission-csr",
@@ -339,6 +340,7 @@ describe("section 5 (certificates) tutorial sequence", () => {
       "6.4-the-key-ceremony",
     ]);
     expect(certTutorials.map((tutorial) => tutorial.number)).toEqual([
+      "5.0",
       "5.1",
       "5.2",
       "5.3",
@@ -349,6 +351,7 @@ describe("section 5 (certificates) tutorial sequence", () => {
   });
 
   it.each([
+    "5.0-overview-certificates-pki",
     "5.2-the-chain-of-trust",
     "5.3-asking-for-permission-csr",
     "5.4-when-trust-breaks-revocation",
@@ -369,8 +372,9 @@ describe("section 6 (transport protocols) tutorial sequence", () => {
     (tutorial) => tutorial.conceptId === "putting-it-together",
   );
 
-  it("starts with SSL 3.0, TLS, and DTLS", () => {
+  it("starts with overview, SSL 3.0, TLS, and DTLS", () => {
     expect(sectionTutorials.map((tutorial) => tutorial.id)).toEqual([
+      "6.0-overview-secure-transport",
       SSL_TUTORIAL_ID,
       TLS_TUTORIAL_ID,
       DTLS_TUTORIAL_ID,
@@ -379,6 +383,7 @@ describe("section 6 (transport protocols) tutorial sequence", () => {
       "5.5-the-quantum-spy",
     ]);
     expect(sectionTutorials.map((tutorial) => tutorial.number)).toEqual([
+      "6.0",
       "6.1",
       "6.2",
       "6.3",
@@ -387,21 +392,25 @@ describe("section 6 (transport protocols) tutorial sequence", () => {
       "6.6",
     ]);
     expect(sectionTutorials[0]).toMatchObject({
+      id: "6.0-overview-secure-transport",
+      title: "Overview: Secure Transport & Protocols",
+    });
+    expect(sectionTutorials[1]).toMatchObject({
       id: SSL_TUTORIAL_ID,
       title: "SSL 3.0: The Handshake Before TLS",
     });
-    expect(sectionTutorials[1]).toMatchObject({
+    expect(sectionTutorials[2]).toMatchObject({
       id: TLS_TUTORIAL_ID,
       title: "The TLS Handshake: The Full Symphony",
     });
-    expect(sectionTutorials[1]?.variants?.[0]?.title).toBe(
+    expect(sectionTutorials[2]?.variants?.[0]?.title).toBe(
       "The TLS Handshake: The Full Symphony",
     );
-    expect(sectionTutorials[2]).toMatchObject({
+    expect(sectionTutorials[3]).toMatchObject({
       id: DTLS_TUTORIAL_ID,
       title: "The DTLS Handshake: The Datagram Symphony",
     });
-    expect(sectionTutorials[2]?.variants?.[0]?.title).toBe(
+    expect(sectionTutorials[3]?.variants?.[0]?.title).toBe(
       "The DTLS Handshake: The Datagram Symphony",
     );
   });
@@ -422,3 +431,55 @@ describe("section 6 (transport protocols) tutorial sequence", () => {
     );
   });
 });
+
+describe(".0 concept overview tutorials", () => {
+  const OVERVIEW_TUTORIAL_IDS = [
+    "1.0-overview-data-integrity",
+    "2.0-overview-authenticity",
+    "3.0-overview-confidentiality",
+    "4.0-overview-asymmetric-crypto",
+    "5.0-overview-certificates-pki",
+    "6.0-overview-secure-transport",
+    "7.0-overview-attacks-and-defences",
+    "8.0-overview-encodings-and-advanced",
+  ] as const;
+
+  it("registers an overview tutorial with .0 number for each concept", () => {
+    for (let i = 0; i < OVERVIEW_TUTORIAL_IDS.length; i++) {
+      const id = OVERVIEW_TUTORIAL_IDS[i]!;
+      const expectedNumber = `${i + 1}.0`;
+      const meta = getTutorialMeta(id);
+
+      expect(meta).toBeDefined();
+      expect(meta?.number).toBe(expectedNumber);
+      expect(meta?.title).toMatch(/^Overview:/);
+    }
+  });
+
+  it.each(OVERVIEW_TUTORIAL_IDS)(
+    "loads %s with all 4 required pillars (what it is, what it does, what it can do, what it does NOT do)",
+    async (id) => {
+      const content = await loadTutorialContent(id);
+      expect(content).toBeDefined();
+      expect(content?.steps).toHaveLength(4);
+
+      const stepTitles = content?.steps.map((s) => s.title).join(" ") ?? "";
+      expect(stepTitles).toMatch(/What It Is/i);
+      expect(stepTitles).toMatch(/What It Does/i);
+      expect(stepTitles).toMatch(/What It Can Do/i);
+      expect(stepTitles).toMatch(/What It Does NOT Do/i);
+
+      expect(content?.takeaways.length).toBeGreaterThan(0);
+      expect(content?.analogy).toBeDefined();
+      expect(content?.problem).toBeDefined();
+      expect(content?.seed.toolId).toBeDefined();
+    },
+  );
+
+  it("does not say 'zero computational' in 8.0 overview", async () => {
+    const content = await loadTutorialContent("8.0-overview-encodings-and-advanced");
+    const fullText = JSON.stringify(content);
+    expect(fullText).not.toMatch(/zero computational/i);
+  });
+});
+

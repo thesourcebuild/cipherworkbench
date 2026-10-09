@@ -47,6 +47,21 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
     badge: "Integrity",
     tutorials: [
       {
+        id: "1.0-overview-data-integrity",
+        number: "1.0",
+        title: "Overview: Data Integrity (Noise vs. Tampering)",
+        subtitle:
+          "What integrity is, what it does, what it guarantees, and what it cannot protect",
+        conceptId: "integrity",
+        family: "hash",
+        toolId: "sha256",
+        difficulty: "Beginner",
+        readTime: "5 min",
+        characters: ["Alice", "Bob", "Mallory"],
+        summary:
+          "A foundational overview of data integrity: distinguishing accidental noise from active tampering, how checksums, CRCs, and cryptographic hashes operate, their core guarantees, and their critical security non-goals.",
+      },
+      {
         id: "1.1-the-scratched-postcard",
         number: "1.1",
         title: "The Scratched Postcard: Checksums & Check Digits",
@@ -100,6 +115,20 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
     badge: "Authenticity",
     tutorials: [
       {
+        id: "2.0-overview-authenticity",
+        number: "2.0",
+        title: "Overview: Authenticity (Identity & Authorship)",
+        subtitle: "Proving message origin with shared secrets and digital signatures",
+        conceptId: "authenticity",
+        family: "mac",
+        toolId: "hmac",
+        difficulty: "Beginner",
+        readTime: "5 min",
+        characters: ["Alice", "Bob", "Mallory"],
+        summary:
+          "A foundational overview of message authenticity: why hashes alone lack identity, how shared secrets (HMAC) and asymmetric signatures (Ed25519) prove provenance, what authenticity guarantees, and what it cannot stop.",
+      },
+      {
         id: "2.1-the-tampered-hash-trap",
         number: "2.1",
         title: "The Tampered Hash Trap: Why Hashes Lack Identity",
@@ -149,6 +178,20 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
     description: "Locking messages away from Eve, avoiding the nonce trap, and modern AEAD.",
     badge: "Symmetric",
     tutorials: [
+      {
+        id: "3.0-overview-confidentiality",
+        number: "3.0",
+        title: "Overview: Confidentiality (Symmetric Encryption)",
+        subtitle: "Locking data with a single key, block cipher modes, and the AEAD imperative",
+        conceptId: "symmetric-ciphers",
+        family: "cipher",
+        toolId: "aes",
+        difficulty: "Beginner",
+        readTime: "5 min",
+        characters: ["Alice", "Bob", "Eve", "Mallory"],
+        summary:
+          "A foundational overview of symmetric confidentiality: transforming plaintext into indistinguishable ciphertext using a shared 128- or 256-bit key, the fatal flaw of unauthenticated cipher modes, and why modern systems require AEAD.",
+      },
       {
         id: "3.1-the-locked-steel-box",
         number: "3.1",
@@ -214,6 +257,20 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
     description: "Diffie-Hellman key exchange, public-key encryption, and digital signatures.",
     badge: "Asymmetric",
     tutorials: [
+      {
+        id: "4.0-overview-asymmetric-crypto",
+        number: "4.0",
+        title: "Overview: Asymmetric Cryptography (Dual-Key Systems)",
+        subtitle: "Solving key distribution with public and private key pairs",
+        conceptId: "asymmetric-keys",
+        family: "asymmetric",
+        toolId: "ecdh",
+        difficulty: "Beginner",
+        readTime: "5 min",
+        characters: ["Alice", "Bob", "Eve", "Mallory"],
+        summary:
+          "A foundational overview of public-key cryptography: how asymmetric key pairs solve the key distribution paradox, how ECDH, RSA, and Ed25519 work, their computational trade-offs, and why they require hybrid design.",
+      },
       {
         id: "4.1-the-paint-mixing-trick",
         number: "4.1",
@@ -297,6 +354,20 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       "Binding identity to public keys: X.509 certificates, trust chains, CSRs, revocation, and automated issuance.",
     badge: "Certificates",
     tutorials: [
+      {
+        id: "5.0-overview-certificates-pki",
+        number: "5.0",
+        title: "Overview: Public Key Infrastructure & Certificates",
+        subtitle: "Binding cryptographic keys to real-world identities and trust chains",
+        conceptId: "certificates",
+        family: "certificates",
+        toolId: "cert-creator",
+        difficulty: "Beginner",
+        readTime: "6 min",
+        characters: ["Alice", "Bob", "Mallory", "Trent"],
+        summary:
+          "A foundational overview of PKI and X.509 certificates: solving the public key impersonation problem, how Certificate Authorities build chains of trust, validation rules, and the limits of identity binding.",
+      },
       // Existing IDs remain stable because tutorial completion is persisted by ID.
       {
         id: "5.2-the-imposter-in-the-middle",
@@ -397,6 +468,20 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       "SSL 3.0, TLS, DTLS, password vaults, threshold cryptography, and Post-Quantum.",
     badge: "Protocols",
     tutorials: [
+      {
+        id: "6.0-overview-secure-transport",
+        number: "6.0",
+        title: "Overview: Secure Transport & Protocols",
+        subtitle: "Orchestrating handshake, identity, key derivation, and record encryption",
+        conceptId: "putting-it-together",
+        family: "asymmetric",
+        toolId: "ecdh",
+        difficulty: "Beginner",
+        readTime: "6 min",
+        characters: ["Alice", "Bob", "Eve", "Mallory"],
+        summary:
+          "A foundational overview of transport layer security (TLS, DTLS, SSH): how isolated cryptographic primitives are assembled into state machines that provide confidentiality, integrity, authenticity, and replay defense over untrusted networks.",
+      },
       {
         id: "5.1-ssl-3.0-handshake",
         number: "6.1",
@@ -552,6 +637,20 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
     badge: "Attacks",
     tutorials: [
       {
+        id: "7.0-overview-attacks-and-defences",
+        number: "7.0",
+        title: "Overview: Cryptographic Attacks & Defences",
+        subtitle: "How crypto breaks in implementation, side channels, and error oracles",
+        conceptId: "attacks-defenses",
+        family: "hash",
+        toolId: "sha256",
+        difficulty: "Beginner",
+        readTime: "5 min",
+        characters: ["Alice", "Bob", "Eve", "Mallory"],
+        summary:
+          "A foundational overview of how cryptography breaks: why mathematical algorithms rarely fail, but implementation bugs, side channels, timing leaks, birthday collisions, and error oracles dismantle systems.",
+      },
+      {
         id: "6.1-the-birthday-collision",
         number: "7.1",
         title: "The Birthday Problem: Hash Collision Attacks",
@@ -605,6 +704,20 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
       "Encoding vs encryption, Zero-Knowledge Proofs, and the future of privacy-preserving cryptography.",
     badge: "Advanced",
     tutorials: [
+      {
+        id: "8.0-overview-encodings-and-advanced",
+        number: "8.0",
+        title: "Overview: Encodings vs. Cryptography & Advanced Primitives",
+        subtitle: "Data representations vs mathematical secrecy, and zero-knowledge proofs",
+        conceptId: "encoding-advanced",
+        family: "cipher",
+        toolId: "aes",
+        difficulty: "Beginner",
+        readTime: "5 min",
+        characters: ["Alice", "Bob", "Eve", "Mallory"],
+        summary:
+          "A foundational overview separating data representation (Base64, Hex, UTF-8) from cryptography, why confusing encoding with encryption causes critical breaches, and an introduction to advanced privacy primitives like Zero-Knowledge Proofs.",
+      },
       {
         id: "7.1-lost-in-translation",
         number: "8.1",

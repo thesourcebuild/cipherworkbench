@@ -91,7 +91,7 @@ export interface AppShellProps {
 export function AppShell({ initialToolId }: AppShellProps = {}) {
   const [selectedId, setSelectedId] = useState(initialToolId ?? DEFAULT_TOOL_ID);
   const [viewMode, setViewMode] = useState<"tools" | "tutorials">("tools");
-  const [selectedTutorialId, setSelectedTutorialId] = useState<string>("1.1-the-scratched-postcard");
+  const [selectedTutorialId, setSelectedTutorialId] = useState<string>("1.0-overview-data-integrity");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
