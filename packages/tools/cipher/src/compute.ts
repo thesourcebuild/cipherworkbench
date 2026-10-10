@@ -329,6 +329,7 @@ function operationFor(r: ResolvedCipher): CipherOperation {
         r.tweak,
         r.gostSbox,
         r.anubisVariant,
+        r.speckByteConvention,
         r.padding,
       );
     case "chacha20":
@@ -942,6 +943,7 @@ function blockCipherForStream(r: ResolvedCipher) {
     tweak: r.tweak,
     gostSbox: r.gostSbox,
     anubisVariant: r.anubisVariant,
+    speckByteConvention: r.speckByteConvention,
   });
 }
 

@@ -18,6 +18,7 @@ import {
   OPTION_KEY,
   OPTION_MODE,
   OPTION_PARAM_SET,
+  OPTION_BYTE_CONVENTION,
   OPTION_NONCE,
   OPTION_TAG_LEN,
   OPTION_TIMESTAMP_FORMAT,
@@ -843,6 +844,32 @@ function blockCipherOptions(tool: CipherToolMeta): readonly OptionDef<CipherOpti
             summary: "Block and key size. Each pairing is a different function.",
             detail: paramSetDetailFor(toolId),
             order: 5,
+          } satisfies OptionDef<CipherOptionGroup>,
+        ]
+      : []),
+    ...(toolId === "speck"
+      ? [
+          {
+            id: OPTION_BYTE_CONVENTION,
+            label: "Byte convention",
+            group: "algorithm" as const,
+            kind: "enum" as const,
+            choices: [
+              {
+                value: "paper",
+                label: "Paper vectors (big-endian)",
+                summary: "Matches the published paper and existing Cipher Workbench output",
+              },
+              {
+                value: "implementation-guide",
+                label: "Implementation guide (little-endian)",
+                summary: "Matches the NSA guide and tools using its BytesToWords convention",
+              },
+            ],
+            summary: "How the key and each block are serialized around Speck's permutation.",
+            detail:
+              "The paper prints Speck's key and block words most significant byte first. The implementation guide reads each complete byte string little-endian, which reverses the key and each block at the permutation boundary. Choose the guide convention to interoperate with tools that follow its reference code. Chaining modes still use the IV and ciphertext bytes exactly as entered.",
+            order: 7,
           } satisfies OptionDef<CipherOptionGroup>,
         ]
       : []),

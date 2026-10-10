@@ -19,6 +19,7 @@ import {
   OPTION_KEY_SIZE,
   OPTION_MODE,
   OPTION_PARAM_SET,
+  OPTION_BYTE_CONVENTION,
   OPTION_NONCE,
   OPTION_TAG_LEN,
   getAesMode,
@@ -1808,6 +1809,17 @@ describe("the block ciphers this repo implements", () => {
     }
   });
 
+  it("offers Speck's two byte conventions only on Speck and defaults to paper order", () => {
+    const option = cipherCatalogueFor("speck").require(OPTION_BYTE_CONVENTION);
+    expect(option.choices?.map(({ value, label }) => ({ value, label }))).toEqual([
+      { value: "paper", label: "Paper vectors (big-endian)" },
+      { value: "implementation-guide", label: "Implementation guide (little-endian)" },
+    ]);
+    expect(cipherCatalogueFor("simon").get(OPTION_BYTE_CONVENTION)).toBeUndefined();
+    expect(createSpec({ variant: "speck" }).options[OPTION_BYTE_CONVENTION]).toBe("paper");
+    expect(createSpec({ variant: "simon" }).options[OPTION_BYTE_CONVENTION]).toBeUndefined();
+  });
+
   it("DES-ECB matches the FIPS 46-3 known-answer test", async () => {
     // Key 0123456789abcdef over "Now is t". PKCS#7 appends a whole block, so the first is the one
     // to compare, exactly as the AES-ECB vector above.
@@ -2773,6 +2785,73 @@ describe("the four ciphers added on top of the mode layer", () => {
         `${id}${paramSet ? `/${paramSet}` : ""}`,
       ).toBe(expected);
     }
+  });
+
+  it("matches implementation-guide Speck128/128-CBC output from Online Tools", async () => {
+    const options = {
+      [OPTION_KEY]: "C)KZz}.Z}U7ztQD>",
+      keyEncoding: "utf-8",
+      [OPTION_NONCE]: ";L}*BhZB({}#2.x6",
+      nonceEncoding: "utf-8",
+      [OPTION_MODE]: "cbc",
+      [OPTION_PARAM_SET]: "128-128",
+      [OPTION_PADDING]: "pkcs7",
+      [OPTION_BYTE_CONVENTION]: "implementation-guide",
+    } satisfies CipherSpec["options"];
+    const plaintext = ascii("123456789");
+    const sealed = await run("speck", options, plaintext);
+    expect(encodeHex(sealed.bytes!)).toBe("4298425f3f1ab6cc5e64984ad4caf7d1");
+
+    const tool = cipherToolDefinition("speck");
+    const guideSpec = specFor("speck", options);
+    expect(tool.fileProcessingForSpec!(guideSpec)).toBe("streaming");
+    const streamed = await runStream(
+      tool.createStream!(guideSpec),
+      rechunk(singleChunk(plaintext), 3),
+    );
+    expect(encodeHex(streamed.bytes!)).toBe(encodeHex(sealed.bytes!));
+
+    const resolved = resolveCipher(guideSpec);
+    expect(resolved.ok).toBe(true);
+    if (resolved.ok) {
+      expect(resolved.resolved.speckByteConvention).toBe("implementation-guide");
+    }
+
+    const opened = await run(
+      "speck",
+      { ...options, [OPTION_DIRECTION]: "decrypt" },
+      sealed.bytes!,
+    );
+    expect(encodeHex(opened.bytes!)).toBe(encodeHex(plaintext));
+
+    const streamOpened = await runStream(
+      tool.createStream!(
+        specFor("speck", { ...options, [OPTION_DIRECTION]: "decrypt" }),
+      ),
+      rechunk(singleChunk(streamed.bytes!), 5),
+    );
+    expect(encodeHex(streamOpened.bytes!)).toBe(encodeHex(plaintext));
+  });
+
+  it("keeps paper-order Speck output for default and pre-option specs", async () => {
+    const options = {
+      [OPTION_KEY]: "C)KZz}.Z}U7ztQD>",
+      keyEncoding: "utf-8",
+      [OPTION_NONCE]: ";L}*BhZB({}#2.x6",
+      nonceEncoding: "utf-8",
+      [OPTION_MODE]: "cbc",
+      [OPTION_PARAM_SET]: "128-128",
+      [OPTION_PADDING]: "pkcs7",
+    } satisfies CipherSpec["options"];
+    const plaintext = ascii("123456789");
+    const seeded = await run("speck", options, plaintext);
+    expect(encodeHex(seeded.bytes!)).toBe("b479ba454a2f0a4616ba835806fabfc3");
+
+    const oldSpec = specFor("speck", options);
+    delete oldSpec.options[OPTION_BYTE_CONVENTION];
+    const oldResult = await cipherToolDefinition("speck").compute(oldSpec, plaintext);
+    expect(oldResult.error).toBeUndefined();
+    expect(encodeHex(oldResult.bytes!)).toBe(encodeHex(seeded.bytes!));
   });
 
   it("accepts Blowfish's whole key range and nothing outside it", () => {

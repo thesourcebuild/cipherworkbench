@@ -17,6 +17,7 @@ import type {
   RectangleVariant,
   SimeckVariant,
   SkinnyVariant,
+  SpeckByteConvention,
 } from "@ocs/algos";
 import {
   chacha12,
@@ -462,6 +463,7 @@ export interface MetadataBlockCipherOptions {
   tweak?: Uint8Array;
   gostSbox?: string;
   anubisVariant?: string;
+  speckByteConvention?: SpeckByteConvention;
 }
 
 /** Builds the bare block permutation selected by resolved cipher-tool metadata. */
@@ -470,7 +472,15 @@ export function createMetadataBlockCipher(
   key: Uint8Array,
   options: MetadataBlockCipherOptions = {},
 ): BlockCipher {
-  const { effectiveKeyBits, paramSetId, rc5Rounds, tweak, gostSbox, anubisVariant } = options;
+  const {
+    effectiveKeyBits,
+    paramSetId,
+    rc5Rounds,
+    tweak,
+    gostSbox,
+    anubisVariant,
+    speckByteConvention,
+  } = options;
   /**
    * The cipher itself, by id. A `Record` rather than a chain ending in a default, for the reason
    * given in `catalogue/options.ts`: a tool added to the metadata without an entry here should fail
@@ -503,7 +513,8 @@ export function createMetadataBlockCipher(
      * not passed -- it is implied by the key handed in, and the resolver has already refused a key
      * the selected set does not take.
      */
-    speck: (k: Uint8Array) => createSpeck(k, simonSpeckWordBits(paramSetId)),
+    speck: (k: Uint8Array) =>
+      createSpeck(k, simonSpeckWordBits(paramSetId), speckByteConvention),
     simon: (k: Uint8Array) => createSimon(k, simonSpeckWordBits(paramSetId)),
     /**
      * Three more tools whose parameter set decides the block size, so the same rule applies: read the
@@ -616,6 +627,7 @@ export function blockCipherOperation(
   tweak?: Uint8Array,
   gostSbox?: string,
   anubisVariant?: string,
+  speckByteConvention?: SpeckByteConvention,
   padding: PaddingScheme = "pkcs7",
 ): CipherOperation {
   const cipher = createMetadataBlockCipher(toolId, key, {
@@ -625,6 +637,7 @@ export function blockCipherOperation(
     tweak,
     gostSbox,
     anubisVariant,
+    speckByteConvention,
   });
 
   /**

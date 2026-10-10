@@ -33,7 +33,8 @@
  *
  * **The paper and the implementation guide print their vectors in opposite byte orders.** The paper's
  * key and plaintext are big-endian words, most significant first; the guide's `BytesToWords` reads the
- * whole byte string little-endian, so its values are the paper's reversed end to end. Both are in
+ * whole byte string little-endian, so its values are the paper's reversed end to end. Speck exposes
+ * both conventions, with the paper order as the backward-compatible default. Both are in
  * `tests/algos-lightweight.test.ts`, which is what makes the guide's ten a second independent check
  * rather than ten puzzling failures.
  */
@@ -41,6 +42,9 @@ import type { BlockCipher } from "./blockmodes";
 
 /** Word sizes the two families define. 24 and 48 are deliberate; see the header. */
 export type SimonSpeckWordBits = 16 | 24 | 32 | 48 | 64;
+
+/** Byte serialization around Speck's word-oriented permutation. */
+export type SpeckByteConvention = "paper" | "implementation-guide";
 
 /**
  * The five constant sequences Simon's key schedule draws single bits from.
@@ -97,10 +101,18 @@ const rotr = (x: bigint, by: number, bits: number): bigint => {
   return ((x >> shift) | (x << (BigInt(bits) - shift))) & maskFor(bits);
 };
 
-/** Big-endian words of `bits` bits each, most significant first. */
-function readWords(bytes: Uint8Array, bits: number): bigint[] {
+/** Big-endian words of `bits` bits each, optionally reading the whole byte string in reverse. */
+function readWords(bytes: Uint8Array, bits: number, reversed = false): bigint[] {
   const size = bits / 8;
   const out: bigint[] = [];
+  if (reversed) {
+    for (let at = bytes.length - size; at >= 0; at -= size) {
+      let word = 0n;
+      for (let i = size - 1; i >= 0; i--) word = (word << 8n) | BigInt(bytes[at + i]!);
+      out.push(word);
+    }
+    return out;
+  }
   for (let at = 0; at + size <= bytes.length; at += size) {
     let word = 0n;
     for (let i = 0; i < size; i++) word = (word << 8n) | BigInt(bytes[at + i]!);
@@ -109,11 +121,20 @@ function readWords(bytes: Uint8Array, bits: number): bigint[] {
   return out;
 }
 
-function writeWords(words: readonly bigint[], bits: number, dst: Uint8Array): void {
+function writeWords(
+  words: readonly bigint[],
+  bits: number,
+  dst: Uint8Array,
+  reversed = false,
+): void {
   const size = bits / 8;
+  const byteLength = words.length * size;
   words.forEach((word, index) => {
     for (let i = 0; i < size; i++) {
-      dst[index * size + i] = Number((word >> BigInt(8 * (size - 1 - i))) & 0xffn);
+      const offset = index * size + i;
+      dst[reversed ? byteLength - 1 - offset : offset] = Number(
+        (word >> BigInt(8 * (size - 1 - i))) & 0xffn,
+      );
     }
   });
 }
@@ -126,14 +147,14 @@ function writeWords(words: readonly bigint[], bits: number, dst: Uint8Array): vo
  * for a one-word key and wrong for every other, which is what the 72-, 96-, 144-, 192- and 256-bit
  * vectors are there to catch.
  */
-function keyWords(key: Uint8Array, bits: number, family: string): bigint[] {
+function keyWords(key: Uint8Array, bits: number, family: string, reversed = false): bigint[] {
   const size = bits / 8;
   if (key.length === 0 || key.length % size !== 0) {
     throw new Error(
       `${family}${bits * 2} takes a key that is a whole number of ${size}-byte words; this one is ${key.length} bytes.`,
     );
   }
-  return readWords(key, bits).reverse();
+  return readWords(key, bits, reversed).reverse();
 }
 
 function requireParams<T>(table: Record<string, T>, bits: number, words: number, family: string): T {
@@ -158,8 +179,13 @@ function requireParams<T>(table: Record<string, T>, bits: number, words: number,
  * Defaults to 64-bit words so `createSpeck(key)` with a 16-byte key is Speck128/128, which is the
  * variant the tool family opened with and the one most implementations mean by "Speck".
  */
-export function createSpeck(key: Uint8Array, wordBits: SimonSpeckWordBits = 64): BlockCipher {
-  const words = keyWords(key, wordBits, "Speck");
+export function createSpeck(
+  key: Uint8Array,
+  wordBits: SimonSpeckWordBits = 64,
+  byteConvention: SpeckByteConvention = "paper",
+): BlockCipher {
+  const reversed = byteConvention === "implementation-guide";
+  const words = keyWords(key, wordBits, "Speck", reversed);
   const rounds = requireParams(SPECK_ROUNDS, wordBits, words.length, "Speck");
   // (7, 2) for the 32-bit block and (8, 3) for every other, which is the whole of the difference.
   const [alpha, beta] = wordBits === 16 ? [7, 2] : [8, 3];
@@ -179,21 +205,21 @@ export function createSpeck(key: Uint8Array, wordBits: SimonSpeckWordBits = 64):
   return {
     blockSize,
     encryptBlock: (src, dst) => {
-      let [x, y] = readWords(src, wordBits) as [bigint, bigint];
+      let [x, y] = readWords(src.subarray(0, blockSize), wordBits, reversed) as [bigint, bigint];
       for (const round of rk) {
         x = (((rotr(x, alpha, wordBits) + y) & mask) ^ round) & mask;
         y = rotl(y, beta, wordBits) ^ x;
       }
-      writeWords([x, y], wordBits, dst);
+      writeWords([x, y], wordBits, dst, reversed);
     },
     decryptBlock: (src, dst) => {
-      let [x, y] = readWords(src, wordBits) as [bigint, bigint];
+      let [x, y] = readWords(src.subarray(0, blockSize), wordBits, reversed) as [bigint, bigint];
       // The round inverted: subtract where it added, and unwind the two rotations.
       for (let i = rk.length - 1; i >= 0; i--) {
         y = rotr(y ^ x, beta, wordBits);
         x = rotl(((x ^ rk[i]!) - y) & mask, alpha, wordBits);
       }
-      writeWords([x, y], wordBits, dst);
+      writeWords([x, y], wordBits, dst, reversed);
     },
   };
 }

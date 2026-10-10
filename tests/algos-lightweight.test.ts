@@ -225,12 +225,23 @@ describe("Simon and Speck, all twenty variants", () => {
     expect(SIMON_SPECK_PAPER_VECTORS).toHaveLength(20);
   });
 
-  it("reproduces the guide's ten, which are the same values byte-reversed", () => {
+  it("reproduces the guide's ten, including Speck's selectable guide convention", () => {
     for (const v of SIMON_SPECK_GUIDE_VECTORS) {
-      const cipher = make(v.family, reversed(fromHex(v.key)), v.blockBits);
-      const out = new Uint8Array(v.blockBits / 8);
-      cipher.encryptBlock(reversed(fromHex(v.plaintext)), out);
-      expect(toHex(reversed(out)), `${v.family}${v.blockBits}/${v.keyBits}`).toBe(v.ciphertext);
+      const label = `${v.family}${v.blockBits}/${v.keyBits}`;
+      if (v.family === "speck") {
+        const cipher = createSpeck(
+          fromHex(v.key),
+          wordBitsOf(v.blockBits),
+          "implementation-guide",
+        );
+        expect(block(cipher, v.plaintext), label).toBe(v.ciphertext);
+        expect(block(cipher, v.ciphertext, false), `${label} inverse`).toBe(v.plaintext);
+      } else {
+        const cipher = make(v.family, reversed(fromHex(v.key)), v.blockBits);
+        const out = new Uint8Array(v.blockBits / 8);
+        cipher.encryptBlock(reversed(fromHex(v.plaintext)), out);
+        expect(toHex(reversed(out)), label).toBe(v.ciphertext);
+      }
     }
     // The guide covers the 64- and 128-bit blocks only, which is what its own README says.
     expect(new Set(SIMON_SPECK_GUIDE_VECTORS.map((v) => v.blockBits))).toEqual(new Set([64, 128]));

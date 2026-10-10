@@ -3,7 +3,7 @@
  */
 import type { OptionValues } from "@ocs/contracts/options";
 import { optBool, optEnumOr, optNumber, optString, setOption } from "@ocs/contracts/pure";
-import type { PaddingScheme } from "@ocs/algos";
+import type { PaddingScheme, SpeckByteConvention } from "@ocs/algos";
 
 export const SPEC_VERSION = 1;
 
@@ -16,6 +16,7 @@ export const OPTION_MODE = "mode";
  * already taken by `CipherSpec.variant`, which holds the tool id.
  */
 export const OPTION_PARAM_SET = "paramSet";
+export const OPTION_BYTE_CONVENTION = "byteConvention";
 export const OPTION_KEY = "key";
 export const OPTION_NONCE = "nonce";
 export const OPTION_AAD = "aad";
@@ -80,6 +81,18 @@ export function readParamSet(options: OptionValues): string | undefined {
 
 export function withParamSet(options: OptionValues, id: string): OptionValues {
   return setOption(options, OPTION_PARAM_SET, id);
+}
+
+/** Paper ordering preserves existing specs; the guide ordering matches little-endian implementations. */
+export const DEFAULT_SPECK_BYTE_CONVENTION: SpeckByteConvention = "paper";
+
+export function readSpeckByteConvention(options: OptionValues): SpeckByteConvention {
+  return optEnumOr(
+    options,
+    OPTION_BYTE_CONVENTION,
+    ["paper", "implementation-guide"] as const,
+    DEFAULT_SPECK_BYTE_CONVENTION,
+  );
 }
 
 export function readMode(options: OptionValues, fallback: string): string {
@@ -339,4 +352,3 @@ export function readAgePassphrase(options: OptionValues): string {
 export function readAgeArmor(options: OptionValues): boolean {
   return options[OPTION_AGE_ARMOR] === undefined ? true : optBool(options, OPTION_AGE_ARMOR);
 }
-

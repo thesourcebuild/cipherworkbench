@@ -1,4 +1,11 @@
-import { DEFAULT_AES_KEY_SIZE, DEFAULT_PADDING, OPTION_KEY_SIZE, OPTION_PADDING } from "./pure";
+import {
+  DEFAULT_AES_KEY_SIZE,
+  DEFAULT_PADDING,
+  DEFAULT_SPECK_BYTE_CONVENTION,
+  OPTION_BYTE_CONVENTION,
+  OPTION_KEY_SIZE,
+  OPTION_PADDING,
+} from "./pure";
 import { DEFAULT_AES_MODE, requireCipherTool } from "./catalogue/tool-meta";
 import {
   DEFAULT_TAG_LEN,
@@ -94,6 +101,9 @@ export function createSpec(options?: { variant?: string }): CipherSpec {
   base[OPTION_ARGON2_VARIANT] = "argon2id";
   if (tool.paramSets) {
     base[OPTION_PARAM_SET] = tool.defaultParamSet ?? tool.paramSets[0]!.id;
+  }
+  if (cipherCatalogueFor(variant).get(OPTION_BYTE_CONVENTION)) {
+    base[OPTION_BYTE_CONVENTION] = DEFAULT_SPECK_BYTE_CONVENTION;
   }
   /**
    * A shaped tool's instance select shares `OPTION_PARAM_SET`, so it is seeded the same way.

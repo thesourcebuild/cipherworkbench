@@ -19,6 +19,7 @@ import {
   readMode,
   readPadding,
   readParamSet,
+  readSpeckByteConvention,
   readRc5Rounds,
   readTagLen,
   readTagLenFrom,
@@ -47,7 +48,12 @@ import {
   type AesModeMeta,
 } from "./catalogue/tool-meta";
 import type { CipherSpec } from "./spec";
-import { formatAgeIdentity, formatAgeRecipient, type PaddingScheme } from "@ocs/algos";
+import {
+  formatAgeIdentity,
+  formatAgeRecipient,
+  type PaddingScheme,
+  type SpeckByteConvention,
+} from "@ocs/algos";
 import { x25519 } from "@noble/curves/ed25519.js";
 import {
   keySourceParams,
@@ -77,6 +83,8 @@ export interface ResolvedCipher {
    * below has a single source. `undefined` for every other cipher.
    */
   paramSet: CipherParamSet | undefined;
+  /** Speck's external byte serialization; ignored by every other block cipher. */
+  speckByteConvention: SpeckByteConvention;
   /**
    * The padding scheme, which only ECB and CBC read.
    *
@@ -533,6 +541,7 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
         direction,
         mode: undefined,
         paramSet: undefined,
+        speckByteConvention: readSpeckByteConvention(spec.options),
         padding: "pkcs7",
         keySource,
         keySourceParams: derivedParams,
@@ -785,6 +794,7 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
       direction,
       mode,
       paramSet,
+      speckByteConvention: readSpeckByteConvention(spec.options),
       instance,
       blockSize,
       padding: readPadding(spec.options),
