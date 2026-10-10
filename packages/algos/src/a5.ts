@@ -17,71 +17,83 @@ function majority(a: number, b: number, c: number): number {
   return (a & b) | (a & c) | (b & c);
 }
 
-export function a51Crypt(key: Uint8Array, count: number, length: number): Uint8Array {
-  // Key: 64 bits (8 bytes), count (Fn): 22 bits
+export interface A51Generator {
+  /** Returns the next bytes of keystream without restarting the GSM frame state. */
+  keystream(length: number): Uint8Array;
+}
+
+export function createA51(key: Uint8Array, count: number): A51Generator {
+  if (key.length !== 8) {
+    throw new Error(`A5/1 requires a 64-bit (8-byte) key, got ${key.length} bytes.`);
+  }
+
   let r1 = 0; // 19 bits
   let r2 = 0; // 22 bits
   let r3 = 0; // 23 bits
 
-  // 1. Initialize with 64 key bits
+  const clockR1 = (): void => {
+    r1 = ((r1 << 1) | parity(r1 & 0x072000)) & 0x7ffff;
+  };
+  const clockR2 = (): void => {
+    r2 = ((r2 << 1) | parity(r2 & 0x300000)) & 0x3fffff;
+  };
+  const clockR3 = (): void => {
+    r3 = ((r3 << 1) | parity(r3 & 0x700080)) & 0x7fffff;
+  };
+  const clockAll = (): void => {
+    clockR1();
+    clockR2();
+    clockR3();
+  };
+  const clockMajority = (): void => {
+    const r1Clock = (r1 >>> 8) & 1;
+    const r2Clock = (r2 >>> 10) & 1;
+    const r3Clock = (r3 >>> 10) & 1;
+    const m = majority(r1Clock, r2Clock, r3Clock);
+    if (r1Clock === m) clockR1();
+    if (r2Clock === m) clockR2();
+    if (r3Clock === m) clockR3();
+  };
+
+  // Kc and COUNT are both loaded least-significant bit first.
   for (let i = 0; i < 64; i++) {
-    const byte = key[Math.floor(i / 8)] ?? 0;
-    const bit = (byte >>> (i % 8)) & 1;
-    r1 = ((r1 << 1) | bit) & 0x7ffff;
-    r2 = ((r2 << 1) | bit) & 0x3fffff;
-    r3 = ((r3 << 1) | bit) & 0x7fffff;
+    const bit = (key[i >>> 3]! >>> (i & 7)) & 1;
+    clockAll();
+    r1 ^= bit;
+    r2 ^= bit;
+    r3 ^= bit;
   }
 
-  // 2. Initialize with 22 frame counter bits
+  // COUNT is a 22-bit value and is loaded least-significant bit first.
   for (let i = 0; i < 22; i++) {
     const bit = (count >>> i) & 1;
-    r1 = ((r1 << 1) | bit) & 0x7ffff;
-    r2 = ((r2 << 1) | bit) & 0x3fffff;
-    r3 = ((r3 << 1) | bit) & 0x7fffff;
+    clockAll();
+    r1 ^= bit;
+    r2 ^= bit;
+    r3 ^= bit;
   }
 
-  // 3. Warm up 100 clock cycles with majority stepping
-  for (let i = 0; i < 100; i++) {
-    const m = majority((r1 >>> 8) & 1, (r2 >>> 10) & 1, (r3 >>> 10) & 1);
-    if (((r1 >>> 8) & 1) === m) {
-      const fb = parity(r1 & 0x072000); // taps 18, 17, 16, 13
-      r1 = ((r1 << 1) | fb) & 0x7ffff;
-    }
-    if (((r2 >>> 10) & 1) === m) {
-      const fb = parity(r2 & 0x300000); // taps 21, 20
-      r2 = ((r2 << 1) | fb) & 0x3fffff;
-    }
-    if (((r3 >>> 10) & 1) === m) {
-      const fb = parity(r3 & 0x700080); // taps 22, 21, 20, 7
-      r3 = ((r3 << 1) | fb) & 0x7fffff;
-    }
-  }
+  for (let i = 0; i < 100; i++) clockMajority();
 
-  // 4. Generate keystream bytes
-  const out = new Uint8Array(length);
-  for (let i = 0; i < length; i++) {
-    let byte = 0;
-    for (let b = 0; b < 8; b++) {
-      const m = majority((r1 >>> 8) & 1, (r2 >>> 10) & 1, (r3 >>> 10) & 1);
-      if (((r1 >>> 8) & 1) === m) {
-        const fb = parity(r1 & 0x072000);
-        r1 = ((r1 << 1) | fb) & 0x7ffff;
+  return {
+    keystream(length: number): Uint8Array {
+      const out = new Uint8Array(length);
+      for (let i = 0; i < length; i++) {
+        let byte = 0;
+        for (let b = 0; b < 8; b++) {
+          clockMajority();
+          const outBit = ((r1 >>> 18) ^ (r2 >>> 21) ^ (r3 >>> 22)) & 1;
+          byte |= outBit << (7 - b);
+        }
+        out[i] = byte;
       }
-      if (((r2 >>> 10) & 1) === m) {
-        const fb = parity(r2 & 0x300000);
-        r2 = ((r2 << 1) | fb) & 0x3fffff;
-      }
-      if (((r3 >>> 10) & 1) === m) {
-        const fb = parity(r3 & 0x700080);
-        r3 = ((r3 << 1) | fb) & 0x7fffff;
-      }
-      const outBit = ((r1 >>> 18) ^ (r2 >>> 21) ^ (r3 >>> 22)) & 1;
-      byte = (byte << 1) | outBit;
-    }
-    out[i] = byte;
-  }
+      return out;
+    },
+  };
+}
 
-  return out;
+export function a51Crypt(key: Uint8Array, count: number, length: number): Uint8Array {
+  return createA51(key, count).keystream(length);
 }
 
 export function a51Encrypt(key: Uint8Array, count: number, data: Uint8Array): Uint8Array {

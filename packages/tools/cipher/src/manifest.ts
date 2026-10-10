@@ -1,6 +1,10 @@
 import type { OutputEncoding } from "@ocs/contracts/encoding";
 import type { ToolManifest } from "@ocs/engine";
-import { CIPHER_TOOLS, type CipherToolMeta } from "./catalogue/tool-meta";
+import {
+  CIPHER_TOOLS,
+  hasConditionalCipherStreaming,
+  type CipherToolMeta,
+} from "./catalogue/tool-meta";
 
 /**
  * `latin1` is offered here and in no other family.
@@ -40,12 +44,9 @@ function toManifest(meta: CipherToolMeta): ToolManifest {
     readsInput: true,
     supportsVerify: true,
     supportsFile: true,
-    /**
-     * Most ciphers do not stream, because an AEAD cannot emit authenticated output until it has seen
-     * every byte, and CBC needs the whole ciphertext to strip padding. Cobblestone is the streaming
-     * chunked encryption exception that does stream incrementally.
-     */
+    // Static true means every configuration streams; conditional support is resolved from the spec.
     streaming: meta.streaming ?? false,
+    ...(hasConditionalCipherStreaming(meta) ? { conditionalStreaming: true } : {}),
   };
 }
 

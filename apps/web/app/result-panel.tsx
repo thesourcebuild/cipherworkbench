@@ -4,9 +4,7 @@ import { useMemo, useState } from "react";
 import type { OutputEncoding } from "@ocs/contracts";
 import { OUTPUT_ENCODING_LABEL } from "@ocs/contracts";
 import {
-  encodeOutput,
   type ToolManifest,
-  type ToolResult,
   type ToolResultField,
   type ToolSpecBase,
 } from "@ocs/engine";
@@ -18,6 +16,7 @@ import { FieldTable } from "./field-table";
 import { KeypairResultView } from "./keypair-result-view";
 import { CertDiffResultView } from "./cert-diff-result-view";
 import { WorkingView } from "./working-view";
+import { jsonExportAvailability, presentResult } from "./result-presentation";
 import type { InputState } from "./input-state";
 import type { ComputeState } from "./use-compute";
 
@@ -97,15 +96,20 @@ export function ResultPanel({
 
   const isCertDiff = Boolean(state.result?.tableRows?.length);
 
-  const primary = useMemo(
-    () => renderPrimary(state.result, outputEncoding, hexPrefix),
+  const presentation = useMemo(
+    () =>
+      presentResult(
+        state.result,
+        outputEncoding,
+        acceptsHexPrefix(outputEncoding) ? hexPrefix : "",
+      ),
     [state.result, outputEncoding, hexPrefix],
   );
-
-  const exportPayload = useMemo(() => {
-    if (!manifest || !spec || !input) return undefined;
-    return buildExportPayload(manifest, spec, input, state.result, outputEncoding, infoFields);
-  }, [manifest, spec, input, state.result, outputEncoding, infoFields]);
+  const primary = presentation.value;
+  const jsonAvailability = useMemo(
+    () => jsonExportAvailability(state.result, input, spec, infoFields, outputEncoding),
+    [state.result, input, spec, infoFields, outputEncoding],
+  );
 
   const [exporting, setExporting] = useState<"idle" | "saving" | "done">("idle");
 
@@ -148,9 +152,13 @@ export function ResultPanel({
    * the second number true when a prefix is on.
    */
   const resultLen = state.result?.bytes?.length ?? 0;
-  const sizeLine = `${resultLen} ${resultLen === 1 ? "byte" : "bytes"} · ${primary.length} ${
-    primary.length === 1 ? "character" : "characters"
-  } as shown`;
+  const sizeLine = presentation.truncated
+    ? presentation.totalBytes !== undefined
+      ? `${presentation.totalBytes} bytes total; previewing ${presentation.totalBytes - (presentation.omittedBytes ?? 0)} bytes; ${presentation.omittedBytes ?? 0} bytes omitted`
+      : `${presentation.totalCharacters ?? 0} characters total; previewing ${(presentation.totalCharacters ?? 0) - (presentation.omittedCharacters ?? 0)} characters; ${presentation.omittedCharacters ?? 0} characters omitted`
+    : `${resultLen} ${resultLen === 1 ? "byte" : "bytes"} · ${primary.length} ${
+        primary.length === 1 ? "character" : "characters"
+      } as shown`;
 
   // Dimmed, not replaced: during the debounce window the value on screen is still the right answer
   // for the input that produced it, and blanking it on every keystroke is what a spinner here would
@@ -221,19 +229,30 @@ export function ResultPanel({
           {!isKeygen && (
             <CopyButton
               value={() => primary}
-              disabled={primary === ""}
+              disabled={primary === "" || presentation.truncated}
               writeClipboard={(text) => platform().copyToClipboard(text)}
             />
           )}
-          {exportPayload && (
+          {manifest && spec && input && (
             <Button
               size="sm"
               variant="secondary"
-              disabled={primary === "" && !state.result?.error}
-              onClick={() =>
-                downloadJsonFile(`${manifest?.id ?? "tool"}-export`, exportPayload)
-              }
-              title="Download computation JSON file"
+              disabled={!jsonAvailability.allowed || (primary === "" && !state.result?.error)}
+              onClick={() => {
+                if (!jsonAvailability.allowed) return;
+                downloadJsonFile(
+                  `${manifest.id}-export`,
+                  buildExportPayload(
+                    manifest,
+                    spec,
+                    input,
+                    state.result,
+                    outputEncoding,
+                    infoFields,
+                  ),
+                );
+              }}
+              title={jsonAvailability.reason ?? "Download computation JSON file"}
             >
               Save JSON
             </Button>
@@ -389,41 +408,4 @@ export function ResultPanel({
       </div>
     </Panel>
   );
-}
-
-/**
- * A bare track, always drawn, whose fill is the only thing that moves.
- *
- * Two things it deliberately is not. It is not conditional: a bar that appears pushes everything
- * below it -- Verify, the field table, sometimes a 256-cell grid -- down the page, and then back up
- * when it goes. And it is not invisible-when-idle either, which was the first attempt at that: it
- * fixed the shift and left the bar reading as something that came and went.
- *
- * It also carries no caption of its own. The byte readout goes in the result panel's single caption
- * slot, so there is one grey line under the value rather than two, and this element's height is
- * fixed at eight pixels in every state.
- */
-function renderPrimary(
-  result: ToolResult | undefined,
-  encoding: OutputEncoding,
-  hexPrefix: HexPrefix,
-): string {
-  if (!result) return "";
-  /**
-   * `text` is returned verbatim, prefix included in the exemption.
-   *
-   * A tool whose output is natively text -- a decoded Base64 string, a formatted JSON document -- is
-   * not a number, and putting `0x` in front of it would be nonsense. This is also why the prefix is
-   * applied here rather than to `primary` afterwards: a wrapper around the finished string could not
-   * tell the two apart.
-   */
-  if (result.text !== undefined) return result.text;
-  if (result.bytes) {
-    const spelled = encodeOutput(result.bytes, encoding);
-    // Nothing to prefix when there is nothing there: `0x` alone would defeat the `primary === ""`
-    // checks that disable Copy and Save.
-    if (spelled === "" || !acceptsHexPrefix(encoding)) return spelled;
-    return hexPrefix + spelled;
-  }
-  return "";
 }

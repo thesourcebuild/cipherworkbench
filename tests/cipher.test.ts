@@ -5,6 +5,9 @@ import {
   CIPHER_MANIFESTS,
   CIPHER_TOOLS,
   OPTION_AAD,
+  OPTION_AGE_ARMOR,
+  OPTION_AGE_AUTH_MODE,
+  OPTION_AGE_PASSPHRASE,
   OPTION_COUNTER,
   OPTION_DIRECTION,
   OPTION_PADDING,
@@ -19,6 +22,8 @@ import {
   OPTION_NONCE,
   OPTION_TAG_LEN,
   getAesMode,
+  hasConditionalCipherStreaming,
+  RAW_STREAM_CIPHER_TOOL_IDS,
   requireCipherTool,
   type AesModeMeta,
   type CipherSpec,
@@ -37,9 +42,17 @@ import {
   requiredNonceLength,
   resolveCipher,
 } from "@ocs/cipher/definition";
-import { encodeHex, isAvailableOn, validateCatalogue, withAvailableChoices } from "@ocs/engine";
+import {
+  encodeHex,
+  isAvailableOn,
+  rechunk,
+  runStream,
+  validateCatalogue,
+  withAvailableChoices,
+} from "@ocs/engine";
 import { formatShellCommands } from "../packages/ui/src/shell-command";
 import { SIMON_SPECK_VARIANTS } from "@ocs/algos";
+import { RAW_STREAM_CIPHER_IDS } from "@ocs/algos/raw-stream";
 import { keySourceOptions } from "@ocs/kdf/key-source";
 import { ASCON_AEAD128_KAT } from "./ascon-kat";
 import { AEGIS128L_VECTORS, AEGIS256_VECTORS } from "./aegis-vectors";
@@ -213,6 +226,17 @@ async function run(variant: string, options: CipherSpec["options"], input: Uint8
   return result;
 }
 
+async function* singleChunk(bytes: Uint8Array) {
+  yield bytes;
+}
+
+describe("cipher catalogue completeness", () => {
+  it("keeps all 121 cipher tools under the catalogue-wide tests", () => {
+    expect(CIPHER_TOOLS).toHaveLength(121);
+    expect(new Set(CIPHER_TOOLS.map((tool) => tool.id)).size).toBe(121);
+  });
+});
+
 // ── AES-GCM: NIST vectors ───────────────────────────────────────────────────
 
 describe("AES-GCM — NIST GCM test cases", () => {
@@ -284,6 +308,20 @@ describe("AES-GCM — NIST GCM test cases", () => {
     expect(tag).toHaveLength(32);
     // The two must reassemble into exactly the primary output.
     expect(body + tag).toBe(encodeHex(result.bytes!));
+  });
+
+  it("does not duplicate large AEAD ciphertext as a hex field", async () => {
+    const result = await run(
+      "aes",
+      keyed("00".repeat(32), "00".repeat(12), { [OPTION_MODE]: "gcm" }),
+      new Uint8Array(4097),
+    );
+    const body = result.fields!.find((field) => field.label === "Ciphertext without tag")!;
+    expect(body.value).toBe(
+      "Stored in the primary binary output: bytes 0-4096, followed by the 16-byte tag shown above.",
+    );
+    expect(body.hint).toMatch(/not duplicated as hex/i);
+    expect(result.bytes).toHaveLength(4113);
   });
 });
 
@@ -871,16 +909,265 @@ describe("catalogue and manifests", () => {
     }
   });
 
-  it("claims streaming only for tools that implement it (Cobblestone)", () => {
+  it("exposes conditional streaming only for tools with at least one incremental configuration", () => {
     for (const meta of CIPHER_TOOLS) {
       const tool = cipherToolDefinition(meta.id);
-      if (meta.streaming) {
-        expect(tool.streaming, meta.id).toBe(true);
+      const expected = hasConditionalCipherStreaming(meta);
+      expect(tool.streaming, meta.id).toBe(false);
+      expect(Boolean(tool.conditionalStreaming), meta.id).toBe(expected);
+      if (expected) {
         expect(tool.createStream, meta.id).toBeDefined();
+        expect(tool.fileProcessingForSpec).toBeDefined();
       } else {
-        expect(tool.streaming, meta.id).toBe(false);
         expect(tool.createStream, meta.id).toBeUndefined();
       }
+    }
+  });
+
+  it("keeps tool metadata and the algorithm raw-stream dispatcher exhaustive together", () => {
+    expect([...RAW_STREAM_CIPHER_TOOL_IDS].sort()).toEqual([...RAW_STREAM_CIPHER_IDS].sort());
+  });
+
+  it("leaves file processing unresolved until required settings are complete", () => {
+    const tool = cipherToolDefinition("aes");
+    const encryptSpec = createSpec({ variant: "aes" });
+    expect(resolveCipher(encryptSpec).ok).toBe(false);
+    expect(tool.fileProcessingForSpec!(encryptSpec)).toBe("unresolved");
+
+    const decryptSpec = specFor("aes", { [OPTION_DIRECTION]: "decrypt" });
+    expect(resolveCipher(decryptSpec).ok).toBe(false);
+    expect(tool.fileProcessingForSpec!(decryptSpec)).toBe("unresolved");
+  });
+
+  it("streams AES classical modes exactly across arbitrary chunk boundaries", async () => {
+    const message = ascii("A 53-byte message crosses blocks and every chunk boundary!!");
+    expect(message).toHaveLength(59);
+    const tool = cipherToolDefinition("aes");
+
+    for (const mode of ["ecb", "cbc", "cfb", "ofb", "ctr"] as const) {
+      const options = keyed("11".repeat(32), mode === "ecb" ? undefined : "22".repeat(16), {
+        [OPTION_MODE]: mode,
+      });
+      const spec = specFor("aes", options);
+      expect(tool.fileProcessingForSpec!(spec), mode).toBe("streaming");
+      const oneShot = await tool.compute(spec, message);
+      expect(oneShot.error, mode).toBeUndefined();
+
+      for (const chunkSize of [1, 7, 16, 31]) {
+        const streamed = await runStream(
+          tool.createStream!(spec),
+          rechunk(singleChunk(message), chunkSize),
+        );
+        expect(encodeHex(streamed.bytes!), `${mode}/encrypt/${chunkSize}`).toBe(
+          encodeHex(oneShot.bytes!),
+        );
+
+        const decryptSpec = specFor("aes", { ...options, [OPTION_DIRECTION]: "decrypt" });
+        const opened = await runStream(
+          tool.createStream!(decryptSpec),
+          rechunk(singleChunk(oneShot.bytes!), chunkSize),
+        );
+        expect(encodeHex(opened.bytes!), `${mode}/decrypt/${chunkSize}`).toBe(
+          encodeHex(message),
+        );
+      }
+    }
+  });
+
+  it("streams every advertised classical mode for every metadata-backed block cipher", async () => {
+    const message = Uint8Array.from({ length: 47 }, (_, i) => (i * 29 + 7) & 0xff);
+    const blockTools = CIPHER_TOOLS.filter((meta) => meta.block !== undefined);
+    let combinations = 0;
+
+    for (const meta of blockTools) {
+      const tool = cipherToolDefinition(meta.id);
+      for (const modeId of meta.block!.modes.filter((id) =>
+        ["ecb", "cbc", "cfb", "ofb", "ctr"].includes(id),
+      )) {
+        combinations++;
+        const mode = getAesMode(modeId)!;
+        const nonceLength = requiredNonceLength(meta.id, mode);
+        const options = keyed(
+          "11".repeat(seedKeyLength(meta.id)),
+          nonceLength > 0 ? "22".repeat(nonceLength) : undefined,
+          { [OPTION_MODE]: modeId },
+        );
+        const spec = specFor(meta.id, options);
+        const label = `${meta.id}/${modeId}`;
+        expect(tool.fileProcessingForSpec!(spec), label).toBe("streaming");
+
+        const oneShot = await tool.compute(spec, message);
+        expect(oneShot.error, label).toBeUndefined();
+        const streamed = await runStream(
+          tool.createStream!(spec),
+          rechunk(singleChunk(message), 7),
+        );
+        expect(encodeHex(streamed.bytes!), `${label}/encrypt`).toBe(encodeHex(oneShot.bytes!));
+
+        const decryptSpec = specFor(meta.id, {
+          ...options,
+          [OPTION_DIRECTION]: "decrypt",
+        });
+        expect(tool.fileProcessingForSpec!(decryptSpec), `${label}/decrypt capability`).toBe(
+          "streaming",
+        );
+        const opened = await runStream(
+          tool.createStream!(decryptSpec),
+          rechunk(singleChunk(streamed.bytes!), 11),
+        );
+        expect(encodeHex(opened.bytes!), `${label}/decrypt`).toBe(encodeHex(message));
+      }
+    }
+
+    expect(blockTools).toHaveLength(66);
+    expect(combinations).toBeGreaterThan(200);
+  });
+
+  it("streams every raw stream cipher through the tool contract", async () => {
+    const message = Uint8Array.from({ length: 257 }, (_, i) => (i * 17 + 3) & 0xff);
+
+    for (const id of RAW_STREAM_CIPHER_TOOL_IDS) {
+      const nonceLength = requiredNonceLength(id, undefined);
+      const options = keyed(
+        "31".repeat(seedKeyLength(id)),
+        nonceLength > 0 ? "42".repeat(nonceLength) : undefined,
+      );
+      const spec = specFor(id, options);
+      const tool = cipherToolDefinition(id);
+      expect(tool.fileProcessingForSpec!(spec), id).toBe("streaming");
+
+      const oneShot = await tool.compute(spec, message);
+      expect(oneShot.error, id).toBeUndefined();
+      const streamed = await runStream(
+        tool.createStream!(spec),
+        rechunk(singleChunk(message), 7),
+      );
+      expect(encodeHex(streamed.bytes!), `${id}/encrypt`).toBe(encodeHex(oneShot.bytes!));
+
+      const opened = await runStream(
+        tool.createStream!(
+          specFor(id, {
+            ...options,
+            [OPTION_DIRECTION]: "decrypt",
+          }),
+        ),
+        rechunk(singleChunk(streamed.bytes!), 13),
+      );
+      expect(encodeHex(opened.bytes!), `${id}/decrypt`).toBe(encodeHex(message));
+    }
+
+    expect(RAW_STREAM_CIPHER_TOOL_IDS).toHaveLength(29);
+  });
+
+  it("streams GCM encryption for every standardized block cipher but buffers decryption", async () => {
+    const message = Uint8Array.from({ length: 4099 }, (_, i) => (i * 11 + 5) & 0xff);
+
+    for (const id of ["aes", "camellia", "aria", "sm4"] as const) {
+      const options = keyed("17".repeat(seedKeyLength(id)), "29".repeat(12), {
+        [OPTION_MODE]: "gcm",
+        [OPTION_AAD]: "a1b2c3d4e5",
+        aadEncoding: "hex",
+      });
+      const tool = cipherToolDefinition(id);
+      const spec = specFor(id, options);
+      expect(tool.fileProcessingForSpec!(spec), `${id}/encrypt`).toBe("streaming");
+
+      const oneShot = await tool.compute(spec, message);
+      expect(oneShot.error, id).toBeUndefined();
+      const streamed = await runStream(
+        tool.createStream!(spec),
+        rechunk(singleChunk(message), 31),
+      );
+      expect(encodeHex(streamed.bytes!), id).toBe(encodeHex(oneShot.bytes!));
+      expect(
+        streamed.cliProviders?.map((provider) => provider.id),
+        `${id}/CLI providers`,
+      ).toEqual(oneShot.cliProviders?.map((provider) => provider.id));
+      expect(JSON.stringify(streamed.cliProviders), `${id}/file CLI command`).toContain(
+        "input.bin",
+      );
+
+      const decryptSpec = specFor(id, {
+        ...options,
+        [OPTION_DIRECTION]: "decrypt",
+      });
+      expect(tool.fileProcessingForSpec!(decryptSpec), `${id}/decrypt`).toBe("buffered");
+      const opened = await tool.compute(decryptSpec, streamed.bytes!);
+      expect(encodeHex(opened.bytes!), `${id}/verified decrypt`).toBe(encodeHex(message));
+    }
+  });
+
+  it("streams raw binary age encryption and keeps auto-detecting decryption buffered", async () => {
+    const tool = cipherToolDefinition("age");
+    const options = {
+      [OPTION_AGE_AUTH_MODE]: "passphrase",
+      [OPTION_AGE_PASSPHRASE]: "streaming age test passphrase",
+      [OPTION_AGE_ARMOR]: false,
+    } satisfies CipherSpec["options"];
+    const message = Uint8Array.from({ length: 2 * 65536 + 37 }, (_, i) => (i * 13 + 9) & 0xff);
+    const spec = specFor("age", options);
+    expect(tool.fileProcessingForSpec!(spec)).toBe("streaming");
+
+    const streamed = await runStream(
+      tool.createStream!(spec),
+      rechunk(singleChunk(message), 8191),
+    );
+    expect(streamed.error).toBeUndefined();
+
+    const decryptSpec = specFor("age", { ...options, [OPTION_DIRECTION]: "decrypt" });
+    expect(tool.fileProcessingForSpec!(decryptSpec)).toBe("buffered");
+    const opened = await tool.compute(decryptSpec, streamed.bytes!);
+    expect(encodeHex(opened.bytes!)).toBe(encodeHex(message));
+
+    expect(
+      tool.fileProcessingForSpec!(specFor("age", { ...options, [OPTION_AGE_ARMOR]: true })),
+    ).toBe("buffered");
+    expect(
+      tool.fileProcessingForSpec!(
+        specFor("age", {
+          ...options,
+          [OPTION_DIRECTION]: "decrypt",
+          [OPTION_AGE_ARMOR]: true,
+        }),
+      ),
+    ).toBe("buffered");
+  });
+
+  it("streams unpadded AES ECB and CBC decryption without requiring a retained block", async () => {
+    const tool = cipherToolDefinition("aes");
+    const message = ascii("0123456789abcdef".repeat(2));
+    expect(message).toHaveLength(32);
+    for (const mode of ["ecb", "cbc"] as const) {
+      const options = keyed("11".repeat(32), mode === "ecb" ? undefined : "22".repeat(16), {
+        [OPTION_MODE]: mode,
+        [OPTION_PADDING]: "none",
+      });
+      const sealed = await tool.compute(specFor("aes", options), message);
+      const opened = await runStream(
+        tool.createStream!(specFor("aes", { ...options, [OPTION_DIRECTION]: "decrypt" })),
+        rechunk(singleChunk(sealed.bytes!), 7),
+      );
+      expect(opened.error, mode).toBeUndefined();
+      expect(encodeHex(opened.bytes!), mode).toBe(encodeHex(message));
+      expect(opened.cliProviders, mode).toBeDefined();
+    }
+  });
+
+  it("keeps authenticated decryption and whole-message AES constructions explicitly buffered", () => {
+    const tool = cipherToolDefinition("aes");
+    for (const mode of ["gcm-siv", "ccm", "ocb", "aessiv", "kw", "kwp", "xts"]) {
+      const modeMeta = getAesMode(mode)!;
+      const nonceLength = requiredNonceLength("aes", modeMeta);
+      const spec = specFor(
+        "aes",
+        keyed(
+          "11".repeat(mode === "xts" ? 64 : 32),
+          nonceLength > 0 ? "22".repeat(nonceLength) : undefined,
+          { [OPTION_MODE]: mode },
+        ),
+      );
+      expect(resolveCipher(spec).ok, `${mode}/fixture`).toBe(true);
+      expect(tool.fileProcessingForSpec!(spec), mode).toBe("buffered");
     }
   });
 
@@ -5074,7 +5361,8 @@ describe("OpenSSL Cipher (enc) Command Parity across Families", () => {
     // 1. AES-256-CBC
     const aesTool = cipherToolDefinition("aes");
     const aesSpec = aesTool.createSpec();
-    aesSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    aesSpec.options[OPTION_KEY] =
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
     aesSpec.options["keyEncoding"] = "hex";
     aesSpec.options[OPTION_KEY_SIZE] = "256";
     aesSpec.options[OPTION_MODE] = "cbc";
@@ -5095,7 +5383,7 @@ describe("OpenSSL Cipher (enc) Command Parity across Families", () => {
     expect(aesCmd).toContain('<nul set /p ="Hello AES" | openssl enc -aes-256-cbc');
 
     const aesPs = formatShellCommands(aesOpenssl!.commands, "powershell", "single-line");
-    expect(aesPs).toContain("cmd /c '<nul set /p =\"Hello AES\" | openssl enc -aes-256-cbc");
+    expect(aesPs).toContain('cmd /c \'<nul set /p ="Hello AES" | openssl enc -aes-256-cbc');
 
     // 2. AES-128-ECB (no IV flag)
     aesSpec.options[OPTION_KEY] = "000102030405060708090a0b0c0d0e0f";
@@ -5154,7 +5442,9 @@ describe("OpenSSL Cipher (enc) Command Parity across Families", () => {
     spec.options[OPTION_NONCE] = "00".repeat(16);
     spec.options["nonceEncoding"] = "hex";
 
-    const lorem3862 = ascii("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(70));
+    const lorem3862 = ascii(
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(70),
+    );
     const res = await tool.compute(spec, lorem3862);
     expect(res.cliProviders).toBeDefined();
 
@@ -5167,4 +5457,3 @@ describe("OpenSSL Cipher (enc) Command Parity across Families", () => {
     expect(bashCmd).toContain("openssl enc -aes-256-cbc -e -in input.txt -out input.txt.enc");
   });
 });
-

@@ -170,8 +170,10 @@ export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps)
                   </th>
                   <td className="px-3 py-2 text-slate-900 dark:text-slate-100">
                     {manifest.streaming
-                      ? "Supported — processes arbitrary-length files in streaming chunks without memory bloat"
-                      : "In-memory block processing"}
+                      ? "Supported — processes file input incrementally in worker chunks"
+                      : manifest.conditionalStreaming
+                        ? "Mode-dependent — direct-key classical block modes read incrementally; derived-key, authenticated, and whole-message constructions buffer"
+                        : "In-memory block processing"}
                   </td>
                 </tr>
                 <tr>

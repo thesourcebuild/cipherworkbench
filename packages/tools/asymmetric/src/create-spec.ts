@@ -9,8 +9,10 @@ import {
 } from "./catalogue/tool-meta";
 import {
   DEFAULT_RSA_SCHEME,
+  DEFAULT_RSA_ENCRYPTION_SCHEME,
   DEFAULT_SIGNATURE_FORMAT,
   OPTION_CURVE,
+  OPTION_ENCRYPTION_SCHEME,
   OPTION_HASH,
   OPTION_MODULUS_LENGTH,
   OPTION_OPERATION,
@@ -35,6 +37,7 @@ export function createSpec(options?: { variant?: string }): AsymmetricSpec {
     values[OPTION_MODULUS_LENGTH] = String(DEFAULT_RSA_MODULUS);
     values[OPTION_PUBLIC_EXPONENT] = String(DEFAULT_RSA_EXPONENT);
     values[OPTION_SCHEME] = DEFAULT_RSA_SCHEME;
+    values[OPTION_ENCRYPTION_SCHEME] = DEFAULT_RSA_ENCRYPTION_SCHEME;
     values[OPTION_HASH] = DEFAULT_RSA_HASH;
   }
   if (variant === "ecdsa") {

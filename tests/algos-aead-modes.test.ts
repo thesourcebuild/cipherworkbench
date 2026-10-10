@@ -29,6 +29,7 @@ import {
   ccmEncrypt,
   createAria,
   createCamellia,
+  createIncrementalGcmEncryptor,
   createSm4,
   gcmDecrypt,
   gcmEncrypt,
@@ -54,12 +55,7 @@ type AeadCipher = Cipher & {
   getAuthTag(): Buffer;
 };
 
-function aeadCipher(
-  name: string,
-  key: Uint8Array,
-  nonce: Uint8Array,
-  tagLen = 16,
-): AeadCipher {
+function aeadCipher(name: string, key: Uint8Array, nonce: Uint8Array, tagLen = 16): AeadCipher {
   return createCipheriv(name, key, nonce, {
     authTagLength: tagLen,
   } as never) as unknown as AeadCipher;
@@ -70,12 +66,27 @@ const toHex = (bytes: Uint8Array) =>
 const fromHex = (hex: string) =>
   hex === ""
     ? new Uint8Array(0)
-    : Uint8Array.from(hex.replace(/\s+/g, "").match(/../g)!.map((b) => parseInt(b, 16)));
+    : Uint8Array.from(
+        hex
+          .replace(/\s+/g, "")
+          .match(/../g)!
+          .map((b) => parseInt(b, 16)),
+      );
 
 /** Deterministic filler -- `Math.random` is banned here and a fixed pattern is reproducible. */
 const seq = (length: number, seed = 1): Uint8Array => {
   const out = new Uint8Array(length);
   for (let i = 0; i < length; i++) out[i] = (i * 7 + seed) & 0xff;
+  return out;
+};
+
+const concat = (chunks: Uint8Array[]): Uint8Array => {
+  const out = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.length, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
   return out;
 };
 
@@ -148,9 +159,10 @@ describe("GCM against OpenSSL", () => {
         openssl.final(),
         openssl.getAuthTag(),
       ]).toString("hex");
-      expect(toHex(gcmEncrypt(aes(key), nonce, plaintext, new Uint8Array(0))), `nonce ${nonceLen}`).toBe(
-        theirs,
-      );
+      expect(
+        toHex(gcmEncrypt(aes(key), nonce, plaintext, new Uint8Array(0))),
+        `nonce ${nonceLen}`,
+      ).toBe(theirs);
     }
   });
 
@@ -162,10 +174,15 @@ describe("GCM against OpenSSL", () => {
       const ad = seq(17, 17);
       const openssl = aeadCipher(`aria-${keyLen * 8}-gcm`, key, nonce, 16);
       openssl.setAAD(ad);
-      expect(toHex(gcmEncrypt(createAria(key), nonce, plaintext, ad)), `aria-${keyLen * 8}-gcm`).toBe(
-        Buffer.concat([openssl.update(plaintext), openssl.final(), openssl.getAuthTag()]).toString(
-          "hex",
-        ),
+      expect(
+        toHex(gcmEncrypt(createAria(key), nonce, plaintext, ad)),
+        `aria-${keyLen * 8}-gcm`,
+      ).toBe(
+        Buffer.concat([
+          openssl.update(plaintext),
+          openssl.final(),
+          openssl.getAuthTag(),
+        ]).toString("hex"),
       );
     }
   });
@@ -186,9 +203,9 @@ describe("GCM against OpenSSL", () => {
       "83de3541e4c2b58177e065a9bf7b62ec";
 
     expect(toHex(gcmEncrypt(createSm4(key), nonce, plaintext, ad))).toBe(expected);
-    expect(
-      toHex(gcmDecrypt(createSm4(key), nonce, fromHex(expected), ad)!),
-    ).toBe(toHex(plaintext));
+    expect(toHex(gcmDecrypt(createSm4(key), nonce, fromHex(expected), ad)!)).toBe(
+      toHex(plaintext),
+    );
   });
 
   it("round-trips and rejects tampering, including in the AAD", () => {
@@ -204,6 +221,147 @@ describe("GCM against OpenSSL", () => {
     expect(gcmDecrypt(aes(key), nonce, tampered, ad)).toBeNull();
     expect(gcmDecrypt(aes(key), nonce, sealed, seq(9, 5))).toBeNull();
   });
+
+  it("accepts only SP 800-38D tag lengths on every GCM path", () => {
+    const key = seq(16, 21);
+    const nonce = seq(12, 23);
+    const plaintext = seq(19, 25);
+
+    for (const tagLen of [4, 8, 12, 13, 14, 15, 16]) {
+      const sealed = gcmEncrypt(aes(key), nonce, plaintext, undefined, tagLen);
+      expect(sealed).toHaveLength(plaintext.length + tagLen);
+      expect(gcmDecrypt(aes(key), nonce, sealed, undefined, tagLen)).toEqual(plaintext);
+      expect(
+        createIncrementalGcmEncryptor(aes(key), nonce, undefined, tagLen).finalize(),
+      ).toHaveLength(tagLen);
+    }
+
+    for (const tagLen of [0, 1, 5, 9, 10, 11, 17]) {
+      expect(() => gcmEncrypt(aes(key), nonce, plaintext, undefined, tagLen)).toThrow(
+        /4, 8, or 12 to 16 bytes/,
+      );
+      expect(() => gcmDecrypt(aes(key), nonce, new Uint8Array(32), undefined, tagLen)).toThrow(
+        /4, 8, or 12 to 16 bytes/,
+      );
+      expect(() => createIncrementalGcmEncryptor(aes(key), nonce, undefined, tagLen)).toThrow(
+        /4, 8, or 12 to 16 bytes/,
+      );
+    }
+  });
+
+  it("rejects oversized plaintext before producing output or advancing state", () => {
+    const limit = 2 ** 36 - 32;
+    // The extra tag width also keeps the decrypt path's derived plaintext one byte over the limit.
+    const oversized = { length: limit + 17 } as unknown as Uint8Array;
+    let encryptions = 0;
+    const countingCipher: BlockCipher = {
+      blockSize: 16,
+      encryptBlock: (src, dst) => {
+        encryptions++;
+        dst.set(src);
+      },
+      decryptBlock: (src, dst) => dst.set(src),
+    };
+
+    expect(() => gcmEncrypt(countingCipher, seq(12), oversized)).toThrow(
+      /limited to 68719476704 bytes/,
+    );
+    expect(encryptions).toBe(0);
+
+    const encryptor = createIncrementalGcmEncryptor(countingCipher, seq(12));
+    const afterSetup = encryptions;
+    expect(() => encryptor.update(oversized)).toThrow(/limited to 68719476704 bytes/);
+    expect(encryptions).toBe(afterSetup);
+
+    expect(() => gcmDecrypt(countingCipher, seq(12), oversized)).toThrow(
+      /limited to 68719476704 bytes/,
+    );
+    expect(encryptions).toBe(afterSetup);
+  });
+
+  it("encrypts across arbitrary chunk boundaries and carries the GHASH tail", () => {
+    const key = seq(32, 31);
+    const nonce = seq(17, 33);
+    const plaintext = seq(79, 35);
+    const ad = seq(21, 37);
+    const tagLen = 12;
+    const encryptor = createIncrementalGcmEncryptor(aes(key), nonce, ad, tagLen);
+    const chunks = [0, 1, 6, 15, 16, 17, 39, 52, 78, 79];
+    const ciphertext: Uint8Array[] = [];
+
+    for (let i = 0; i < chunks.length - 1; i++) {
+      const input = plaintext.subarray(chunks[i], chunks[i + 1]);
+      const output = encryptor.update(input);
+      expect(output, `chunk ${i}`).toHaveLength(input.length);
+      ciphertext.push(output);
+    }
+    const tag = encryptor.finalize();
+    expect(tag).toHaveLength(tagLen);
+
+    const openssl = aeadCipher("aes-256-gcm", key, nonce, tagLen);
+    openssl.setAAD(ad);
+    const expected = Buffer.concat([
+      openssl.update(plaintext),
+      openssl.final(),
+      openssl.getAuthTag(),
+    ]);
+    expect(toHex(concat([...ciphertext, tag]))).toBe(expected.toString("hex"));
+  });
+
+  it("is generic across AES, ARIA and SM4", () => {
+    const key = seq(16, 41);
+    const nonce = seq(8, 43);
+    const plaintext = seq(53, 45);
+    const ad = seq(19, 47);
+
+    for (const [name, make] of [
+      ["AES", aes],
+      ["ARIA", createAria],
+      ["SM4", createSm4],
+    ] as const) {
+      const encryptor = createIncrementalGcmEncryptor(make(key), nonce, ad);
+      const sealed = concat([
+        encryptor.update(plaintext.subarray(0, 3)),
+        encryptor.update(plaintext.subarray(3, 34)),
+        encryptor.update(plaintext.subarray(34)),
+        encryptor.finalize(),
+      ]);
+      expect(toHex(sealed), name).toBe(toHex(gcmEncrypt(make(key), nonce, plaintext, ad)));
+    }
+  });
+
+  it("does not mutate inputs and guards its finalized lifecycle", () => {
+    const nonce = seq(12, 51);
+    const ad = seq(11, 53);
+    const first = seq(7, 55);
+    const second = seq(23, 57);
+    const before = [nonce, ad, first, second].map(toHex);
+    const encryptor = createIncrementalGcmEncryptor(aes(seq(16, 49)), nonce, ad);
+
+    expect(encryptor.update(new Uint8Array(0))).toHaveLength(0);
+    expect(encryptor.update(first)).toHaveLength(first.length);
+    expect(encryptor.update(second)).toHaveLength(second.length);
+    expect(encryptor.finalize()).toHaveLength(16);
+    expect([nonce, ad, first, second].map(toHex)).toEqual(before);
+    expect(() => encryptor.update(first)).toThrow(/already finalized/);
+    expect(() => encryptor.finalize()).toThrow(/already finalized/);
+  });
+
+  it("matches one-shot GCM for approximately 3 MiB without buffering plaintext", () => {
+    const key = seq(16, 61);
+    const nonce = seq(13, 63);
+    const plaintext = seq(3 * 1024 * 1024 + 29, 65);
+    const ad = seq(23, 67);
+    const expected = gcmEncrypt(aes(key), nonce, plaintext, ad);
+    const encryptor = createIncrementalGcmEncryptor(aes(key), nonce, ad);
+    const ciphertext: Uint8Array[] = [];
+
+    for (let at = 0; at < plaintext.length; at += 65_521) {
+      ciphertext.push(encryptor.update(plaintext.subarray(at, at + 65_521)));
+    }
+    ciphertext.push(encryptor.finalize());
+    expect(Buffer.from(concat(ciphertext)).equals(expected)).toBe(true);
+  }, 20_000);
 
   it("GHASH is keyed and order-dependent, which is all it promises", () => {
     // Not a MAC on its own: exposed only to the modes. Two properties worth pinning -- a different
@@ -257,10 +415,15 @@ describe("CCM against OpenSSL", () => {
       const ad = seq(11, 27);
       const openssl = aeadCipher(`aria-${keyLen * 8}-ccm`, key, nonce, 12);
       openssl.setAAD(ad, { plaintextLength: plaintext.length });
-      expect(toHex(ccmEncrypt(createAria(key), nonce, plaintext, ad, 12)), `aria-${keyLen * 8}-ccm`).toBe(
-        Buffer.concat([openssl.update(plaintext), openssl.final(), openssl.getAuthTag()]).toString(
-          "hex",
-        ),
+      expect(
+        toHex(ccmEncrypt(createAria(key), nonce, plaintext, ad, 12)),
+        `aria-${keyLen * 8}-ccm`,
+      ).toBe(
+        Buffer.concat([
+          openssl.update(plaintext),
+          openssl.final(),
+          openssl.getAuthTag(),
+        ]).toString("hex"),
       );
     }
   });
@@ -292,11 +455,13 @@ describe("CCM against OpenSSL", () => {
      * rather than failing obscurely.
      */
     const key = seq(16, 1);
-    expect(() => ccmEncrypt(aes(key), seq(13, 2), new Uint8Array(65536), undefined, 16)).toThrow(
-      /caps the message at 65535/,
-    );
+    expect(() =>
+      ccmEncrypt(aes(key), seq(13, 2), new Uint8Array(65536), undefined, 16),
+    ).toThrow(/caps the message at 65535/);
     // A 7-byte nonce leaves 8 length bytes and no practical cap.
-    expect(() => ccmEncrypt(aes(key), seq(7, 2), new Uint8Array(65536), undefined, 16)).not.toThrow();
+    expect(() =>
+      ccmEncrypt(aes(key), seq(7, 2), new Uint8Array(65536), undefined, 16),
+    ).not.toThrow();
     expect(() => ccmEncrypt(aes(key), seq(6, 2), new Uint8Array(1), undefined, 16)).toThrow(
       /7 to 13 bytes/,
     );
@@ -316,8 +481,15 @@ describe("XTS against OpenSSL", () => {
         const name = `aes-${half * 8}-xts`;
 
         const openssl = createCipheriv(name, key, tweak);
-        const theirs = Buffer.concat([openssl.update(plaintext), openssl.final()]).toString("hex");
-        const ours = xtsEncrypt(aes(key.subarray(0, half)), aes(key.subarray(half)), tweak, plaintext);
+        const theirs = Buffer.concat([openssl.update(plaintext), openssl.final()]).toString(
+          "hex",
+        );
+        const ours = xtsEncrypt(
+          aes(key.subarray(0, half)),
+          aes(key.subarray(half)),
+          tweak,
+          plaintext,
+        );
         expect(toHex(ours), `${name} @ ${length}`).toBe(theirs);
 
         // Decryption separately: the same mistake in both directions cancels out in a round trip, and
@@ -344,7 +516,9 @@ describe("XTS against OpenSSL", () => {
     for (const make of [createCamellia, createSm4]) {
       const sealed = xtsEncrypt(make(key), make(seq(16, 9)), tweak, plaintext);
       expect(sealed).toHaveLength(plaintext.length);
-      expect(toHex(xtsDecrypt(make(key), make(seq(16, 9)), tweak, sealed))).toBe(toHex(plaintext));
+      expect(toHex(xtsDecrypt(make(key), make(seq(16, 9)), tweak, sealed))).toBe(
+        toHex(plaintext),
+      );
     }
   });
 
@@ -400,10 +574,15 @@ describe("OCB against OpenSSL", () => {
       nonce[11] = last;
       const openssl = createCipheriv("aes-256-ocb", key, nonce, { authTagLength: 16 });
       openssl.setAAD(ad);
-      expect(toHex(ocbEncrypt(aes(key), nonce, plaintext, ad, 16)), `nonce ending ${last}`).toBe(
-        Buffer.concat([openssl.update(plaintext), openssl.final(), openssl.getAuthTag()]).toString(
-          "hex",
-        ),
+      expect(
+        toHex(ocbEncrypt(aes(key), nonce, plaintext, ad, 16)),
+        `nonce ending ${last}`,
+      ).toBe(
+        Buffer.concat([
+          openssl.update(plaintext),
+          openssl.final(),
+          openssl.getAuthTag(),
+        ]).toString("hex"),
       );
     }
   });
@@ -437,7 +616,9 @@ describe("OCB against OpenSSL", () => {
 
   it("names its nonce and tag limits", () => {
     const key = seq(16, 1);
-    expect(() => ocbEncrypt(aes(key), new Uint8Array(0), new Uint8Array(1))).toThrow(/1 to 15 bytes/);
+    expect(() => ocbEncrypt(aes(key), new Uint8Array(0), new Uint8Array(1))).toThrow(
+      /1 to 15 bytes/,
+    );
     expect(() => ocbEncrypt(aes(key), seq(16, 2), new Uint8Array(1))).toThrow(/1 to 15 bytes/);
     expect(() => ocbEncrypt(aes(key), seq(12, 2), new Uint8Array(1), undefined, 17)).toThrow(
       /1 to 16 bytes/,
@@ -470,10 +651,11 @@ describe("the BlockCipher contract", () => {
       cipher.encryptBlock(source, out);
       expect(toHex(source), `${name} encryptBlock mutated its source`).toBe(before);
       expect(toHex(out), `${name} encryptBlock did nothing`).not.toBe(before);
+      const encrypted = toHex(out);
 
       const back = new Uint8Array(cipher.blockSize);
       cipher.decryptBlock(out, back);
-      expect(toHex(out), `${name} decryptBlock mutated its source`).toBe(toHex(out));
+      expect(toHex(out), `${name} decryptBlock mutated its source`).toBe(encrypted);
       expect(toHex(back), `${name} did not round-trip`).toBe(before);
     }
   });

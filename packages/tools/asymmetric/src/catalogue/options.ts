@@ -1,6 +1,7 @@
 import { createOptionCatalogue, type OptionCatalogue, type OptionDef } from "@ocs/engine";
 import {
   OPTION_CURVE,
+  OPTION_ENCRYPTION_SCHEME,
   OPTION_HASH,
   OPTION_MODULUS_LENGTH,
   OPTION_OAEP_LABEL,
@@ -12,6 +13,7 @@ import {
   OPTION_SCHEME,
   OPTION_SIGNATURE,
   OPTION_SIGNATURE_FORMAT,
+  TAG_RSA_OAEP,
 } from "../pure";
 import {
   curvesFor,
@@ -94,21 +96,26 @@ const ECDSA_HASHES: readonly { value: string; label: string; summary?: string }[
   { value: "SHA-1", label: "SHA-1", summary: "Legacy only -- collision-broken" },
 ];
 
-function hashOption(availableOn: readonly AsymmetricOperation[], forRsa: boolean): Def {
+function hashOption(availableOn: readonly string[], forRsa: boolean): Def {
   /**
    * All fourteen RSA hashes, including the ten `crypto.subtle` refuses.
    *
    * The `insecure` flag comes off the metadata's `broken` field rather than a hardcoded id
    * list here, so a hash that becomes unfit gets flagged in the form and in `A002` from one
-   * edit. Four of these are unavailable for OAEP; the resolver says so rather than the
-   * catalogue hiding them, because one catalogue serves all five operations.
+   * edit. OAEP narrows this to the four hashes WebCrypto implements through choice-level tags;
+   * signing still exposes the full interoperable list.
    */
   const choices = forRsa
     ? RSA_HASHES.map((h) => ({
         value: h.id,
         label: h.label,
         ...(h.broken ? { insecure: true, summary: "Legacy only — collision-broken" } : {}),
-        ...(h.webcrypto ? {} : { summary: "Signatures only, via the in-repo RSA path" }),
+        ...(h.webcrypto
+          ? { availableOn: ["sign", "verify", TAG_RSA_OAEP] }
+          : {
+              availableOn: ["sign", "verify"],
+              summary: "Signatures only, via the in-repo RSA path",
+            }),
       }))
     : ECDSA_HASHES.map((c) => ({ ...c, ...(c.value === "SHA-1" ? { insecure: true } : {}) }));
 
@@ -147,6 +154,31 @@ const SCHEME_OPTION: Def = {
   detail:
     "PSS adds a random salt and has a proof of security relative to the RSA problem; the salt length here is the hash's output length, which is the recommended setting and what every implementation defaults to. PKCS#1 v1.5 is deterministic, has no such proof, and has produced a long line of implementation-specific forgery attacks -- and is nonetheless what JWT's RS256, most X.509 certificates and most SSH keys use, so it cannot be dropped. Neither is broken today when implemented correctly.",
   order: 15,
+};
+
+const ENCRYPTION_SCHEME_OPTION: Def = {
+  id: OPTION_ENCRYPTION_SCHEME,
+  label: "Encryption padding",
+  group: "algorithm",
+  kind: "enum",
+  choices: [
+    {
+      value: "oaep",
+      label: "RSA-OAEP",
+      summary: "Modern randomized padding; use for new encryption",
+    },
+    {
+      value: "pkcs1v15",
+      label: "RSAES-PKCS1-v1_5",
+      summary: "Legacy interoperability only; vulnerable to padding-oracle attacks",
+      insecure: true,
+    },
+  ],
+  availableOn: ["encrypt", "decrypt"],
+  summary: "OAEP for new encryption; PKCS#1 v1.5 only for legacy interoperability.",
+  detail:
+    "RSA-OAEP is the modern randomized encoding and binds a hash plus an optional label into the ciphertext. RSAES-PKCS1-v1_5 is the older 00 02 || random nonzero padding || 00 || message encoding. Its format has enabled practical Bleichenbacher and ROBOT padding-oracle attacks whenever a decryptor reveals whether padding was valid. It remains available to inspect legacy data, but must not be chosen for a new protocol.",
+  order: 16,
 };
 
 const MODULUS_OPTION: Def = {
@@ -330,7 +362,7 @@ const OAEP_LABEL_OPTION: Def = {
   kind: "bytes",
   bytesLength: { min: 0, max: 4096 },
   defaultBytesEncoding: "utf-8",
-  availableOn: ["encrypt", "decrypt"],
+  availableOn: [TAG_RSA_OAEP],
   summary: "Optional context bound into the padding. Usually empty.",
   detail:
     "OAEP's rarely-used third input, analogous to an AEAD's additional data: it is hashed into the padding, so a ciphertext produced under one label will not decrypt under another. It is not transmitted and not recoverable from the ciphertext, so both sides must know it independently. Almost every deployment leaves it empty, which is the default here.",
@@ -342,7 +374,8 @@ const RSA_OPTIONS: readonly Def[] = [
   MODULUS_OPTION,
   EXPONENT_OPTION,
   SCHEME_OPTION,
-  hashOption(["sign", "verify", "encrypt", "decrypt"], true),
+  ENCRYPTION_SCHEME_OPTION,
+  hashOption(["sign", "verify", TAG_RSA_OAEP], true),
   pemPrivateKeyOption(["sign", "decrypt"]),
   pemPublicKeyOption(["verify", "encrypt"]),
   signatureOption(
@@ -433,7 +466,6 @@ const ECDH_OPTIONS: readonly Def[] = [
   ),
 ];
 
-
 /**
  * The parameter set, for the three post-quantum tools.
  *
@@ -457,7 +489,7 @@ function paramSetOption(toolId: string): Def {
     })),
     summary: "Which standardised parameter set, and therefore every length below.",
     detail:
-      "NIST's security categories are 1, 2, 3 and 5 -- there is no 4 -- and they are stated as \"at least as hard to break as AES-128\" through \"as AES-256\" rather than as a bit count, because the underlying problems are not comparable to a key search. Category 3 is the usual choice and what the deployed protocols picked. Changing the set changes every length the form accepts, which is why a key from one set is refused under another rather than silently truncated.",
+      'NIST\'s security categories are 1, 2, 3 and 5 -- there is no 4 -- and they are stated as "at least as hard to break as AES-128" through "as AES-256" rather than as a bit count, because the underlying problems are not comparable to a key search. Category 3 is the usual choice and what the deployed protocols picked. Changing the set changes every length the form accepts, which is why a key from one set is refused under another rather than silently truncated.',
     order: 5,
   };
 }
@@ -557,7 +589,12 @@ const BIP340_OPTIONS: readonly Def[] = [
 
 function pqOptions(toolId: string): readonly Def[] {
   const tool = requireAsymmetricTool(toolId);
-  const isKem = toolId === "mlkem" || toolId === "mceliece" || toolId === "hqc" || toolId === "ntru" || toolId === "x25519mlkem768";
+  const isKem =
+    toolId === "mlkem" ||
+    toolId === "mceliece" ||
+    toolId === "hqc" ||
+    toolId === "ntru" ||
+    toolId === "x25519mlkem768";
 
   return [
     operationOption(tool.operations),
@@ -573,7 +610,9 @@ function pqOptions(toolId: string): readonly Def[] {
       isKem ? "Public key (theirs)" : "Public key",
       isKem ? ["encapsulate"] : ["verify"],
       { exact: pqLengths(toolId, (set) => set.publicKeyLen) },
-      isKem ? "The recipient's encapsulation key. Not a secret — share it freely." : "The verification key. Not a secret — share it freely.",
+      isKem
+        ? "The recipient's encapsulation key. Not a secret — share it freely."
+        : "The verification key. Not a secret — share it freely.",
       isKem
         ? "Encapsulating produces a shared secret *for whoever holds the matching private key*, so this is their public key and not yours. There is no message input at all -- a KEM generates the secret itself, which is the difference between it and public-key encryption."
         : "Leave it empty while a private key is present and it will be derived from that, which is the quick way to check a signature you have just produced.",
@@ -589,13 +628,9 @@ function pqOptions(toolId: string): readonly Def[] {
   ];
 }
 
-const SECRET_SHARING_OPTIONS: readonly Def[] = [
-  operationOption(["generate", "derive"]),
-];
+const SECRET_SHARING_OPTIONS: readonly Def[] = [operationOption(["generate", "derive"])];
 
-const PEDERSEN_OPTIONS: readonly Def[] = [
-  operationOption(["generate", "derive"]),
-];
+const PEDERSEN_OPTIONS: readonly Def[] = [operationOption(["generate", "derive"])];
 
 const CACHE = new Map<string, OptionCatalogue<AsymmetricOptionGroup>>();
 
@@ -636,7 +671,9 @@ export function asymmetricCatalogueFor(toolId: string): OptionCatalogue<Asymmetr
     };
     const options = byTool[toolId];
     if (!options) {
-      throw new Error(`No option catalogue for public-key tool "${toolId}". Add one to byTool.`);
+      throw new Error(
+        `No option catalogue for public-key tool "${toolId}". Add one to byTool.`,
+      );
     }
     catalogue = createOptionCatalogue<AsymmetricOptionGroup>(options);
     CACHE.set(toolId, catalogue);

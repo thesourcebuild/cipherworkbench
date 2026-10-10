@@ -8,6 +8,8 @@ import {
   generateRsaKeypair,
   hashOutputLen,
   needsPureRsa,
+  pureRsaDecrypt,
+  pureRsaEncrypt,
   pureRsaSign,
   pureRsaVerify,
   rsaPrivateNumbers,
@@ -31,7 +33,7 @@ import {
 } from "./bindings";
 import { ED25519_CURVE, type CurveMeta } from "./catalogue/tool-meta";
 import { decodePem, encodePem, formatJwk, isPrivateJwk, keyInputKind, parseJwk } from "./pem";
-import { maxOaepPlaintext, PUBLIC_KEY_HINT } from "./pure";
+import { maxOaepPlaintext, maxPkcs1Plaintext, PUBLIC_KEY_HINT } from "./pure";
 import { resolveAsymmetric, type ResolvedAsymmetric } from "./resolve";
 import type { AsymmetricSpec } from "./spec";
 
@@ -76,11 +78,33 @@ function rsaAlgorithm(r: ResolvedAsymmetric): RsaAlgorithmName {
  * anything; `rsaPrivateNumbers` exports the JWK and the arithmetic happens in `@ocs/algos`.
  */
 function webcryptoHash(r: ResolvedAsymmetric): string {
+  if (
+    (r.operation === "encrypt" || r.operation === "decrypt") &&
+    r.encryptionScheme === "pkcs1v15"
+  ) {
+    return "SHA-256";
+  }
   return needsPureRsa(r.hash) ? "SHA-256" : r.hash;
 }
 
 function rsaSignatureAlgorithm(r: ResolvedAsymmetric): RsaSignatureAlgorithm {
   return r.scheme === "pkcs1v15" ? "RSASSA-PKCS1-v1_5" : "RSA-PSS";
+}
+
+function usesPureRsa(r: ResolvedAsymmetric): boolean {
+  return (
+    ((r.operation === "encrypt" || r.operation === "decrypt") &&
+      r.encryptionScheme === "pkcs1v15") ||
+    ((r.operation === "sign" || r.operation === "verify") && needsPureRsa(r.hash))
+  );
+}
+
+function randomNonZeroBytes(length: number): Uint8Array {
+  const bytes = randomBytes(length);
+  for (let i = 0; i < bytes.length; i++) {
+    while (bytes[i] === 0) bytes[i] = randomBytes(1)[0] ?? 0;
+  }
+  return bytes;
 }
 
 type KeyResult = { ok: true; key: CryptoKey } | { ok: false; error: string };
@@ -210,7 +234,6 @@ async function generateRsa(r: ResolvedAsymmetric): Promise<ToolResult> {
   };
 }
 
-
 /** Curve key generation. The same three lines for all three curve tools, via the bindings. */
 function generateCurveKeypair(r: ResolvedAsymmetric): ToolResult {
   const curve = curveOf(r);
@@ -220,7 +243,12 @@ function generateCurveKeypair(r: ResolvedAsymmetric): ToolResult {
   if (r.tool.id === "ed25519") {
     secret = ed25519Bindings.randomSecretKey();
     publicKey = ed25519Bindings.getPublicKey(secret);
-  } else if (r.tool.id === "ecdh" || r.tool.id === "shamir" || r.tool.id === "slip39" || r.tool.id === "pedersen") {
+  } else if (
+    r.tool.id === "ecdh" ||
+    r.tool.id === "shamir" ||
+    r.tool.id === "slip39" ||
+    r.tool.id === "pedersen"
+  ) {
     const api = agreementCurve(curve.id);
     secret = api.randomSecretKey();
     publicKey = api.getPublicKey(secret);
@@ -419,7 +447,9 @@ function rsaFields(r: ResolvedAsymmetric, key: CryptoKey): ToolResultField[] {
       label: "Scheme",
       value:
         r.operation === "encrypt" || r.operation === "decrypt"
-          ? `RSA-OAEP with ${r.hash}`
+          ? r.encryptionScheme === "oaep"
+            ? `RSA-OAEP with ${r.hash}`
+            : "RSAES-PKCS1-v1_5"
           : `${r.scheme === "pkcs1v15" ? "RSASSA-PKCS1-v1_5" : "RSA-PSS"} with ${r.hash}`,
     },
     {
@@ -434,13 +464,16 @@ function rsaFields(r: ResolvedAsymmetric, key: CryptoKey): ToolResultField[] {
      * Reported rather than hidden because it changes a property the user may care about:
      * `crypto.subtle` is the platform's own audited, hardware-accelerated RSA, and the pure
      * path is this repo's `@ocs/algos` code with a non-constant-time modular exponentiation.
-     * `A008` explains the consequence; this field is what tells you which one you got.
+     * `A008` and `A013` explain the consequences; this field says which implementation ran.
      */
     {
       label: "Implementation",
-      value: needsPureRsa(r.hash) ? "@ocs/algos (RFC 8017)" : "WebCrypto",
-      hint: needsPureRsa(r.hash)
-        ? `crypto.subtle refuses ${r.hash}, so the padding and modular exponentiation were done in-repo. See Checks.`
+      value: usesPureRsa(r) ? "@ocs/algos (RFC 8017)" : "WebCrypto",
+      hint: usesPureRsa(r)
+        ? r.encryptionScheme === "pkcs1v15" &&
+          (r.operation === "encrypt" || r.operation === "decrypt")
+          ? "WebCrypto does not implement RSAES-PKCS1-v1_5, so its padding and modular exponentiation were done in-repo. See Checks."
+          : `crypto.subtle refuses ${r.hash}, so the padding and modular exponentiation were done in-repo. See Checks.`
         : "The platform's own RSA. Audited and hardware-accelerated where available.",
     },
   ];
@@ -536,25 +569,36 @@ async function rsaOperate(r: ResolvedAsymmetric, input: Uint8Array): Promise<Too
     const pub = await publicKeyFor(r);
     if (!pub.ok) return { error: pub.error };
 
-    const capacity = maxOaepPlaintext(rsaModulusBytes(pub.key), hashOutputLen(r.hash));
+    const modulusBytes = rsaModulusBytes(pub.key);
+    const capacity =
+      r.encryptionScheme === "oaep"
+        ? maxOaepPlaintext(modulusBytes, hashOutputLen(r.hash))
+        : maxPkcs1Plaintext(modulusBytes);
     /**
      * The capacity check, and the reason this tool explains hybrid encryption.
      *
-     * RSA cannot encrypt a message. It can encrypt a number smaller than its modulus, and OAEP
-     * spends 2*hLen+2 bytes of that on padding. Everything that appears to encrypt a file with
-     * RSA is really encrypting a symmetric key with RSA and the file with that key. Reporting
-     * the limit and naming the fix is the single most useful thing this operation does.
+     * RSA cannot encrypt a message. It can encrypt a number smaller than its modulus, and both
+     * encodings spend part of that on padding. Everything that appears to encrypt a file with RSA
+     * is really encrypting a symmetric key with RSA and the file with that key. Reporting the limit
+     * and naming the fix is the single most useful thing this operation does.
      */
     if (input.length > capacity) {
       return {
-        error: `RSA-OAEP with a ${rsaModulusBits(pub.key)}-bit key and ${r.hash} can carry at most ${capacity} bytes; this input is ${input.length}. RSA is not used to encrypt messages -- generate an AES key, encrypt the message with that using the AES tool, and encrypt the 32-byte key here. That is what every protocol using RSA encryption actually does.`,
+        error: `${r.encryptionScheme === "oaep" ? `RSA-OAEP with ${r.hash}` : "RSAES-PKCS1-v1_5"} and a ${rsaModulusBits(pub.key)}-bit key can carry at most ${capacity} bytes; this input is ${input.length}. RSA is not used to encrypt messages -- generate an AES key, encrypt the message with that using the AES tool, and encrypt the 32-byte key here. That is what every protocol using RSA encryption actually does.`,
       };
     }
     if (input.length === 0) {
       return { error: "Nothing to encrypt. Enter the bytes in the input panel." };
     }
 
-    const ciphertext = await rsaEncrypt(pub.key, r.oaepLabel, input);
+    const ciphertext =
+      r.encryptionScheme === "oaep"
+        ? await rsaEncrypt(pub.key, r.oaepLabel, input)
+        : pureRsaEncrypt(
+            await rsaPublicNumbers(pub.key),
+            input,
+            randomNonZeroBytes(modulusBytes - input.length - 3),
+          );
     return {
       bytes: ciphertext,
       fields: [
@@ -562,14 +606,20 @@ async function rsaOperate(r: ResolvedAsymmetric, input: Uint8Array): Promise<Too
         {
           label: "Capacity used",
           value: `${input.length} of ${capacity} bytes`,
-          hint: "OAEP spends two hash lengths plus two bytes of the modulus on padding, which is what sets this limit.",
+          hint:
+            r.encryptionScheme === "oaep"
+              ? "OAEP spends two hash lengths plus two bytes of the modulus on padding, which is what sets this limit."
+              : "PKCS#1 v1.5 requires at least eight nonzero random padding bytes plus three framing bytes.",
         },
         {
           label: "Randomised",
           value: "Every encryption differs",
-          hint: "OAEP draws a fresh random seed each time, so encrypting the same plaintext twice gives two unrelated ciphertexts. Both decrypt correctly.",
+          hint:
+            r.encryptionScheme === "oaep"
+              ? "OAEP draws a fresh random seed each time, so encrypting the same plaintext twice gives two unrelated ciphertexts. Both decrypt correctly."
+              : "PKCS#1 v1.5 fills its padding string with fresh nonzero random bytes, so repeated encryptions differ.",
         },
-        ...(r.oaepLabel.length > 0
+        ...(r.encryptionScheme === "oaep" && r.oaepLabel.length > 0
           ? [
               {
                 label: "Label",
@@ -582,9 +632,9 @@ async function rsaOperate(r: ResolvedAsymmetric, input: Uint8Array): Promise<Too
     };
   }
 
-  // Decrypt. OAEP is WebCrypto-only, so `r.hash` is always one it accepts here — the
-  // resolver refuses the others with a message saying why.
-  const priv = await importPrivate(r.privateKeyText, name, r.hash);
+  // Import under OAEP even for legacy decryption. WebCrypto validates and exports the key;
+  // only the RFC 8017 arithmetic takes the in-repo path.
+  const priv = await importPrivate(r.privateKeyText, name, webcryptoHash(r));
   if (!priv.ok) return { error: priv.error };
 
   const modulusBytes = rsaModulusBytes(priv.key);
@@ -595,7 +645,11 @@ async function rsaOperate(r: ResolvedAsymmetric, input: Uint8Array): Promise<Too
   }
 
   try {
-    const plaintext = await rsaDecrypt(priv.key, r.oaepLabel, input);
+    const plaintext =
+      r.encryptionScheme === "oaep"
+        ? await rsaDecrypt(priv.key, r.oaepLabel, input)
+        : pureRsaDecrypt(await rsaPrivateNumbers(priv.key), input);
+    if (!plaintext) throw new Error("Invalid PKCS#1 v1.5 ciphertext");
     return { bytes: plaintext, fields: rsaFields(r, priv.key) };
   } catch {
     /**
@@ -606,11 +660,13 @@ async function rsaOperate(r: ResolvedAsymmetric, input: Uint8Array): Promise<Too
      * this lists the possible causes rather than pretending to know which one it was.
      */
     return {
-      error: `Could not decrypt. The ciphertext was produced under a different key, a different hash, or a different OAEP label${r.oaepLabel.length === 0 ? " (this decrypt used no label)" : ""} -- or it is not an OAEP ciphertext at all. OAEP does not report which, by design: a padding oracle is what breaks RSA encryption in practice.`,
+      error:
+        r.encryptionScheme === "oaep"
+          ? `Could not decrypt. The ciphertext was produced under a different key, a different hash, or a different OAEP label${r.oaepLabel.length === 0 ? " (this decrypt used no label)" : ""} -- or it is not an OAEP ciphertext at all. OAEP does not report which, by design: a padding oracle is what breaks RSA encryption in practice.`
+          : "Could not decrypt. The ciphertext was produced under a different key or padding scheme, or its PKCS#1 v1.5 padding is invalid. No padding details are reported because distinguishing them would create a padding oracle.",
     };
   }
 }
-
 
 /**
  * The three post-quantum tools.
@@ -622,7 +678,12 @@ async function rsaOperate(r: ResolvedAsymmetric, input: Uint8Array): Promise<Too
  */
 function pqOperate(r: ResolvedAsymmetric, input: Uint8Array): ToolResult {
   const set = r.paramSet!;
-  const isKem = r.tool.id === "mlkem" || r.tool.id === "mceliece" || r.tool.id === "hqc" || r.tool.id === "ntru" || r.tool.id === "x25519mlkem768";
+  const isKem =
+    r.tool.id === "mlkem" ||
+    r.tool.id === "mceliece" ||
+    r.tool.id === "hqc" ||
+    r.tool.id === "ntru" ||
+    r.tool.id === "x25519mlkem768";
 
   if (r.operation === "generate") {
     const api = isKem ? pqKemFor(r.tool.id, set.id) : pqSignerFor(r.tool.id, set.id);
@@ -722,8 +783,7 @@ function pqOperate(r: ResolvedAsymmetric, input: Uint8Array): ToolResult {
   }
 
   // Verify. The public key may have come from the private one, exactly as for the curve tools.
-  const publicKey =
-    r.publicKey.length > 0 ? r.publicKey : signer.getPublicKey(r.privateKey);
+  const publicKey = r.publicKey.length > 0 ? r.publicKey : signer.getPublicKey(r.privateKey);
   const valid = signer.verify(r.signature, input, publicKey);
   return {
     text: valid ? "Signature is valid" : "Signature does NOT match",
@@ -808,16 +868,18 @@ export async function computeAsymmetric(
         return {
           text: dec.toString(),
           bytes: new TextEncoder().encode(dec.toString()),
-          fields: [
-            { label: "Decrypted plaintext", value: dec.toString() },
-          ],
+          fields: [{ label: "Decrypted plaintext", value: dec.toString() }],
         };
       }
     }
     if (r.tool.id === "shamir") {
-      const { shamirSplit, shamirCombine, formatShamirShare, parseShamirShare } = await import("@ocs/algos");
+      const { shamirSplit, shamirCombine, formatShamirShare, parseShamirShare } =
+        await import("@ocs/algos");
       if (r.operation === "generate") {
-        const secret = input.length > 0 ? input : new TextEncoder().encode("CipherWorkbench-Secret-Vault-Key");
+        const secret =
+          input.length > 0
+            ? input
+            : new TextEncoder().encode("CipherWorkbench-Secret-Vault-Key");
         const k = 3;
         const n = 5;
         const shares = shamirSplit(secret, n, k, (len) => {
@@ -843,8 +905,13 @@ export async function computeAsymmetric(
       }
       if (r.operation === "derive") {
         const inputText = new TextDecoder().decode(input).trim();
-        const lines = inputText.split(/[\r\n,;]+/).map((s) => s.trim()).filter(Boolean);
-        const parsed = lines.map(parseShamirShare).filter((s): s is NonNullable<typeof s> => s !== null);
+        const lines = inputText
+          .split(/[\r\n,;]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const parsed = lines
+          .map(parseShamirShare)
+          .filter((s): s is NonNullable<typeof s> => s !== null);
         if (parsed.length < 2) {
           const secret = new TextEncoder().encode("CipherWorkbench-Secret-Vault-Key");
           const shares = shamirSplit(secret, 5, 3, (len) => {
@@ -869,7 +936,10 @@ export async function computeAsymmetric(
           text,
           bytes: combined,
           fields: [
-            { label: "Shares supplied", value: `${parsed.length} shares (${parsed.map((p) => `#${p.x}`).join(", ")})` },
+            {
+              label: "Shares supplied",
+              value: `${parsed.length} shares (${parsed.map((p) => `#${p.x}`).join(", ")})`,
+            },
             { label: "Reconstructed secret", value: text },
           ],
         };
@@ -878,7 +948,10 @@ export async function computeAsymmetric(
     if (r.tool.id === "slip39") {
       const { slip39Generate, slip39ParsePhrase, slip39Combine } = await import("@ocs/algos");
       if (r.operation === "generate") {
-        const secret = input.length > 0 ? input : new TextEncoder().encode("CipherWorkbench-Secret-Vault-Key");
+        const secret =
+          input.length > 0
+            ? input
+            : new TextEncoder().encode("CipherWorkbench-Secret-Vault-Key");
         const k = 3;
         const n = 5;
         const shares = slip39Generate(secret, n, k, (len) => {
@@ -905,7 +978,10 @@ export async function computeAsymmetric(
       }
       if (r.operation === "derive") {
         const inputText = new TextDecoder().decode(input).trim();
-        const lines = inputText.split(/[\r\n]+/).map((s) => s.trim()).filter((s) => s.length > 0);
+        const lines = inputText
+          .split(/[\r\n]+/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
         // Four header words and three checksum words frame data encoded at 10 bits per word.
         const secretByteLength = Math.floor(
           (Math.max(0, (lines[0]?.split(/\s+/).length ?? 7) - 7) * 10) / 8,
@@ -923,7 +999,8 @@ export async function computeAsymmetric(
             return buf;
           });
           const combined = slip39Combine([shares[0]!, shares[1]!, shares[2]!]);
-          const decoded = combined.ok && combined.secret ? new TextDecoder().decode(combined.secret) : "";
+          const decoded =
+            combined.ok && combined.secret ? new TextDecoder().decode(combined.secret) : "";
           return {
             text: decoded,
             bytes: combined.secret ?? new Uint8Array(0),
@@ -962,7 +1039,11 @@ export async function computeAsymmetric(
             { label: "Scheme", value: "Pedersen Commitment (C = g^m * h^r mod p)" },
             { label: "Commitment (C)", value: "0x" + comm.commitment.toString(16) },
             { label: "Message (m)", value: comm.message.toString() },
-            { label: "Blinding factor (r)", value: "0x" + comm.blindingFactor.toString(16), secret: true },
+            {
+              label: "Blinding factor (r)",
+              value: "0x" + comm.blindingFactor.toString(16),
+              secret: true,
+            },
           ],
         };
       }
@@ -974,7 +1055,10 @@ export async function computeAsymmetric(
         return {
           text: valid ? "COMMITMENT VERIFIED" : "COMMITMENT INVALID",
           fields: [
-            { label: "Status", value: valid ? "Valid commitment opening verified." : "Verification failed." },
+            {
+              label: "Status",
+              value: valid ? "Valid commitment opening verified." : "Verification failed.",
+            },
             { label: "Commitment (C)", value: "0x" + comm.commitment.toString(16) },
           ],
         };
@@ -1000,14 +1084,27 @@ export async function computeAsymmetric(
           bytes: pi,
           fields: [
             { label: "Scheme", value: "ECVRF-EDWARDS25519-SHA512-TAI (RFC 9381 §5.1)" },
-            { label: "VRF Proof (π)", value: encodeHex(pi), hint: "80 bytes: Gamma (32) || c (16) || s (32)" },
-            { label: "VRF Hash (β)", value: encodeHex(beta), hint: "32 bytes deterministic pseudorandom output" },
+            {
+              label: "VRF Proof (π)",
+              value: encodeHex(pi),
+              hint: "80 bytes: Gamma (32) || c (16) || s (32)",
+            },
+            {
+              label: "VRF Hash (β)",
+              value: encodeHex(beta),
+              hint: "32 bytes deterministic pseudorandom output",
+            },
             { label: "Public key", value: encodeHex(pk), hint: PUBLIC_KEY_HINT },
           ],
         };
       }
       if (r.operation === "verify") {
-        const pk = r.publicKey.length > 0 ? r.publicKey : (r.privateKey.length > 0 ? ecvrfGetPublicKey(r.privateKey) : new Uint8Array(0));
+        const pk =
+          r.publicKey.length > 0
+            ? r.publicKey
+            : r.privateKey.length > 0
+              ? ecvrfGetPublicKey(r.privateKey)
+              : new Uint8Array(0);
         if (pk.length !== 32) {
           return { error: "ECVRF verification requires a 32-byte public key." };
         }
@@ -1016,22 +1113,45 @@ export async function computeAsymmetric(
           text: verifyRes.valid ? "VRF PROOF VALID" : "VRF PROOF INVALID",
           fields: [
             { label: "Scheme", value: "ECVRF-EDWARDS25519-SHA512-TAI (RFC 9381 §5.1)" },
-            { label: "Result", value: verifyRes.valid ? "Valid proof matching public key and alpha input." : "Invalid proof or key mismatch." },
-            ...(verifyRes.beta ? [{ label: "VRF Hash (β)", value: encodeHex(verifyRes.beta), hint: "Verified deterministic pseudorandom output" }] : []),
+            {
+              label: "Result",
+              value: verifyRes.valid
+                ? "Valid proof matching public key and alpha input."
+                : "Invalid proof or key mismatch.",
+            },
+            ...(verifyRes.beta
+              ? [
+                  {
+                    label: "VRF Hash (β)",
+                    value: encodeHex(verifyRes.beta),
+                    hint: "Verified deterministic pseudorandom output",
+                  },
+                ]
+              : []),
             { label: "Public key", value: encodeHex(pk) },
           ],
         };
       }
     }
     if (r.tool.id === "bls12-381") {
-      const { bls12381Keygen, bls12381Sign, bls12381Verify, bls12381GetPublicKey } = await import("@ocs/algos");
+      const { bls12381Keygen, bls12381Sign, bls12381Verify, bls12381GetPublicKey } =
+        await import("@ocs/algos");
       if (r.operation === "generate") {
         const kp = bls12381Keygen();
         return {
           bytes: kp.publicKey,
           fields: [
-            { label: "Secret key", value: encodeHex(kp.secretKey), secret: true, hint: KEEP_IT_HINT },
-            { label: "Public key (G1)", value: encodeHex(kp.publicKey), hint: "48 bytes compressed G1 point" },
+            {
+              label: "Secret key",
+              value: encodeHex(kp.secretKey),
+              secret: true,
+              hint: KEEP_IT_HINT,
+            },
+            {
+              label: "Public key (G1)",
+              value: encodeHex(kp.publicKey),
+              hint: "48 bytes compressed G1 point",
+            },
           ],
         };
       }
@@ -1041,13 +1161,26 @@ export async function computeAsymmetric(
         return {
           bytes: sig,
           fields: [
-            { label: "Signature (G2)", value: encodeHex(sig), hint: "96 bytes compressed G2 point (supports threshold & aggregation)" },
-            { label: "Public key (G1)", value: encodeHex(pk), hint: "48 bytes compressed G1 point" },
+            {
+              label: "Signature (G2)",
+              value: encodeHex(sig),
+              hint: "96 bytes compressed G2 point (supports threshold & aggregation)",
+            },
+            {
+              label: "Public key (G1)",
+              value: encodeHex(pk),
+              hint: "48 bytes compressed G1 point",
+            },
           ],
         };
       }
       if (r.operation === "verify") {
-        const pk = r.publicKey.length > 0 ? r.publicKey : (r.privateKey.length > 0 ? bls12381GetPublicKey(r.privateKey) : new Uint8Array(0));
+        const pk =
+          r.publicKey.length > 0
+            ? r.publicKey
+            : r.privateKey.length > 0
+              ? bls12381GetPublicKey(r.privateKey)
+              : new Uint8Array(0);
         if (pk.length !== 48) {
           return { error: "BLS12-381 verification requires a 48-byte G1 public key." };
         }
@@ -1059,7 +1192,12 @@ export async function computeAsymmetric(
           text: valid ? "BLS SIGNATURE VALID" : "BLS SIGNATURE INVALID",
           fields: [
             { label: "Scheme", value: "BLS12-381 (Pairing-friendly curves, RFC 9380)" },
-            { label: "Result", value: valid ? "Signature is valid for message and public key." : "Signature verification failed." },
+            {
+              label: "Result",
+              value: valid
+                ? "Signature is valid for message and public key."
+                : "Signature verification failed.",
+            },
             { label: "Public key (G1)", value: encodeHex(pk) },
             { label: "Signature (G2)", value: encodeHex(r.signature) },
           ],
@@ -1067,14 +1205,24 @@ export async function computeAsymmetric(
       }
     }
     if (r.tool.id === "bip340-schnorr") {
-      const { bip340Keygen, bip340Sign, bip340Verify, bip340GetPublicKey } = await import("@ocs/algos");
+      const { bip340Keygen, bip340Sign, bip340Verify, bip340GetPublicKey } =
+        await import("@ocs/algos");
       if (r.operation === "generate") {
         const kp = bip340Keygen();
         return {
           bytes: kp.publicKey,
           fields: [
-            { label: "Secret key", value: encodeHex(kp.secretKey), secret: true, hint: KEEP_IT_HINT },
-            { label: "Public key (x-only)", value: encodeHex(kp.publicKey), hint: "32 bytes x-only secp256k1 public key (Taproot)" },
+            {
+              label: "Secret key",
+              value: encodeHex(kp.secretKey),
+              secret: true,
+              hint: KEEP_IT_HINT,
+            },
+            {
+              label: "Public key (x-only)",
+              value: encodeHex(kp.publicKey),
+              hint: "32 bytes x-only secp256k1 public key (Taproot)",
+            },
           ],
         };
       }
@@ -1084,13 +1232,26 @@ export async function computeAsymmetric(
         return {
           bytes: sig,
           fields: [
-            { label: "Schnorr signature", value: encodeHex(sig), hint: "64 bytes: 32-byte R.x || 32-byte s" },
-            { label: "Public key (x-only)", value: encodeHex(pk), hint: "32 bytes x-only public key" },
+            {
+              label: "Schnorr signature",
+              value: encodeHex(sig),
+              hint: "64 bytes: 32-byte R.x || 32-byte s",
+            },
+            {
+              label: "Public key (x-only)",
+              value: encodeHex(pk),
+              hint: "32 bytes x-only public key",
+            },
           ],
         };
       }
       if (r.operation === "verify") {
-        const pk = r.publicKey.length > 0 ? r.publicKey : (r.privateKey.length > 0 ? bip340GetPublicKey(r.privateKey) : new Uint8Array(0));
+        const pk =
+          r.publicKey.length > 0
+            ? r.publicKey
+            : r.privateKey.length > 0
+              ? bip340GetPublicKey(r.privateKey)
+              : new Uint8Array(0);
         if (pk.length !== 32) {
           return { error: "BIP-340 verification requires a 32-byte x-only public key." };
         }
@@ -1102,7 +1263,12 @@ export async function computeAsymmetric(
           text: valid ? "SCHNORR SIGNATURE VALID" : "SCHNORR SIGNATURE INVALID",
           fields: [
             { label: "Standard", value: "BIP-340 Schnorr Signatures (secp256k1 Taproot)" },
-            { label: "Result", value: valid ? "Signature is valid for message and public key." : "Signature verification failed." },
+            {
+              label: "Result",
+              value: valid
+                ? "Signature is valid for message and public key."
+                : "Signature verification failed.",
+            },
             { label: "Public key (x-only)", value: encodeHex(pk) },
             { label: "Signature", value: encodeHex(r.signature) },
           ],
@@ -1146,7 +1312,9 @@ export function generateAsymmetricCliProviders(
         },
         {
           comment: `Generate ${bits}-bit RSA private key using modern genpkey`,
-          parts: [`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:${bits} -out private.key`],
+          parts: [
+            `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:${bits} -out private.key`,
+          ],
         },
         {
           comment: "Extract RSA public key in PEM (SPKI) format",
@@ -1172,7 +1340,9 @@ export function generateAsymmetricCliProviders(
         },
         {
           comment: "Sign data using legacy dgst command",
-          parts: [`openssl dgst -${digestFlag} -sign private.key -out signature.bin message.txt`],
+          parts: [
+            `openssl dgst -${digestFlag} -sign private.key -out signature.bin message.txt`,
+          ],
         },
       );
     } else if (r.operation === "verify") {
@@ -1193,16 +1363,20 @@ export function generateAsymmetricCliProviders(
       );
     } else if (r.operation === "encrypt") {
       commands.push({
-        comment: "Encrypt payload using RSA-OAEP with pkeyutl",
+        comment: `Encrypt payload using ${r.encryptionScheme === "oaep" ? "RSA-OAEP" : "RSAES-PKCS1-v1_5"} with pkeyutl`,
         parts: [
-          `openssl pkeyutl -encrypt -pubin -inkey public.key -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:${r.hash.toLowerCase()} -in secret.bin -out ciphertext.bin`,
+          r.encryptionScheme === "oaep"
+            ? `openssl pkeyutl -encrypt -pubin -inkey public.key -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:${r.hash.toLowerCase()} -in secret.bin -out ciphertext.bin`
+            : "openssl pkeyutl -encrypt -pubin -inkey public.key -pkeyopt rsa_padding_mode:pkcs1 -in secret.bin -out ciphertext.bin",
         ],
       });
     } else if (r.operation === "decrypt") {
       commands.push({
-        comment: "Decrypt payload using RSA-OAEP with pkeyutl",
+        comment: `Decrypt payload using ${r.encryptionScheme === "oaep" ? "RSA-OAEP" : "RSAES-PKCS1-v1_5"} with pkeyutl`,
         parts: [
-          `openssl pkeyutl -decrypt -inkey private.key -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:${r.hash.toLowerCase()} -in ciphertext.bin -out secret.bin`,
+          r.encryptionScheme === "oaep"
+            ? `openssl pkeyutl -decrypt -inkey private.key -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:${r.hash.toLowerCase()} -in ciphertext.bin -out secret.bin`
+            : "openssl pkeyutl -decrypt -inkey private.key -pkeyopt rsa_padding_mode:pkcs1 -in ciphertext.bin -out secret.bin",
         ],
       });
     }
@@ -1223,7 +1397,9 @@ export function generateAsymmetricCliProviders(
         },
         {
           comment: `Generate EC private key using genpkey`,
-          parts: [`openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:${curveName} -out ec_private.key`],
+          parts: [
+            `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:${curveName} -out ec_private.key`,
+          ],
         },
         {
           comment: "Extract EC public key using openssl ec",
@@ -1264,7 +1440,9 @@ export function generateAsymmetricCliProviders(
     } else if (r.operation === "sign") {
       commands.push({
         comment: "Sign message using Ed25519 with pkeyutl",
-        parts: ["openssl pkeyutl -sign -inkey ed25519.key -rawin -in message.txt -out signature.bin"],
+        parts: [
+          "openssl pkeyutl -sign -inkey ed25519.key -rawin -in message.txt -out signature.bin",
+        ],
       });
     } else if (r.operation === "verify") {
       commands.push({

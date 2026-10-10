@@ -25,6 +25,7 @@ import {
   OPTION_PARAM_SET,
   OPTION_SIGNATURE,
   readCurve,
+  readEncryptionScheme,
   readHash,
   readModulusLength,
   readOperation,
@@ -33,6 +34,7 @@ import {
   readScheme,
   readSignatureFormat,
   type RsaScheme,
+  type RsaEncryptionScheme,
   type SignatureFormat,
 } from "./pure";
 import type { AsymmetricSpec } from "./spec";
@@ -47,6 +49,7 @@ export interface ResolvedAsymmetric {
   /** WebCrypto spelling, e.g. "SHA-256". Unused by Ed25519, which fixes SHA-512. */
   hash: string;
   scheme: RsaScheme;
+  encryptionScheme: RsaEncryptionScheme;
   modulusBits: number;
   publicExponent: number;
   signatureFormat: SignatureFormat;
@@ -102,7 +105,10 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
 
   const curve =
     spec.variant === "ecdsa" || spec.variant === "ecdh"
-      ? getCurve(spec.variant === "ecdsa" ? "ecdsa" : "ecdh", readCurve(spec.options, spec.variant))
+      ? getCurve(
+          spec.variant === "ecdsa" ? "ecdsa" : "ecdh",
+          readCurve(spec.options, spec.variant),
+        )
       : undefined;
 
   const isPq = PQ_PARAM_SETS[spec.variant] !== undefined;
@@ -126,6 +132,7 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
     paramSet,
     hash: readHash(spec.options),
     scheme: readScheme(spec.options),
+    encryptionScheme: readEncryptionScheme(spec.options),
     modulusBits: readModulusLength(spec.options),
     publicExponent: readPublicExponent(spec.options),
     signatureFormat: readSignatureFormat(spec.options),
@@ -143,17 +150,15 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
 
   // Secret sharing and commitments consume their operation data from the workbench input.
   // Their "derive" operation is reconstruction/verification, not key agreement.
-  if (
-    spec.variant === "shamir" ||
-    spec.variant === "slip39" ||
-    spec.variant === "pedersen"
-  ) {
+  if (spec.variant === "shamir" || spec.variant === "slip39" || spec.variant === "pedersen") {
     return { ok: true, resolved: base };
   }
 
-  const labelResult = decodeBytesOption(catalogue, spec.options, OPTION_OAEP_LABEL);
-  if (!labelResult.ok) return problem(OPTION_OAEP_LABEL, labelResult.error);
-  base.oaepLabel = labelResult.bytes;
+  if (base.encryptionScheme === "oaep") {
+    const labelResult = decodeBytesOption(catalogue, spec.options, OPTION_OAEP_LABEL);
+    if (!labelResult.ok) return problem(OPTION_OAEP_LABEL, labelResult.error);
+    base.oaepLabel = labelResult.bytes;
+  }
 
   /**
    * OAEP is WebCrypto-only, so the hash list is narrower for encryption than for signing.
@@ -171,6 +176,7 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
   if (
     tool.usesPem &&
     (operation === "encrypt" || operation === "decrypt") &&
+    base.encryptionScheme === "oaep" &&
     !RSA_OAEP_HASHES.some((h) => h.id === base.hash)
   ) {
     return problem(
@@ -381,7 +387,12 @@ function resolvePqKeys(
   base: ResolvedAsymmetric,
   set: PqParamSet,
 ): ResolveResult {
-  const isKem = spec.variant === "mlkem" || spec.variant === "mceliece" || spec.variant === "hqc" || spec.variant === "ntru" || spec.variant === "x25519mlkem768";
+  const isKem =
+    spec.variant === "mlkem" ||
+    spec.variant === "mceliece" ||
+    spec.variant === "hqc" ||
+    spec.variant === "ntru" ||
+    spec.variant === "x25519mlkem768";
   const needsPrivate = isKem ? base.operation === "decapsulate" : base.operation === "sign";
   const needsPublic = isKem ? base.operation === "encapsulate" : base.operation === "verify";
 

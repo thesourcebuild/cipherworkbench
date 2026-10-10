@@ -1,7 +1,7 @@
 import type { ToolResult, ToolStream } from "./tool-definition";
 
-/** 1 MiB. Large enough that per-chunk overhead vanishes, small enough to keep progress smooth. */
-export const DEFAULT_CHUNK_SIZE = 1024 * 1024;
+/** 2 MiB. Large enough that per-chunk overhead vanishes, small enough to keep progress smooth. */
+export const DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024;
 
 export interface StreamProgress {
   bytesProcessed: number;
@@ -15,6 +15,30 @@ export interface RunStreamOptions {
   /** Throttle progress callbacks to at most one per this many bytes. */
   progressInterval?: number;
   signal?: AbortSignal;
+  /** Receives transformed output in order. Awaiting this callback provides backpressure. */
+  onOutput?: (chunk: Uint8Array) => void | Promise<void>;
+}
+
+function outputChunks(
+  output: Uint8Array | readonly Uint8Array[] | void,
+): readonly Uint8Array[] {
+  if (!output) return [];
+  if (output instanceof Uint8Array) return [output];
+  return Array.isArray(output) && output.every((chunk) => chunk instanceof Uint8Array)
+    ? output
+    : [];
+}
+
+function toolError(error: unknown): ToolResult {
+  return { error: error instanceof Error ? error.message : String(error) };
+}
+
+function finishToolStream(stream: ToolStream): ToolResult {
+  try {
+    return stream.finish();
+  } catch (error) {
+    return toolError(error);
+  }
 }
 
 /**
@@ -35,16 +59,39 @@ export async function runStream(
   chunks: AsyncIterable<Uint8Array>,
   options: RunStreamOptions = {},
 ): Promise<ToolResult> {
-  const { totalBytes, onProgress, progressInterval = DEFAULT_CHUNK_SIZE, signal } = options;
+  const {
+    totalBytes,
+    onProgress,
+    progressInterval = DEFAULT_CHUNK_SIZE,
+    signal,
+    onOutput,
+  } = options;
 
   let processed = 0;
   let lastReported = 0;
+  let outputDelivered = false;
+  const emitted: Uint8Array[] = [];
+
+  const handleOutput = async (output: Uint8Array | readonly Uint8Array[] | void) => {
+    for (const chunk of outputChunks(output)) {
+      if (chunk.length === 0) continue;
+      outputDelivered = true;
+      if (onOutput) await onOutput(chunk);
+      else emitted.push(chunk);
+    }
+  };
 
   onProgress?.({ bytesProcessed: 0, totalBytes });
 
   for await (const chunk of chunks) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    stream.update(chunk);
+    let output: Uint8Array | readonly Uint8Array[] | void;
+    try {
+      output = stream.update(chunk);
+    } catch (error) {
+      return toolError(error);
+    }
+    await handleOutput(output);
     processed += chunk.length;
     if (processed - lastReported >= progressInterval) {
       lastReported = processed;
@@ -57,7 +104,23 @@ export async function runStream(
   // size is not a clean multiple of the interval.
   onProgress?.({ bytesProcessed: processed, totalBytes });
 
-  return stream.finish();
+  const result = finishToolStream(stream);
+  if (result.error) return result;
+  await handleOutput(result.bytes);
+  if (emitted.length === 0) {
+    if (!onOutput || !result.bytes || !outputDelivered) return result;
+    const { bytes: _bytes, ...metadata } = result;
+    return metadata;
+  }
+
+  const totalOutput = emitted.reduce((total, chunk) => total + chunk.length, 0);
+  const bytes = new Uint8Array(totalOutput);
+  let offset = 0;
+  for (const chunk of emitted) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return { ...result, bytes };
 }
 
 /**
@@ -88,8 +151,9 @@ export async function runStreams(
     },
     finish: () => ({}),
   };
-  await runStream(fanOut, chunks, options);
-  return streams.map((stream) => stream.finish());
+  const fanOutResult = await runStream(fanOut, chunks, options);
+  if (fanOutResult.error) return streams.map(() => fanOutResult);
+  return streams.map(finishToolStream);
 }
 
 /**

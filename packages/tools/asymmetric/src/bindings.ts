@@ -9,6 +9,8 @@ import {
   os2ip,
   rsaPkcs1Sign,
   rsaPkcs1Verify,
+  rsaesPkcs1V15Decrypt,
+  rsaesPkcs1V15Encrypt,
   rsaPssSign,
   rsaPssVerify,
   falconKeygen,
@@ -58,11 +60,10 @@ import type { SignatureFormat } from "./pure";
 /**
  * The only module in this package that reaches an implementation.
  *
- * Two backends, split along a line drawn by what exists rather than by preference:
- * `@noble/curves` for everything elliptic, and WebCrypto for RSA, because noble has no RSA
- * and hand-rolling one would be exactly the wrong kind of ambition. WebCrypto's RSA is
- * present and identical in a browser tab, an Electron renderer and Node 20+, which is the
- * same portability property the rest of this repo depends on.
+ * Two main backends, split along a line drawn by what exists rather than by preference:
+ * `@noble/curves` for everything elliptic, and WebCrypto for modern RSA. The in-repo RFC 8017
+ * path fills only WebCrypto's interoperability gaps: signature hashes it refuses and legacy
+ * RSAES-PKCS1-v1_5 encryption. WebCrypto remains the key parser for both paths.
  */
 
 /** MD5 ‖ SHA-1, as OpenSSL's `md5-sha1`. See the RSA hash list for why it is here. */
@@ -238,7 +239,7 @@ export function agreementCurve(id: string): AgreementCurve {
 }
 
 /**
- * RSA, entirely through WebCrypto.
+ * RSA, with keys parsed and validated through WebCrypto.
  *
  * `crypto.subtle` is the reason this family's `compute` being async was worth having. It is
  * also the reason RSA behaves slightly differently from everything else here: keys are opaque
@@ -294,11 +295,10 @@ export async function generateRsaKeypair(
     publicExponent: exponentToUint8Array(publicExponent) as unknown as Uint8Array<ArrayBuffer>,
     hash: "SHA-256",
   };
-  const pair = (await crypto.subtle.generateKey(
-    params,
-    true,
-    ["sign", "verify"],
-  )) as CryptoKeyPair;
+  const pair = (await crypto.subtle.generateKey(params, true, [
+    "sign",
+    "verify",
+  ])) as CryptoKeyPair;
 
   const [privatePkcs8, publicSpki, privateJwk, publicJwk] = await Promise.all([
     crypto.subtle.exportKey("pkcs8", pair.privateKey),
@@ -596,6 +596,21 @@ export function pureRsaVerify(
       );
 }
 
+export function pureRsaEncrypt(
+  key: RsaPublicKey,
+  message: Uint8Array,
+  padding: Uint8Array,
+): Uint8Array {
+  return rsaesPkcs1V15Encrypt(key, message, padding);
+}
+
+export function pureRsaDecrypt(
+  key: RsaPrivateKey,
+  ciphertext: Uint8Array,
+): Uint8Array | undefined {
+  return rsaesPkcs1V15Decrypt(key, ciphertext);
+}
+
 /**
  * The three FIPS post-quantum schemes, from `@noble/post-quantum`.
  *
@@ -771,7 +786,7 @@ export function pqSignerFor(toolId: string, setId: string): PqSigner {
         const nonce = sig.subarray(0, 40);
         const s2 = new Int16Array(n);
         for (let i = 0; i < n; i++) {
-          s2[i] = (sig[40 + i * 2]! | (sig[40 + i * 2 + 1]! << 8)) << 16 >> 16;
+          s2[i] = ((sig[40 + i * 2]! | (sig[40 + i * 2 + 1]! << 8)) << 16) >> 16;
         }
         return falconVerify(sha512, publicKey, msg, { nonce, s2 }, n);
       },

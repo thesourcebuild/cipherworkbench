@@ -1,6 +1,12 @@
 /// <reference lib="webworker" />
 
-import { iterateStream, runStream, runStreams, type ToolResult } from "@ocs/engine";
+import {
+  fileProcessingModeForSpec,
+  iterateStream,
+  runStream,
+  runStreams,
+  type ToolResult,
+} from "@ocs/engine";
 import { loadTool } from "@ocs/registry";
 
 /**
@@ -11,28 +17,71 @@ import { loadTool } from "@ocs/registry";
  * which is the one case where a progress bar has to work. So the file goes to a
  * worker, and only progress counts and the final result come back.
  *
- * The `File` handle itself is what gets posted — not its bytes. A `File` is
- * structured-cloneable, and `file.stream()` inside the worker reads from disk
- * lazily, so a 40 GB file never needs 40 GB of memory on either side.
+ * The `File` handle itself is what gets posted, not its bytes. A `File` is
+ * structured-cloneable, so input is read lazily. Transform tools can still retain
+ * output bytes in the renderer because Result and Export require the exact output.
  */
 
 export type ComputeRequest =
-  | { kind?: "single"; jobId: number; toolId: string; spec: unknown; file: File; chunkSize?: number }
-  | { kind: "variants"; jobId: number; toolId: string; spec: unknown; file: File; chunkSize?: number };
+  | {
+      kind?: "single";
+      jobId: number;
+      toolId: string;
+      spec: unknown;
+      file: File;
+      chunkSize?: number;
+    }
+  | {
+      kind: "variants";
+      jobId: number;
+      toolId: string;
+      spec: unknown;
+      file: File;
+      chunkSize?: number;
+    }
+  | { kind: "output-ack"; jobId: number; sequence: number };
 
 export type ComputeResponse =
   | { jobId: number; type: "progress"; bytesProcessed: number; totalBytes?: number }
   | { jobId: number; type: "done"; result: ToolResult }
+  | { jobId: number; type: "output"; sequence: number; chunk: Uint8Array }
   | { jobId: number; type: "variants-done"; results: Array<{ id: string; bytes?: Uint8Array }> }
   | { jobId: number; type: "error"; message: string };
 
-const post = (message: ComputeResponse) => self.postMessage(message);
+function transferableBuffers(message: ComputeResponse): Transferable[] {
+  const buffers = new Set<ArrayBuffer>();
+  const add = (bytes: Uint8Array | undefined) => {
+    if (bytes?.buffer instanceof ArrayBuffer) buffers.add(bytes.buffer);
+  };
+  if (message.type === "done") {
+    add(message.result.bytes);
+    for (const file of message.result.files ?? []) {
+      if (typeof file.content !== "string") add(file.content);
+    }
+  } else if (message.type === "variants-done") {
+    for (const result of message.results) add(result.bytes);
+  } else if (message.type === "output") {
+    add(message.chunk);
+  }
+  return [...buffers];
+}
+
+const post = (message: ComputeResponse) =>
+  self.postMessage(message, transferableBuffers(message));
+
+const outputAcknowledgements = new Map<string, () => void>();
 
 self.addEventListener("message", (event: MessageEvent<ComputeRequest>) => {
+  if (event.data.kind === "output-ack") {
+    const key = `${event.data.jobId}:${event.data.sequence}`;
+    outputAcknowledgements.get(key)?.();
+    outputAcknowledgements.delete(key);
+    return;
+  }
   void handle(event.data);
 });
 
-async function handle(req: ComputeRequest): Promise<void> {
+async function handle(req: Exclude<ComputeRequest, { kind: "output-ack" }>): Promise<void> {
   const { jobId, toolId, spec, file, chunkSize } = req;
   try {
     const tool = await loadTool(toolId);
@@ -68,7 +117,8 @@ async function handle(req: ComputeRequest): Promise<void> {
       return;
     }
 
-    if (!tool.createStream) {
+    const streamsCurrentSpec = fileProcessingModeForSpec(tool, spec as never) === "streaming";
+    if (!tool.createStream || !streamsCurrentSpec) {
       // A tool that cannot stream reads the whole file instead. AEAD ciphers are
       // in this category by nature: there is no authenticated output to emit
       // until every byte has been seen.
@@ -77,6 +127,7 @@ async function handle(req: ComputeRequest): Promise<void> {
       return;
     }
 
+    let outputSequence = 0;
     const result = await runStream(
       tool.createStream(spec as never),
       iterateStream(file.stream()),
@@ -85,6 +136,17 @@ async function handle(req: ComputeRequest): Promise<void> {
         ...(chunkSize === undefined ? {} : { progressInterval: chunkSize }),
         onProgress: ({ bytesProcessed, totalBytes }) =>
           post({ jobId, type: "progress", bytesProcessed, totalBytes }),
+        onOutput: (source) => {
+          const chunk =
+            source.byteOffset === 0 && source.byteLength === source.buffer.byteLength
+              ? source
+              : Uint8Array.from(source);
+          const sequence = outputSequence++;
+          return new Promise<void>((resolve) => {
+            outputAcknowledgements.set(`${jobId}:${sequence}`, resolve);
+            post({ jobId, type: "output", sequence, chunk });
+          });
+        },
       },
     );
 

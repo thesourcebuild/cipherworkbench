@@ -106,10 +106,14 @@ export function describeSpec(spec: AsymmetricSpec): string {
       return `Checks the ${r.signature.length}-byte signature against the input under ECDSA over ${curve} and ${r.hash}.`;
 
     case "encrypt":
-      return `Encrypts the input with RSA-OAEP and ${r.hash}${r.oaepLabel.length > 0 ? `, bound to a ${r.oaepLabel.length}-byte label` : ""}.`;
+      return r.encryptionScheme === "oaep"
+        ? `Encrypts the input with RSA-OAEP and ${r.hash}${r.oaepLabel.length > 0 ? `, bound to a ${r.oaepLabel.length}-byte label` : ""}.`
+        : "Encrypts the input with legacy RSAES-PKCS1-v1_5 randomized padding.";
 
     case "decrypt":
-      return `Decrypts the input with RSA-OAEP and ${r.hash}${r.oaepLabel.length > 0 ? `, expecting a ${r.oaepLabel.length}-byte label` : ""}.`;
+      return r.encryptionScheme === "oaep"
+        ? `Decrypts the input with RSA-OAEP and ${r.hash}${r.oaepLabel.length > 0 ? `, expecting a ${r.oaepLabel.length}-byte label` : ""}.`
+        : "Decrypts legacy RSAES-PKCS1-v1_5 ciphertext with a generic padding failure.";
 
     case "derive":
       // Naming the KDF requirement in the one-line description as well as in A005: it is the

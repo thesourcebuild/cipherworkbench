@@ -15,6 +15,12 @@ export const AGE_VERSION_LINE = "age-encryption.org/v1";
 export const AGE_CHUNK_SIZE = 65536; // 64 KiB
 export const AGE_TAG_SIZE = 16;
 export const AGE_FILE_KEY_SIZE = 16;
+export const AGE_PAYLOAD_NONCE_SIZE = 16;
+export const AGE_MAX_HEADER_SIZE = 2 * 1024 * 1024;
+export const AGE_MAX_SCRYPT_LOG_N = 22;
+
+const AGE_MAX_CHUNK_INDEX = (1n << 88n) - 1n;
+const AGE_SCRYPT_LABEL = new TextEncoder().encode("age-encryption.org/v1/scrypt");
 
 const B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const B64_REV = new Uint8Array(256);
@@ -36,7 +42,8 @@ export function encodeBase64Raw(bytes: Uint8Array): string {
     if (i + 1 < bytes.length) {
       const b1 = bytes[i + 1]!;
       const n = (b0 << 16) | (b1 << 8);
-      res += B64_CHARS[(n >> 18) & 63]! + B64_CHARS[(n >> 12) & 63]! + B64_CHARS[(n >> 6) & 63]!;
+      res +=
+        B64_CHARS[(n >> 18) & 63]! + B64_CHARS[(n >> 12) & 63]! + B64_CHARS[(n >> 6) & 63]!;
     } else {
       const n = b0 << 16;
       res += B64_CHARS[(n >> 18) & 63]! + B64_CHARS[(n >> 12) & 63]!;
@@ -46,37 +53,56 @@ export function encodeBase64Raw(bytes: Uint8Array): string {
 }
 
 export function decodeBase64Raw(str: string): Uint8Array {
-  const clean = str.replace(/[^A-Za-z0-9+/]/g, "");
+  if (!/^[A-Za-z0-9+/]*$/.test(str) || str.length % 4 === 1) {
+    throw new Error("Invalid raw base64 encoding.");
+  }
   const out: number[] = [];
   let i = 0;
-  for (; i + 3 < clean.length; i += 4) {
+  for (; i + 3 < str.length; i += 4) {
     const n =
-      (B64_REV[clean.charCodeAt(i)]! << 18) |
-      (B64_REV[clean.charCodeAt(i + 1)]! << 12) |
-      (B64_REV[clean.charCodeAt(i + 2)]! << 6) |
-      B64_REV[clean.charCodeAt(i + 3)]!;
+      (B64_REV[str.charCodeAt(i)]! << 18) |
+      (B64_REV[str.charCodeAt(i + 1)]! << 12) |
+      (B64_REV[str.charCodeAt(i + 2)]! << 6) |
+      B64_REV[str.charCodeAt(i + 3)]!;
     out.push((n >> 16) & 255, (n >> 8) & 255, n & 255);
   }
-  const rem = clean.length - i;
+  const rem = str.length - i;
   if (rem === 2) {
-    const n = (B64_REV[clean.charCodeAt(i)]! << 18) | (B64_REV[clean.charCodeAt(i + 1)]! << 12);
+    const n = (B64_REV[str.charCodeAt(i)]! << 18) | (B64_REV[str.charCodeAt(i + 1)]! << 12);
     out.push((n >> 16) & 255);
   } else if (rem === 3) {
     const n =
-      (B64_REV[clean.charCodeAt(i)]! << 18) |
-      (B64_REV[clean.charCodeAt(i + 1)]! << 12) |
-      (B64_REV[clean.charCodeAt(i + 2)]! << 6);
+      (B64_REV[str.charCodeAt(i)]! << 18) |
+      (B64_REV[str.charCodeAt(i + 1)]! << 12) |
+      (B64_REV[str.charCodeAt(i + 2)]! << 6);
     out.push((n >> 16) & 255, (n >> 8) & 255);
   }
-  return new Uint8Array(out);
+  const decoded = new Uint8Array(out);
+  if (encodeBase64Raw(decoded) !== str) {
+    throw new Error("Invalid non-canonical raw base64 encoding.");
+  }
+  return decoded;
 }
 
 export interface AgeCrypto {
-  chacha20poly1305Encrypt(key: Uint8Array, nonce: Uint8Array, plaintext: Uint8Array): Uint8Array;
-  chacha20poly1305Decrypt(key: Uint8Array, nonce: Uint8Array, ciphertext: Uint8Array): Uint8Array;
+  chacha20poly1305Encrypt(
+    key: Uint8Array,
+    nonce: Uint8Array,
+    plaintext: Uint8Array,
+  ): Uint8Array;
+  chacha20poly1305Decrypt(
+    key: Uint8Array,
+    nonce: Uint8Array,
+    ciphertext: Uint8Array,
+  ): Uint8Array;
   x25519GetPublicKey(privateKey: Uint8Array): Uint8Array;
   x25519SharedSecret(privateKey: Uint8Array, peerPublicKey: Uint8Array): Uint8Array;
-  hkdfSha256(ikm: Uint8Array, salt: Uint8Array, info: string | Uint8Array, length: number): Uint8Array;
+  hkdfSha256(
+    ikm: Uint8Array,
+    salt: Uint8Array,
+    info: string | Uint8Array,
+    length: number,
+  ): Uint8Array;
   hmacSha256(key: Uint8Array, message: Uint8Array): Uint8Array;
   scrypt(password: string | Uint8Array, salt: Uint8Array, logN: number): Uint8Array;
 }
@@ -143,6 +169,7 @@ export interface AgeEncryptOptions {
   ephemeralKey?: Uint8Array;
   scryptSalt?: Uint8Array;
   scryptLogN?: number; // default 14
+  payloadNonce?: Uint8Array;
 }
 
 export interface AgeDecryptOptions {
@@ -150,15 +177,543 @@ export interface AgeDecryptOptions {
   passphrase?: string;
 }
 
-function makeChunkNonce(chunkIndex: number, isLast: boolean): Uint8Array {
+export interface AgeIncrementalEncryptOptions extends AgeEncryptOptions {
+  armor?: boolean;
+}
+
+function makeChunkNonce(chunkIndex: bigint, isLast: boolean): Uint8Array {
+  if (chunkIndex < 0n || chunkIndex > AGE_MAX_CHUNK_INDEX) {
+    throw new Error("Age payload chunk counter exhausted.");
+  }
   const nonce = new Uint8Array(12);
-  let temp = BigInt(chunkIndex);
+  let temp = chunkIndex;
   for (let i = 10; i >= 0; i--) {
     nonce[i] = Number(temp & 0xffn);
     temp >>= 8n;
   }
   nonce[11] = isLast ? 0x01 : 0x00;
   return nonce;
+}
+
+function concatBytes(chunks: Uint8Array[]): Uint8Array<ArrayBuffer> {
+  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const result = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
+function appendBytes(left: Uint8Array, right: Uint8Array): Uint8Array<ArrayBuffer> {
+  const result = new Uint8Array(left.length + right.length);
+  result.set(left, 0);
+  result.set(right, left.length);
+  return result;
+}
+
+function indexOfBytes(bytes: Uint8Array, needle: Uint8Array, from = 0): number {
+  outer: for (let i = from; i <= bytes.length - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (bytes[i + j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
+
+const AGE_HEADER_MAC_MARKER = new TextEncoder().encode("\n--- ");
+const AGE_ARMOR_BEGIN = "-----BEGIN AGE ENCRYPTED FILE-----";
+
+interface ParsedStanza {
+  args: string[];
+  body: Uint8Array;
+}
+
+function prefixedScryptSalt(salt: Uint8Array): Uint8Array {
+  return concatBytes([AGE_SCRYPT_LABEL, salt]);
+}
+
+function parseHeaderStanzas(headerBytes: Uint8Array): ParsedStanza[] {
+  for (const byte of headerBytes) {
+    if (byte !== 0x0a && (byte < 0x20 || byte > 0x7e)) {
+      throw new Error("Invalid age container: header contains non-ASCII characters.");
+    }
+  }
+
+  const lines = new TextDecoder().decode(headerBytes).split("\n");
+  if (lines.shift() !== AGE_VERSION_LINE) {
+    throw new Error(`Invalid age container: expected version line '${AGE_VERSION_LINE}'.`);
+  }
+
+  const stanzas: ParsedStanza[] = [];
+  for (let lineIndex = 0; lineIndex < lines.length;) {
+    const argLine = lines[lineIndex++]!;
+    if (!argLine.startsWith("-> ")) {
+      throw new Error("Invalid age container: malformed recipient stanza argument line.");
+    }
+    const args = argLine.slice(3).split(" ");
+    if (
+      args.length === 0 ||
+      args.length > 129 ||
+      args.some((argument) => !/^[\x21-\x7e]+$/.test(argument))
+    ) {
+      throw new Error("Invalid age container: malformed recipient stanza arguments.");
+    }
+
+    const bodyLines: string[] = [];
+    while (lineIndex < lines.length && !lines[lineIndex]!.startsWith("-> ")) {
+      bodyLines.push(lines[lineIndex++]!);
+    }
+    if (bodyLines.length === 0) {
+      throw new Error("Invalid age container: recipient stanza is missing its body.");
+    }
+    for (let i = 0; i < bodyLines.length - 1; i++) {
+      if (bodyLines[i]!.length !== 64) {
+        throw new Error("Invalid age container: stanza body has a non-final short line.");
+      }
+    }
+    if (bodyLines[bodyLines.length - 1]!.length > 63) {
+      throw new Error("Invalid age container: stanza body is missing its final short line.");
+    }
+
+    let body: Uint8Array;
+    try {
+      body = decodeBase64Raw(bodyLines.join(""));
+    } catch {
+      throw new Error("Invalid age container: stanza body is not canonical raw base64.");
+    }
+    stanzas.push({ args, body });
+    if (stanzas.length > 1024) {
+      throw new Error("Invalid age container: too many recipient stanzas.");
+    }
+  }
+  if (stanzas.length === 0) {
+    throw new Error("Invalid age container: no recipient stanzas.");
+  }
+  return stanzas;
+}
+
+function validateNativeStanzas(stanzas: ParsedStanza[]): void {
+  const scryptStanzas = stanzas.filter((stanza) => stanza.args[0] === "scrypt");
+  if (scryptStanzas.length > 0 && stanzas.length !== 1) {
+    throw new Error("Invalid age container: an scrypt stanza must be the only stanza.");
+  }
+
+  for (const stanza of stanzas) {
+    if (stanza.args[0] === "X25519") {
+      if (stanza.args.length !== 2 || stanza.body.length !== 32) {
+        throw new Error("Invalid age container: malformed X25519 recipient stanza.");
+      }
+      try {
+        if (decodeBase64Raw(stanza.args[1]!).length !== 32) throw new Error();
+      } catch {
+        throw new Error("Invalid age container: malformed X25519 ephemeral share.");
+      }
+    } else if (stanza.args[0] === "scrypt") {
+      if (stanza.args.length !== 3 || stanza.body.length !== 32) {
+        throw new Error("Invalid age container: malformed scrypt recipient stanza.");
+      }
+      try {
+        if (decodeBase64Raw(stanza.args[1]!).length !== 16) throw new Error();
+      } catch {
+        throw new Error("Invalid age container: malformed scrypt salt.");
+      }
+      const encodedLogN = stanza.args[2]!;
+      if (!/^[1-9][0-9]*$/.test(encodedLogN)) {
+        throw new Error("Invalid age container: malformed scrypt work factor.");
+      }
+      const logN = Number(encodedLogN);
+      if (!Number.isSafeInteger(logN) || logN > AGE_MAX_SCRYPT_LOG_N) {
+        throw new Error(
+          `Invalid age container: scrypt work factor exceeds ${AGE_MAX_SCRYPT_LOG_N}.`,
+        );
+      }
+    }
+  }
+}
+
+/** Incremental raw-binary age encryptor. ASCII armor is intentionally unsupported. */
+export class AgeEncryptor {
+  private readonly crypto: AgeCrypto;
+  private readonly header: Uint8Array;
+  private readonly payloadKey: Uint8Array;
+  private buffer = new Uint8Array(0);
+  private chunkIndex = 0n;
+  private headerEmitted = false;
+  private finalized = false;
+
+  constructor(crypto: AgeCrypto, options: AgeIncrementalEncryptOptions) {
+    if (options.armor) {
+      throw new Error(
+        "AgeEncryptor does not support armored output; stream the raw binary age format.",
+      );
+    }
+
+    this.crypto = crypto;
+    const recipients = options.recipients ?? [];
+    const passphrase = options.passphrase;
+    if (recipients.length === 0 && !passphrase) {
+      throw new Error(
+        "AgeEncryptor requires at least one recipient (age1...) or a passphrase.",
+      );
+    }
+    if (recipients.length > 0 && passphrase) {
+      throw new Error("AgeEncryptor cannot mix an scrypt stanza with other recipients.");
+    }
+
+    const fileKey = options.fileKey ?? new Uint8Array(AGE_FILE_KEY_SIZE);
+    if (fileKey.length !== AGE_FILE_KEY_SIZE) {
+      throw new Error(`Age file key must be ${AGE_FILE_KEY_SIZE} bytes.`);
+    }
+    if (!options.fileKey) {
+      if (typeof globalThis.crypto?.getRandomValues === "function") {
+        globalThis.crypto.getRandomValues(fileKey);
+      } else {
+        throw new Error("CSPRNG unavailable for age file key generation.");
+      }
+    }
+
+    const zeroNonce = new Uint8Array(12);
+    const stanzas: string[] = [];
+    for (const recipient of recipients) {
+      const recipientPublicKey = parseAgeRecipient(recipient);
+      const ephemeralPrivateKey = options.ephemeralKey ?? new Uint8Array(32);
+      if (ephemeralPrivateKey.length !== 32) {
+        throw new Error("Age X25519 ephemeral key must be 32 bytes.");
+      }
+      if (!options.ephemeralKey) {
+        if (typeof globalThis.crypto?.getRandomValues === "function") {
+          globalThis.crypto.getRandomValues(ephemeralPrivateKey);
+        } else {
+          throw new Error("CSPRNG unavailable for age ephemeral key generation.");
+        }
+      }
+      const ephemeralPublicKey = crypto.x25519GetPublicKey(ephemeralPrivateKey);
+      const sharedSecret = crypto.x25519SharedSecret(ephemeralPrivateKey, recipientPublicKey);
+      const salt = new Uint8Array(64);
+      salt.set(ephemeralPublicKey, 0);
+      salt.set(recipientPublicKey, 32);
+      const wrapKey = crypto.hkdfSha256(sharedSecret, salt, "age-encryption.org/v1/X25519", 32);
+      const body = crypto.chacha20poly1305Encrypt(wrapKey, zeroNonce, fileKey);
+      stanzas.push(
+        `-> X25519 ${encodeBase64Raw(ephemeralPublicKey)}\n${encodeBase64Raw(body)}`,
+      );
+    }
+
+    if (passphrase) {
+      const salt = options.scryptSalt ?? new Uint8Array(16);
+      if (salt.length !== 16) throw new Error("Age scrypt salt must be 16 bytes.");
+      if (!options.scryptSalt) {
+        if (typeof globalThis.crypto?.getRandomValues === "function") {
+          globalThis.crypto.getRandomValues(salt);
+        } else {
+          throw new Error("CSPRNG unavailable for age scrypt salt generation.");
+        }
+      }
+      const logN = options.scryptLogN ?? 14;
+      if (!Number.isInteger(logN) || logN < 1 || logN > AGE_MAX_SCRYPT_LOG_N) {
+        throw new Error(
+          `Age scrypt work factor must be an integer from 1 through ${AGE_MAX_SCRYPT_LOG_N}.`,
+        );
+      }
+      const wrapKey = crypto.scrypt(passphrase, prefixedScryptSalt(salt), logN);
+      const body = crypto.chacha20poly1305Encrypt(wrapKey, zeroNonce, fileKey);
+      stanzas.push(`-> scrypt ${encodeBase64Raw(salt)} ${logN}\n${encodeBase64Raw(body)}`);
+    }
+
+    const headerPrefix = `${AGE_VERSION_LINE}\n${stanzas.join("\n")}\n---`;
+    const hmacKey = crypto.hkdfSha256(fileKey, new Uint8Array(0), "header", 32);
+    const headerMac = crypto.hmacSha256(hmacKey, new TextEncoder().encode(headerPrefix));
+    const header = new TextEncoder().encode(`${headerPrefix} ${encodeBase64Raw(headerMac)}\n`);
+    const payloadNonce = options.payloadNonce ?? new Uint8Array(AGE_PAYLOAD_NONCE_SIZE);
+    if (payloadNonce.length !== AGE_PAYLOAD_NONCE_SIZE) {
+      throw new Error(`Age payload nonce must be ${AGE_PAYLOAD_NONCE_SIZE} bytes.`);
+    }
+    if (!options.payloadNonce) {
+      if (typeof globalThis.crypto?.getRandomValues === "function") {
+        globalThis.crypto.getRandomValues(payloadNonce);
+      } else {
+        throw new Error("CSPRNG unavailable for age payload nonce generation.");
+      }
+    }
+    this.header = concatBytes([header, payloadNonce]);
+    this.payloadKey = crypto.hkdfSha256(fileKey, payloadNonce, "payload", 32);
+  }
+
+  update(chunk: Uint8Array): Uint8Array {
+    if (this.finalized) throw new Error("AgeEncryptor has already been finalized.");
+    if (chunk.length === 0) return new Uint8Array(0);
+
+    const combined = appendBytes(this.buffer, chunk);
+    const output: Uint8Array[] = [];
+    if (!this.headerEmitted) {
+      output.push(this.header);
+      this.headerEmitted = true;
+    }
+
+    let offset = 0;
+    // A full frame may be the final frame, so it is held until more plaintext arrives.
+    while (combined.length - offset > AGE_CHUNK_SIZE) {
+      if (this.chunkIndex === AGE_MAX_CHUNK_INDEX) {
+        throw new Error("Age payload chunk counter exhausted.");
+      }
+      const plaintext = combined.subarray(offset, offset + AGE_CHUNK_SIZE);
+      const nonce = makeChunkNonce(this.chunkIndex, false);
+      output.push(this.crypto.chacha20poly1305Encrypt(this.payloadKey, nonce, plaintext));
+      this.chunkIndex++;
+      offset += AGE_CHUNK_SIZE;
+    }
+    this.buffer = combined.slice(offset);
+    return concatBytes(output);
+  }
+
+  finalize(): Uint8Array {
+    if (this.finalized) throw new Error("AgeEncryptor has already been finalized.");
+    this.finalized = true;
+
+    const output: Uint8Array[] = [];
+    if (!this.headerEmitted) output.push(this.header);
+    const nonce = makeChunkNonce(this.chunkIndex, true);
+    output.push(this.crypto.chacha20poly1305Encrypt(this.payloadKey, nonce, this.buffer));
+    this.buffer = new Uint8Array(0);
+    return concatBytes(output);
+  }
+}
+
+/** Incremental raw-binary age decryptor. Plaintext is returned only for authenticated frames. */
+export class AgeDecryptor {
+  private readonly crypto: AgeCrypto;
+  private readonly options: AgeDecryptOptions;
+  private fileKey?: Uint8Array;
+  private payloadKey?: Uint8Array;
+  private buffer = new Uint8Array(0);
+  private chunkIndex = 0n;
+  private headerProcessed = false;
+  private payloadNonceProcessed = false;
+  private finalized = false;
+  private failed = false;
+
+  constructor(crypto: AgeCrypto, options: AgeDecryptOptions) {
+    this.crypto = crypto;
+    this.options = options;
+  }
+
+  private processPreamble(): boolean {
+    if (!this.headerProcessed) {
+      const armorPrefix = new TextEncoder().encode(AGE_ARMOR_BEGIN);
+      if (
+        this.buffer.length >= armorPrefix.length &&
+        indexOfBytes(this.buffer.subarray(0, armorPrefix.length), armorPrefix) === 0
+      ) {
+        throw new Error(
+          "AgeDecryptor does not support armored input; dearmor it before streaming.",
+        );
+      }
+
+      const markerIndex = indexOfBytes(this.buffer, AGE_HEADER_MAC_MARKER);
+      if (markerIndex === -1) {
+        if (this.buffer.length > AGE_MAX_HEADER_SIZE) {
+          throw new Error(
+            `Invalid age container: header exceeds ${AGE_MAX_HEADER_SIZE} bytes.`,
+          );
+        }
+        return false;
+      }
+      const macEndIndex = this.buffer.indexOf(0x0a, markerIndex + AGE_HEADER_MAC_MARKER.length);
+      if (macEndIndex === -1) {
+        if (this.buffer.length > AGE_MAX_HEADER_SIZE) {
+          throw new Error(
+            `Invalid age container: header exceeds ${AGE_MAX_HEADER_SIZE} bytes.`,
+          );
+        }
+        return false;
+      }
+      if (macEndIndex + 1 > AGE_MAX_HEADER_SIZE) {
+        throw new Error(`Invalid age container: header exceeds ${AGE_MAX_HEADER_SIZE} bytes.`);
+      }
+
+      const macLine = new TextDecoder().decode(
+        this.buffer.subarray(markerIndex + AGE_HEADER_MAC_MARKER.length, macEndIndex),
+      );
+      let expectedHeaderMac: Uint8Array;
+      try {
+        expectedHeaderMac = decodeBase64Raw(macLine);
+      } catch {
+        throw new Error("Invalid age container: malformed header MAC encoding.");
+      }
+      if (macLine.length !== 43 || expectedHeaderMac.length !== 32) {
+        throw new Error("Invalid age container: header MAC must encode 32 bytes.");
+      }
+
+      const stanzas = parseHeaderStanzas(this.buffer.subarray(0, markerIndex));
+      validateNativeStanzas(stanzas);
+      const fileKey = this.decryptFileKey(stanzas);
+      const hmacKey = this.crypto.hkdfSha256(fileKey, new Uint8Array(0), "header", 32);
+      const actualMac = this.crypto.hmacSha256(
+        hmacKey,
+        this.buffer.subarray(0, markerIndex + 4),
+      );
+      let difference = actualMac.length ^ expectedHeaderMac.length;
+      for (let i = 0; i < Math.min(actualMac.length, expectedHeaderMac.length); i++) {
+        difference |= actualMac[i]! ^ expectedHeaderMac[i]!;
+      }
+      if (difference !== 0) {
+        throw new Error(
+          "Invalid age container: header MAC authentication failed (tampered header).",
+        );
+      }
+
+      this.fileKey = fileKey;
+      this.buffer = this.buffer.slice(macEndIndex + 1);
+      this.headerProcessed = true;
+    }
+
+    if (!this.payloadNonceProcessed) {
+      if (this.buffer.length < AGE_PAYLOAD_NONCE_SIZE) return false;
+      const payloadNonce = this.buffer.slice(0, AGE_PAYLOAD_NONCE_SIZE);
+      this.payloadKey = this.crypto.hkdfSha256(this.fileKey!, payloadNonce, "payload", 32);
+      this.fileKey = undefined;
+      this.buffer = this.buffer.slice(AGE_PAYLOAD_NONCE_SIZE);
+      this.payloadNonceProcessed = true;
+    }
+    return true;
+  }
+
+  private decryptFileKey(stanzas: ParsedStanza[]): Uint8Array {
+    const zeroNonce = new Uint8Array(12);
+    if (this.options.identities && this.options.identities.length > 0) {
+      for (const identity of this.options.identities) {
+        const identityPrivateKey = parseAgeIdentity(identity);
+        const identityPublicKey = this.crypto.x25519GetPublicKey(identityPrivateKey);
+        for (const stanza of stanzas) {
+          if (stanza.args[0] !== "X25519") continue;
+          const ephemeralPublicKey = decodeBase64Raw(stanza.args[1]!);
+          let sharedSecret: Uint8Array;
+          try {
+            sharedSecret = this.crypto.x25519SharedSecret(
+              identityPrivateKey,
+              ephemeralPublicKey,
+            );
+          } catch {
+            throw new Error("Invalid age container: invalid X25519 ephemeral share.");
+          }
+          if (sharedSecret.every((byte) => byte === 0)) {
+            throw new Error("Invalid age container: all-zero X25519 shared secret.");
+          }
+          try {
+            const salt = new Uint8Array(64);
+            salt.set(ephemeralPublicKey, 0);
+            salt.set(identityPublicKey, 32);
+            const wrapKey = this.crypto.hkdfSha256(
+              sharedSecret,
+              salt,
+              "age-encryption.org/v1/X25519",
+              32,
+            );
+            const candidate = this.crypto.chacha20poly1305Decrypt(
+              wrapKey,
+              zeroNonce,
+              stanza.body,
+            );
+            if (candidate.length === AGE_FILE_KEY_SIZE) return candidate;
+          } catch {
+            // This stanza does not match the identity.
+          }
+        }
+      }
+    }
+
+    if (this.options.passphrase) {
+      for (const stanza of stanzas) {
+        if (stanza.args[0] !== "scrypt") continue;
+        const salt = decodeBase64Raw(stanza.args[1]!);
+        const logN = Number(stanza.args[2]!);
+        try {
+          const wrapKey = this.crypto.scrypt(
+            this.options.passphrase,
+            prefixedScryptSalt(salt),
+            logN,
+          );
+          const candidate = this.crypto.chacha20poly1305Decrypt(
+            wrapKey,
+            zeroNonce,
+            stanza.body,
+          );
+          if (candidate.length === AGE_FILE_KEY_SIZE) return candidate;
+        } catch {
+          // Incorrect passphrase.
+        }
+      }
+    }
+
+    throw new Error(
+      "Could not decrypt age container: no matching identity or correct passphrase.",
+    );
+  }
+
+  update(chunk: Uint8Array): Uint8Array {
+    if (this.finalized) throw new Error("AgeDecryptor has already been finalized.");
+    if (this.failed)
+      throw new Error("AgeDecryptor cannot continue after an authentication failure.");
+    if (chunk.length === 0) return new Uint8Array(0);
+
+    try {
+      this.buffer = appendBytes(this.buffer, chunk);
+      if (!this.processPreamble()) return new Uint8Array(0);
+
+      const output: Uint8Array[] = [];
+      const frameSize = AGE_CHUNK_SIZE + AGE_TAG_SIZE;
+      let offset = 0;
+      // An exactly full frame may be final and must retain the final-bit nonce until more input arrives.
+      while (this.buffer.length - offset > frameSize) {
+        if (this.chunkIndex === AGE_MAX_CHUNK_INDEX) {
+          throw new Error("Age payload chunk counter exhausted.");
+        }
+        const ciphertext = this.buffer.subarray(offset, offset + frameSize);
+        const nonce = makeChunkNonce(this.chunkIndex, false);
+        output.push(this.crypto.chacha20poly1305Decrypt(this.payloadKey!, nonce, ciphertext));
+        this.chunkIndex++;
+        offset += frameSize;
+      }
+      this.buffer = this.buffer.slice(offset);
+      return concatBytes(output);
+    } catch (error) {
+      this.failed = true;
+      throw error;
+    }
+  }
+
+  finalize(): Uint8Array {
+    if (this.finalized) throw new Error("AgeDecryptor has already been finalized.");
+    if (this.failed)
+      throw new Error("AgeDecryptor cannot finalize after an authentication failure.");
+    this.finalized = true;
+
+    if (!this.headerProcessed) {
+      throw new Error("Invalid age container: incomplete header.");
+    }
+    if (!this.payloadNonceProcessed) {
+      throw new Error("Invalid age container: incomplete payload nonce.");
+    }
+    const frameSize = AGE_CHUNK_SIZE + AGE_TAG_SIZE;
+    if (this.buffer.length < AGE_TAG_SIZE || this.buffer.length > frameSize) {
+      throw new Error(
+        `Invalid age container: final payload frame is ${this.buffer.length} bytes (expected ${AGE_TAG_SIZE} to ${frameSize}).`,
+      );
+    }
+    if (this.chunkIndex > 0n && this.buffer.length === AGE_TAG_SIZE) {
+      throw new Error(
+        "Invalid age container: final payload frame is empty after prior frames.",
+      );
+    }
+    const nonce = makeChunkNonce(this.chunkIndex, true);
+    const plaintext = this.crypto.chacha20poly1305Decrypt(this.payloadKey!, nonce, this.buffer);
+    this.buffer = new Uint8Array(0);
+    this.chunkIndex++;
+    return plaintext;
+  }
 }
 
 /**
@@ -169,93 +724,8 @@ export function ageEncrypt(
   plaintext: Uint8Array,
   options: AgeEncryptOptions,
 ): Uint8Array {
-  const recipients = options.recipients ?? [];
-  const passphrase = options.passphrase;
-
-  if (recipients.length === 0 && !passphrase) {
-    throw new Error("ageEncrypt requires at least one recipient (age1...) or a passphrase.");
-  }
-
-  // 1. Generate 16-byte random file key
-  const fileKey = options.fileKey ?? new Uint8Array(AGE_FILE_KEY_SIZE);
-  if (!options.fileKey) {
-    if (typeof globalThis.crypto?.getRandomValues === "function") {
-      globalThis.crypto.getRandomValues(fileKey);
-    } else {
-      throw new Error("CSPRNG unavailable for age file key generation.");
-    }
-  }
-
-  const zeroNonce = new Uint8Array(12);
-  const stanzas: string[] = [];
-
-  // 2. Process X25519 recipients
-  for (const recipStr of recipients) {
-    const recipPk = parseAgeRecipient(recipStr);
-    const ephemSk = options.ephemeralKey ?? new Uint8Array(32);
-    if (!options.ephemeralKey) {
-      globalThis.crypto.getRandomValues(ephemSk);
-    }
-    const ephemPk = crypto.x25519GetPublicKey(ephemSk);
-    const sharedSecret = crypto.x25519SharedSecret(ephemSk, recipPk);
-
-    const salt = new Uint8Array(64);
-    salt.set(ephemPk, 0);
-    salt.set(recipPk, 32);
-
-    const wrapKey = crypto.hkdfSha256(sharedSecret, salt, "age-encryption.org/v1/X25519", 32);
-    const body = crypto.chacha20poly1305Encrypt(wrapKey, zeroNonce, fileKey);
-
-    stanzas.push(`-> X25519 ${encodeBase64Raw(ephemPk)}\n${encodeBase64Raw(body)}`);
-  }
-
-  // 3. Process passphrase recipient if present
-  if (passphrase) {
-    const salt = options.scryptSalt ?? new Uint8Array(16);
-    if (!options.scryptSalt) {
-      globalThis.crypto.getRandomValues(salt);
-    }
-    const logN = options.scryptLogN ?? 14;
-    const wrapKey = crypto.scrypt(passphrase, salt, logN);
-    const body = crypto.chacha20poly1305Encrypt(wrapKey, zeroNonce, fileKey);
-
-    stanzas.push(`-> scrypt ${encodeBase64Raw(salt)} ${logN}\n${encodeBase64Raw(body)}`);
-  }
-
-  // 4. Assemble header and compute header MAC
-  const headerPrefix = `${AGE_VERSION_LINE}\n${stanzas.join("\n")}\n---`;
-  const hmacKey = crypto.hkdfSha256(fileKey, new Uint8Array(0), "header", 32);
-  const headerMac = crypto.hmacSha256(hmacKey, new TextEncoder().encode(headerPrefix));
-  const fullHeaderStr = `${headerPrefix} ${encodeBase64Raw(headerMac)}\n`;
-  const fullHeaderBytes = new TextEncoder().encode(fullHeaderStr);
-
-  // 5. Derive payload key
-  const payloadKey = crypto.hkdfSha256(fileKey, new Uint8Array(0), "payload", 32);
-
-  // 6. Encrypt payload in 64 KiB chunks
-  const encryptedChunks: Uint8Array[] = [];
-  const totalChunks = Math.ceil(plaintext.length / AGE_CHUNK_SIZE) || 1;
-
-  for (let c = 0; c < totalChunks; c++) {
-    const isLast = c === totalChunks - 1;
-    const chunkStart = c * AGE_CHUNK_SIZE;
-    const chunkPlain = plaintext.subarray(chunkStart, Math.min(chunkStart + AGE_CHUNK_SIZE, plaintext.length));
-    const nonce = makeChunkNonce(c, isLast);
-    const chunkCipher = crypto.chacha20poly1305Encrypt(payloadKey, nonce, chunkPlain);
-    encryptedChunks.push(chunkCipher);
-  }
-
-  // 7. Combine full container
-  const totalCipherLen = encryptedChunks.reduce((acc, ch) => acc + ch.length, 0);
-  const out = new Uint8Array(fullHeaderBytes.length + totalCipherLen);
-  out.set(fullHeaderBytes, 0);
-  let off = fullHeaderBytes.length;
-  for (const chunk of encryptedChunks) {
-    out.set(chunk, off);
-    off += chunk.length;
-  }
-
-  return out;
+  const encryptor = new AgeEncryptor(crypto, options);
+  return concatBytes([encryptor.update(plaintext), encryptor.finalize()]);
 }
 
 /**
@@ -266,140 +736,13 @@ export function ageDecrypt(
   containerBytes: Uint8Array,
   options: AgeDecryptOptions,
 ): Uint8Array {
-  // Find header end marker: "\n--- "
-  const textHead = new TextDecoder().decode(containerBytes.subarray(0, Math.min(containerBytes.length, 8192)));
-  const macMarkerIdx = textHead.indexOf("\n--- ");
-  if (macMarkerIdx === -1) {
-    throw new Error("Invalid age container: missing header MAC delimiter '--- '.");
-  }
-
-  const macEndIdx = textHead.indexOf("\n", macMarkerIdx + 5);
-  if (macEndIdx === -1) {
-    throw new Error("Invalid age container: malformed header line endings.");
-  }
-
-  const headerPrefix = textHead.substring(0, macMarkerIdx + 4); // includes "\n---"
-  const macLine = textHead.substring(macMarkerIdx + 5, macEndIdx).trim();
-  const expectedHeaderMac = decodeBase64Raw(macLine);
-
-  const payloadOffset = new TextEncoder().encode(textHead.substring(0, macEndIdx + 1)).length;
-  const payloadCiphertext = containerBytes.subarray(payloadOffset);
-
-  // Parse stanzas
-  const stanzaSections = textHead.substring(0, macMarkerIdx).split("\n-> ").slice(1);
-  let fileKey: Uint8Array | undefined;
-
-  const zeroNonce = new Uint8Array(12);
-
-  // Attempt X25519 identity decryption
-  if (options.identities && options.identities.length > 0) {
-    for (const identityStr of options.identities) {
-      const identSk = parseAgeIdentity(identityStr);
-      const identPk = crypto.x25519GetPublicKey(identSk);
-
-      for (const stanza of stanzaSections) {
-        if (!stanza.startsWith("X25519 ")) continue;
-        const lines = stanza.split("\n");
-        const parts = lines[0]!.split(" ");
-        const ephemPk = decodeBase64Raw(parts[1]!);
-        const bodyCipher = decodeBase64Raw(lines[1]!);
-
-        try {
-          const sharedSecret = crypto.x25519SharedSecret(identSk, ephemPk);
-          const salt = new Uint8Array(64);
-          salt.set(ephemPk, 0);
-          salt.set(identPk, 32);
-
-          const wrapKey = crypto.hkdfSha256(sharedSecret, salt, "age-encryption.org/v1/X25519", 32);
-          const candidate = crypto.chacha20poly1305Decrypt(wrapKey, zeroNonce, bodyCipher);
-          if (candidate.length === AGE_FILE_KEY_SIZE) {
-            fileKey = candidate;
-            break;
-          }
-        } catch {
-          // Stanza does not match this key
-        }
-      }
-      if (fileKey) break;
-    }
-  }
-
-  // Attempt scrypt passphrase decryption if still locked
-  if (!fileKey && options.passphrase) {
-    for (const stanza of stanzaSections) {
-      if (!stanza.startsWith("scrypt ")) continue;
-      const lines = stanza.split("\n");
-      const parts = lines[0]!.split(" ");
-      const salt = decodeBase64Raw(parts[1]!);
-      const logN = parseInt(parts[2]!, 10);
-      const bodyCipher = decodeBase64Raw(lines[1]!);
-
-      try {
-        const wrapKey = crypto.scrypt(options.passphrase, salt, logN);
-        const candidate = crypto.chacha20poly1305Decrypt(wrapKey, zeroNonce, bodyCipher);
-        if (candidate.length === AGE_FILE_KEY_SIZE) {
-          fileKey = candidate;
-          break;
-        }
-      } catch {
-        // Incorrect passphrase
-      }
-    }
-  }
-
-  if (!fileKey) {
-    throw new Error("Could not decrypt age container: no matching identity or correct passphrase.");
-  }
-
-  // Verify header MAC
-  const hmacKey = crypto.hkdfSha256(fileKey, new Uint8Array(0), "header", 32);
-  const actualMac = crypto.hmacSha256(hmacKey, new TextEncoder().encode(headerPrefix));
-  if (actualMac.length !== expectedHeaderMac.length) {
-    throw new Error("Invalid age container: header MAC length mismatch.");
-  }
-  let diff = 0;
-  for (let i = 0; i < actualMac.length; i++) {
-    diff |= actualMac[i]! ^ expectedHeaderMac[i]!;
-  }
-  if (diff !== 0) {
-    throw new Error("Invalid age container: header MAC authentication failed (tampered header).");
-  }
-
-  // Derive payload key and decrypt chunks
-  const payloadKey = crypto.hkdfSha256(fileKey, new Uint8Array(0), "payload", 32);
-  const decryptedChunks: Uint8Array[] = [];
-
-  let chunkIdx = 0;
-  let pOff = 0;
-  const chunkCipherMax = AGE_CHUNK_SIZE + AGE_TAG_SIZE;
-
-  while (pOff < payloadCiphertext.length) {
-    const remaining = payloadCiphertext.length - pOff;
-    const isLast = remaining <= chunkCipherMax;
-    const thisChunkCipher = payloadCiphertext.subarray(pOff, pOff + (isLast ? remaining : chunkCipherMax));
-    const nonce = makeChunkNonce(chunkIdx, isLast);
-
-    const chunkPlain = crypto.chacha20poly1305Decrypt(payloadKey, nonce, thisChunkCipher);
-    decryptedChunks.push(chunkPlain);
-
-    pOff += thisChunkCipher.length;
-    chunkIdx++;
-  }
-
-  // Total plaintext assembly
-  const totalPlainLen = decryptedChunks.reduce((acc, ch) => acc + ch.length, 0);
-  const out = new Uint8Array(totalPlainLen);
-  let dOff = 0;
-  for (const ch of decryptedChunks) {
-    out.set(ch, dOff);
-    dOff += ch.length;
-  }
-
-  return out;
+  const decryptor = new AgeDecryptor(crypto, options);
+  return concatBytes([decryptor.update(containerBytes), decryptor.finalize()]);
 }
 
 export function isArmoredAge(input: string | Uint8Array): boolean {
-  const str = typeof input === "string" ? input : new TextDecoder().decode(input.subarray(0, 40));
+  const str =
+    typeof input === "string" ? input : new TextDecoder().decode(input.subarray(0, 40));
   return str.trimStart().startsWith("-----BEGIN AGE ENCRYPTED FILE-----");
 }
 
@@ -409,7 +752,8 @@ export function armorAge(bytes: Uint8Array): string {
   let i = 0;
   for (; i + 2 < bytes.length; i += 3) {
     const n = (bytes[i]! << 16) | (bytes[i + 1]! << 8) | bytes[i + 2]!;
-    b64 += chars[(n >> 18) & 63]! + chars[(n >> 12) & 63]! + chars[(n >> 6) & 63]! + chars[n & 63]!;
+    b64 +=
+      chars[(n >> 18) & 63]! + chars[(n >> 12) & 63]! + chars[(n >> 6) & 63]! + chars[n & 63]!;
   }
   if (i < bytes.length) {
     const b0 = bytes[i]!;
@@ -435,12 +779,21 @@ export function dearmorAge(armored: string | Uint8Array): Uint8Array {
   const text = typeof armored === "string" ? armored : new TextDecoder().decode(armored);
   const startMarker = "-----BEGIN AGE ENCRYPTED FILE-----";
   const endMarker = "-----END AGE ENCRYPTED FILE-----";
-  const startIdx = text.indexOf(startMarker);
-  const endIdx = text.indexOf(endMarker);
-  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+  const normalized = text.trim().replace(/\r\n/g, "\n");
+  if (normalized.includes("\r")) {
+    throw new Error("Invalid age armored file: unsupported line endings.");
+  }
+  const lines = normalized.split("\n");
+  if (lines[0] !== startMarker || lines.at(-1) !== endMarker) {
     throw new Error("Invalid age armored file: missing begin or end markers.");
   }
-  const b64 = text.substring(startIdx + startMarker.length, endIdx).replace(/\s+/g, "");
-  return decodeBase64Raw(b64);
+  const b64 = lines.slice(1, -1).join("");
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(b64)) {
+    throw new Error("Invalid age armored file: malformed base64.");
+  }
+  const decoded = decodeBase64Raw(b64.replace(/=+$/, ""));
+  if (armorAge(decoded).trim() !== normalized) {
+    throw new Error("Invalid age armored file: non-canonical PEM encoding.");
+  }
+  return decoded;
 }
-

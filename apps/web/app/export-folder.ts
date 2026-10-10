@@ -185,7 +185,7 @@ export function downloadZipArchive(
 export async function exportFilesToFolder(
   folderName: string,
   files: readonly ExportableFile[],
-): Promise<{ method: "folder" | "zip" | "cancelled"; count: number }> {
+): Promise<{ method: "folder" | "zip" | "download" | "cancelled"; count: number }> {
   if (files.length === 0) return { method: "cancelled", count: 0 };
 
   // 1. Try File System Access API if available in Chromium / Electron / Edge / Chrome
@@ -226,7 +226,24 @@ export async function exportFilesToFolder(
     }
   }
 
-  // 2. Universal fallback: Download as ZIP
+  // A single large result should not be copied into a second, equally large ZIP allocation.
+  if (files.length === 1) {
+    const file = files[0]!;
+    const blob = new Blob([file.content as BlobPart], {
+      type: file.mimeType ?? "application/octet-stream",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return { method: "download", count: 1 };
+  }
+
+  // Universal multi-file fallback: Download as ZIP
   downloadZipArchive(folderName, files);
   return { method: "zip", count: files.length };
 }

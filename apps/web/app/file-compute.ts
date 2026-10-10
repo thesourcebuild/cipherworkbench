@@ -1,5 +1,6 @@
 import {
   iterateStream,
+  fileProcessingModeForSpec,
   runStream,
   runStreams,
   type StreamProgress,
@@ -29,6 +30,67 @@ export interface FileComputeOptions {
  */
 let workerSupported = true;
 let jobCounter = 0;
+export const MAX_MAIN_THREAD_FILE_BYTES = 16 * 1024 * 1024;
+
+class WorkerUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "WorkerUnavailableError";
+  }
+}
+
+class OutputAccumulator {
+  private buffer: Uint8Array | undefined;
+  private readonly chunks: Uint8Array[] = [];
+  private length = 0;
+
+  constructor(initialCapacity = 0) {
+    if (initialCapacity > 0) this.buffer = new Uint8Array(initialCapacity);
+  }
+
+  append(chunk: Uint8Array): void {
+    if (this.buffer) {
+      if (this.length + chunk.length > this.buffer.length) {
+        const grown = new Uint8Array(
+          Math.max(this.length + chunk.length, this.buffer.length * 2),
+        );
+        grown.set(this.buffer.subarray(0, this.length));
+        this.buffer = grown;
+      }
+      this.buffer.set(chunk, this.length);
+    } else {
+      this.chunks.push(chunk);
+    }
+    this.length += chunk.length;
+  }
+
+  finish(result: ToolResult): ToolResult {
+    if (result.error) return result;
+    if (this.length === 0 && !this.buffer) return result;
+    if (result.bytes) this.append(result.bytes);
+    if (this.length === 0) return result;
+    if (this.buffer) return { ...result, bytes: this.buffer.subarray(0, this.length) };
+
+    const bytes = new Uint8Array(this.length);
+    let offset = 0;
+    for (const chunk of this.chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return { ...result, bytes };
+  }
+}
+
+function expectedCipherOutputCapacity(inputBytes: number): number {
+  return inputBytes + Math.ceil(inputBytes / (16 * 1024)) * 32 + 1024;
+}
+
+function assertSafeMainThreadFallback(file: File, streamsCurrentSpec: boolean): void {
+  if (streamsCurrentSpec || file.size <= MAX_MAIN_THREAD_FILE_BYTES) return;
+  throw new Error(
+    `The compute worker is unavailable, and this ${file.size}-byte file is too large to process safely on the main thread. Reload the app and try again.`,
+  );
+}
 
 export async function computeFile(
   tool: ToolDefinition<ToolSpecBase>,
@@ -36,11 +98,20 @@ export async function computeFile(
   file: File,
   options: FileComputeOptions = {},
 ): Promise<ToolResult> {
+  const streamsCurrentSpec = fileProcessingModeForSpec(tool, spec) === "streaming";
   if (workerSupported) {
     try {
-      return await computeInWorker(tool.id, spec, file, options);
+      return await computeInWorker(
+        tool.id,
+        spec,
+        file,
+        options,
+        tool.family === "cipher" && streamsCurrentSpec,
+      );
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") throw error;
+      if (!(error instanceof WorkerUnavailableError)) throw error;
+      assertSafeMainThreadFallback(file, streamsCurrentSpec);
       // One failure is enough to stop paying the construction cost on every file.
       workerSupported = false;
       console.warn(
@@ -49,6 +120,7 @@ export async function computeFile(
       );
     }
   }
+  assertSafeMainThreadFallback(file, streamsCurrentSpec);
   return computeOnMainThread(tool, spec, file, options);
 }
 
@@ -58,11 +130,14 @@ export async function computeVariantsFile(
   file: File,
   options: FileComputeOptions = {},
 ): Promise<Map<string, Uint8Array>> {
+  const streamsCurrentSpec = Boolean(tool.variants);
   if (workerSupported) {
     try {
       return await computeVariantsInWorker(tool.id, spec, file, options);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") throw error;
+      if (!(error instanceof WorkerUnavailableError)) throw error;
+      assertSafeMainThreadFallback(file, streamsCurrentSpec);
       workerSupported = false;
       console.warn(
         "Falling back to main-thread variants hashing; the compute worker is unavailable.",
@@ -70,6 +145,7 @@ export async function computeVariantsFile(
       );
     }
   }
+  assertSafeMainThreadFallback(file, streamsCurrentSpec);
   return computeVariantsOnMainThread(tool, spec, file, options);
 }
 
@@ -78,13 +154,21 @@ function computeInWorker(
   spec: ToolSpecBase,
   file: File,
   { onProgress, signal }: FileComputeOptions,
+  preallocateTransformOutput: boolean,
 ): Promise<ToolResult> {
   return new Promise<ToolResult>((resolve, reject) => {
-    const worker = new Worker(new URL("./compute.worker.ts", import.meta.url), {
-      type: "module",
-    });
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL("./compute.worker.ts", import.meta.url), {
+        type: "module",
+      });
+    } catch (error) {
+      reject(
+        new WorkerUnavailableError("The compute worker failed to start.", { cause: error }),
+      );
+      return;
+    }
     const jobId = ++jobCounter;
-
     const cleanup = () => {
       worker.terminate();
       signal?.removeEventListener("abort", onAbort);
@@ -99,6 +183,20 @@ function computeInWorker(
       return;
     }
     signal?.addEventListener("abort", onAbort);
+    let output: OutputAccumulator;
+    try {
+      output = new OutputAccumulator(
+        preallocateTransformOutput ? expectedCipherOutputCapacity(file.size) : 0,
+      );
+    } catch (error) {
+      cleanup();
+      reject(
+        new Error("The transformed output is too large to retain for Result and Export.", {
+          cause: error,
+        }),
+      );
+      return;
+    }
 
     worker.addEventListener("message", (event: MessageEvent<ComputeResponse>) => {
       const message = event.data;
@@ -114,7 +212,15 @@ function computeInWorker(
           break;
         case "done":
           cleanup();
-          resolve(message.result);
+          resolve(output.finish(message.result));
+          break;
+        case "output":
+          output.append(message.chunk);
+          worker.postMessage({
+            kind: "output-ack",
+            jobId,
+            sequence: message.sequence,
+          } satisfies ComputeRequest);
           break;
         case "error":
           cleanup();
@@ -127,7 +233,9 @@ function computeInWorker(
     // case the main-thread fallback exists for.
     worker.addEventListener("error", (event) => {
       cleanup();
-      reject(new Error(event.message || "The compute worker failed to start."));
+      reject(
+        new WorkerUnavailableError(event.message || "The compute worker failed to start."),
+      );
     });
 
     const request: ComputeRequest = { kind: "single", jobId, toolId, spec, file };
@@ -142,9 +250,17 @@ function computeVariantsInWorker(
   { onProgress, signal }: FileComputeOptions,
 ): Promise<Map<string, Uint8Array>> {
   return new Promise<Map<string, Uint8Array>>((resolve, reject) => {
-    const worker = new Worker(new URL("./compute.worker.ts", import.meta.url), {
-      type: "module",
-    });
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL("./compute.worker.ts", import.meta.url), {
+        type: "module",
+      });
+    } catch (error) {
+      reject(
+        new WorkerUnavailableError("The compute worker failed to start.", { cause: error }),
+      );
+      return;
+    }
     const jobId = ++jobCounter;
 
     const cleanup = () => {
@@ -182,6 +298,13 @@ function computeVariantsInWorker(
           resolve(map);
           break;
         }
+        case "output":
+          worker.postMessage({
+            kind: "output-ack",
+            jobId,
+            sequence: message.sequence,
+          } satisfies ComputeRequest);
+          break;
         case "error":
           cleanup();
           reject(new Error(message.message));
@@ -191,7 +314,9 @@ function computeVariantsInWorker(
 
     worker.addEventListener("error", (event) => {
       cleanup();
-      reject(new Error(event.message || "The compute worker failed to start."));
+      reject(
+        new WorkerUnavailableError(event.message || "The compute worker failed to start."),
+      );
     });
 
     const request: ComputeRequest = { kind: "variants", jobId, toolId, spec, file };
@@ -205,7 +330,8 @@ async function computeOnMainThread(
   file: File,
   { onProgress, signal }: FileComputeOptions,
 ): Promise<ToolResult> {
-  if (!tool.createStream) {
+  const streamsCurrentSpec = fileProcessingModeForSpec(tool, spec) === "streaming";
+  if (!tool.createStream || !streamsCurrentSpec) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     return tool.compute(spec, bytes);
   }

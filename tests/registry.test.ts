@@ -107,35 +107,52 @@ describe("TOOL_MANIFESTS", () => {
   const TEXT_VERIFIERS: Readonly<Record<string, string>> = {
     caesar: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     adfgvx: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    "vic-cipher": "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    "hill-cipher": "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    foursquare: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    chaocipher: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "vic-cipher":
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "hill-cipher":
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    foursquare:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    chaocipher:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
     enigma: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    vigenere: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    playfair: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    vigenere:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    playfair:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
     bifid: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     trifid: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     bacon: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    railfence: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    railfence:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
     m209: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     lorenz: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    solitaire: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    solitaire:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
     adfgx: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    nihilist: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    "straddling-checkerboard": "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    nihilist:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "straddling-checkerboard":
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
     typex: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     sigaba: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    bazeries: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    bazeries:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
     alberti: "a ciphertext is a value somebody already has, and verifyText compares it as text",
     porta: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    gronsfeld: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    jefferson: "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    gronsfeld:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    jefferson:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
     autokey: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    beaufort: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    columnar: "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    "two-square": "a ciphertext is a value somebody already has, and verifyText compares it as text",
-    "fractionated-morse": "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    beaufort:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    columnar:
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "two-square":
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
+    "fractionated-morse":
+      "a ciphertext is a value somebody already has, and verifyText compares it as text",
     scytale: "a ciphertext is a value somebody already has, and verifyText compares it as text",
   };
 
@@ -196,7 +213,7 @@ describe("TOOL_MANIFESTS", () => {
     for (const manifest of TOOL_MANIFESTS) {
       const tool = await loadTool(manifest.id);
       expect(Boolean(tool.createStream), `${manifest.id} streaming claim`).toBe(
-        manifest.streaming,
+        manifest.streaming || Boolean(tool.fileProcessingForSpec),
       );
     }
   });

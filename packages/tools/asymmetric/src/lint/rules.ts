@@ -7,16 +7,19 @@ import {
 } from "../catalogue/tool-meta";
 import {
   OPTION_CURVE,
+  OPTION_ENCRYPTION_SCHEME,
   OPTION_HASH,
   OPTION_OPERATION,
   OPTION_PARAM_SET,
   OPTION_PUBLIC_EXPONENT,
   OPTION_SCHEME,
+  readEncryptionScheme,
   readHash,
   readOperation,
   readPublicExponent,
   readScheme,
   withHash,
+  withEncryptionScheme,
   withPublicExponent,
   withScheme,
 } from "../pure";
@@ -36,6 +39,7 @@ export const RULE_CODES = [
   "A010",
   "A011",
   "A012",
+  "A013",
 ] as const;
 
 /** The operation, read without going through the resolver -- the info rules need only this. */
@@ -94,6 +98,7 @@ export const RULES: readonly LintRule<AsymmetricSpec>[] = [
       if (!broken) return [];
 
       const signing = operation === "sign" || operation === "verify";
+      if (!signing && readEncryptionScheme(spec.options) !== "oaep") return [];
       return [
         {
           code: "A002",
@@ -222,16 +227,58 @@ export const RULES: readonly LintRule<AsymmetricSpec>[] = [
     check(spec) {
       if (spec.variant !== "rsa" || operationOf(spec) !== "encrypt") return [];
       const hash = readHash(spec.options);
-      const capacity = 256 - 2 * hashOutputLength(hash) - 2;
+      const scheme = readEncryptionScheme(spec.options);
+      const capacity = scheme === "oaep" ? 256 - 2 * hashOutputLength(hash) - 2 : 245;
       return [
         {
           code: "A006",
           level: "info",
-          message: `RSA-OAEP carries at most ${capacity} bytes with a 2048-bit key and ${hash}.`,
+          message:
+            scheme === "oaep"
+              ? `RSA-OAEP carries at most ${capacity} bytes with a 2048-bit key and ${hash}.`
+              : `RSAES-PKCS1-v1_5 carries at most ${capacity} bytes with a 2048-bit key.`,
           detail:
-            "RSA encrypts a number smaller than its modulus, and OAEP spends two hash lengths plus two bytes of that on padding. It cannot encrypt a message, and no amount of key size fixes that -- a 4096-bit key raises the ceiling to about 446 bytes. What everything actually does is hybrid encryption: generate a symmetric key, encrypt the data with that using the AES tool, and encrypt the symmetric key here.",
+            scheme === "oaep"
+              ? "RSA encrypts a number smaller than its modulus, and OAEP spends two hash lengths plus two bytes of that on padding. It cannot encrypt a message, and no amount of key size fixes that -- a 4096-bit key raises the ceiling to about 446 bytes. What everything actually does is hybrid encryption: generate a symmetric key, encrypt the data with that using the AES tool, and encrypt the symmetric key here."
+              : "RSA encrypts a number smaller than its modulus, and PKCS#1 v1.5 spends at least eleven bytes on framing and random padding. It cannot encrypt a message. Legacy protocols used it to wrap a symmetric session key; new protocols use OAEP instead.",
           // No option to point at: the key size field only exists on the generate operation.
           optionIds: [],
+        },
+      ];
+    },
+  },
+  {
+    code: "A013",
+    check(spec) {
+      if (spec.variant !== "rsa") return [];
+      const operation = operationOf(spec);
+      if (operation !== "encrypt" && operation !== "decrypt") return [];
+      if (readEncryptionScheme(spec.options) !== "pkcs1v15") return [];
+
+      return [
+        {
+          code: "A013",
+          level: operation === "encrypt" ? "insecure" : "warning",
+          message:
+            operation === "encrypt"
+              ? "RSAES-PKCS1-v1_5 is unsafe for new encryption. Use RSA-OAEP."
+              : "RSAES-PKCS1-v1_5 decryption must never reveal whether its padding was valid.",
+          detail:
+            operation === "encrypt"
+              ? "The legacy block format has enabled practical Bleichenbacher and ROBOT attacks whenever a server reveals whether decryption padding was valid. This option exists to interoperate with old ciphertexts, not to create a new protocol. OAEP was designed to replace it."
+              : "This local workbench returns one generic failure for every malformed ciphertext, but the in-repo bigint private operation is not constant-time. Do not turn this path into a network decryption service or expose its timing. Use it only to inspect legacy material locally.",
+          optionIds: [OPTION_ENCRYPTION_SCHEME],
+          ...(operation === "encrypt"
+            ? {
+                fix: {
+                  label: "Switch to RSA-OAEP",
+                  apply: (s: AsymmetricSpec) => ({
+                    ...s,
+                    options: withEncryptionScheme(s.options, "oaep"),
+                  }),
+                },
+              }
+            : {}),
         },
       ];
     },
@@ -371,7 +418,10 @@ export const RULES: readonly LintRule<AsymmetricSpec>[] = [
               // in one pass, so another may already have changed the set.
               options: {
                 ...s.options,
-                [OPTION_PARAM_SET]: String(s.options[OPTION_PARAM_SET] ?? "").replace(/s$/, "f"),
+                [OPTION_PARAM_SET]: String(s.options[OPTION_PARAM_SET] ?? "").replace(
+                  /s$/,
+                  "f",
+                ),
               },
             }),
           },

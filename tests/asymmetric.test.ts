@@ -6,6 +6,7 @@ import {
   ECDSA_CURVES,
   matchingHashFor,
   OPTION_CURVE,
+  OPTION_ENCRYPTION_SCHEME,
   OPTION_HASH,
   OPTION_MODULUS_LENGTH,
   OPTION_OAEP_LABEL,
@@ -18,6 +19,7 @@ import {
   DEFAULT_PARAM_SETS,
   DEFAULT_RSA_EXPONENT,
   RSA_PUBLIC_EXPONENTS,
+  RSA_OAEP_HASHES,
   PQ_PARAM_SETS,
   PUBLIC_KEY_HINT,
   OPTION_SIGNATURE,
@@ -37,7 +39,7 @@ import {
   lint,
   resolveAsymmetric,
 } from "@ocs/asymmetric/definition";
-import { encodeHex, validateCatalogue } from "@ocs/engine";
+import { encodeHex, isAvailableOn, validateCatalogue, withAvailableChoices } from "@ocs/engine";
 import { formatShellCommands } from "../packages/ui/src/shell-command";
 
 const ascii = (text: string) => new TextEncoder().encode(text);
@@ -582,7 +584,9 @@ describe("RSA — key generation", () => {
       expect(generated.text).toContain("-----BEGIN PUBLIC KEY-----");
       expect(generated.fields!.find((f) => f.label === "Key size")?.value).toBe(`${bits} bits`);
 
-      const privPem = generated.fields!.find((f) => f.label === "Private key (PKCS#8 PEM)")!.value;
+      const privPem = generated.fields!.find(
+        (f) => f.label === "Private key (PKCS#8 PEM)",
+      )!.value;
       const pubPem = generated.fields!.find((f) => f.label === "Public key (SPKI PEM)")!.value;
 
       const priv = decodePem(privPem);
@@ -806,6 +810,33 @@ describe("RSA — OAEP encryption", () => {
     expect(encodeHex(second.bytes!)).not.toBe(encodeHex(first.bytes!));
   });
 
+  it("round-trips every OAEP hash WebCrypto supports", async () => {
+    const key = await rsaKey();
+    for (const hash of RSA_OAEP_HASHES) {
+      const encrypted = await run(
+        "rsa",
+        {
+          [OPTION_OPERATION]: "encrypt",
+          [OPTION_ENCRYPTION_SCHEME]: "oaep",
+          [OPTION_HASH]: hash.id,
+          [OPTION_PUBLIC_KEY]: key.publicPem,
+        },
+        ascii("session key"),
+      );
+      const decrypted = await run(
+        "rsa",
+        {
+          [OPTION_OPERATION]: "decrypt",
+          [OPTION_ENCRYPTION_SCHEME]: "oaep",
+          [OPTION_HASH]: hash.id,
+          [OPTION_PRIVATE_KEY]: key.privatePem,
+        },
+        encrypted.bytes!,
+      );
+      expect(new TextDecoder().decode(decrypted.bytes!), hash.label).toBe("session key");
+    }
+  });
+
   it("carries 190 bytes with SHA-256 and refuses 191, naming hybrid encryption", async () => {
     const key = await rsaKey();
     const tool = asymmetricToolDefinition("rsa");
@@ -887,6 +918,85 @@ describe("RSA — OAEP encryption", () => {
     expect(result.error).toBeDefined();
     // The padding-oracle point: no detail about which of the causes it was.
     expect(result.error).toContain("does not report which");
+  });
+});
+
+describe("RSA — PKCS#1 v1.5 encryption", () => {
+  it("round-trips through the legacy encryption scheme", async () => {
+    const key = await rsaKey();
+    const encrypted = await run(
+      "rsa",
+      {
+        [OPTION_OPERATION]: "encrypt",
+        [OPTION_ENCRYPTION_SCHEME]: "pkcs1v15",
+        [OPTION_HASH]: "stale-hidden-hash",
+        [OPTION_OAEP_LABEL]: "not-hex",
+        oaepLabelEncoding: "hex",
+        [OPTION_PUBLIC_KEY]: key.publicPem,
+      },
+      ascii("legacy session key"),
+    );
+    expect(encrypted.fields?.find((field) => field.label === "Implementation")?.value).toBe(
+      "@ocs/algos (RFC 8017)",
+    );
+
+    const decrypted = await run(
+      "rsa",
+      {
+        [OPTION_OPERATION]: "decrypt",
+        [OPTION_ENCRYPTION_SCHEME]: "pkcs1v15",
+        [OPTION_HASH]: "stale-hidden-hash",
+        [OPTION_OAEP_LABEL]: "not-hex",
+        oaepLabelEncoding: "hex",
+        [OPTION_PRIVATE_KEY]: key.privatePem,
+      },
+      encrypted.bytes!,
+    );
+    expect(new TextDecoder().decode(decrypted.bytes!)).toBe("legacy session key");
+  });
+
+  it("is randomised and enforces the k - 11 capacity", async () => {
+    const key = await rsaKey();
+    const options = {
+      [OPTION_OPERATION]: "encrypt",
+      [OPTION_ENCRYPTION_SCHEME]: "pkcs1v15",
+      [OPTION_PUBLIC_KEY]: key.publicPem,
+    };
+    const first = await run("rsa", options, new Uint8Array(245));
+    const second = await run("rsa", options, new Uint8Array(245));
+    expect(first.bytes).toHaveLength(256);
+    expect(encodeHex(second.bytes!)).not.toBe(encodeHex(first.bytes!));
+
+    const result = await asymmetricToolDefinition("rsa").compute(
+      specFor("rsa", options),
+      new Uint8Array(246),
+    );
+    expect(result.error).toContain("245 bytes");
+  });
+
+  it("returns one generic error for malformed legacy ciphertext", async () => {
+    const key = await rsaKey();
+    const encrypted = await run(
+      "rsa",
+      {
+        [OPTION_OPERATION]: "encrypt",
+        [OPTION_ENCRYPTION_SCHEME]: "pkcs1v15",
+        [OPTION_PUBLIC_KEY]: key.publicPem,
+      },
+      ascii("secret"),
+    );
+    const tampered = Uint8Array.from(encrypted.bytes!);
+    tampered[100] = (tampered[100] ?? 0) ^ 1;
+
+    const result = await asymmetricToolDefinition("rsa").compute(
+      specFor("rsa", {
+        [OPTION_OPERATION]: "decrypt",
+        [OPTION_ENCRYPTION_SCHEME]: "pkcs1v15",
+        [OPTION_PRIVATE_KEY]: key.privatePem,
+      }),
+      tampered,
+    );
+    expect(result.error).toContain("No padding details are reported");
   });
 });
 
@@ -1036,6 +1146,18 @@ describe("lint rules", () => {
     expect(diagnostic?.message).toContain("190");
   });
 
+  it("A013 rejects new PKCS#1 v1.5 encryption and fixes it to OAEP", async () => {
+    const key = await rsaKey();
+    const spec = specFor("rsa", {
+      [OPTION_OPERATION]: "encrypt",
+      [OPTION_ENCRYPTION_SCHEME]: "pkcs1v15",
+      [OPTION_PUBLIC_KEY]: key.publicPem,
+    });
+    const diagnostic = lint(spec).diagnostics.find((d) => d.code === "A013");
+    expect(diagnostic?.level).toBe("insecure");
+    expect(applyAllFixes(spec).options[OPTION_ENCRYPTION_SCHEME]).toBe("oaep");
+  });
+
   it("A007 warns that a generated key is not stored, for every keypair tool", () => {
     for (const tool of KEYPAIR_TOOLS) {
       const spec = specFor(tool.id, { [OPTION_OPERATION]: "generate" });
@@ -1087,14 +1209,16 @@ describe("catalogue integrity", () => {
       expect(catalogue.get(OPTION_PUBLIC_KEY)?.secret).toBeUndefined();
     });
 
-    it(`${tool.id} restricts every option to operations the tool actually has`, () => {
+    it(`${tool.id} restricts every option to reachable variant tags`, () => {
       const catalogue = asymmetricCatalogueFor(tool.id);
+      const reachable = new Set<string>(tool.operations);
+      if (tool.id === "rsa") {
+        reachable.add("rsa-encryption:oaep");
+        reachable.add("rsa-encryption:pkcs1v15");
+      }
       for (const option of catalogue.options) {
         for (const tag of option.availableOn ?? []) {
-          expect(
-            tool.operations as readonly string[],
-            `${tool.id}/${option.id} is gated on ${tag}`,
-          ).toContain(tag);
+          expect(reachable, `${tool.id}/${option.id} is gated on ${tag}`).toContain(tag);
         }
       }
     });
@@ -1103,7 +1227,9 @@ describe("catalogue integrity", () => {
       const definition = asymmetricToolDefinition(tool.id);
       for (const operation of tool.operations) {
         const spec = specFor(tool.id, { [OPTION_OPERATION]: operation });
-        expect(definition.variantTag!(spec)).toBe(operation);
+        const rawTags = definition.variantTag!(spec);
+        const tags = Array.isArray(rawTags) ? rawTags : [rawTags];
+        expect(tags).toContain(operation);
       }
     });
 
@@ -1121,7 +1247,6 @@ describe("catalogue integrity", () => {
     });
   }
 
-
   it("every multiline option is a text or password kind", () => {
     for (const tool of ASYMMETRIC_TOOLS) {
       for (const option of asymmetricCatalogueFor(tool.id).options) {
@@ -1129,6 +1254,30 @@ describe("catalogue integrity", () => {
         expect(["text", "password"], `${tool.id}/${option.id}`).toContain(option.kind);
       }
     }
+  });
+
+  it("RSA encryption narrows parameters to the selected padding scheme", () => {
+    const definition = asymmetricToolDefinition("rsa");
+    const catalogue = definition.catalogue;
+
+    const oaep = specFor("rsa", {
+      [OPTION_OPERATION]: "encrypt",
+      [OPTION_ENCRYPTION_SCHEME]: "oaep",
+    });
+    const oaepTags = definition.variantTag!(oaep);
+    const hashes = withAvailableChoices(catalogue.require(OPTION_HASH), oaepTags);
+    expect(hashes.choices?.map((choice) => choice.value)).toEqual(
+      RSA_OAEP_HASHES.map((hash) => hash.id),
+    );
+    expect(isAvailableOn(catalogue.require(OPTION_OAEP_LABEL), oaepTags)).toBe(true);
+
+    const legacy = specFor("rsa", {
+      [OPTION_OPERATION]: "encrypt",
+      [OPTION_ENCRYPTION_SCHEME]: "pkcs1v15",
+    });
+    const legacyTags = definition.variantTag!(legacy);
+    expect(isAvailableOn(catalogue.require(OPTION_HASH), legacyTags)).toBe(false);
+    expect(isAvailableOn(catalogue.require(OPTION_OAEP_LABEL), legacyTags)).toBe(false);
   });
 });
 
@@ -1253,10 +1402,9 @@ describe("the post-quantum tools", () => {
         const privateField = result.fields?.find((f) => f.label === "Private key");
         expect(privateField?.secret, `${label} marked secret`).toBe(true);
         expect(privateField!.value.length / 2, `${label} private`).toBe(set.secretKeyLen);
-        expect(
-          result.fields?.find((f) => f.label === "Parameter set")?.value,
-          label,
-        ).toBe(set.label);
+        expect(result.fields?.find((f) => f.label === "Parameter set")?.value, label).toBe(
+          set.label,
+        );
       }
     }
   });
@@ -1494,7 +1642,10 @@ describe("the post-quantum tools", () => {
   });
 
   it("states the signature size where a signature is being produced", () => {
-    for (const [toolId, setId] of [["mldsa", "65"], ["slhdsa", "sha2-128f"]] as const) {
+    for (const [toolId, setId] of [
+      ["mldsa", "65"],
+      ["slhdsa", "sha2-128f"],
+    ] as const) {
       const found = lint(
         specFor(toolId, { [OPTION_OPERATION]: "generate", [OPTION_PARAM_SET]: setId }),
       ).diagnostics.find((d) => d.code === "A011");
@@ -1512,7 +1663,9 @@ describe("the post-quantum tools", () => {
 
   it("describes itself in terms of the sizes, which is what people want to know", () => {
     expect(
-      describeSpec(specFor("mlkem", { [OPTION_OPERATION]: "generate", [OPTION_PARAM_SET]: "768" })),
+      describeSpec(
+        specFor("mlkem", { [OPTION_OPERATION]: "generate", [OPTION_PARAM_SET]: "768" }),
+      ),
     ).toMatch(/1184/);
     expect(
       describeSpec(
@@ -1708,7 +1861,9 @@ describe("OpenSSL Asymmetric Key CLI Parity", () => {
     expect(openssl).toBeDefined();
     const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
     expect(bash).toContain("openssl genrsa -out private.key 2048");
-    expect(bash).toContain("openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.key");
+    expect(bash).toContain(
+      "openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.key",
+    );
     expect(bash).toContain("openssl rsa -in private.key -pubout -out public.key");
     expect(bash).toContain("openssl pkcs8 -topk8 -in private.key -out private.pk8 -nocrypt");
     expect(bash).toContain("openssl rsa -in private.key -check -text -noout");
@@ -1724,9 +1879,13 @@ describe("OpenSSL Asymmetric Key CLI Parity", () => {
     const ecOpenssl = ecRes.cliProviders?.find((p) => p.id === "openssl");
     expect(ecOpenssl).toBeDefined();
     const ecBash = formatShellCommands(ecOpenssl!.commands, "bash", "single-line");
-    expect(ecBash).toContain("openssl ecparam -name prime256v1 -genkey -noout -out ec_private.key");
+    expect(ecBash).toContain(
+      "openssl ecparam -name prime256v1 -genkey -noout -out ec_private.key",
+    );
     expect(ecBash).toContain("openssl ec -in ec_private.key -pubout -out ec_public.key");
-    expect(ecBash).toContain("openssl pkcs8 -topk8 -in ec_private.key -out ec_private.pk8 -nocrypt");
+    expect(ecBash).toContain(
+      "openssl pkcs8 -topk8 -in ec_private.key -out ec_private.pk8 -nocrypt",
+    );
 
     // 2. Ed25519
     const edTool = asymmetricToolDefinition("ed25519");
@@ -1745,7 +1904,8 @@ describe("OpenSSL Asymmetric Key CLI Parity", () => {
     const ecdhSpec = ecdhTool.createSpec();
     ecdhSpec.options[OPTION_OPERATION] = "derive";
     ecdhSpec.options[OPTION_CURVE] = "p256";
-    ecdhSpec.options[OPTION_PRIVATE_KEY] = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    ecdhSpec.options[OPTION_PRIVATE_KEY] =
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
     ecdhSpec.options["privateKeyEncoding"] = "hex";
     ecdhSpec.options[OPTION_PUBLIC_KEY] = "04" + "00".repeat(64);
     ecdhSpec.options["publicKeyEncoding"] = "hex";
@@ -1753,8 +1913,8 @@ describe("OpenSSL Asymmetric Key CLI Parity", () => {
     const openssl = ecdhRes.cliProviders?.find((p) => p.id === "openssl");
     expect(openssl).toBeDefined();
     const bash = formatShellCommands(openssl!.commands, "bash", "single-line");
-    expect(bash).toContain("openssl pkeyutl -derive -inkey local_priv.key -peerkey peer_pub.key -out shared_secret.bin");
+    expect(bash).toContain(
+      "openssl pkeyutl -derive -inkey local_priv.key -peerkey peer_pub.key -out shared_secret.bin",
+    );
   });
 });
-
-

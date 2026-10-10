@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   createDes,
+  createIncrementalBlockMode,
   createSm4,
   createTripleDes,
   decryptBlockMode,
@@ -118,7 +119,9 @@ function checkAgainstOpenssl(options: {
         expect(toHex(back), `${label}/${mode}/${length} decrypt`).toBe(toHex(data));
 
         const theirsBack = opensslDecrypt(algorithm, key, iv, ours, pads);
-        expect(toHex(theirsBack), `${label}/${mode}/${length} openssl decrypt`).toBe(toHex(data));
+        expect(toHex(theirsBack), `${label}/${mode}/${length} openssl decrypt`).toBe(
+          toHex(data),
+        );
       }
     });
   }
@@ -249,7 +252,9 @@ describe("PKCS#7", () => {
         const data = pseudoRandom(length, length + 3);
         const padded = padPkcs7(data, blockSize);
         expect(padded.length % blockSize, `${blockSize}/${length}`).toBe(0);
-        expect(toHex(unpadPkcs7(padded, blockSize)), `${blockSize}/${length}`).toBe(toHex(data));
+        expect(toHex(unpadPkcs7(padded, blockSize)), `${blockSize}/${length}`).toBe(
+          toHex(data),
+        );
       }
     }
   });
@@ -283,7 +288,9 @@ describe("the mode layer's own rules", () => {
 
   it("needs an IV of exactly one block, and says so", () => {
     for (const mode of ["cbc", "cfb", "ofb", "ctr"] as const) {
-      expect(() => encryptBlockMode(cipher, mode, new Uint8Array(8), {})).toThrow(/needs an IV/);
+      expect(() => encryptBlockMode(cipher, mode, new Uint8Array(8), {})).toThrow(
+        /needs an IV/,
+      );
       expect(() =>
         encryptBlockMode(cipher, mode, new Uint8Array(8), { iv: new Uint8Array(4) }),
       ).toThrow(/exactly 8 bytes/);
@@ -312,9 +319,44 @@ describe("the mode layer's own rules", () => {
     // and produce a repeated keystream, so the two 8-byte halves would relate to each other.
     const zeros = new Uint8Array(24);
     const keystream = toHex(encryptBlockMode(cipher, "ctr", zeros, { iv }));
-    expect(new Set([keystream.slice(0, 16), keystream.slice(16, 32), keystream.slice(32)]).size).toBe(
-      3,
-    );
+    expect(
+      new Set([keystream.slice(0, 16), keystream.slice(16, 32), keystream.slice(32)]).size,
+    ).toBe(3);
+  });
+
+  it("incremental CTR stops before a wrapped counter can reuse keystream", () => {
+    const counters: number[] = [];
+    const byteCipher: BlockCipher = {
+      blockSize: 1,
+      encryptBlock: (src, dst) => {
+        counters.push(src[0]!);
+        dst[0] = src[0]!;
+      },
+      decryptBlock: (src, dst) => {
+        dst[0] = src[0]!;
+      },
+    };
+    const stream = createIncrementalBlockMode(byteCipher, "ctr", "encrypt", {
+      iv: Uint8Array.of(0),
+    });
+
+    expect(stream.update(new Uint8Array(255))).toHaveLength(255);
+    expect(stream.update(new Uint8Array(1))).toHaveLength(1);
+    expect(counters).toEqual(Array.from({ length: 256 }, (_, i) => i));
+    expect(() => stream.update(new Uint8Array(1))).toThrow(/counter is exhausted/);
+    expect(counters).toHaveLength(256);
+
+    counters.length = 0;
+    expect(() =>
+      encryptBlockMode(byteCipher, "ctr", new Uint8Array(257), { iv: Uint8Array.of(0) }),
+    ).toThrow(/counter is exhausted/);
+    expect(counters).toHaveLength(256);
+
+    counters.length = 0;
+    expect(() =>
+      decryptBlockMode(byteCipher, "ctr", new Uint8Array(257), { iv: Uint8Array.of(0) }),
+    ).toThrow(/counter is exhausted/);
+    expect(counters).toHaveLength(256);
   });
 
   it("CFB and OFB leave the length alone", () => {

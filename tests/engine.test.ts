@@ -16,6 +16,8 @@ import {
   randomBytes,
   randomHex,
   rechunk,
+  runStream,
+  runStreams,
   timingSafeEqual,
   validateCatalogue,
   verifyAgainst,
@@ -350,6 +352,103 @@ describe("rechunk", () => {
 
   it("yields nothing for an empty source", async () => {
     expect(await collect(rechunk(from(), 4))).toEqual([]);
+  });
+});
+
+describe("stream transform output", () => {
+  async function* source() {
+    yield bytes(1, 2);
+    yield bytes(3);
+  }
+
+  it("collects emitted output into the default result", async () => {
+    const result = await runStream(
+      {
+        update: (chunk) => Uint8Array.from(chunk, (value) => value + 1),
+        finish: () => ({ bytes: bytes(9) }),
+      },
+      source(),
+    );
+    expect(Array.from(result.bytes!)).toEqual([2, 3, 4, 9]);
+  });
+
+  it("awaits an output sink and does not retain a duplicate result", async () => {
+    const written: number[] = [];
+    const result = await runStream(
+      {
+        update: (chunk) => chunk,
+        finish: () => ({ bytes: bytes(9), fields: [{ label: "Mode", value: "test" }] }),
+      },
+      source(),
+      {
+        onOutput: async (chunk) => {
+          await Promise.resolve();
+          written.push(...chunk);
+        },
+      },
+    );
+    expect(written).toEqual([1, 2, 3, 9]);
+    expect(result.bytes).toBeUndefined();
+    expect(result.fields).toEqual([{ label: "Mode", value: "test" }]);
+  });
+
+  it("preserves an explicit empty byte result when a sink receives no output", async () => {
+    const result = await runStream(
+      { update: () => new Uint8Array(0), finish: () => ({ bytes: new Uint8Array(0) }) },
+      source(),
+      { onOutput: () => undefined },
+    );
+    expect(result.bytes).toEqual(new Uint8Array(0));
+  });
+
+  it("returns update and finish exceptions as tool errors", async () => {
+    const updateFailure = await runStream(
+      {
+        update: () => {
+          throw new Error("update failed");
+        },
+        finish: () => ({ bytes: bytes(9) }),
+      },
+      source(),
+    );
+    expect(updateFailure).toEqual({ error: "update failed" });
+
+    const finishFailure = await runStream(
+      {
+        update: () => undefined,
+        finish: () => {
+          throw new Error("finish failed");
+        },
+      },
+      source(),
+    );
+    expect(finishFailure).toEqual({ error: "finish failed" });
+  });
+
+  it("propagates a fan-out update exception to every stream result", async () => {
+    const results = await runStreams(
+      [
+        { update: () => undefined, finish: () => ({ bytes: bytes(1) }) },
+        {
+          update: () => {
+            throw "variant failed";
+          },
+          finish: () => ({ bytes: bytes(2) }),
+        },
+      ],
+      source(),
+    );
+    expect(results).toEqual([{ error: "variant failed" }, { error: "variant failed" }]);
+  });
+
+  it("does not turn output-sink failures into tool errors", async () => {
+    await expect(
+      runStream({ update: (chunk) => chunk, finish: () => ({}) }, source(), {
+        onOutput: () => {
+          throw new Error("disk full");
+        },
+      }),
+    ).rejects.toThrow("disk full");
   });
 });
 

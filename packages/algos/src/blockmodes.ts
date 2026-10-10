@@ -240,12 +240,13 @@ export function unpadPkcs7(data: Uint8Array, blockSize: number): Uint8Array {
   return data.slice(0, data.length - padding);
 }
 
-/** Big-endian increment of the whole counter block, wrapping at the top. */
-function incrementCounter(counter: Uint8Array): void {
+/** Big-endian increment of the whole counter block. Returns true when it wraps. */
+function incrementCounter(counter: Uint8Array): boolean {
   for (let i = counter.length - 1; i >= 0; i--) {
     counter[i] = (counter[i]! + 1) & 0xff;
-    if (counter[i] !== 0) return;
+    if (counter[i] !== 0) return false;
   }
+  return true;
 }
 
 function assertIv(mode: BlockMode, iv: Uint8Array | undefined, blockSize: number): Uint8Array {
@@ -272,6 +273,132 @@ export interface ModeOptions {
   padding?: PaddingScheme;
   /** Random bytes for ISO 10126's filler; see `padBlocks`. Unused by every other scheme. */
   random?: (length: number) => Uint8Array;
+}
+
+export interface IncrementalBlockMode {
+  update(chunk: Uint8Array): Uint8Array;
+  finalize(): Uint8Array;
+}
+
+/** Stateful counterpart to `encryptBlockMode`/`decryptBlockMode` for arbitrarily chunked input. */
+export function createIncrementalBlockMode(
+  cipher: BlockCipher,
+  mode: BlockMode,
+  direction: "encrypt" | "decrypt",
+  options: ModeOptions = {},
+): IncrementalBlockMode {
+  const size = cipher.blockSize;
+  const iv = assertIv(mode, options.iv, size);
+  const padding = options.padding ?? "pkcs7";
+  const state = Uint8Array.from(iv);
+  const keystream = new Uint8Array(size);
+  const scratch = new Uint8Array(size);
+  let streamOffset = size;
+  let pending = new Uint8Array(0);
+  let finished = false;
+  let inputLength = 0;
+  let counterExhausted = false;
+
+  const appendPending = (chunk: Uint8Array) => {
+    if (pending.length === 0) {
+      pending = Uint8Array.from(chunk);
+      return;
+    }
+    const merged = new Uint8Array(pending.length + chunk.length);
+    merged.set(pending);
+    merged.set(chunk, pending.length);
+    pending = merged;
+  };
+
+  const processAligned = (data: Uint8Array): Uint8Array => {
+    const out = new Uint8Array(data.length);
+    for (let offset = 0; offset < data.length; offset += size) {
+      const source = data.subarray(offset, offset + size);
+      const target = out.subarray(offset, offset + size);
+      if (direction === "encrypt") {
+        if (mode === "cbc") {
+          for (let i = 0; i < size; i++) scratch[i] = source[i]! ^ state[i]!;
+          cipher.encryptBlock(scratch, target);
+          state.set(target);
+        } else {
+          cipher.encryptBlock(source, target);
+        }
+      } else {
+        cipher.decryptBlock(source, scratch);
+        if (mode === "cbc") {
+          for (let i = 0; i < size; i++) target[i] = scratch[i]! ^ state[i]!;
+          state.set(source);
+        } else {
+          target.set(scratch);
+        }
+      }
+    }
+    return out;
+  };
+
+  const updateStreamMode = (chunk: Uint8Array): Uint8Array => {
+    const out = new Uint8Array(chunk.length);
+    for (let i = 0; i < chunk.length; i++) {
+      if (streamOffset === size) {
+        if (mode === "ctr" && counterExhausted) {
+          throw new Error("CTR's counter is exhausted; continuing would reuse keystream.");
+        }
+        cipher.encryptBlock(state, keystream);
+        if (mode === "ofb") state.set(keystream);
+        else if (mode === "ctr") counterExhausted = incrementCounter(state);
+        streamOffset = 0;
+      }
+      out[i] = chunk[i]! ^ keystream[streamOffset]!;
+      if (mode === "cfb") {
+        state[streamOffset] = direction === "encrypt" ? out[i]! : chunk[i]!;
+      }
+      streamOffset++;
+    }
+    return out;
+  };
+
+  return {
+    update(chunk) {
+      if (finished) throw new Error("The block-mode stream is already finalized.");
+      inputLength += chunk.length;
+      if (mode === "cfb" || mode === "ofb" || mode === "ctr") {
+        return updateStreamMode(chunk);
+      }
+
+      appendPending(chunk);
+      const blocks = Math.floor(pending.length / size);
+      const processBlocks =
+        direction === "decrypt" && padding !== "none" ? Math.max(0, blocks - 1) : blocks;
+      const processLength = processBlocks * size;
+      if (processLength === 0) return new Uint8Array(0);
+      const output = processAligned(pending.subarray(0, processLength));
+      pending = pending.slice(processLength);
+      return output;
+    },
+    finalize() {
+      if (finished) throw new Error("The block-mode stream is already finalized.");
+      finished = true;
+      if (mode === "cfb" || mode === "ofb" || mode === "ctr") return new Uint8Array(0);
+
+      if (direction === "encrypt") {
+        return processAligned(padBlocks(pending, size, padding, options.random));
+      }
+      if (padding === "none" && pending.length === 0) {
+        if (inputLength === 0) {
+          throw new Error(
+            `${mode.toUpperCase()} ciphertext is a whole number of ${size}-byte blocks; this one is empty.`,
+          );
+        }
+        return new Uint8Array(0);
+      }
+      if (pending.length === 0 || pending.length % size !== 0) {
+        throw new Error(
+          `${mode.toUpperCase()} ciphertext is a whole number of ${size}-byte blocks; this one ends with ${pending.length} buffered bytes.`,
+        );
+      }
+      return unpadBlocks(processAligned(pending), size, padding);
+    },
+  };
 }
 
 export function encryptBlockMode(
@@ -313,7 +440,12 @@ export function encryptBlockMode(
     for (let i = 0; i < length; i++) out[offset + i] = data[offset + i]! ^ keystream[i]!;
 
     if (mode === "ofb") state.set(keystream);
-    else if (mode === "ctr") incrementCounter(state);
+    else if (mode === "ctr") {
+      const exhausted = incrementCounter(state);
+      if (exhausted && offset + length < data.length) {
+        throw new Error("CTR's counter is exhausted; continuing would reuse keystream.");
+      }
+    }
     // CFB feeds the *ciphertext* forward, which is what makes it self-synchronising and what makes a
     // truncated final block still decryptable.
     else state.set(out.subarray(offset, offset + length), 0);

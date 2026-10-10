@@ -67,14 +67,25 @@ export class Crypto1State {
     }
     return byte;
   }
+
+  absorb(input: Uint8Array): void {
+    for (const byte of input) {
+      for (let bit = 0; bit < 8; bit++) this.clock((byte >>> bit) & 1);
+    }
+  }
 }
 
-export function crypto1Stream(key64: Uint8Array, length: number): Uint8Array {
+export function crypto1Stream(
+  key64: Uint8Array,
+  initialization: Uint8Array,
+  length: number,
+): Uint8Array {
   let key = 0n;
   for (let i = 0; i < Math.min(6, key64.length); i++) {
     key |= BigInt(key64[i]!) << BigInt(8 * i);
   }
   const c1 = new Crypto1State(key);
+  c1.absorb(initialization);
   const out = new Uint8Array(length);
   for (let i = 0; i < length; i++) {
     out[i] = c1.nextByte();
@@ -82,8 +93,12 @@ export function crypto1Stream(key64: Uint8Array, length: number): Uint8Array {
   return out;
 }
 
-export function crypto1Crypt(key64: Uint8Array, data: Uint8Array): Uint8Array {
-  const stream = crypto1Stream(key64, data.length);
+export function crypto1Crypt(
+  key64: Uint8Array,
+  initialization: Uint8Array,
+  data: Uint8Array,
+): Uint8Array {
+  const stream = crypto1Stream(key64, initialization, data.length);
   const out = new Uint8Array(data.length);
   for (let i = 0; i < data.length; i++) {
     out[i] = data[i]! ^ stream[i]!;

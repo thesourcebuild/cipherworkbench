@@ -2,11 +2,18 @@
 
 import { useCallback, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { ByteSourceMode, TextEncoding } from "@ocs/contracts";
+import type { FileProcessingMode } from "@ocs/engine";
 import { BYTE_SOURCE_MODE_LABEL, ENCODING_GROUP_LABEL, encodingsByGroup } from "@ocs/contracts";
 import { Button, ClearButton, CopyIconButton, Panel, Toggle, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
 import { MAX_TEXT_INPUT_CHARS } from "@ocs/engine";
-import { describeInputSize, formatBytes, formatBytesShort, isInputBlank, type InputState } from "./input-state";
+import {
+  describeInputSize,
+  formatBytes,
+  formatBytesShort,
+  isInputBlank,
+  type InputState,
+} from "./input-state";
 import { INPUT_DEBOUNCE_LABEL } from "./use-debounce";
 
 const MODES: readonly ByteSourceMode[] = [
@@ -63,8 +70,8 @@ export interface InputPanelProps {
   generates: boolean;
   /** False for a tool that only accepts typed input; the File tab is then hidden. */
   supportsFile: boolean;
-  /** True when the tool must read the whole file into memory — worth saying before someone drops 8 GB on it. */
-  buffersWholeFile: boolean;
+  /** How the current settings process files; unresolved avoids making a false claim. */
+  fileProcessing: FileProcessingMode;
   /** Decoded byte count, from the compute hook. Undefined while the input is unparseable. */
   byteLength: number | undefined;
   /** Decode error for the current mode, shown inline. */
@@ -91,8 +98,8 @@ export interface InputPanelProps {
    * The bottom of the input, because that is where the eye already is once you have finished typing
    * and it is the ordinary form-then-submit reading order. It sat between the Input and Result
    * panels before -- a full-width band of its own, floating between two ca    * Rendered bare rather than wrapped in an aligning row: whatever goes here decides its own width,
-    * which is what lets `Compute` span the panel.
-    */
+   * which is what lets `Compute` span the panel.
+   */
   footer?: ReactNode;
   /** Custom panel title, overriding "Input" / "Generate". */
   title?: string;
@@ -126,7 +133,7 @@ export function InputPanel({
   readsInput,
   generates,
   supportsFile,
-  buffersWholeFile,
+  fileProcessing,
   byteLength,
   problem,
   autoUpdate,
@@ -163,17 +170,16 @@ export function InputPanel({
     <Panel
       title={title ?? (generates ? "Generate" : "Input")}
       description={
-        description ?? (
-          readsInput ? (
-            <span data-ocs-input-size="">
-              {describeInputSize(input, byteLength) || "Nothing entered yet."}
-            </span>
-          ) : generates ? (
-            "This tool reads no input. Everything it needs is in Settings."
-          ) : (
-            "This tool takes its input from the fields below rather than from a text box."
-          )
-        )
+        description ??
+        (readsInput ? (
+          <span data-ocs-input-size="">
+            {describeInputSize(input, byteLength) || "Nothing entered yet."}
+          </span>
+        ) : generates ? (
+          "This tool reads no input. Everything it needs is in Settings."
+        ) : (
+          "This tool takes its input from the fields below rather than from a text box."
+        ))
       }
       actions={
         !showAutoUpdate || generates ? undefined : (
@@ -199,66 +205,66 @@ export function InputPanel({
         {readsInput && (
           <>
             <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
-              Source
-              <select
-                /**
-                 * Driven by the desktop smoke test, which switches to File to push a real file
-                 * through the streaming worker and back to Text afterwards. It sets `value` and
-                 * dispatches `change` rather than clicking, because an `<option>` is not clickable
-                 * the way the segmented buttons this replaced were. `data-ocs-mode` stays on each
-                 * option so a probe can still find one by mode without matching on label text.
-                 */
-                data-ocs-input-mode=""
-                aria-label="Input source"
-                value={input.mode}
-                onChange={(event) => setMode(event.target.value as ByteSourceMode)}
-                className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-full dark:border-slate-700 dark:bg-slate-950"
-              >
-                {modes.map((mode) => (
-                  <option
-                    key={mode}
-                    value={mode}
-                    data-ocs-mode={mode}
-                    title={MODE_HINT[mode]}
-                  >
-                    {BYTE_SOURCE_MODE_LABEL[mode]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {input.mode === "text" && (
               <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
-                Encoding
+                Source
                 <select
-                  // Paired with `data-ocs-input`: the smoke test drives this to prove the lazy
-                  // encoding-table chunk resolves over app:// in the packaged build.
-                  data-ocs-input-encoding=""
-                  value={input.textEncoding}
-                  onChange={(event) =>
-                    onChange({ ...input, textEncoding: event.target.value as TextEncoding })
-                  }
-                  className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-[200px] sm:max-w-xs truncate dark:border-slate-700 dark:bg-slate-950"
+                  /**
+                   * Driven by the desktop smoke test, which switches to File to push a real file
+                   * through the streaming worker and back to Text afterwards. It sets `value` and
+                   * dispatches `change` rather than clicking, because an `<option>` is not clickable
+                   * the way the segmented buttons this replaced were. `data-ocs-mode` stays on each
+                   * option so a probe can still find one by mode without matching on label text.
+                   */
+                  data-ocs-input-mode=""
+                  aria-label="Input source"
+                  value={input.mode}
+                  onChange={(event) => setMode(event.target.value as ByteSourceMode)}
+                  className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-full dark:border-slate-700 dark:bg-slate-950"
                 >
-                  {ENCODING_GROUPS.map(({ group, encodings }) => (
-                    <optgroup key={group} label={ENCODING_GROUP_LABEL[group]}>
-                      {encodings.map((encoding) => (
-                        <option
-                          key={encoding.id}
-                          value={encoding.id}
-                          title={encoding.summary}
-                        >
-                          {encoding.label}
-                        </option>
-                      ))}
-                    </optgroup>
+                  {modes.map((mode) => (
+                    <option
+                      key={mode}
+                      value={mode}
+                      data-ocs-mode={mode}
+                      title={MODE_HINT[mode]}
+                    >
+                      {BYTE_SOURCE_MODE_LABEL[mode]}
+                    </option>
                   ))}
                 </select>
               </label>
-            )}
 
-            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+              {input.mode === "text" && (
+                <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
+                  Encoding
+                  <select
+                    // Paired with `data-ocs-input`: the smoke test drives this to prove the lazy
+                    // encoding-table chunk resolves over app:// in the packaged build.
+                    data-ocs-input-encoding=""
+                    value={input.textEncoding}
+                    onChange={(event) =>
+                      onChange({ ...input, textEncoding: event.target.value as TextEncoding })
+                    }
+                    className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] max-w-[200px] sm:max-w-xs truncate dark:border-slate-700 dark:bg-slate-950"
+                  >
+                    {ENCODING_GROUPS.map(({ group, encodings }) => (
+                      <optgroup key={group} label={ENCODING_GROUP_LABEL[group]}>
+                        {encodings.map((encoding) => (
+                          <option
+                            key={encoding.id}
+                            value={encoding.id}
+                            title={encoding.summary}
+                          >
+                            {encoding.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <div className="flex items-center gap-1.5 ml-auto shrink-0">
                 {onOpenProbe && (
                   <button
                     type="button"
@@ -339,9 +345,11 @@ export function InputPanel({
                   {input.file ? "Choose another" : "Choose file"}
                 </Button>
                 <p className="max-w-md text-[11px] text-slate-500 dark:text-slate-400">
-                  {buffersWholeFile
+                  {fileProcessing === "buffered"
                     ? "This tool cannot process a file incrementally, so the whole thing is read into memory. Keep it modest."
-                    : "Read in chunks as it hashes — the file never has to fit in memory, and it is never uploaded anywhere."}
+                    : fileProcessing === "streaming"
+                      ? "Processed locally in chunks and never uploaded. For encryption and other transforms, the complete output is kept in memory so you can view or export it."
+                      : "Complete the required settings to determine whether this configuration can process files incrementally."}
                 </p>
               </div>
             ) : (
@@ -390,23 +398,27 @@ export function InputPanel({
 
             {problem && <p className="text-[11px] text-(--color-severity-error)">{problem}</p>}
 
-            {input.mode !== "file" && byteLength !== undefined && byteLength > 5 * 1024 * 1024 && !problem && (
-              <div className="flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50/70 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
-                <span>
-                  Large text input ({formatBytesShort(byteLength)}). For maximum performance and background streaming, consider using the File tab.
-                </span>
-                {supportsFile && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => setMode("file")}
-                    className="h-6 text-[10px] shrink-0"
-                  >
-                    Switch to File
-                  </Button>
-                )}
-              </div>
-            )}
+            {input.mode !== "file" &&
+              byteLength !== undefined &&
+              byteLength > 5 * 1024 * 1024 &&
+              !problem && (
+                <div className="flex items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50/70 px-2.5 py-1.5 text-[11px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+                  <span>
+                    Large text input ({formatBytesShort(byteLength)}). For maximum performance
+                    and background streaming, consider using the File tab.
+                  </span>
+                  {supportsFile && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setMode("file")}
+                      className="h-6 text-[10px] shrink-0"
+                    >
+                      Switch to File
+                    </Button>
+                  )}
+                </div>
+              )}
           </>
         )}
 

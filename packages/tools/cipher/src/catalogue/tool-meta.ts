@@ -246,7 +246,6 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Streaming AEAD",
     aead: true,
     security: "modern",
-    streaming: true,
     tags: [
       "cobblestone",
       "c2sp",
@@ -3938,6 +3937,56 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     summary: "Modern, simple, and secure file encryption format (age-encryption.org/v1) supporting X25519 recipients and scrypt passphrases.",
   },
 ];
+
+/** Raw unauthenticated ciphers whose state can advance independently of input chunk boundaries. */
+export const RAW_STREAM_CIPHER_TOOL_IDS = [
+  "chacha20",
+  "chacha12",
+  "chacha8",
+  "chacha20orig",
+  "salsa20",
+  "xsalsa20",
+  "zuc128",
+  "zuc256",
+  "hc128",
+  "hc256",
+  "grainv1",
+  "grain128",
+  "rabbit",
+  "trivium",
+  "sosemanuk",
+  "snow3g",
+  "snow-v",
+  "a5-1",
+  "rc4-drop",
+  "isaac",
+  "pcg64",
+  "xoshiro256",
+  "spritz",
+  "crypto1",
+  "dect-dsc",
+  "gea",
+  "mickey",
+  "a5-2",
+  "rc4",
+] as const;
+
+const RAW_STREAM_CIPHER_TOOL_ID_SET = new Set<string>(RAW_STREAM_CIPHER_TOOL_IDS);
+
+export function isRawStreamCipherTool(id: string): boolean {
+  return RAW_STREAM_CIPHER_TOOL_ID_SET.has(id);
+}
+
+/** Whether at least one resolved configuration of this tool supports bounded-memory streaming. */
+export function hasConditionalCipherStreaming(meta: CipherToolMeta): boolean {
+  return (
+    meta.id === "aes" ||
+    meta.id === "age" ||
+    meta.id === "cobblestone" ||
+    meta.block !== undefined ||
+    isRawStreamCipherTool(meta.id)
+  );
+}
 
 const BY_ID = new Map(CIPHER_TOOLS.map((t) => [t.id, t]));
 

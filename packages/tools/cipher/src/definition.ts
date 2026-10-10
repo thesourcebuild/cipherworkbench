@@ -2,7 +2,7 @@ import type { ToolDefinition } from "@ocs/engine";
 import { cipherCatalogueFor } from "./catalogue/options";
 import { OPTION_GROUP_META } from "./catalogue/groups";
 import { CIPHER_TOOL_IDS, DEFAULT_AES_MODE, requireCipherTool } from "./catalogue/tool-meta";
-import { computeCipher, createCipherStream } from "./compute";
+import { cipherFileProcessing, computeCipher, createCipherStream } from "./compute";
 import { describeSpec } from "./explain/describe";
 import { RULES } from "./lint/rules";
 import { CIPHER_MANIFESTS } from "./manifest";
@@ -95,7 +95,9 @@ export function cipherToolDefinition(toolId: string): ToolDefinition<CipherSpec>
     specSchema: CipherSpec,
     describe: describeSpec,
     compute: computeCipher,
-    ...(manifest.streaming ? { createStream: createCipherStream } : {}),
+    ...(manifest.streaming || manifest.conditionalStreaming
+      ? { createStream: createCipherStream, fileProcessingForSpec: cipherFileProcessing }
+      : {}),
     /**
      * So Generate offers a length this tool will actually accept.
      *
@@ -128,8 +130,10 @@ export {
   cobblestoneOperation,
   cobblestoneCrypto,
   createCobblestoneStream,
+  createAgeStream,
   ageOperation,
   ageCrypto,
+  createMetadataBlockCipher,
 } from "./bindings";
 export {
   computeCipher,

@@ -197,6 +197,8 @@ export function formatByteSize(bytes: number): string {
 export function getInlineTextSample(input?: Uint8Array, maxLen: number = 256): string | undefined {
   if (!input) return undefined;
   if (input.length === 0) return "";
+  // A UTF-8 character is at most four bytes, so anything larger cannot fit the character limit.
+  if (input.length > maxLen * 4) return undefined;
   try {
     const decoded = new TextDecoder("utf-8", { fatal: true }).decode(input);
     // Disallow control characters (\x00-\x1F, \x7F) including newlines (\n, \r)
@@ -218,6 +220,12 @@ export interface InputExclusionInfo {
  */
 export function describeInputExclusion(input: Uint8Array): InputExclusionInfo {
   const size = formatByteSize(input.length);
+  if (input.length > 256 * 4) {
+    return {
+      note: `Input exceeds inline shell limit (${size}) — save to input.txt or use File mode:`,
+      defaultFileName: "input.txt",
+    };
+  }
   try {
     const decoded = new TextDecoder("utf-8", { fatal: true }).decode(input);
     if (decoded.includes("\n") || decoded.includes("\r")) {
@@ -266,6 +274,7 @@ export function prefixVariantsComment(
   }
   return res;
 }
+
 
 /**
  * Constructs shell command variants for piping input data across Bash, PowerShell, and Command Prompt.
@@ -370,4 +379,3 @@ export function buildFileShellVariants(
     ],
   };
 }
-

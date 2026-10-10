@@ -7,7 +7,7 @@ import { describeSpec } from "./explain/describe";
 import { RULES } from "./lint/rules";
 import { ASYMMETRIC_MANIFESTS } from "./manifest";
 import { createSpec } from "./create-spec";
-import { readOperation } from "./pure";
+import { readEncryptionScheme, readOperation, TAG_RSA_OAEP, TAG_RSA_PKCS1V15 } from "./pure";
 import { AsymmetricSpec } from "./spec";
 
 import { asymmetricInfo } from "./info";
@@ -33,14 +33,23 @@ export function asymmetricToolDefinition(toolId: string): ToolDefinition<Asymmet
     info: asymmetricInfo,
     compute: computeAsymmetric,
     /**
-     * The variant tag is the operation.
+     * The primary variant tag is the operation.
      *
      * Every other family tags by algorithm variant; here it is what you are doing, because that
      * is what decides which fields mean anything. A signature field while signing, or a key-size
      * field while verifying, would be worse than absent -- they would look like settings that
      * mattered.
      */
-    variantTag: (spec) => readOperation(spec.options, meta.operations),
+    variantTag: (spec) => {
+      const operation = readOperation(spec.options, meta.operations);
+      if (meta.id !== "rsa" || (operation !== "encrypt" && operation !== "decrypt")) {
+        return operation;
+      }
+      return [
+        operation,
+        readEncryptionScheme(spec.options) === "oaep" ? TAG_RSA_OAEP : TAG_RSA_PKCS1V15,
+      ];
+    },
     /**
      * Key generation reads no message input. Marking it false lets the workbench drop the
      * input text box, source selector, encoding selector, and auto-update toggle, presenting
@@ -53,7 +62,6 @@ export function asymmetricToolDefinition(toolId: string): ToolDefinition<Asymmet
         : readOperation(spec.options, meta.operations) !== "generate",
   };
 }
-
 
 export { ASYMMETRIC_TOOL_IDS };
 
@@ -72,4 +80,3 @@ export { RULES, RULE_CODES } from "./lint/rules";
 export { lint, applyAllFixes } from "./lint/run";
 export { decodePem, encodePem, formatJwk, keyInputKind, parseJwk } from "./pem";
 export { asymmetricInfo } from "./info";
-

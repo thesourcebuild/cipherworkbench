@@ -197,6 +197,7 @@ import { hkdf } from "@noble/hashes/hkdf.js";
 import { scrypt } from "@noble/hashes/scrypt.js";
 import { sha256, sha512 } from "@noble/hashes/sha2.js";
 import { x25519 } from "@noble/curves/ed25519.js";
+import { AgeDecryptor, AgeEncryptor } from "@ocs/algos/age";
 import { randomBytes } from "@ocs/engine";
 
 /**
@@ -454,37 +455,22 @@ function kalynaBlockBits(paramSetId: string | undefined): 128 | 256 | 512 {
   return blockBits;
 }
 
-export function blockCipherOperation(
+export interface MetadataBlockCipherOptions {
+  effectiveKeyBits?: number;
+  paramSetId?: string;
+  rc5Rounds?: number;
+  tweak?: Uint8Array;
+  gostSbox?: string;
+  anubisVariant?: string;
+}
+
+/** Builds the bare block permutation selected by resolved cipher-tool metadata. */
+export function createMetadataBlockCipher(
   toolId: string,
-  mode: string,
   key: Uint8Array,
-  iv: Uint8Array,
-  aad: Uint8Array,
-  tagLen: number,
-  effectiveKeyBits?: number,
-  /**
-   * The selected parameter set's id, for the two tools that have them.
-   *
-   * Required in practice for Simon and Speck -- the lookup below throws without it rather than
-   * quietly building the default set, because a Speck48/96 request answered with Speck128/128 would
-   * encrypt successfully and match nothing.
-   */
-  paramSetId?: string,
-  /** RC5's round count and Threefish's tweak: two more parameters that belong to one tool each. */
-  rc5Rounds?: number,
-  tweak?: Uint8Array,
-  /** GOST 28147-89's S-box set: the fourth parameter here that belongs to a single cipher. */
-  gostSbox?: string,
-  anubisVariant?: string,
-  /**
-   * Which padding ECB and CBC use. Ignored by every other mode, which never pads.
-   *
-   * Defaulted rather than required, because `padBlocks` defaults the same way -- so a caller that has
-   * not been updated behaves exactly as it did instead of throwing, and there is one place that says
-   * what "unspecified" means.
-   */
-  padding: PaddingScheme = "pkcs7",
-): CipherOperation {
+  options: MetadataBlockCipherOptions = {},
+): BlockCipher {
+  const { effectiveKeyBits, paramSetId, rc5Rounds, tweak, gostSbox, anubisVariant } = options;
   /**
    * The cipher itself, by id. A `Record` rather than a chain ending in a default, for the reason
    * given in `catalogue/options.ts`: a tool added to the metadata without an entry here should fail
@@ -614,7 +600,32 @@ export function blockCipherOperation(
   };
   const factory = factories[toolId];
   if (!factory) throw new Error(`No block cipher implementation for "${toolId}".`);
-  const cipher: BlockCipher = factory(key);
+  return factory(key);
+}
+
+export function blockCipherOperation(
+  toolId: string,
+  mode: string,
+  key: Uint8Array,
+  iv: Uint8Array,
+  aad: Uint8Array,
+  tagLen: number,
+  effectiveKeyBits?: number,
+  paramSetId?: string,
+  rc5Rounds?: number,
+  tweak?: Uint8Array,
+  gostSbox?: string,
+  anubisVariant?: string,
+  padding: PaddingScheme = "pkcs7",
+): CipherOperation {
+  const cipher = createMetadataBlockCipher(toolId, key, {
+    effectiveKeyBits,
+    paramSetId,
+    rc5Rounds,
+    tweak,
+    gostSbox,
+    anubisVariant,
+  });
 
   /**
    * GCM and CCM are not `BlockMode`s and cannot be: they authenticate, so they own the tag and the
@@ -803,27 +814,19 @@ export function streamCipherOperation(
     snow3g: (data) => snow3gCrypt(key, nonce, data),
     "snow-v": (data) => snowVCrypt(key, nonce, data),
     "a5-1": (data) =>
-      a51Encrypt(
-        key,
-        (nonce[0] ?? 0) | ((nonce[1] ?? 0) << 8) | ((nonce[2] ?? 0) << 16),
-        data,
-      ),
+      a51Encrypt(key, (nonce[0] ?? 0) | ((nonce[1] ?? 0) << 8) | ((nonce[2] ?? 0) << 16), data),
     "rc4-drop": (data) => rc4DropCrypt(key, 768, data),
     isaac: (data) => isaacCrypt(key, data),
     pcg64: (data) => pcg64Crypt(key, data),
     xoshiro256: (data) => xoshiro256Crypt(key, data),
     spritz: (data) => spritzCrypt(key, nonce, data),
-    crypto1: (data) => crypto1Crypt(key, data),
+    crypto1: (data) => crypto1Crypt(key, nonce, data),
     "dect-dsc": (data) => dectDscCrypt(key, nonce, data),
     dectdsc: (data) => dectDscCrypt(key, nonce, data),
     gea: (data) => geaCrypt(key, nonce, data),
     mickey: (data) => mickeyEncrypt(key, nonce, data),
     "a5-2": (data) =>
-      a52Encrypt(
-        key,
-        (nonce[0] ?? 0) | ((nonce[1] ?? 0) << 8) | ((nonce[2] ?? 0) << 16),
-        data,
-      ),
+      a52Encrypt(key, (nonce[0] ?? 0) | ((nonce[1] ?? 0) << 8) | ((nonce[2] ?? 0) << 16), data),
   };
   const run = ciphers[toolId];
   if (!run) throw new Error(`No stream cipher implementation for "${toolId}".`);
@@ -1031,7 +1034,11 @@ export function fernetOperation(
   };
 }
 
-export function hkdfExpandSha512(prk: Uint8Array, info: Uint8Array, length: number): Uint8Array {
+export function hkdfExpandSha512(
+  prk: Uint8Array,
+  info: Uint8Array,
+  length: number,
+): Uint8Array {
   const hashLen = 64;
   const n = Math.ceil(length / hashLen);
   if (n > 255) throw new Error("HKDF output length too large");
@@ -1134,7 +1141,8 @@ export const ageCrypto: AgeCrypto = {
     return hmac(sha256, key, message);
   },
   scrypt(password, salt, logN) {
-    const passBytes = typeof password === "string" ? new TextEncoder().encode(password) : password;
+    const passBytes =
+      typeof password === "string" ? new TextEncoder().encode(password) : password;
     return scrypt(passBytes, salt, { N: 1 << logN, r: 8, p: 1, dkLen: 32 });
   },
 };
@@ -1146,18 +1154,53 @@ export interface AgeOperationOptions {
   armor?: boolean;
 }
 
+function ageEncryptOptions(options: AgeOperationOptions): AgeEncryptOptions {
+  if (options.passphrase && options.passphrase.trim()) {
+    return { passphrase: options.passphrase.trim() };
+  }
+  if (options.recipient && options.recipient.trim()) {
+    return { recipients: [options.recipient.trim()] };
+  }
+  throw new Error("age encryption requires a recipient or passphrase.");
+}
+
+function ageDecryptOptions(options: AgeOperationOptions): AgeDecryptOptions {
+  return {
+    ...(options.passphrase && options.passphrase.trim()
+      ? { passphrase: options.passphrase.trim() }
+      : {}),
+    ...(options.identity && options.identity.trim()
+      ? { identities: [options.identity.trim()] }
+      : {}),
+  };
+}
+
+export function createAgeStream(
+  options: AgeOperationOptions,
+  direction: "encrypt" | "decrypt",
+) {
+  if (direction === "encrypt") {
+    const encryptor = new AgeEncryptor(ageCrypto, {
+      ...ageEncryptOptions(options),
+      armor: options.armor,
+    });
+    return {
+      update: (chunk: Uint8Array) => encryptor.update(chunk),
+      finalize: () => encryptor.finalize(),
+    };
+  }
+
+  const decryptor = new AgeDecryptor(ageCrypto, ageDecryptOptions(options));
+  return {
+    update: (chunk: Uint8Array) => decryptor.update(chunk),
+    finalize: () => decryptor.finalize(),
+  };
+}
+
 export function ageOperation(options: AgeOperationOptions): CipherOperation {
   return {
     encrypt(plaintext: Uint8Array): Uint8Array {
-      const encOpts: AgeEncryptOptions = {};
-      if (options.passphrase && options.passphrase.trim()) {
-        encOpts.passphrase = options.passphrase.trim();
-      } else if (options.recipient && options.recipient.trim()) {
-        encOpts.recipients = [options.recipient.trim()];
-      } else {
-        throw new Error("age encryption requires a recipient or passphrase.");
-      }
-      const raw = ageEncrypt(ageCrypto, plaintext, encOpts);
+      const raw = ageEncrypt(ageCrypto, plaintext, ageEncryptOptions(options));
       if (options.armor) {
         return new TextEncoder().encode(armorAge(raw));
       }
@@ -1168,15 +1211,7 @@ export function ageOperation(options: AgeOperationOptions): CipherOperation {
       if (isArmoredAge(ciphertext)) {
         raw = dearmorAge(ciphertext);
       }
-      const decOpts: AgeDecryptOptions = {};
-      if (options.passphrase && options.passphrase.trim()) {
-        decOpts.passphrase = options.passphrase.trim();
-      }
-      if (options.identity && options.identity.trim()) {
-        decOpts.identities = [options.identity.trim()];
-      }
-      return ageDecrypt(ageCrypto, raw, decOpts);
+      return ageDecrypt(ageCrypto, raw, ageDecryptOptions(options));
     },
   };
 }
-

@@ -164,6 +164,8 @@ export interface ToolManifest {
    * and says so, rather than pretending to stream.
    */
   streaming: boolean;
+  /** Some configurations stream, selected at runtime by `ToolDefinition.fileProcessingForSpec`. */
+  conditionalStreaming?: boolean;
 }
 
 /**
@@ -369,11 +371,13 @@ export interface ToolTable {
   name?: string;
 }
 
-/** Incremental input, for file-sized data. Only tools with `streaming: true` provide one. */
+/** Incremental input, with optional output chunks for file-sized transforms. */
 export interface ToolStream {
-  update(chunk: Uint8Array): void;
+  update(chunk: Uint8Array): Uint8Array | readonly Uint8Array[] | void;
   finish(): ToolResult;
 }
+
+export type FileProcessingMode = "streaming" | "buffered" | "unresolved";
 
 /**
  * The full contract a `packages/tools/<family>` package implements for one tool.
@@ -517,6 +521,8 @@ export interface ToolDefinition<TSpec extends ToolSpecBase> extends ToolManifest
    * in arbitrary chunks must equal `compute` on the whole buffer.
    */
   createStream?(spec: TSpec): ToolStream;
+  /** File handling for the current settings. `unresolved` means required settings are incomplete. */
+  fileProcessingForSpec?(spec: TSpec): FileProcessingMode;
   /**
    * Which `availableOn` tag(s) the current spec selects, so the options form knows which options
    * to show. Omit for a tool whose options never vary.
@@ -545,3 +551,9 @@ export interface ToolDefinition<TSpec extends ToolSpecBase> extends ToolManifest
   onOptionChange?(spec: TSpec, id: string, value: OptionValue | undefined): TSpec;
 }
 
+export function fileProcessingModeForSpec<TSpec extends ToolSpecBase>(
+  tool: ToolDefinition<TSpec>,
+  spec: TSpec,
+): FileProcessingMode {
+  return tool.fileProcessingForSpec?.(spec) ?? (tool.streaming ? "streaming" : "buffered");
+}

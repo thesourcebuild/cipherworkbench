@@ -3,6 +3,8 @@ import {
   createHmac,
   getHashes,
   generateKeyPairSync,
+  privateDecrypt,
+  publicEncrypt,
   sign,
   verify,
   constants,
@@ -15,14 +17,16 @@ import { HMAC_HASHES, OPTION_HASH as MAC_OPTION_HASH, OPTION_KEY } from "@ocs/ma
 import { macToolDefinition } from "@ocs/mac/definition";
 import {
   OPTION_HASH,
+  OPTION_ENCRYPTION_SCHEME,
   OPTION_OPERATION,
   OPTION_PRIVATE_KEY,
+  OPTION_PUBLIC_KEY,
   OPTION_SCHEME,
   OPTION_SIGNATURE,
   RSA_HASHES,
 } from "@ocs/asymmetric";
 import { asymmetricToolDefinition } from "@ocs/asymmetric/definition";
-import { PKCS1_DIGEST_INFO_PREFIX } from "@ocs/algos";
+import { emePkcs1V15Decode, PKCS1_DIGEST_INFO_PREFIX } from "@ocs/algos";
 import { encodeHex } from "@ocs/engine";
 
 /**
@@ -560,6 +564,50 @@ describe("RSA signatures match OpenSSL", () => {
       }
     });
   }
+});
+
+describe("RSAES-PKCS1-v1_5 encryption matches OpenSSL", () => {
+  it("interoperates in both directions", async () => {
+    const tool = asymmetricToolDefinition("rsa");
+    const base = tool.createSpec();
+    const ours = await tool.compute(
+      {
+        ...base,
+        options: {
+          ...base.options,
+          [OPTION_OPERATION]: "encrypt",
+          [OPTION_ENCRYPTION_SCHEME]: "pkcs1v15",
+          [OPTION_PUBLIC_KEY]: rsa.publicPem,
+        },
+      },
+      RSA_MESSAGE,
+    );
+    expect(ours.error).toBeUndefined();
+    const encodedByUs = privateDecrypt(
+      { key: rsa.node.privateKey, padding: constants.RSA_NO_PADDING },
+      ours.bytes!,
+    );
+    expect(emePkcs1V15Decode(new Uint8Array(encodedByUs))).toEqual(RSA_MESSAGE);
+
+    const theirs = publicEncrypt(
+      { key: rsa.node.publicKey, padding: constants.RSA_PKCS1_PADDING },
+      RSA_MESSAGE,
+    );
+    const openedByUs = await tool.compute(
+      {
+        ...base,
+        options: {
+          ...base.options,
+          [OPTION_OPERATION]: "decrypt",
+          [OPTION_ENCRYPTION_SCHEME]: "pkcs1v15",
+          [OPTION_PRIVATE_KEY]: rsa.privatePem,
+        },
+      },
+      new Uint8Array(theirs),
+    );
+    expect(openedByUs.error).toBeUndefined();
+    expect(openedByUs.bytes).toEqual(RSA_MESSAGE);
+  });
 });
 
 describe("the PKCS#1 DigestInfo table", () => {

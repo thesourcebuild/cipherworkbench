@@ -1,15 +1,17 @@
 /**
- * RSA's numeric primitives and its two signature paddings, from RFC 8017.
+ * RSA's numeric primitives, its two signature paddings, and legacy PKCS#1 v1.5 encryption,
+ * from RFC 8017.
  *
- * This exists for one reason, stated plainly because hand-rolling RSA is normally the wrong
- * answer: WebCrypto — which is where this app gets RSA — supports exactly four hashes
+ * This exists because WebCrypto — which is where this app gets modern RSA — supports exactly four hashes
  * (SHA-1, SHA-256, SHA-384, SHA-512) and refuses every other with `NotSupportedError`.
  * OpenSSL will sign with fourteen. Reaching parity with the algorithms OpenSSL names means
  * having a path that does not go through `crypto.subtle`, and WebCrypto exposes no raw RSA
- * primitive to build one on top of.
+ * primitive to build one on top of. WebCrypto also deliberately omits RSAES-PKCS1-v1_5
+ * encryption, which this local workbench retains for inspecting legacy ciphertexts.
  *
- * So the split is: WebCrypto for the four hashes it supports, and this module for the other
- * ten. What that buys is coverage; what it costs is stated in `A008` and repeated here, so
+ * So the split is: WebCrypto for OAEP and the four signature hashes it supports, and this module
+ * for the other ten signature hashes plus legacy encryption. What that buys is coverage; what it
+ * costs is stated in `A008` and `A013` and repeated here, so
  * nobody has to read the implementation to find out:
  *
  * **`modPow` below is not constant-time.** It is square-and-multiply over `bigint`, and its
@@ -96,21 +98,30 @@ export interface RsaPrivateKey extends RsaPublicKey {
   qi?: bigint;
 }
 
-/** RSAVP1 — the public operation, `s^e mod n`. No secret, so no timing concern. */
+function publicOperation(key: RsaPublicKey, representative: bigint, name: string): bigint {
+  if (representative >= key.n) throw new Error(`${name}: representative out of range`);
+  return modPow(representative, key.e, key.n);
+}
+
+/** RSAEP — the public encryption operation, `m^e mod n`. */
+export function rsaep(key: RsaPublicKey, message: bigint): bigint {
+  return publicOperation(key, message, "rsaep");
+}
+
+/** RSAVP1 — the public signature-verification operation, `s^e mod n`. */
 export function rsavp1(key: RsaPublicKey, signature: bigint): bigint {
-  if (signature >= key.n) throw new Error("rsavp1: signature representative out of range");
-  return modPow(signature, key.e, key.n);
+  return publicOperation(key, signature, "rsavp1");
 }
 
 /**
- * RSASP1 — the private operation, `m^d mod n`, via the CRT when the parameters are present.
+ * The private RSA operation via the CRT when its parameters are present.
  *
  * The CRT form computes two exponentiations over halves of the modulus instead of one over
  * the whole of it, which is why every real implementation uses it. It is not a shortcut with
  * different results: the recombination is exact.
  */
-export function rsasp1(key: RsaPrivateKey, message: bigint): bigint {
-  if (message >= key.n) throw new Error("rsasp1: message representative out of range");
+function privateOperation(key: RsaPrivateKey, representative: bigint, name: string): bigint {
+  if (representative >= key.n) throw new Error(`${name}: representative out of range`);
 
   const { p, q, dp, dq, qi } = key;
   if (
@@ -120,15 +131,96 @@ export function rsasp1(key: RsaPrivateKey, message: bigint): bigint {
     dq !== undefined &&
     qi !== undefined
   ) {
-    const m1 = modPow(message % p, dp, p);
-    const m2 = modPow(message % q, dq, q);
+    const m1 = modPow(representative % p, dp, p);
+    const m2 = modPow(representative % q, dq, q);
     // h = qi * (m1 - m2) mod p, taking care that the difference can be negative.
     const diff = (((m1 - m2) % p) + p) % p;
     const h = (qi * diff) % p;
     return m2 + h * q;
   }
 
-  return modPow(message, key.d, key.n);
+  return modPow(representative, key.d, key.n);
+}
+
+/** RSADP — the private decryption operation, `c^d mod n`. */
+export function rsadp(key: RsaPrivateKey, ciphertext: bigint): bigint {
+  return privateOperation(key, ciphertext, "rsadp");
+}
+
+/** RSASP1 — the private signature operation, `m^d mod n`. */
+export function rsasp1(key: RsaPrivateKey, message: bigint): bigint {
+  return privateOperation(key, message, "rsasp1");
+}
+
+// ── PKCS#1 v1.5 encryption padding (RFC 8017 §7.2) ──────────────────────────
+
+/** EME-PKCS1-v1_5: `0x00 0x02 || nonzero random PS || 0x00 || M`. */
+export function emePkcs1V15Encode(
+  message: Uint8Array,
+  emLen: number,
+  padding: Uint8Array,
+): Uint8Array {
+  if (message.length > emLen - 11) {
+    throw new Error(
+      `PKCS#1 v1.5 can carry at most ${emLen - 11} octets; the message is ${message.length}.`,
+    );
+  }
+  const expectedPadding = emLen - message.length - 3;
+  if (padding.length !== expectedPadding || padding.length < 8) {
+    throw new Error(`PKCS#1 v1.5 requires exactly ${expectedPadding} nonzero padding octets.`);
+  }
+  if (padding.some((byte) => byte === 0)) {
+    throw new Error("PKCS#1 v1.5 encryption padding must not contain zero octets.");
+  }
+
+  const encoded = new Uint8Array(emLen);
+  encoded[1] = 0x02;
+  encoded.set(padding, 2);
+  encoded.set(message, padding.length + 3);
+  return encoded;
+}
+
+/**
+ * Decodes EME-PKCS1-v1_5 without returning a reason for rejection.
+ *
+ * The whole block is scanned before validity is decided. JavaScript bigint exponentiation is not
+ * constant-time, so this is not a server-grade oracle defence; it does ensure callers cannot expose
+ * which structural check failed, which is the only safe API for this legacy encoding.
+ */
+export function emePkcs1V15Decode(encoded: Uint8Array): Uint8Array | undefined {
+  let bad = encoded.length < 11 ? 1 : 0;
+  bad |= (encoded[0] ?? 1) ^ 0x00;
+  bad |= (encoded[1] ?? 0) ^ 0x02;
+
+  let separator = -1;
+  for (let i = 2; i < encoded.length; i++) {
+    if (separator === -1 && encoded[i] === 0) separator = i;
+  }
+  if (separator < 10) bad |= 1;
+  if (bad !== 0) return undefined;
+  return encoded.slice(separator + 1);
+}
+
+export function rsaesPkcs1V15Encrypt(
+  key: RsaPublicKey,
+  message: Uint8Array,
+  padding: Uint8Array,
+): Uint8Array {
+  const encoded = emePkcs1V15Encode(message, key.k, padding);
+  return i2osp(rsaep(key, os2ip(encoded)), key.k);
+}
+
+export function rsaesPkcs1V15Decrypt(
+  key: RsaPrivateKey,
+  ciphertext: Uint8Array,
+): Uint8Array | undefined {
+  if (ciphertext.length !== key.k) return undefined;
+  try {
+    const encoded = i2osp(rsadp(key, os2ip(ciphertext)), key.k);
+    return emePkcs1V15Decode(encoded);
+  } catch {
+    return undefined;
+  }
 }
 
 // ── PKCS#1 v1.5 signature padding (RFC 8017 §9.2) ───────────────────────────

@@ -5,6 +5,7 @@ import type { OptionValue, OutputEncoding } from "@ocs/contracts";
 import { OutputEncoding as OutputEncodingSchema, setOption } from "@ocs/contracts";
 import {
   decodeInput,
+  fileProcessingModeForSpec,
   identifyAmong,
   isAvailableOn,
   lint,
@@ -319,7 +320,14 @@ export function ToolWorkbench({
         });
       }
     },
-    [input, onInputChange, onSecondaryInputChange, probeTargetSlot, secondaryInput, secondaryOptionDef],
+    [
+      input,
+      onInputChange,
+      onSecondaryInputChange,
+      probeTargetSlot,
+      secondaryInput,
+      secondaryOptionDef,
+    ],
   );
 
   const handleApplyPayloadFromProbe = useCallback(
@@ -387,7 +395,8 @@ export function ToolWorkbench({
       if (op === "pem-to-pkcs12") return "Certificate (PEM)";
       if (op === "pem-to-ppk") return "Private Key (PEM)";
       if (op === "ppk-to-pem") return "PuTTY Private Key (.ppk)";
-      if (op === "pkcs12-to-pem" || op === "pkcs12-inspect") return "PKCS#12 Archive (.pfx / .p12)";
+      if (op === "pkcs12-to-pem" || op === "pkcs12-inspect")
+        return "PKCS#12 Archive (.pfx / .p12)";
       if (op === "pkcs7-to-pem") return "PKCS#7 Bundle (.p7b)";
       if (op === "split-chain") return "Certificate Chain / Bundle (PEM)";
       return "Certificate or Key (PEM or DER)";
@@ -552,7 +561,8 @@ export function ToolWorkbench({
    */
   const acceptedByteLengths = (optionId: string) => tool.acceptedByteLengths?.(spec, optionId);
   const CustomWorkbench = tool ? getCustomWorkbench(tool.id) : undefined;
-  const customResult = customResultState?.toolId === tool.id ? customResultState.result : undefined;
+  const customResult =
+    customResultState?.toolId === tool.id ? customResultState.result : undefined;
   const resultState = customResult ? { status: "done" as const, result: customResult } : state;
 
   const hasSettings =
@@ -587,12 +597,12 @@ export function ToolWorkbench({
      */
     ...(hasSettings || info.length > 0 || effectiveReadsInput
       ? [
-        {
-          id: "settings",
-          label: "Settings",
-          content: (
-            <>
-              {/*
+          {
+            id: "settings",
+            label: "Settings",
+            content: (
+              <>
+                {/*
                   First in the rail, and it has now been in three places.
 
                   It started in the Input panel's controls row, next to Source, Encoding and Clear --
@@ -608,83 +618,82 @@ export function ToolWorkbench({
                   a block cipher contributes a dozen controls -- so anything under it starts below the
                   fold on a short window, which is the wrong place for the thing you want first.
                 */}
-              {/* Absent for a generator: there is no box to load anything into. */}
-              {effectiveReadsInput && (
-                <Panel
-                  title="Test input"
-                  description="Load a known string into the box."
-                  collapsible
-                >
-                  <TestInputPicker
-                    input={input}
-                    samples={tool.samples}
-                    onChange={onInputChange}
-                  />
-                </Panel>
-              )}
-              {hasSettings && (
-                /**
-                 * Collapsible, like the two panels around it, and for the same reason each of them
-                 * is: this is the tallest thing in the rail on most tools -- AES contributes a mode,
-                 * a padding, a key size and a tag length -- so folding it is what lets the Info
-                 * table below it be on screen at the same time.
-                 *
-                 * Open by default. The whole point of the tab is these controls.
-                 */
-                <Panel
-                  title="Settings"
-                  description={
-                    CustomWorkbench
-                      ? "Interactive workspace"
-                      : `${tool.label} options`
-                  }
-                  collapsible
-                >
-                  {CustomWorkbench ? (
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-950 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200">
-                        <div className="font-semibold flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
-                          <span>✓</span>
-                          <span>Interactive Studio Active</span>
-                        </div>
-                        <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
-                          Workflow parameters, keys, and commands are configured directly in the main interactive canvas.
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <OptionsForm
-                      catalogue={tool.catalogue}
-                      groups={tool.groups}
-                      options={spec.options}
-                      tag={tag}
-                      scope="settings"
-                      generateLength={generateLength}
-                      acceptedByteLengths={acceptedByteLengths}
-                      onChange={setOptionValue}
+                {/* Absent for a generator: there is no box to load anything into. */}
+                {effectiveReadsInput && (
+                  <Panel
+                    title="Test input"
+                    description="Load a known string into the box."
+                    collapsible
+                  >
+                    <TestInputPicker
+                      input={input}
+                      samples={tool.samples}
+                      onChange={onInputChange}
                     />
-                  )}
-                </Panel>
-              )}
-              {info.length > 0 && (
-                /**
-                 * Collapsible, and open. It is the longest *fixed* thing in the rail -- a CRC
-                 * contributes nine rows -- so being able to fold it away is worth a chevron.
-                 *
-                 * Open by default, unlike the Table panel. Both are spec-derived reference
-                 * material, but these are the parameters the tool is *running with*, and someone
-                 * comparing a CRC against another implementation is reading the polynomial and
-                 * the init value while they work. A 256-cell grid is something you go and look
-                 * for; nine labelled values are something you glance at.
-                 */
-                <Panel title="Info" description="What these settings are." collapsible>
-                  <FieldTable fields={info} />
-                </Panel>
-              )}
-            </>
-          ),
-        },
-      ]
+                  </Panel>
+                )}
+                {hasSettings && (
+                  /**
+                   * Collapsible, like the two panels around it, and for the same reason each of them
+                   * is: this is the tallest thing in the rail on most tools -- AES contributes a mode,
+                   * a padding, a key size and a tag length -- so folding it is what lets the Info
+                   * table below it be on screen at the same time.
+                   *
+                   * Open by default. The whole point of the tab is these controls.
+                   */
+                  <Panel
+                    title="Settings"
+                    description={
+                      CustomWorkbench ? "Interactive workspace" : `${tool.label} options`
+                    }
+                    collapsible
+                  >
+                    {CustomWorkbench ? (
+                      <div className="space-y-3">
+                        <div className="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-950 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-200">
+                          <div className="font-semibold flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400">
+                            <span>✓</span>
+                            <span>Interactive Studio Active</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                            Workflow parameters, keys, and commands are configured directly in
+                            the main interactive canvas.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <OptionsForm
+                        catalogue={tool.catalogue}
+                        groups={tool.groups}
+                        options={spec.options}
+                        tag={tag}
+                        scope="settings"
+                        generateLength={generateLength}
+                        acceptedByteLengths={acceptedByteLengths}
+                        onChange={setOptionValue}
+                      />
+                    )}
+                  </Panel>
+                )}
+                {info.length > 0 && (
+                  /**
+                   * Collapsible, and open. It is the longest *fixed* thing in the rail -- a CRC
+                   * contributes nine rows -- so being able to fold it away is worth a chevron.
+                   *
+                   * Open by default, unlike the Table panel. Both are spec-derived reference
+                   * material, but these are the parameters the tool is *running with*, and someone
+                   * comparing a CRC against another implementation is reading the polynomial and
+                   * the init value while they work. A 256-cell grid is something you go and look
+                   * for; nine labelled values are something you glance at.
+                   */
+                  <Panel title="Info" description="What these settings are." collapsible>
+                    <FieldTable fields={info} />
+                  </Panel>
+                )}
+              </>
+            ),
+          },
+        ]
       : []),
     ...(guideDef
       ? [
@@ -755,17 +764,17 @@ export function ToolWorkbench({
       label: "Checks",
       ...(lintResult.diagnostics.length > 0
         ? {
-          badge: {
-            text: String(lintResult.diagnostics.length),
-            tone: lintResult.hasErrors
-              ? ("error" as const)
-              : lintResult.isInsecure
-                ? ("insecure" as const)
-                : lintResult.counts.warning > 0
-                  ? ("warning" as const)
-                  : ("neutral" as const),
-          },
-        }
+            badge: {
+              text: String(lintResult.diagnostics.length),
+              tone: lintResult.hasErrors
+                ? ("error" as const)
+                : lintResult.isInsecure
+                  ? ("insecure" as const)
+                  : lintResult.counts.warning > 0
+                    ? ("warning" as const)
+                    : ("neutral" as const),
+            },
+          }
         : {}),
       content: (
         <>
@@ -819,6 +828,8 @@ export function ToolWorkbench({
     </div>
   );
 
+  const fileProcessing = fileProcessingModeForSpec(tool, spec);
+
   return (
     /*
       Two columns in one row, and *neither* scrolls: `<main>` above owns the only scrollbar in the
@@ -828,7 +839,11 @@ export function ToolWorkbench({
     */
     <div className="flex flex-col lg:flex-row min-w-0 gap-6">
       <div className="min-w-0 flex-1 space-y-4 w-full">
-        <ToolHeader manifest={tool} description={tool.describe(spec)} />
+        <ToolHeader
+          manifest={tool}
+          description={tool.describe(spec)}
+          streaming={fileProcessing === "streaming"}
+        />
 
         {CustomWorkbench ? (
           <CustomWorkbench
@@ -852,7 +867,7 @@ export function ToolWorkbench({
                   readsInput={effectiveReadsInput}
                   generates={false}
                   supportsFile={tool.supportsFile}
-                  buffersWholeFile={tool.supportsFile && !tool.streaming}
+                  fileProcessing={fileProcessing}
                   byteLength={state.inputByteLength}
                   problem={inputProblem ?? (state.status === "error" ? state.error : undefined)}
                   autoUpdate={effectiveAutoUpdate}
@@ -880,7 +895,7 @@ export function ToolWorkbench({
             // "is this a generator" and it is the one the compute hook was given.
             generates={generates}
             supportsFile={effectiveReadsInput && tool.supportsFile}
-            buffersWholeFile={tool.supportsFile && !tool.streaming}
+            fileProcessing={fileProcessing}
             byteLength={state.inputByteLength}
             /**
              * The decode failure first, because it is true earlier.
@@ -933,7 +948,7 @@ export function ToolWorkbench({
             readsInput={true}
             generates={false}
             supportsFile={true}
-            buffersWholeFile={true}
+            fileProcessing="buffered"
             byteLength={secondaryDecoded.byteLength}
             problem={secondaryDecoded.problem}
             autoUpdate={effectiveAutoUpdate}

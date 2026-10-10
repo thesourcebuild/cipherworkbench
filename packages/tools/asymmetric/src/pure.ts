@@ -22,6 +22,7 @@ export const OPTION_OPERATION = "operation";
 export const OPTION_CURVE = "curve";
 export const OPTION_HASH = "hash";
 export const OPTION_SCHEME = "scheme";
+export const OPTION_ENCRYPTION_SCHEME = "encryptionScheme";
 export const OPTION_MODULUS_LENGTH = "modulusLength";
 export const OPTION_PUBLIC_EXPONENT = "publicExponent";
 export const OPTION_PRIVATE_KEY = "privateKey";
@@ -111,6 +112,24 @@ export function withScheme(options: OptionValues, scheme: RsaScheme): OptionValu
   return setOption(options, OPTION_SCHEME, scheme);
 }
 
+/** RSA encryption padding. OAEP is the default; PKCS#1 v1.5 exists for legacy interop only. */
+export type RsaEncryptionScheme = "oaep" | "pkcs1v15";
+
+export const DEFAULT_RSA_ENCRYPTION_SCHEME: RsaEncryptionScheme = "oaep";
+export const TAG_RSA_OAEP = "rsa-encryption:oaep";
+export const TAG_RSA_PKCS1V15 = "rsa-encryption:pkcs1v15";
+
+export function readEncryptionScheme(options: OptionValues): RsaEncryptionScheme {
+  return optString(options, OPTION_ENCRYPTION_SCHEME) === "pkcs1v15" ? "pkcs1v15" : "oaep";
+}
+
+export function withEncryptionScheme(
+  options: OptionValues,
+  scheme: RsaEncryptionScheme,
+): OptionValues {
+  return setOption(options, OPTION_ENCRYPTION_SCHEME, scheme);
+}
+
 /**
  * Read as a string and parsed, because it is an `enum` option rather than a `number` one.
  *
@@ -168,6 +187,11 @@ export function withSignatureFormat(
  */
 export function maxOaepPlaintext(modulusBytes: number, hashOutputLen: number): number {
   return modulusBytes - 2 * hashOutputLen - 2;
+}
+
+/** Largest plaintext RSAES-PKCS1-v1_5 can carry: k − 11. */
+export function maxPkcs1Plaintext(modulusBytes: number): number {
+  return modulusBytes - 11;
 }
 
 /**

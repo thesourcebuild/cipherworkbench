@@ -37,8 +37,6 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { hmac } from "@noble/hashes/hmac.js";
 import { pbkdf2 } from "@noble/hashes/pbkdf2.js";
 
-
-
 describe("Extended Algorithm Suite: KDFs, Ciphers, Hashes, MACs", () => {
   describe("KDFs", () => {
     it("Balloon Hashing executes and produces deterministic 32-byte digest", () => {
@@ -65,7 +63,11 @@ describe("Extended Algorithm Suite: KDFs, Ciphers, Hashes, MACs", () => {
 
       const kSimple = openpgpS2k(sha256, pass, 32, { type: "simple" });
       const kSalted = openpgpS2k(sha256, pass, 32, { type: "salted", salt });
-      const kIter = openpgpS2k(sha256, pass, 32, { type: "iterated-salted", salt, count: 65536 });
+      const kIter = openpgpS2k(sha256, pass, 32, {
+        type: "iterated-salted",
+        salt,
+        count: 65536,
+      });
 
       expect(kSimple.length).toBe(32);
       expect(kSalted.length).toBe(32);
@@ -86,7 +88,10 @@ describe("Extended Algorithm Suite: KDFs, Ciphers, Hashes, MACs", () => {
     it("TLS 1.2 PRF generates expanded key material", () => {
       const hmacFn = (k: Uint8Array, m: Uint8Array) => hmac(sha256, k, m);
       const secret = new Uint8Array(32).fill(0x99);
-      const prfOut = tls12Prf(hmacFn, secret, 48, { label: "master secret", seed: new Uint8Array(32).fill(0x01) });
+      const prfOut = tls12Prf(hmacFn, secret, 48, {
+        label: "master secret",
+        seed: new Uint8Array(32).fill(0x01),
+      });
       expect(prfOut.length).toBe(48);
     });
 
@@ -184,8 +189,8 @@ describe("Extended Algorithm Suite: KDFs, Ciphers, Hashes, MACs", () => {
       const iv = new Uint8Array(4).fill(0x21);
       const plaintext = new TextEncoder().encode("Secret cellular and RFID payload");
 
-      const crypt1 = crypto1Crypt(key, plaintext);
-      expect(crypto1Crypt(key, crypt1)).toEqual(plaintext);
+      const crypt1 = crypto1Crypt(key, iv, plaintext);
+      expect(crypto1Crypt(key, iv, crypt1)).toEqual(plaintext);
 
       const dectOut = dectDscEncrypt(key, iv, plaintext);
       expect(dectDscEncrypt(key, iv, dectOut)).toEqual(plaintext);

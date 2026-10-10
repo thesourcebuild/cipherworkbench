@@ -5,6 +5,7 @@ import {
   getInlineTextSample,
   describeInputExclusion,
   type CliProviderCommand,
+  type FileProcessingMode,
   type ToolResult,
   type ToolResultField,
   type ToolStream,
@@ -18,7 +19,10 @@ import {
   chacha20Operation,
   chachaPolyOperation,
   cobblestoneOperation,
+  createAgeStream,
   createCobblestoneStream,
+  createMetadataBlockCipher,
+  aesBlockCipher,
   fernetOperation,
   lwcOperation,
   rc4Operation,
@@ -29,7 +33,7 @@ import {
   xsalsaPolyOperation,
   type CipherOperation,
 } from "./bindings";
-import { requireCipherTool } from "./catalogue/tool-meta";
+import { isRawStreamCipherTool, requireCipherTool } from "./catalogue/tool-meta";
 import {
   cipherBlockSize,
   requiresBlockAlignment,
@@ -37,18 +41,21 @@ import {
   type ResolvedCipher,
 } from "./resolve";
 import type { CipherSpec } from "./spec";
-import { readBigUint64BE, type CobblestoneVariant, type PaddingScheme } from "@ocs/algos";
+import {
+  createIncrementalBlockMode,
+  readBigUint64BE,
+  type CobblestoneVariant,
+  type PaddingScheme,
+} from "@ocs/algos";
+import { createIncrementalGcmEncryptor } from "@ocs/algos/aead-modes";
+import { createRawStreamCipher, type RawStreamCipherId } from "@ocs/algos/raw-stream";
 import { opensslHeader, type KeySource } from "@ocs/kdf/key-source";
 import { concatBytes, randomBytes } from "@ocs/engine";
 
 export function getOpenSslCipherName(r: ResolvedCipher): string | undefined {
   const mode = r.mode?.id ?? "cbc";
   const keyBits =
-    r.key.length > 0
-      ? r.key.length * 8
-      : r.derivedKeyLength
-        ? r.derivedKeyLength * 8
-        : 128;
+    r.key.length > 0 ? r.key.length * 8 : r.derivedKeyLength ? r.derivedKeyLength * 8 : 128;
 
   switch (r.toolId) {
     case "aes":
@@ -199,6 +206,7 @@ export function generateCipherFileProviders(
  * field and rejected a legitimate 32-byte-tag ciphertext as too short.
  */
 const tagLength = (r: ResolvedCipher): number => (r.tagLen > 0 ? r.tagLen : 16);
+const MAX_INLINE_CIPHERTEXT_FIELD_BYTES = 4096;
 
 function operationFor(r: ResolvedCipher): CipherOperation {
   switch (r.toolId) {
@@ -509,7 +517,11 @@ export function constructionLabel(r: ResolvedCipher): string {
   return tool.label.replace(" (raw)", "");
 }
 
-function fields(r: ResolvedCipher, output: Uint8Array): ToolResultField[] {
+function fields(
+  r: ResolvedCipher,
+  output: Uint8Array,
+  outputLength: number = output.length,
+): ToolResultField[] {
   const out: ToolResultField[] = [{ label: "Construction", value: constructionLabel(r) }];
 
   /*
@@ -556,7 +568,8 @@ function fields(r: ResolvedCipher, output: Uint8Array): ToolResultField[] {
   }
 
   const tagLen = tagLength(r);
-  if (r.aead && r.direction === "encrypt" && output.length >= tagLen) {
+  const hasSingleTrailingTag = r.toolId !== "cobblestone" && r.toolId !== "age";
+  if (r.aead && hasSingleTrailingTag && r.direction === "encrypt" && output.length >= tagLen) {
     /**
      * The tag is shown separately as well as being part of the output.
      *
@@ -566,13 +579,26 @@ function fields(r: ResolvedCipher, output: Uint8Array): ToolResultField[] {
      * it starts, and counting sixteen bytes back from the end of a hex string by eye is
      * exactly the sort of thing to get wrong.
      */
-    const split = output.length - tagLen;
+    const split = outputLength - tagLen;
+    const tag = output.subarray(output.length - tagLen);
+    const hasCompleteOutput = outputLength === output.length;
     out.push({
       label: "Tag",
-      value: encodeHex(output.subarray(split)),
+      value: encodeHex(tag),
       hint: `The last ${tagLen} bytes of the output above, already included. Shown separately only for protocols that transmit it in its own field.`,
     });
-    out.push({ label: "Ciphertext without tag", value: encodeHex(output.subarray(0, split)) });
+    out.push({
+      label: "Ciphertext without tag",
+      value:
+        hasCompleteOutput && split <= MAX_INLINE_CIPHERTEXT_FIELD_BYTES
+          ? encodeHex(output.subarray(0, split))
+          : `Stored in the primary binary output: bytes 0-${split - 1}, followed by the ${tagLen}-byte tag shown above.`,
+      ...(!hasCompleteOutput || split > MAX_INLINE_CIPHERTEXT_FIELD_BYTES
+        ? {
+            hint: "Not duplicated as hex here because the ciphertext is large. Use Export for the exact bytes.",
+          }
+        : {}),
+    });
   }
 
   if (r.aead && r.direction === "decrypt") {
@@ -633,10 +659,10 @@ function fields(r: ResolvedCipher, output: Uint8Array): ToolResultField[] {
   }
 
   if (r.toolId === "cobblestone") {
-    if (r.direction === "encrypt" && output.length >= 56) {
+    if (r.direction === "encrypt" && outputLength >= 56) {
       const salt = output.slice(0, 24);
       const commitment = output.slice(24, 56);
-      const payloadLen = output.length - 56;
+      const payloadLen = outputLength - 56;
       const chunks = Math.floor(payloadLen / 16400) + 1;
       out.push({
         label: "Salt",
@@ -872,6 +898,53 @@ export async function computeCipher(spec: CipherSpec, input: Uint8Array): Promis
   }
 }
 
+const INCREMENTAL_BLOCK_MODES = new Set(["ecb", "cbc", "cfb", "ofb", "ctr"]);
+
+type IncrementalBlockModeId = "ecb" | "cbc" | "cfb" | "ofb" | "ctr";
+
+type StreamConfiguration = Pick<
+  ResolvedCipher,
+  "toolId" | "direction" | "ageArmor" | "keySource" | "mode" | "padding"
+>;
+
+function canStreamConfiguration(r: StreamConfiguration): boolean {
+  // Decryption auto-detects ASCII armor from the input bytes, which are unavailable here.
+  // Keep it buffered rather than claiming a raw-only capability that one-shot computation lacks.
+  if (r.toolId === "age") return r.direction === "encrypt" && !r.ageArmor;
+  if (r.keySource !== "directinput") return false;
+  if (r.toolId === "cobblestone" || isRawStreamCipherTool(r.toolId)) return true;
+
+  const hasBlockCipher = r.toolId === "aes" || requireCipherTool(r.toolId).block !== undefined;
+  if (!hasBlockCipher) return false;
+  if (r.mode?.id === "gcm") return r.direction === "encrypt";
+  if (!INCREMENTAL_BLOCK_MODES.has(r.mode?.id ?? "")) return false;
+
+  // Random padding is semantically streamable, but cannot equal a separate one-shot computation.
+  return !(r.direction === "encrypt" && r.padding === "iso10126");
+}
+
+function canStreamResolvedCipher(r: ResolvedCipher): boolean {
+  return canStreamConfiguration(r);
+}
+
+export function cipherFileProcessing(spec: CipherSpec): FileProcessingMode {
+  const result = resolveCipher(spec);
+  if (!result.ok) return "unresolved";
+  return canStreamResolvedCipher(result.resolved) ? "streaming" : "buffered";
+}
+
+function blockCipherForStream(r: ResolvedCipher) {
+  if (r.toolId === "aes") return aesBlockCipher(r.key);
+  return createMetadataBlockCipher(r.toolId, r.key, {
+    effectiveKeyBits: r.effectiveKeyBits,
+    paramSetId: r.paramSet?.id,
+    rc5Rounds: r.rc5Rounds,
+    tweak: r.tweak,
+    gostSbox: r.gostSbox,
+    anubisVariant: r.anubisVariant,
+  });
+}
+
 /**
  * Creates an incremental streaming tool stream for ciphers that support streaming (e.g. Cobblestone).
  */
@@ -884,6 +957,128 @@ export function createCipherStream(spec: CipherSpec): ToolStream {
     };
   }
   const r = result.resolved;
+  if (!canStreamResolvedCipher(r)) {
+    throw new Error(
+      `Streaming is not supported for this ${constructionLabel(r)} configuration.`,
+    );
+  }
+
+  if (r.toolId === "age") {
+    const stream = createAgeStream(
+      {
+        recipient: r.ageRecipient,
+        identity: r.ageIdentity,
+        passphrase: r.agePassphrase,
+        armor: r.ageArmor,
+      },
+      r.direction,
+    );
+    let outputLength = 0;
+    const record = (output: Uint8Array) => {
+      outputLength += output.length;
+      return output;
+    };
+    return {
+      update(chunk: Uint8Array) {
+        return record(stream.update(chunk));
+      },
+      finish(): ToolResult {
+        try {
+          const final = record(stream.finalize());
+          return { bytes: final, fields: fields(r, final, outputLength) };
+        } catch (error) {
+          return { error: error instanceof Error ? error.message : String(error) };
+        }
+      },
+    };
+  }
+
+  if (isRawStreamCipherTool(r.toolId)) {
+    const stream = createRawStreamCipher(r.toolId as RawStreamCipherId, r.key, r.nonce, {
+      counter: r.counter,
+      drop: r.drop,
+    });
+    return {
+      update(chunk: Uint8Array) {
+        return stream.process(chunk);
+      },
+      finish(): ToolResult {
+        const cliProviders = generateCipherFileProviders(
+          r,
+          r.direction === "decrypt" ? "ciphertext.bin" : "input.bin",
+        );
+        return {
+          bytes: new Uint8Array(0),
+          fields: fields(r, new Uint8Array(0)),
+          ...(cliProviders ? { cliProviders } : {}),
+        };
+      },
+    };
+  }
+
+  if (r.mode?.id === "gcm") {
+    const stream = createIncrementalGcmEncryptor(
+      blockCipherForStream(r),
+      r.nonce,
+      r.aad,
+      tagLength(r),
+    );
+    let outputLength = 0;
+    return {
+      update(chunk: Uint8Array) {
+        const output = stream.update(chunk);
+        outputLength += output.length;
+        return output;
+      },
+      finish(): ToolResult {
+        try {
+          const tag = stream.finalize();
+          outputLength += tag.length;
+          const cliProviders = generateCipherFileProviders(r, "input.bin");
+          return {
+            bytes: tag,
+            fields: fields(r, tag, outputLength),
+            ...(cliProviders ? { cliProviders } : {}),
+          };
+        } catch (error) {
+          return { error: error instanceof Error ? error.message : String(error) };
+        }
+      },
+    };
+  }
+
+  if (r.toolId === "aes" || requireCipherTool(r.toolId).block) {
+    const mode = r.mode!.id as IncrementalBlockModeId;
+    const stream = createIncrementalBlockMode(
+      blockCipherForStream(r),
+      mode,
+      r.direction,
+      mode === "ecb"
+        ? { padding: r.padding, random: randomBytes }
+        : { iv: r.nonce, padding: r.padding, random: randomBytes },
+    );
+    return {
+      update(chunk: Uint8Array) {
+        return stream.update(chunk);
+      },
+      finish(): ToolResult {
+        try {
+          const final = stream.finalize();
+          const cliProviders = generateCipherFileProviders(
+            r,
+            r.direction === "decrypt" ? "ciphertext.bin" : "input.bin",
+          );
+          return {
+            bytes: final,
+            fields: fields(r, final),
+            ...(cliProviders ? { cliProviders } : {}),
+          };
+        } catch (error) {
+          return { error: error instanceof Error ? error.message : String(error) };
+        }
+      },
+    };
+  }
   if (r.toolId === "cobblestone") {
     const stream = createCobblestoneStream(r.key, r.direction, {
       variant:
@@ -892,26 +1087,29 @@ export function createCipherStream(spec: CipherSpec): ToolStream {
       context: r.context,
       salt: r.salt,
     });
-    const chunks: Uint8Array[] = [];
+    let prefix = new Uint8Array(0);
+    let outputLength = 0;
+    const record = (output: Uint8Array) => {
+      outputLength += output.length;
+      if (prefix.length < 56 && output.length > 0) {
+        const take = Math.min(56 - prefix.length, output.length);
+        const next = new Uint8Array(prefix.length + take);
+        next.set(prefix);
+        next.set(output.subarray(0, take), prefix.length);
+        prefix = next;
+      }
+      return output;
+    };
     return {
       update(chunk: Uint8Array) {
-        const out = stream.update(chunk);
-        if (out.length > 0) chunks.push(out);
+        return record(stream.update(chunk));
       },
       finish(): ToolResult {
         try {
-          const final = stream.finalize();
-          if (final.length > 0) chunks.push(final);
-          const totalLen = chunks.reduce((a, b) => a + b.length, 0);
-          const combined = new Uint8Array(totalLen);
-          let offset = 0;
-          for (const c of chunks) {
-            combined.set(c, offset);
-            offset += c.length;
-          }
+          const final = record(stream.finalize());
           return {
-            bytes: combined,
-            fields: fields(r, combined),
+            bytes: final,
+            fields: fields(r, prefix, outputLength),
           };
         } catch (err) {
           return { error: err instanceof Error ? err.message : String(err) };

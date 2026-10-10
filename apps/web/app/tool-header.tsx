@@ -31,9 +31,11 @@ const POSTURE_LABEL: Record<SecurityPosture, string> = {
 export function ToolHeader({
   manifest,
   description,
+  streaming,
 }: {
   manifest: ToolManifest | undefined;
   description: string | undefined;
+  streaming?: boolean;
 }) {
   if (!manifest) return null;
 
@@ -58,9 +60,9 @@ export function ToolHeader({
               One-way
             </span>
           )}
-          {manifest.streaming && (
+          {(streaming ?? manifest.streaming) && (
             <span
-              title="Can be fed a file in chunks, so file size is not limited by memory."
+              title="Reads file input incrementally in the compute worker. Transform outputs remain available for Export."
               className="shrink-0 whitespace-nowrap cursor-help rounded border border-slate-300 px-1.5 py-px text-[10px] font-medium text-slate-500 underline decoration-dotted dark:border-slate-700 dark:text-slate-400"
             >
               Streaming

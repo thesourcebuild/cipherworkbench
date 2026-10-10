@@ -38,6 +38,10 @@ import { Ghash } from "./ghash";
 
 const BLOCK = 16;
 
+/** Tag lengths GCM permits under SP 800-38D, in bytes. */
+const GCM_TAG_LENS: readonly number[] = [4, 8, 12, 13, 14, 15, 16];
+/** SP 800-38D's per-invocation plaintext limit: 2^39 - 256 bits. */
+const GCM_MAX_PLAINTEXT_BYTES = 2 ** 36 - 32;
 /** Tag lengths CCM permits: even, 4 to 16 bytes. */
 export const CCM_TAG_LENS: readonly number[] = [4, 6, 8, 10, 12, 14, 16];
 /** Nonce lengths CCM permits: 7 to 13 bytes. */
@@ -65,6 +69,29 @@ function tagsMatch(a: Uint8Array, b: Uint8Array): boolean {
 
 // ── GCM ─────────────────────────────────────────────────────────────────────
 
+function requireGcmTagLength(tagLen: number): void {
+  if (!GCM_TAG_LENS.includes(tagLen)) {
+    throw new Error(`GCM's tag must be 4, 8, or 12 to 16 bytes; ${tagLen} was requested.`);
+  }
+}
+
+function requireGcmPlaintextLength(length: number): void {
+  if (!Number.isSafeInteger(length) || length < 0 || length > GCM_MAX_PLAINTEXT_BYTES) {
+    throw new Error(
+      `GCM plaintext is limited to ${GCM_MAX_PLAINTEXT_BYTES} bytes per invocation; ${length} was requested.`,
+    );
+  }
+}
+
+/** Advances GCM's low 32-bit, big-endian counter in place. */
+function incrementGcmCounter(counter: Uint8Array): void {
+  // GCM increments only the low 32 bits, big-endian, wrapping rather than carrying into the nonce.
+  for (let i = BLOCK - 1; i >= BLOCK - 4; i--) {
+    counter[i] = (counter[i]! + 1) & 0xff;
+    if (counter[i] !== 0) break;
+  }
+}
+
 /** Counter-mode encryption starting from `counter`, which is advanced in place. */
 function gctr(cipher: BlockCipher, counter: Uint8Array, data: Uint8Array): Uint8Array {
   const out = new Uint8Array(data.length);
@@ -74,12 +101,7 @@ function gctr(cipher: BlockCipher, counter: Uint8Array, data: Uint8Array): Uint8
     cipher.encryptBlock(counter, keystream);
     const take = Math.min(BLOCK, data.length - at);
     for (let i = 0; i < take; i++) out[at + i] = data[at + i]! ^ keystream[i]!;
-    // The counter is the low 32 bits only, big-endian, wrapping -- not the whole block, which is
-    // what plain CTR does. Incrementing the wrong width is invisible until the 2^32nd block.
-    for (let i = BLOCK - 1; i >= BLOCK - 4; i--) {
-      counter[i] = (counter[i]! + 1) & 0xff;
-      if (counter[i] !== 0) break;
-    }
+    incrementGcmCounter(counter);
   }
   return out;
 }
@@ -148,6 +170,90 @@ function gcmTag(
   return gctr(cipher, counter, hash.digest()).subarray(0, tagLen);
 }
 
+export interface IncrementalGcmEncryptor {
+  /** Encrypts one chunk without retaining or modifying it. */
+  update(chunk: Uint8Array): Uint8Array;
+  /** Finishes authentication and returns only the tag. */
+  finalize(): Uint8Array;
+}
+
+/** Stateful GCM encryption with ciphertext output matching every input chunk's length. */
+export function createIncrementalGcmEncryptor(
+  cipher: BlockCipher,
+  nonce: Uint8Array,
+  ad: Uint8Array = new Uint8Array(0),
+  tagLen = 16,
+): IncrementalGcmEncryptor {
+  require128(cipher, "GCM");
+  requireGcmTagLength(tagLen);
+  const parts = gcmSetup(cipher, nonce);
+  const counter = Uint8Array.from(parts.j0);
+  incrementGcmCounter(counter);
+
+  const hash = new Ghash(parts.hashKey);
+  hash.update(ad);
+  const adLength = ad.length;
+  const hashTail = new Uint8Array(BLOCK);
+  const keystream = new Uint8Array(BLOCK);
+  let hashTailLength = 0;
+  let keystreamOffset = BLOCK;
+  let ciphertextLength = 0;
+  let finished = false;
+
+  const absorbCiphertext = (ciphertext: Uint8Array): void => {
+    let at = 0;
+    if (hashTailLength > 0) {
+      const take = Math.min(BLOCK - hashTailLength, ciphertext.length);
+      hashTail.set(ciphertext.subarray(0, take), hashTailLength);
+      hashTailLength += take;
+      at = take;
+      if (hashTailLength === BLOCK) {
+        hash.update(hashTail);
+        hashTailLength = 0;
+      }
+    }
+
+    const alignedLength = Math.floor((ciphertext.length - at) / BLOCK) * BLOCK;
+    if (alignedLength > 0) {
+      hash.update(ciphertext.subarray(at, at + alignedLength));
+      at += alignedLength;
+    }
+    if (at < ciphertext.length) {
+      hashTail.set(ciphertext.subarray(at), 0);
+      hashTailLength = ciphertext.length - at;
+    }
+  };
+
+  return {
+    update(chunk) {
+      if (finished) throw new Error("The GCM encryptor is already finalized.");
+      requireGcmPlaintextLength(ciphertextLength + chunk.length);
+
+      const ciphertext = new Uint8Array(chunk.length);
+      for (let i = 0; i < chunk.length; i++) {
+        if (keystreamOffset === BLOCK) {
+          cipher.encryptBlock(counter, keystream);
+          incrementGcmCounter(counter);
+          keystreamOffset = 0;
+        }
+        ciphertext[i] = chunk[i]! ^ keystream[keystreamOffset++]!;
+      }
+      absorbCiphertext(ciphertext);
+      ciphertextLength += ciphertext.length;
+      return ciphertext;
+    },
+    finalize() {
+      if (finished) throw new Error("The GCM encryptor is already finalized.");
+      finished = true;
+
+      if (hashTailLength > 0) hash.update(hashTail.subarray(0, hashTailLength));
+      hash.update(lengthBlock(adLength, ciphertextLength));
+      const tagCounter = Uint8Array.from(parts.j0);
+      return gctr(cipher, tagCounter, hash.digest()).subarray(0, tagLen);
+    },
+  };
+}
+
 /** GCM encryption; the tag is appended, as every wire format does it. */
 export function gcmEncrypt(
   cipher: BlockCipher,
@@ -156,18 +262,10 @@ export function gcmEncrypt(
   ad: Uint8Array = new Uint8Array(0),
   tagLen = 16,
 ): Uint8Array {
-  require128(cipher, "GCM");
-  const parts = gcmSetup(cipher, nonce);
-
-  const counter = Uint8Array.from(parts.j0);
-  // Encryption starts at J0 + 1; J0 itself is reserved for the tag.
-  for (let i = BLOCK - 1; i >= BLOCK - 4; i--) {
-    counter[i] = (counter[i]! + 1) & 0xff;
-    if (counter[i] !== 0) break;
-  }
-
-  const ciphertext = gctr(cipher, counter, plaintext);
-  const tag = gcmTag(cipher, parts, ad, ciphertext, tagLen);
+  requireGcmPlaintextLength(plaintext.length);
+  const encryptor = createIncrementalGcmEncryptor(cipher, nonce, ad, tagLen);
+  const ciphertext = encryptor.update(plaintext);
+  const tag = encryptor.finalize();
 
   const out = new Uint8Array(ciphertext.length + tag.length);
   out.set(ciphertext, 0);
@@ -184,19 +282,18 @@ export function gcmDecrypt(
   tagLen = 16,
 ): Uint8Array | null {
   require128(cipher, "GCM");
+  requireGcmTagLength(tagLen);
   if (sealed.length < tagLen) return null;
 
   const split = sealed.length - tagLen;
+  requireGcmPlaintextLength(split);
   const ciphertext = sealed.subarray(0, split);
   const parts = gcmSetup(cipher, nonce);
   const expected = gcmTag(cipher, parts, ad, ciphertext, tagLen);
   if (!tagsMatch(expected, sealed.subarray(split))) return null;
 
   const counter = Uint8Array.from(parts.j0);
-  for (let i = BLOCK - 1; i >= BLOCK - 4; i--) {
-    counter[i] = (counter[i]! + 1) & 0xff;
-    if (counter[i] !== 0) break;
-  }
+  incrementGcmCounter(counter);
   return gctr(cipher, counter, ciphertext);
 }
 

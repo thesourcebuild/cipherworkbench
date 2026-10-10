@@ -39,6 +39,10 @@ export function FieldTable({ fields }: { fields: readonly ToolResultField[] }) {
       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
         {fields.map((field) => {
           const shown = !field.secret || revealed.has(field.label);
+          const displayValue =
+            field.value.length > 8192
+              ? `${field.value.slice(0, 4096)}\n... ${field.value.length - 8192} characters omitted ...\n${field.value.slice(-4096)}`
+              : field.value;
           return (
             <tr key={field.label} className="align-baseline">
               <th
@@ -67,7 +71,7 @@ export function FieldTable({ fields }: { fields: readonly ToolResultField[] }) {
                 )}
               </th>
               <td className="py-1.5 font-mono break-all text-slate-900 dark:text-slate-100">
-                {shown ? field.value : "\u2022".repeat(Math.min(field.value.length, 48))}
+                {shown ? displayValue : "\u2022".repeat(Math.min(field.value.length, 48))}
                 {/*
                   No Copy button per row. Seven of them down the side of seven short values was
                   furniture rather than function: these are two to twelve characters long and

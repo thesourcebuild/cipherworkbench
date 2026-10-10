@@ -83,18 +83,24 @@ export function asymmetricInfo(spec: AsymmetricSpec): ToolResultField[] {
         },
       );
     } else if (r.operation === "encrypt" || r.operation === "decrypt") {
-      fields.push(
-        {
-          label: "Padding scheme",
-          value: "RSA-OAEP (Optimal Asymmetric Encryption Padding)",
-          hint: "Randomized Feistel padding construction with MGF1 (RFC 8017 Section 7.1).",
-        },
-        {
+      fields.push({
+        label: "Padding scheme",
+        value:
+          r.encryptionScheme === "oaep"
+            ? "RSA-OAEP (Optimal Asymmetric Encryption Padding)"
+            : "RSAES-PKCS1-v1_5 (Legacy encryption padding)",
+        hint:
+          r.encryptionScheme === "oaep"
+            ? "Randomized Feistel padding construction with MGF1 (RFC 8017 Section 7.1)."
+            : "Legacy randomized block type 2 encoding (RFC 8017 Section 7.2); vulnerable when padding validity leaks.",
+      });
+      if (r.encryptionScheme === "oaep") {
+        fields.push({
           label: "Hash function",
           value: r.hash,
           hint: "Hash used inside OAEP data padding and mask generation.",
-        },
-      );
+        });
+      }
     }
 
     fields.push({

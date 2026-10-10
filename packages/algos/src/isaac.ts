@@ -10,12 +10,20 @@ export class Isaac {
   private cc = 0;
   private randrsl = new Uint32Array(256);
   private randcnt = 256;
+  private byteWord = 0;
+  private byteAt = 4;
 
   constructor(seed?: Uint8Array) {
     this.init(seed);
   }
 
   private init(seed?: Uint8Array): void {
+    this.aa = 0;
+    this.bb = 0;
+    this.cc = 0;
+    this.mm.fill(0);
+    this.randrsl.fill(0);
+
     let a = 0x9e3779b9;
     let b = 0x9e3779b9;
     let c = 0x9e3779b9;
@@ -26,14 +34,30 @@ export class Isaac {
     let h = 0x9e3779b9;
 
     const mix = () => {
-      a ^= b << 11; d = (d + a) >>> 0; b = (b + c) >>> 0;
-      b ^= c >>> 2; e = (e + b) >>> 0; c = (c + d) >>> 0;
-      c ^= d << 8;  f = (f + c) >>> 0; d = (d + e) >>> 0;
-      d ^= e >>> 16; g = (g + d) >>> 0; e = (e + f) >>> 0;
-      e ^= f << 10; h = (h + e) >>> 0; f = (f + g) >>> 0;
-      f ^= g >>> 4; a = (a + f) >>> 0; g = (g + h) >>> 0;
-      g ^= h << 8;  b = (b + g) >>> 0; h = (h + a) >>> 0;
-      h ^= a >>> 9; c = (c + h) >>> 0; a = (a + b) >>> 0;
+      a ^= b << 11;
+      d = (d + a) >>> 0;
+      b = (b + c) >>> 0;
+      b ^= c >>> 2;
+      e = (e + b) >>> 0;
+      c = (c + d) >>> 0;
+      c ^= d << 8;
+      f = (f + c) >>> 0;
+      d = (d + e) >>> 0;
+      d ^= e >>> 16;
+      g = (g + d) >>> 0;
+      e = (e + f) >>> 0;
+      e ^= f << 10;
+      h = (h + e) >>> 0;
+      f = (f + g) >>> 0;
+      f ^= g >>> 4;
+      a = (a + f) >>> 0;
+      g = (g + h) >>> 0;
+      g ^= h << 8;
+      b = (b + g) >>> 0;
+      h = (h + a) >>> 0;
+      h ^= a >>> 9;
+      c = (c + h) >>> 0;
+      a = (a + b) >>> 0;
     };
 
     if (seed) {
@@ -48,14 +72,16 @@ export class Isaac {
     for (let i = 0; i < 4; i++) mix();
 
     for (let i = 0; i < 256; i += 8) {
-      a = (a + this.randrsl[i]!) >>> 0;
-      b = (b + this.randrsl[i + 1]!) >>> 0;
-      c = (c + this.randrsl[i + 2]!) >>> 0;
-      d = (d + this.randrsl[i + 3]!) >>> 0;
-      e = (e + this.randrsl[i + 4]!) >>> 0;
-      f = (f + this.randrsl[i + 5]!) >>> 0;
-      g = (g + this.randrsl[i + 6]!) >>> 0;
-      h = (h + this.randrsl[i + 7]!) >>> 0;
+      if (seed !== undefined) {
+        a = (a + this.randrsl[i]!) >>> 0;
+        b = (b + this.randrsl[i + 1]!) >>> 0;
+        c = (c + this.randrsl[i + 2]!) >>> 0;
+        d = (d + this.randrsl[i + 3]!) >>> 0;
+        e = (e + this.randrsl[i + 4]!) >>> 0;
+        f = (f + this.randrsl[i + 5]!) >>> 0;
+        g = (g + this.randrsl[i + 6]!) >>> 0;
+        h = (h + this.randrsl[i + 7]!) >>> 0;
+      }
       mix();
       this.mm[i] = a;
       this.mm[i + 1] = b;
@@ -67,7 +93,30 @@ export class Isaac {
       this.mm[i + 7] = h;
     }
 
+    if (seed !== undefined) {
+      for (let i = 0; i < 256; i += 8) {
+        a = (a + this.mm[i]!) >>> 0;
+        b = (b + this.mm[i + 1]!) >>> 0;
+        c = (c + this.mm[i + 2]!) >>> 0;
+        d = (d + this.mm[i + 3]!) >>> 0;
+        e = (e + this.mm[i + 4]!) >>> 0;
+        f = (f + this.mm[i + 5]!) >>> 0;
+        g = (g + this.mm[i + 6]!) >>> 0;
+        h = (h + this.mm[i + 7]!) >>> 0;
+        mix();
+        this.mm[i] = a;
+        this.mm[i + 1] = b;
+        this.mm[i + 2] = c;
+        this.mm[i + 3] = d;
+        this.mm[i + 4] = e;
+        this.mm[i + 5] = f;
+        this.mm[i + 6] = g;
+        this.mm[i + 7] = h;
+      }
+    }
+
     this.isaac();
+    this.randcnt = 256;
   }
 
   private isaac(): void {
@@ -77,10 +126,18 @@ export class Isaac {
     for (let i = 0; i < 256; i++) {
       const x = this.mm[i]!;
       switch (i % 4) {
-        case 0: this.aa = (this.aa ^ (this.aa << 13)) >>> 0; break;
-        case 1: this.aa = (this.aa ^ (this.aa >>> 6)) >>> 0; break;
-        case 2: this.aa = (this.aa ^ (this.aa << 2)) >>> 0; break;
-        case 3: this.aa = (this.aa ^ (this.aa >>> 16)) >>> 0; break;
+        case 0:
+          this.aa = (this.aa ^ (this.aa << 13)) >>> 0;
+          break;
+        case 1:
+          this.aa = (this.aa ^ (this.aa >>> 6)) >>> 0;
+          break;
+        case 2:
+          this.aa = (this.aa ^ (this.aa << 2)) >>> 0;
+          break;
+        case 3:
+          this.aa = (this.aa ^ (this.aa >>> 16)) >>> 0;
+          break;
       }
       this.aa = (this.mm[(i + 128) & 0xff]! + this.aa) >>> 0;
       const y = (this.mm[(x >>> 2) & 0xff]! + this.aa + this.bb) >>> 0;
@@ -88,25 +145,25 @@ export class Isaac {
       this.bb = (this.mm[(y >>> 10) & 0xff]! + x) >>> 0;
       this.randrsl[i] = this.bb;
     }
-    this.randcnt = 0;
   }
 
   public nextUint32(): number {
-    if (this.randcnt >= 256) {
+    if (this.randcnt === 0) {
       this.isaac();
+      this.randcnt = 256;
     }
-    return this.randrsl[this.randcnt++]!;
+    return this.randrsl[--this.randcnt]!;
   }
 
   public crypt(input: Uint8Array): Uint8Array {
     const out = new Uint8Array(input.length);
     for (let i = 0; i < input.length; i++) {
-      if ((i & 3) === 0 && this.randcnt >= 256) {
-        this.isaac();
+      if (this.byteAt === 4) {
+        this.byteWord = this.nextUint32();
+        this.byteAt = 0;
       }
-      const word = this.randrsl[Math.floor(i / 4) % 256]!;
-      const byte = (word >>> ((i % 4) * 8)) & 0xff;
-      out[i] = input[i]! ^ byte;
+      out[i] = input[i]! ^ ((this.byteWord >>> (this.byteAt * 8)) & 0xff);
+      this.byteAt++;
     }
     return out;
   }
