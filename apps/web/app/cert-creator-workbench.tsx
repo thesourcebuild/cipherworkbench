@@ -13,7 +13,7 @@ import {
   type ShellCommandVariants,
 } from "@ocs/ui";
 import { OptionsForm } from "./options-form";
-import type { ComputeState } from "./use-compute";
+import { isComputeBusy, type ComputeState } from "./use-compute";
 import {
   certificateStudioFilenames,
   OPTION_CA_CERT,
@@ -973,7 +973,7 @@ export function CertCreatorWorkbench({
     ];
   }, [creatorMode, pkiHierarchy, singleCertificateMode]);
 
-  const isComputing = state.status === "computing";
+  const isComputing = isComputeBusy(state.status);
 
   // Render credentials for the selected existing-CA flow.
   const renderCaAuthoritySection = () => (
@@ -2046,6 +2046,7 @@ ssl_verify_depth        2;`}
             size="md"
             variant="primary"
             disabled={!canRecompute || isComputing || missingCaCredentials}
+            aria-busy={isComputing}
             onClick={recompute}
             className="gap-2 font-semibold shadow-xs"
           >

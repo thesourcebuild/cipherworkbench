@@ -31,7 +31,7 @@ import {
   type ShellCommandVariants,
 } from "@ocs/ui";
 import { OptionsForm } from "./options-form";
-import type { ComputeState } from "./use-compute";
+import { isComputeBusy, type ComputeState } from "./use-compute";
 
 interface CsrWorkbenchProps {
   tool: ToolDefinition<ToolSpecBase>;
@@ -422,7 +422,7 @@ export function CsrWorkbench({
     caMode === "custom-ca" &&
     (!optionString(spec.options, OPTION_CA_CERT, "") ||
       !optionString(spec.options, OPTION_CA_PRIVATE_KEY, ""));
-  const isComputing = state.status === "computing" || state.status === "pending";
+  const isComputing = isComputeBusy(state.status);
 
   const steps: readonly CsrStep[] = signer
     ? [
@@ -573,6 +573,7 @@ export function CsrWorkbench({
             size="md"
             variant="primary"
             disabled={!canRecompute || isComputing || missingCustomCa}
+            aria-busy={isComputing}
             onClick={recompute}
             className="gap-2 font-semibold shadow-xs"
           >

@@ -26,6 +26,20 @@ import { debounceForMode, useDebouncedTrigger } from "./use-debounce";
  */
 export type ComputeStatus = "blank" | "pending" | "computing" | "done" | "error" | "stale";
 
+export function isComputeBusy(status: ComputeStatus): boolean {
+  return status === "pending" || status === "computing";
+}
+
+export function canRequestCompute(status: ComputeStatus, ready: boolean): boolean {
+  return ready && !isComputeBusy(status);
+}
+
+export function claimComputeRequest(lock: { current: boolean }, allowed: boolean): boolean {
+  if (!allowed || lock.current) return false;
+  lock.current = true;
+  return true;
+}
+
 /**
  * Why a result is out of date, which decides the sentence the panel shows.
  *
@@ -207,6 +221,7 @@ export function useCompute(
           );
         }
 
+        commit({ status: "computing", inputByteLength: decoded.bytes.length });
         const result = await tool.compute(spec, decoded.bytes);
         // Note what is *not* here: the variants table. It has its own hook, its own Run button and
         // its own lifecycle -- see `useVariants`. Twenty engines over a large file is not something
@@ -393,12 +408,14 @@ export function useCompute(
   const readsInput =
     tool && spec && tool.readsInputForSpec ? tool.readsInputForSpec(spec) : tool?.readsInput;
 
+  const readyToCompute = Boolean(tool && spec && (!readsInput || !isInputBlank(input)));
+
   return {
     state: state.inputByteLength === inputByteLength ? state : { ...state, inputByteLength },
     recompute,
     // "There is something to compute over" -- which for a generator is always true, since what it
     // computes over is the spec. Without this the Compute button is permanently disabled on `uuid`.
-    canRecompute: Boolean(tool && spec && (!readsInput || !isInputBlank(input))),
+    canRecompute: canRequestCompute(state.status, readyToCompute),
     inputProblem,
   };
 }

@@ -238,28 +238,30 @@ export function ResultPanel({
               Save JSON
             </Button>
           )}
-          {exportFiles.length > 0 && (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={
-                exporting === "saving" || (primary === "" && !state.result?.files?.length)
-              }
-              onClick={handleExportFolder}
-              title={
-                exportFiles.length > 1
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={
+              exportFiles.length === 0 ||
+              exporting === "saving" ||
+              (primary === "" && !state.result?.files?.length)
+            }
+            onClick={handleExportFolder}
+            title={
+              exportFiles.length === 0
+                ? "No result available to export"
+                : exportFiles.length > 1
                   ? `Export all ${exportFiles.length} files to folder`
                   : "Export file to folder"
-              }
-              data-ocs-export-folder=""
-            >
-              {exporting === "saving"
-                ? "Exporting..."
-                : exporting === "done"
-                  ? "Exported!"
-                  : "Export"}
-            </Button>
-          )}
+            }
+            data-ocs-export-folder=""
+          >
+            {exporting === "saving"
+              ? "Exporting..."
+              : exporting === "done"
+                ? "Exported!"
+                : "Export"}
+          </Button>
         </div>
       }
     >

@@ -45,7 +45,7 @@ import { VariantsPanel } from "./variants-panel";
 import { RightSidebar, type SidebarTab } from "./right-sidebar";
 import { buildShareLink, type ParsedShare } from "./share-link";
 import { ToolHeader } from "./tool-header";
-import { useCompute } from "./use-compute";
+import { claimComputeRequest, isComputeBusy, useCompute } from "./use-compute";
 import { useVariants } from "./use-variants";
 import { VerifyPanel } from "./verify-panel";
 
@@ -444,12 +444,13 @@ export function ToolWorkbench({
     input,
     effectiveAutoUpdate,
   );
+  const computeBusy = isComputeBusy(state.status);
   const manualComputePendingRef = useRef(false);
 
   const handleRecompute = useCallback(() => {
-    manualComputePendingRef.current = true;
+    if (!claimComputeRequest(manualComputePendingRef, canRecompute)) return;
     recompute();
-  }, [recompute]);
+  }, [canRecompute, recompute]);
 
   useEffect(() => {
     manualComputePendingRef.current = false;
@@ -795,6 +796,7 @@ export function ToolWorkbench({
           size="sm"
           className="w-full"
           disabled={!canRecompute}
+          aria-busy={computeBusy}
           onClick={handleRecompute}
           title={
             generates || !effectiveReadsInput
@@ -805,7 +807,13 @@ export function ToolWorkbench({
           {/* "Compute" over a box you filled in; "Generate" where the button is the whole
               interaction. The KDFs keep "Compute": they read no box either, but their
               password comes from a field, so there is still an input being processed. */}
-          {generates || !effectiveReadsInput ? "Generate" : "Compute"}
+          {computeBusy
+            ? generates || !effectiveReadsInput
+              ? "Generating..."
+              : "Computing..."
+            : generates || !effectiveReadsInput
+              ? "Generate"
+              : "Compute"}
         </Button>
       )}
     </div>
@@ -970,7 +978,7 @@ export function ToolWorkbench({
           outputEncoding={outputEncoding}
           onOutputEncodingChange={setOutputEncoding}
           isInsecure={lintResult.isInsecure}
-          onRecompute={recompute}
+          onRecompute={handleRecompute}
           canRecompute={canRecompute}
         />
 
