@@ -1,5 +1,6 @@
-import { optString } from "@ocs/contracts/pure";
+import { optNumber, optString } from "@ocs/contracts/pure";
 import { decodeBytesOption } from "@ocs/engine";
+import { validateHtpasswdUsername } from "@ocs/algos";
 import { kdfCatalogueFor } from "./catalogue/options";
 import {
   DEFAULT_ARGON2_VARIANT,
@@ -14,6 +15,10 @@ import {
   OPTION_ARGON2_TIME,
   OPTION_ARGON2_VARIANT,
   OPTION_BCRYPT_COST,
+  OPTION_BCRYPT_VARIANT,
+  BCRYPT_VARIANTS,
+  DEFAULT_BCRYPT_VARIANT,
+  type BcryptVariant,
   OPTION_IKM,
   OPTION_INFO,
   OPTION_ITERATIONS,
@@ -24,6 +29,10 @@ import {
   OPTION_SCRYPT_N,
   OPTION_SCRYPT_P,
   OPTION_SCRYPT_R,
+  OPTION_SCHEME,
+  OPTION_USERNAME,
+  CRYPT_DEFAULT_ROUNDS,
+  HTPASSWD_DEFAULT_BCRYPT_COST,
   OPENSSH_DEFAULT_ROUNDS,
   OPENSSH_KEY_IV_BYTES,
   OWASP_ARGON2_MEMORY_KIB,
@@ -55,6 +64,7 @@ export interface ResolvedKdf {
   password: Uint8Array;
   /** The password as text — bcrypt is defined over a string, not bytes. */
   passwordText: string;
+  username: string;
   salt: Uint8Array;
   /** HKDF only. */
   ikm: Uint8Array;
@@ -70,8 +80,11 @@ export interface ResolvedKdf {
   argon2Time: number;
   argon2Parallelism: number;
   bcryptCost: number;
+  bcryptVariant: BcryptVariant;
   /** bcrypt-PBKDF only. Linear, unlike bcrypt's log2 cost. */
   rounds: number;
+  roundsSpecified: boolean;
+  scheme: string;
   /** Argon2's optional pepper and context binding. Empty when unset. */
   argon2Secret: Uint8Array;
   argon2AssociatedData: Uint8Array;
@@ -107,6 +120,7 @@ export function resolveKdf(spec: KdfSpec): ResolveResult {
 
   const passwordText = optString(spec.options, OPTION_PASSWORD) ?? "";
   const password = new TextEncoder().encode(passwordText);
+  const username = optString(spec.options, OPTION_USERNAME) ?? "";
 
   const expected = readExpected(spec.options);
   if (mode === "verify" && (expected === undefined || expected.trim() === "")) {
@@ -149,6 +163,11 @@ export function resolveKdf(spec: KdfSpec): ResolveResult {
       problem: "bcrypt-PBKDF needs a password; OpenBSD's implementation refuses an empty one.",
       optionId: OPTION_PASSWORD,
     };
+  }
+
+  if (spec.variant === "htpasswd" && mode === "derive") {
+    const problem = validateHtpasswdUsername(username);
+    if (problem) return { ok: false, problem, optionId: OPTION_USERNAME };
   }
 
   const saltResult = decodeOption(spec, OPTION_SALT);
@@ -196,6 +215,12 @@ export function resolveKdf(spec: KdfSpec): ResolveResult {
   const argon2Variant =
     variantRaw === "argon2i" || variantRaw === "argon2d" ? variantRaw : "argon2id";
 
+  const bcryptVariantRaw = optString(spec.options, OPTION_BCRYPT_VARIANT) ?? DEFAULT_BCRYPT_VARIANT;
+  const bcryptVariant: BcryptVariant =
+    BCRYPT_VARIANTS.some((v) => v.id === bcryptVariantRaw)
+      ? (bcryptVariantRaw as BcryptVariant)
+      : DEFAULT_BCRYPT_VARIANT;
+
   const scryptN = readPositiveInt(spec.options, OPTION_SCRYPT_N, OWASP_SCRYPT_N);
   // scrypt requires N to be a power of two, and noble throws rather than rounding.
   if (spec.variant === "scrypt" && (scryptN & (scryptN - 1)) !== 0) {
@@ -206,6 +231,52 @@ export function resolveKdf(spec: KdfSpec): ResolveResult {
     };
   }
 
+  const defaultScheme = spec.variant === "htpasswd" ? "apr1" : "sha512crypt";
+  const scheme = optString(spec.options, OPTION_SCHEME) ?? defaultScheme;
+  if (mode === "derive" && spec.variant === "crypt3") {
+    const schemes = ["des-crypt", "bs-crypt", "md5crypt", "sha256crypt", "sha512crypt"];
+    if (!schemes.includes(scheme)) {
+      return {
+        ok: false,
+        problem: `Unsupported crypt(3) scheme: ${scheme}.`,
+        optionId: OPTION_SCHEME,
+      };
+    }
+  }
+  if (mode === "derive" && spec.variant === "htpasswd") {
+    const schemes = ["apr1", "bcrypt", "apache-sha", "sha256crypt", "sha512crypt", "des-crypt"];
+    if (!schemes.includes(scheme)) {
+      return {
+        ok: false,
+        problem: `Unsupported htpasswd scheme: ${scheme}.`,
+        optionId: OPTION_SCHEME,
+      };
+    }
+  }
+
+  const bcryptCost = readPositiveInt(
+    spec.options,
+    OPTION_BCRYPT_COST,
+    spec.variant === "htpasswd" ? HTPASSWD_DEFAULT_BCRYPT_COST : OWASP_BCRYPT_COST,
+  );
+  const usesBcrypt = spec.variant === "bcrypt" || spec.variant.startsWith("bcrypt-");
+  if (mode === "derive" && usesBcrypt && (bcryptCost < 4 || bcryptCost > 31)) {
+    return {
+      ok: false,
+      problem: "bcrypt cost must be between 4 and 31.",
+      optionId: OPTION_BCRYPT_COST,
+    };
+  }
+  if (mode === "derive" && spec.variant === "htpasswd" && scheme === "bcrypt") {
+    if (bcryptCost < 4 || bcryptCost > 17) {
+      return {
+        ok: false,
+        problem: "Apache htpasswd bcrypt cost must be between 4 and 17.",
+        optionId: OPTION_BCRYPT_COST,
+      };
+    }
+  }
+
   return {
     ok: true,
     resolved: {
@@ -213,6 +284,7 @@ export function resolveKdf(spec: KdfSpec): ResolveResult {
       mode,
       password,
       passwordText,
+      username,
       salt: saltResult.bytes,
       ikm: ikmResult.bytes,
       info: infoResult.bytes,
@@ -249,8 +321,19 @@ export function resolveKdf(spec: KdfSpec): ResolveResult {
       ),
       argon2Time: readPositiveInt(spec.options, OPTION_ARGON2_TIME, 2),
       argon2Parallelism: readPositiveInt(spec.options, OPTION_ARGON2_PARALLELISM, 1),
-      bcryptCost: readPositiveInt(spec.options, OPTION_BCRYPT_COST, OWASP_BCRYPT_COST),
-      rounds: readPositiveInt(spec.options, OPTION_ROUNDS, OPENSSH_DEFAULT_ROUNDS),
+      bcryptCost,
+      bcryptVariant,
+      rounds: readPositiveInt(
+        spec.options,
+        OPTION_ROUNDS,
+        spec.variant === "bcryptpbkdf"
+          ? OPENSSH_DEFAULT_ROUNDS
+          : spec.variant === "bs-crypt" || (spec.variant === "crypt3" && scheme === "bs-crypt")
+            ? 1000
+            : CRYPT_DEFAULT_ROUNDS,
+      ),
+      roundsSpecified: optNumber(spec.options, OPTION_ROUNDS) !== undefined,
+      scheme,
       argon2Secret: secretResult.bytes,
       argon2AssociatedData: adResult.bytes,
       expected,

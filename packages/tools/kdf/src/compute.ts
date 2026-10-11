@@ -1,5 +1,12 @@
-import { encodeHex, timingSafeEqual, type ToolResult, type ToolResultField } from "@ocs/engine";
+import {
+  encodeHex,
+  randomBelow,
+  timingSafeEqual,
+  type ToolResult,
+  type ToolResultField,
+} from "@ocs/engine";
 import type { CliProviderCommand } from "@ocs/contracts";
+import type { Crypt3Scheme } from "@ocs/algos";
 import {
   bcryptCostOf,
   deriveAnsiX963,
@@ -21,11 +28,22 @@ import {
   deriveTls12Prf,
   deriveYescrypt,
   hashBcrypt,
+  hashBcryptPrehash,
+  hashPasslibBcryptSha256,
   verifyBcrypt,
+  verifyBcryptPrehash,
+  verifyPasslibBcryptSha256,
   md5Crypt,
   sha256Crypt,
   sha512Crypt,
   cryptVerify,
+  crypt3,
+  crypt3Verify,
+  apr1Crypt,
+  apacheSha,
+  apacheShaVerify,
+  formatHtpasswdRecord,
+  parseHtpasswdRecord,
   unixDesCrypt,
   bsdExtendedCrypt,
   lmHash,
@@ -34,7 +52,7 @@ import {
   wpaPsk,
 } from "./bindings";
 import { formatPhc, parsePhc, phcNumber, type PhcString } from "./phc";
-import { OPENSSH_DEFAULT_ROUNDS } from "./pure";
+import { BCRYPT_VARIANTS, OPENSSH_DEFAULT_ROUNDS } from "./pure";
 import { resolveKdf, type ResolvedKdf } from "./resolve";
 import type { KdfSpec } from "./spec";
 
@@ -148,17 +166,82 @@ function costFields(r: ResolvedKdf): ToolResultField[] {
         },
       ];
     }
-    case "bcrypt":
+    case "bcrypt": {
+      const variantLabel =
+        BCRYPT_VARIANTS.find((v) => v.id === r.bcryptVariant)?.label ?? "Standard";
       return [
-        { label: "Construction", value: "bcrypt" },
+        { label: "Pre-hash", value: variantLabel },
         {
           label: "Cost",
           value: String(r.bcryptCost),
           hint: `2^${r.bcryptCost} = ${(2 ** r.bcryptCost).toLocaleString()} key-setup rounds.`,
         },
       ];
+    }
     default:
       return [];
+  }
+}
+
+const CRYPT_ALPHABET = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+function randomCryptSalt(length: number): string {
+  let salt = "";
+  for (let i = 0; i < length; i++) salt += CRYPT_ALPHABET[randomBelow(CRYPT_ALPHABET.length)]!;
+  return salt;
+}
+
+function suppliedOrRandomSalt(r: ResolvedKdf, length: number): string {
+  return r.salt.length > 0 ? new TextDecoder().decode(r.salt) : randomCryptSalt(length);
+}
+
+
+function cryptScheme(value: string): Crypt3Scheme {
+  switch (value) {
+    case "des-crypt":
+    case "bs-crypt":
+    case "md5crypt":
+    case "sha256crypt":
+    case "sha512crypt":
+      return value;
+    default:
+      return "sha512crypt";
+  }
+}
+
+function cryptSaltLength(scheme: Crypt3Scheme): number {
+  if (scheme === "des-crypt") return 2;
+  if (scheme === "bs-crypt") return 4;
+  if (scheme === "md5crypt") return 8;
+  return 16;
+}
+
+function hashHtpasswdPassword(r: ResolvedKdf): string {
+  switch (r.scheme) {
+    case "bcrypt":
+      return hashBcrypt(
+        r.passwordText,
+        r.bcryptCost,
+        r.salt.length > 0 ? new TextDecoder().decode(r.salt) : undefined,
+      );
+    case "apache-sha":
+      return apacheSha(r.password);
+    case "sha256crypt":
+      return sha256Crypt(
+        r.password,
+        suppliedOrRandomSalt(r, 16),
+        r.roundsSpecified ? r.rounds : undefined,
+      );
+    case "sha512crypt":
+      return sha512Crypt(
+        r.password,
+        suppliedOrRandomSalt(r, 16),
+        r.roundsSpecified ? r.rounds : undefined,
+      );
+    case "des-crypt":
+      return unixDesCrypt(r.passwordText, suppliedOrRandomSalt(r, 2));
+    default:
+      return apr1Crypt(r.password, suppliedOrRandomSalt(r, 8));
   }
 }
 
@@ -243,13 +326,17 @@ function derive(r: ResolvedKdf): { bytes: Uint8Array; encoded?: string } {
       return { bytes: deriveSp800108(r.hashId, r.password, r.keyLength) };
 
     case "openpgp-s2k":
-      return { bytes: deriveOpenPgpS2k(r.hashId, r.password, r.keyLength, "iterated-salted", r.salt) };
+      return {
+        bytes: deriveOpenPgpS2k(r.hashId, r.password, r.keyLength, "iterated-salted", r.salt),
+      };
 
     case "ssh-kdf":
       return { bytes: deriveSshKdf(r.hashId, r.password, r.salt, r.keyLength) };
 
     case "tls12-prf":
-      return { bytes: deriveTls12Prf(r.hashId, r.password, r.keyLength, "master secret", r.salt) };
+      return {
+        bytes: deriveTls12Prf(r.hashId, r.password, r.keyLength, "master secret", r.salt),
+      };
 
     case "catena":
       return { bytes: deriveCatena(r.hashId, r.password, r.salt) };
@@ -260,7 +347,14 @@ function derive(r: ResolvedKdf): { bytes: Uint8Array; encoded?: string } {
     case "hpke": {
       const ephemeralPrivate = r.salt.length > 0 ? r.salt : new Uint8Array(32);
       const recipientPublic = r.password.length > 0 ? r.password : new Uint8Array(32);
-      return { bytes: deriveHpke(recipientPublic, r.info, r.ikm.length > 0 ? r.ikm : new Uint8Array(32), ephemeralPrivate) };
+      return {
+        bytes: deriveHpke(
+          recipientPublic,
+          r.info,
+          r.ikm.length > 0 ? r.ikm : new Uint8Array(32),
+          ephemeralPrivate,
+        ),
+      };
     }
 
     case "bip39": {
@@ -279,43 +373,77 @@ function derive(r: ResolvedKdf): { bytes: Uint8Array; encoded?: string } {
     }
 
     case "bcrypt": {
-      const encoded = hashBcrypt(r.passwordText, r.bcryptCost);
-      /**
-       * bcrypt's output is the string, not raw bytes, and its format is not PHC despite the
-       * dollar signs. The bytes returned are the ASCII of that string, so the result panel
-       * has something to render in every output encoding rather than special-casing this one
-       * tool.
-       */
+      let encoded: string;
+      if (r.bcryptVariant === "passlib") {
+        encoded = hashPasslibBcryptSha256(r.passwordText, r.bcryptCost);
+      } else if (r.bcryptVariant !== "none") {
+        encoded = hashBcryptPrehash(r.passwordText, r.bcryptVariant, r.bcryptCost);
+      } else {
+        encoded = hashBcrypt(r.passwordText, r.bcryptCost);
+      }
       return { bytes: new TextEncoder().encode(encoded), encoded };
     }
 
     case "md5crypt": {
-      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "12345678";
+      const saltStr = suppliedOrRandomSalt(r, 8);
       const encoded = md5Crypt(r.passwordText, saltStr);
       return { bytes: new TextEncoder().encode(encoded), encoded };
     }
 
     case "sha256crypt": {
-      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "12345678";
-      const encoded = sha256Crypt(r.passwordText, saltStr, r.rounds || 5000);
+      const saltStr = suppliedOrRandomSalt(r, 16);
+      const encoded = sha256Crypt(
+        r.passwordText,
+        saltStr,
+        r.roundsSpecified ? r.rounds : undefined,
+      );
       return { bytes: new TextEncoder().encode(encoded), encoded };
     }
 
     case "sha512crypt": {
-      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "12345678";
-      const encoded = sha512Crypt(r.passwordText, saltStr, r.rounds || 5000);
+      const saltStr = suppliedOrRandomSalt(r, 16);
+      const encoded = sha512Crypt(
+        r.passwordText,
+        saltStr,
+        r.roundsSpecified ? r.rounds : undefined,
+      );
+      return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
+    case "crypt3": {
+      const scheme = cryptScheme(r.scheme);
+      const encoded = crypt3(r.password, {
+        scheme,
+        salt: suppliedOrRandomSalt(r, cryptSaltLength(scheme)),
+        rounds: scheme === "bs-crypt" || r.roundsSpecified ? r.rounds : undefined,
+      });
+      return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
+    case "apr1": {
+      const encoded = apr1Crypt(r.password, suppliedOrRandomSalt(r, 8));
+      return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
+    case "apache-sha": {
+      const encoded = apacheSha(r.password);
+      return { bytes: new TextEncoder().encode(encoded), encoded };
+    }
+
+    case "htpasswd": {
+      const encoded = formatHtpasswdRecord(r.username, hashHtpasswdPassword(r));
       return { bytes: new TextEncoder().encode(encoded), encoded };
     }
 
     case "des-crypt": {
-      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "AB";
+      const saltStr = suppliedOrRandomSalt(r, 2);
       const encoded = unixDesCrypt(r.passwordText, saltStr);
       return { bytes: new TextEncoder().encode(encoded), encoded };
     }
 
     case "bs-crypt": {
-      const saltStr = r.salt.length > 0 ? new TextDecoder().decode(r.salt) : "ABCD";
-      const encoded = bsdExtendedCrypt(r.passwordText, saltStr, 1000);
+      const saltStr = suppliedOrRandomSalt(r, 4);
+      const encoded = bsdExtendedCrypt(r.passwordText, saltStr, r.rounds);
       return { bytes: new TextEncoder().encode(encoded), encoded };
     }
 
@@ -362,7 +490,12 @@ function verify(r: ResolvedKdf): ToolResult {
   const stored = r.expected!.trim();
 
   if (r.toolId === "bcrypt") {
-    const matched = verifyBcrypt(r.passwordText, stored);
+    const matched =
+      r.bcryptVariant === "passlib"
+        ? verifyPasslibBcryptSha256(r.passwordText, stored)
+        : r.bcryptVariant !== "none"
+          ? verifyBcryptPrehash(r.passwordText, r.bcryptVariant, stored)
+          : verifyBcrypt(r.passwordText, stored);
     const cost = bcryptCostOf(stored);
     return {
       text: matched ? "MATCH" : "NO MATCH",
@@ -387,6 +520,61 @@ function verify(r: ResolvedKdf): ToolResult {
           label: "Result",
           value: matched ? "The password matches this hash." : "The password does not match.",
         },
+      ],
+    };
+  }
+
+  if (r.toolId === "crypt3" || r.toolId === "des-crypt" || r.toolId === "bs-crypt") {
+    const matched = crypt3Verify(r.password, stored);
+    return {
+      text: matched ? "MATCH" : "NO MATCH",
+      fields: [
+        {
+          label: "Result",
+          value: matched ? "The password matches this hash." : "The password does not match.",
+        },
+      ],
+    };
+  }
+
+  if (r.toolId === "apr1" || r.toolId === "apache-sha") {
+    const matched =
+      r.toolId === "apr1"
+        ? cryptVerify(r.password, stored)
+        : apacheShaVerify(r.password, stored);
+    return {
+      text: matched ? "MATCH" : "NO MATCH",
+      fields: [
+        {
+          label: "Result",
+          value: matched ? "The password matches this hash." : "The password does not match.",
+        },
+      ],
+    };
+  }
+
+  if (r.toolId === "htpasswd") {
+    const record = parseHtpasswdRecord(stored);
+    if (!record) return { error: "Paste one valid username:hash htpasswd record." };
+    const hash = record.hash;
+    const matched = hash.startsWith("$2")
+      ? verifyBcrypt(r.passwordText, hash)
+      : hash.startsWith("{SHA}")
+        ? apacheShaVerify(r.password, hash)
+        : hash.startsWith("$apr1$") ||
+            hash.startsWith("$1$") ||
+            hash.startsWith("$5$") ||
+            hash.startsWith("$6$")
+          ? cryptVerify(r.password, hash)
+          : crypt3Verify(r.password, hash);
+    return {
+      text: matched ? "MATCH" : "NO MATCH",
+      fields: [
+        {
+          label: "Result",
+          value: matched ? "The password matches this record." : "The password does not match.",
+        },
+        { label: "Username", value: record.username },
       ],
     };
   }

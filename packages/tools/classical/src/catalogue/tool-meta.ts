@@ -1,9 +1,15 @@
 import type { OptionValue } from "@ocs/contracts/options";
 import {
+  DEFAULT_AFFINE_MULTIPLIER,
+  DEFAULT_AFFINE_OFFSET,
+  DEFAULT_ROT_VARIANT,
   DEFAULT_SHIFT,
   OPTION_DIRECTION,
   OPTION_DIGITS,
   OPTION_LETTER_CASE,
+  OPTION_MULTIPLIER,
+  OPTION_OFFSET,
+  OPTION_ROT_VARIANT,
   OPTION_SHIFT,
   OPTION_SHOW_ALL,
 } from "../pure";
@@ -11,14 +17,17 @@ import {
 /**
  * The family's tools, as eager metadata. Free of any algorithm import, so listing them costs strings.
  *
- * One tool today. ROT13 is deliberately *not* a second: it is this cipher at a shift of 13, which is
- * "one thing with a knob" by the test `## One tool or many` sets out -- and it is a tag here, so
- * searching the sidebar for it lands on this tool. Atbash, Vigenere and an affine cipher would each be
- * a genuine addition rather than a cell of this one's grid, and each is a metadata entry plus a compute
- * arm away.
+ * ROT13 is deliberately not a second tool: it remains Caesar at a shift of 13. The broader ROT entry
+ * covers the genuinely different digit, alphanumeric and printable-ASCII alphabets used by ROT5,
+ * ROT18 and ROT47.
  */
 export type ClassicalKind =
   | "caesar"
+  | "affine"
+  | "atbash"
+  | "polybius"
+  | "a1z26"
+  | "rot"
   | "adfgvx"
   | "vic-cipher"
   | "hill-cipher"
@@ -64,6 +73,7 @@ export interface ClassicalToolMeta {
    * `tests/registry.test.ts` walks every tool checking exactly that.
    */
   defaults: Readonly<Record<string, OptionValue>>;
+  supportsVerify?: boolean;
   tags: readonly string[];
   summary: string;
 }
@@ -100,6 +110,86 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     summary: "Every letter moved a fixed number of places. Breakable by reading 26 lines.",
   },
   {
+    id: "affine",
+    label: "Affine cipher",
+    kind: "affine",
+    category: "Substitution",
+    exposes: [OPTION_DIRECTION, OPTION_MULTIPLIER, OPTION_OFFSET],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+      [OPTION_MULTIPLIER]: DEFAULT_AFFINE_MULTIPLIER,
+      [OPTION_OFFSET]: DEFAULT_AFFINE_OFFSET,
+    },
+    supportsVerify: false,
+    tags: [
+      "affine",
+      "affine cipher",
+      "substitution",
+      "monoalphabetic",
+      "modular arithmetic",
+      "classical",
+    ],
+    summary: "Maps each letter with E(x) = (ax + b) mod 26 using an invertible multiplier.",
+  },
+  {
+    id: "atbash",
+    label: "Atbash cipher",
+    kind: "atbash",
+    category: "Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: { [OPTION_DIRECTION]: "encrypt" },
+    supportsVerify: false,
+    tags: ["atbash", "reverse alphabet", "substitution", "reciprocal", "hebrew", "classical"],
+    summary:
+      "Reverses the alphabet, mapping A to Z and B to Y; applying it twice restores the text.",
+  },
+  {
+    id: "polybius",
+    label: "Polybius square",
+    kind: "polybius",
+    category: "Fractionating",
+    exposes: [OPTION_DIRECTION],
+    defaults: { [OPTION_DIRECTION]: "encrypt" },
+    supportsVerify: false,
+    tags: ["polybius", "polybius square", "coordinates", "5x5", "fractionating", "classical"],
+    summary: "Encodes letters as row and column coordinates in the standard 5x5 I/J square.",
+  },
+  {
+    id: "a1z26",
+    label: "A1Z26 cipher",
+    kind: "a1z26",
+    category: "Substitution",
+    exposes: [OPTION_DIRECTION],
+    defaults: { [OPTION_DIRECTION]: "encrypt" },
+    supportsVerify: false,
+    tags: ["a1z26", "a=1", "alphabet numbers", "number substitution", "classical"],
+    summary: "Writes letters as their alphabet positions from A=1 through Z=26.",
+  },
+  {
+    id: "rot",
+    label: "ROT5 / ROT18 / ROT47",
+    kind: "rot",
+    category: "Substitution",
+    exposes: [OPTION_DIRECTION, OPTION_ROT_VARIANT],
+    defaults: {
+      [OPTION_DIRECTION]: "encrypt",
+      [OPTION_ROT_VARIANT]: DEFAULT_ROT_VARIANT,
+    },
+    supportsVerify: false,
+    tags: [
+      "rot",
+      "rot5",
+      "rot-5",
+      "rot18",
+      "rot-18",
+      "rot47",
+      "rot-47",
+      "rotation",
+      "classical",
+    ],
+    summary: "Applies reciprocal rotations over digits, alphanumerics, or printable ASCII.",
+  },
+  {
     id: "adfgvx",
     label: "ADFGVX cipher",
     kind: "adfgvx",
@@ -109,7 +199,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["adfgvx", "adfgx", "ww1", "fractionating", "transposition", "classical"],
-    summary: "WWI German field cipher combining Polybius fractionating substitution with columnar transposition.",
+    summary:
+      "WWI German field cipher combining Polybius fractionating substitution with columnar transposition.",
   },
   {
     id: "vic-cipher",
@@ -133,7 +224,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["hill", "hill-cipher", "linear-algebra", "matrix", "polygraphic", "classical"],
-    summary: "Lester S. Hill's 1929 polygraphic cipher based on linear algebra matrix multiplication modulo 26.",
+    summary:
+      "Lester S. Hill's 1929 polygraphic cipher based on linear algebra matrix multiplication modulo 26.",
   },
   {
     id: "foursquare",
@@ -145,7 +237,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["foursquare", "polygraphic", "digram", "playfair-variant", "classical"],
-    summary: "Felix Delastelle's polygraphic cipher using four 5x5 matrices to encrypt letter pairs.",
+    summary:
+      "Felix Delastelle's polygraphic cipher using four 5x5 matrices to encrypt letter pairs.",
   },
   {
     id: "chaocipher",
@@ -156,7 +249,13 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     defaults: {
       [OPTION_DIRECTION]: "encrypt",
     },
-    tags: ["chaocipher", "john-byrne", "dynamic-substitution", "permuting-alphabet", "classical"],
+    tags: [
+      "chaocipher",
+      "john-byrne",
+      "dynamic-substitution",
+      "permuting-alphabet",
+      "classical",
+    ],
     summary: "John F. Byrne's 1918 cipher using two rotating, permuting alphabet wheels.",
   },
   {
@@ -169,8 +268,19 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
       [OPTION_DIGITS]: "preserve",
     },
-    tags: ["enigma", "enigma-m3", "enigma-m4", "wehrmacht", "kriegsmarine", "rotor", "turing", "bletchley", "classical"],
-    summary: "WWII German electromechanical cipher with interchangeable rotors, reflector, plugboard, and double-stepping.",
+    tags: [
+      "enigma",
+      "enigma-m3",
+      "enigma-m4",
+      "wehrmacht",
+      "kriegsmarine",
+      "rotor",
+      "turing",
+      "bletchley",
+      "classical",
+    ],
+    summary:
+      "WWII German electromechanical cipher with interchangeable rotors, reflector, plugboard, and double-stepping.",
   },
   {
     id: "vigenere",
@@ -206,7 +316,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["bifid", "delastelle", "fractionating", "polybius", "transposition", "classical"],
-    summary: "Delastelle's 2-coordinate fractionating cipher combining Polybius substitution with period transposition.",
+    summary:
+      "Delastelle's 2-coordinate fractionating cipher combining Polybius substitution with period transposition.",
   },
   {
     id: "trifid",
@@ -218,7 +329,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["trifid", "delastelle", "fractionating", "3d", "cube", "transposition", "classical"],
-    summary: "Delastelle's 3-coordinate fractionating cipher operating over a 3x3x3 27-symbol cube.",
+    summary:
+      "Delastelle's 3-coordinate fractionating cipher operating over a 3x3x3 27-symbol cube.",
   },
   {
     id: "bacon",
@@ -230,7 +342,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["bacon", "baconian", "francis-bacon", "steganography", "binary", "classical"],
-    summary: "Sir Francis Bacon's 5-bit steganographic cipher encoding letters into A/B binary sequences.",
+    summary:
+      "Sir Francis Bacon's 5-bit steganographic cipher encoding letters into A/B binary sequences.",
   },
   {
     id: "railfence",
@@ -265,8 +378,19 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     defaults: {
       [OPTION_DIRECTION]: "encrypt",
     },
-    tags: ["lorenz", "sz40", "sz42", "tunny", "teleprinter", "baudot", "bletchley", "colossus", "classical"],
-    summary: "WWII German High Command 12-wheel teleprinter stream cipher machine broken by Colossus.",
+    tags: [
+      "lorenz",
+      "sz40",
+      "sz42",
+      "tunny",
+      "teleprinter",
+      "baudot",
+      "bletchley",
+      "colossus",
+      "classical",
+    ],
+    summary:
+      "WWII German High Command 12-wheel teleprinter stream cipher machine broken by Colossus.",
   },
   {
     id: "solitaire",
@@ -277,8 +401,18 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     defaults: {
       [OPTION_DIRECTION]: "encrypt",
     },
-    tags: ["solitaire", "pontifex", "schneier", "cryptonomicon", "playing-cards", "deck", "stream", "classical"],
-    summary: "Bruce Schneier's playing card stream cipher designed for field operations with a 54-card deck.",
+    tags: [
+      "solitaire",
+      "pontifex",
+      "schneier",
+      "cryptonomicon",
+      "playing-cards",
+      "deck",
+      "stream",
+      "classical",
+    ],
+    summary:
+      "Bruce Schneier's playing card stream cipher designed for field operations with a 54-card deck.",
   },
   {
     id: "adfgx",
@@ -290,7 +424,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["adfgx", "wwi", "polybius", "fractionating", "transposition", "german", "classical"],
-    summary: "WWI German 5x5 fractionating field cipher combining Polybius coordinates (ADFGX) with transposition.",
+    summary:
+      "WWI German 5x5 fractionating field cipher combining Polybius coordinates (ADFGX) with transposition.",
   },
   {
     id: "nihilist",
@@ -302,7 +437,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["nihilist", "russian", "polybius", "additive", "coordinates", "classical"],
-    summary: "19th-century Russian Nihilist cipher combining Polybius matrix coordinates with additive keys.",
+    summary:
+      "19th-century Russian Nihilist cipher combining Polybius matrix coordinates with additive keys.",
   },
   {
     id: "straddling-checkerboard",
@@ -313,8 +449,17 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     defaults: {
       [OPTION_DIRECTION]: "encrypt",
     },
-    tags: ["straddling-checkerboard", "vic", "espionage", "soviet", "digits", "compression", "classical"],
-    summary: "Espionage digits-to-letters substitution matrix creating variable-length digit sequences without delimiters.",
+    tags: [
+      "straddling-checkerboard",
+      "vic",
+      "espionage",
+      "soviet",
+      "digits",
+      "compression",
+      "classical",
+    ],
+    summary:
+      "Espionage digits-to-letters substitution matrix creating variable-length digit sequences without delimiters.",
   },
   {
     id: "typex",
@@ -325,8 +470,18 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     defaults: {
       [OPTION_DIRECTION]: "encrypt",
     },
-    tags: ["typex", "british", "enigma-variant", "rotor", "bletchley", "stator", "wwii", "classical"],
-    summary: "British WWII 5-rotor cipher machine based on Enigma with a stationary reversing stator.",
+    tags: [
+      "typex",
+      "british",
+      "enigma-variant",
+      "rotor",
+      "bletchley",
+      "stator",
+      "wwii",
+      "classical",
+    ],
+    summary:
+      "British WWII 5-rotor cipher machine based on Enigma with a stationary reversing stator.",
   },
   {
     id: "sigaba",
@@ -337,8 +492,19 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     defaults: {
       [OPTION_DIRECTION]: "encrypt",
     },
-    tags: ["sigaba", "ecm", "mark-ii", "csp-889", "15-rotor", "us-army", "us-navy", "wwii", "classical"],
-    summary: "High-security US WWII 15-rotor machine with 3 banks of 5 rotors: cipher, control, and index.",
+    tags: [
+      "sigaba",
+      "ecm",
+      "mark-ii",
+      "csp-889",
+      "15-rotor",
+      "us-army",
+      "us-navy",
+      "wwii",
+      "classical",
+    ],
+    summary:
+      "High-security US WWII 15-rotor machine with 3 banks of 5 rotors: cipher, control, and index.",
   },
   {
     id: "bazeries",
@@ -349,8 +515,18 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     defaults: {
       [OPTION_DIRECTION]: "encrypt",
     },
-    tags: ["bazeries", "m94", "m-94", "jefferson", "cylinder", "wheel-cipher", "army", "classical"],
-    summary: "Historical 25-disc cylinder cipher invented by Thomas Jefferson and Etienne Bazeries.",
+    tags: [
+      "bazeries",
+      "m94",
+      "m-94",
+      "jefferson",
+      "cylinder",
+      "wheel-cipher",
+      "army",
+      "classical",
+    ],
+    summary:
+      "Historical 25-disc cylinder cipher invented by Thomas Jefferson and Etienne Bazeries.",
   },
   {
     id: "alberti",
@@ -362,7 +538,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["alberti", "cipher disk", "polyalphabetic", "renaissance", "1467", "classical"],
-    summary: "Historic 1467 dual-ring cipher disk by Leon Battista Alberti with rotating index alignments.",
+    summary:
+      "Historic 1467 dual-ring cipher disk by Leon Battista Alberti with rotating index alignments.",
   },
   {
     id: "porta",
@@ -374,7 +551,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["porta", "polyalphabetic", "reciprocal", "della porta", "1563", "classical"],
-    summary: "1563 reciprocal polyalphabetic cipher by Giambattista della Porta with 13 paired alphabets.",
+    summary:
+      "1563 reciprocal polyalphabetic cipher by Giambattista della Porta with 13 paired alphabets.",
   },
   {
     id: "gronsfeld",
@@ -398,7 +576,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["jefferson", "wheel cipher", "m-94", "m94", "cylinder", "us army", "classical"],
-    summary: "Thomas Jefferson's 1795 wheel cipher, standardized as the US Army M-94 25-cylinder cipher.",
+    summary:
+      "Thomas Jefferson's 1795 wheel cipher, standardized as the US Army M-94 25-cylinder cipher.",
   },
   {
     id: "autokey",
@@ -410,7 +589,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["autokey", "vigenere autokey", "polyalphabetic", "blaise de vigenere", "classical"],
-    summary: "Blaise de Vigenère's authentic autokey cipher extending the keystream with the message itself.",
+    summary:
+      "Blaise de Vigenère's authentic autokey cipher extending the keystream with the message itself.",
   },
   {
     id: "beaufort",
@@ -422,7 +602,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["beaufort", "reciprocal", "polyalphabetic", "francis beaufort", "classical"],
-    summary: "Reciprocal polyalphabetic cipher where encryption and decryption are identical operations.",
+    summary:
+      "Reciprocal polyalphabetic cipher where encryption and decryption are identical operations.",
   },
   {
     id: "columnar",
@@ -434,7 +615,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["columnar", "transposition", "permutation", "matrix", "classical"],
-    summary: "Military transposition cipher routing text through an alphabetical keyword column matrix.",
+    summary:
+      "Military transposition cipher routing text through an alphabetical keyword column matrix.",
   },
   {
     id: "two-square",
@@ -446,7 +628,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["two-square", "double playfair", "digraphic", "substitution", "classical"],
-    summary: "Double Playfair digraphic substitution cipher operating across two 5x5 keyword grids.",
+    summary:
+      "Double Playfair digraphic substitution cipher operating across two 5x5 keyword grids.",
   },
   {
     id: "fractionated-morse",
@@ -457,8 +640,16 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
     defaults: {
       [OPTION_DIRECTION]: "encrypt",
     },
-    tags: ["fractionated morse", "morse", "fractionating", "trigrams", "substitution", "classical"],
-    summary: "Fractionating cipher converting text to Morse, grouping into trigrams, and substituting through a keyword.",
+    tags: [
+      "fractionated morse",
+      "morse",
+      "fractionating",
+      "trigrams",
+      "substitution",
+      "classical",
+    ],
+    summary:
+      "Fractionating cipher converting text to Morse, grouping into trigrams, and substituting through a keyword.",
   },
   {
     id: "scytale",
@@ -470,7 +661,8 @@ export const CLASSICAL_TOOLS: readonly ClassicalToolMeta[] = [
       [OPTION_DIRECTION]: "encrypt",
     },
     tags: ["scytale", "cylinder", "spartan", "ancient greece", "transposition", "classical"],
-    summary: "Ancient Spartan transposition cylinder winding parchment around a rod of fixed diameter.",
+    summary:
+      "Ancient Spartan transposition cylinder winding parchment around a rod of fixed diameter.",
   },
 ];
 

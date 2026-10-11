@@ -124,7 +124,7 @@ export const OPTIONS: readonly OptionDef<HashOptionGroup>[] = [
   {
     id: OPTION_BLAKE_KEY,
     label: "Key",
-    group: "transform",
+    group: "key",
     kind: "bytes",
     // BLAKE2b takes up to 64 bytes of key, BLAKE2s up to 32 and BLAKE3 exactly 32. The union is
     // accepted here and the specific limit is enforced where the message can name the algorithm --
@@ -141,7 +141,7 @@ export const OPTIONS: readonly OptionDef<HashOptionGroup>[] = [
   {
     id: OPTION_BLAKE_SALT,
     label: "Salt",
-    group: "transform",
+    group: "key",
     kind: "bytes",
     // RFC 7693: 16 bytes for BLAKE2b, 8 for BLAKE2s. Exact, not a range -- the parameter block has
     // a fixed field, and noble rejects anything else.
@@ -156,7 +156,7 @@ export const OPTIONS: readonly OptionDef<HashOptionGroup>[] = [
   {
     id: OPTION_BLAKE_PERSONAL,
     label: "Personalisation",
-    group: "transform",
+    group: "key",
     kind: "bytes",
     bytesLength: { exact: [8, 16] },
     defaultBytesEncoding: "utf-8",
@@ -169,7 +169,7 @@ export const OPTIONS: readonly OptionDef<HashOptionGroup>[] = [
   {
     id: OPTION_BLAKE_CONTEXT,
     label: "Derive-key context",
-    group: "transform",
+    group: "key",
     kind: "bytes",
     bytesLength: { min: 0, max: 4096 },
     defaultBytesEncoding: "utf-8",

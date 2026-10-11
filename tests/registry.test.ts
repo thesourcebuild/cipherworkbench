@@ -8,7 +8,14 @@ import {
   presentFamilies,
   TOOL_MANIFESTS,
 } from "@ocs/registry";
-import { isAvailableOn, withAvailableChoices, lint, validateCatalogue } from "@ocs/engine";
+import {
+  acceptedInputModes,
+  isAvailableOn,
+  withAvailableChoices,
+  lint,
+  validateCatalogue,
+} from "@ocs/engine";
+import { TEST_INPUTS, testInputsFor } from "../apps/web/app/test-inputs";
 
 describe("TOOL_MANIFESTS", () => {
   it("is not empty", () => {
@@ -26,7 +33,13 @@ describe("TOOL_MANIFESTS", () => {
       expect(manifest.summary).not.toBe("");
       expect(manifest.category).not.toBe("");
       expect(manifest.tags.length).toBeGreaterThan(0);
-      expect(manifest.directions.length).toBeGreaterThan(0);
+      if ((manifest.purpose ?? "transform") === "transform") {
+        expect(manifest.directions.length).toBeGreaterThan(0);
+        expect(manifest.security).toBeDefined();
+      } else {
+        expect(manifest.directions).toEqual([]);
+        expect(manifest.security).toBeUndefined();
+      }
       expect(manifest.outputEncodings.length).toBeGreaterThan(0);
       expect(FAMILY_ORDER).toContain(manifest.family);
     }
@@ -46,6 +59,28 @@ describe("TOOL_MANIFESTS", () => {
       expect(manifest.streaming, `${manifest.id} reads no input but claims streaming`).toBe(
         false,
       );
+    }
+  });
+
+  it("exposes only source modes that match each tool's input contract", () => {
+    for (const manifest of TOOL_MANIFESTS) {
+      const modes = acceptedInputModes(manifest.sourcePolicy, manifest.supportsFile);
+      if (!manifest.readsInput) continue;
+      expect(modes.length, `${manifest.id} accepts no input modes`).toBeGreaterThan(0);
+      expect(modes.includes("file"), manifest.id).toBe(manifest.supportsFile);
+      if (manifest.sourcePolicy?.semantics === "file-artifact") {
+        expect(modes, manifest.id).toEqual(["file"]);
+      }
+      if (manifest.sourcePolicy?.semantics === "text-artifact") {
+        expect(modes.every((mode) => mode === "text" || mode === "file"), manifest.id).toBe(true);
+      }
+    }
+  });
+
+  it("registers all four original-padding Keccak digests", async () => {
+    for (const id of ["keccak-224", "keccak-256", "keccak-384", "keccak-512"]) {
+      expect(getManifest(id)).toMatchObject({ id, family: "hash", category: "Keccak" });
+      await expect(loadTool(id)).resolves.toMatchObject({ id });
     }
   });
 
@@ -244,6 +279,20 @@ describe("loadTool", () => {
     jwt: /three dot-separated parts/i,
     json: /line \d+, column \d+/i,
     xml: /./,
+    grafana2hashcat: /Grafana|64 hex digest/i,
+    gitea2hashcat: /Gitea|hex salt/i,
+    ssh2john: /SSH|private.key|PEM/i,
+    truecrypt2john: /TrueCrypt|truncated/i,
+    luks2john: /LUKS|truncated/i,
+    dmg2john: /DMG|truncated/i,
+    bitlocker2john: /BitLocker|truncated|signature/i,
+    kdbx2john: /KDBX|truncated|KeePass/i,
+    zip2john: /ZIP|truncated/i,
+    office2john: /Office|compound|truncated/i,
+    pdf2john: /PDF|header|magic/i,
+    rar2john: /RAR|truncated|signature/i,
+    "7z2john": /7z|truncated|signature/i,
+    gpg2john: /OpenPGP|private key|armor/i,
     x509: /X\.509|certificate|PEM|DER/i,
     csr: /PKCS#10|CSR|certificate|PEM|DER/i,
     crl: /CRL|X\.509|certificate|PEM|DER/i,
@@ -338,20 +387,54 @@ describe("loadTool", () => {
         expect(sample.label, `${manifest.id}/${sample.id}`).not.toBe("");
         expect(sample.note, `${manifest.id}/${sample.id}`).not.toBe("");
         expect(sample.text, `${manifest.id}/${sample.id}`).not.toBe("");
+        const baseSpec = tool.createSpec();
+        const spec = {
+          ...baseSpec,
+          options: {
+            ...baseSpec.options,
+            ...(manifest.readsInput ? {} : { password: sample.text }),
+            ...(sample.options ?? {}),
+          },
+        };
         const result = await tool.compute(
-          tool.createSpec(),
+          spec,
           new TextEncoder().encode(sample.text),
         );
         expect(result.error, `${manifest.id}/${sample.id}: ${result.error}`).toBeUndefined();
         checked++;
       }
-      // A sample on a tool with no box would be unreachable.
-      if (!manifest.readsInput) expect(tool.samples ?? [], manifest.id).toEqual([]);
+      // Tools without an input box only carry samples when they have password options (e.g. KDF).
+      if (!manifest.readsInput && manifest.family !== "kdf") {
+        expect(tool.samples ?? [], manifest.id).toEqual([]);
+      }
       // Ids have to be unique within a tool: the picker keys its options on them.
       const ids = (tool.samples ?? []).map((s) => s.id);
       expect(new Set(ids).size, manifest.id).toBe(ids.length);
     }
     expect(checked).toBeGreaterThan(0);
+  });
+
+  it("offers generic test strings only to arbitrary-byte tools", async () => {
+    for (const manifest of TOOL_MANIFESTS) {
+      const tool = await loadTool(manifest.id);
+      const entries = testInputsFor(tool);
+      if (manifest.sourcePolicy?.semantics === "file-artifact") {
+        expect(entries, manifest.id).toEqual([]);
+        continue;
+      }
+      if (manifest.sourcePolicy?.semantics === "text-artifact") {
+        expect(entries.length, `${manifest.id} needs a structured text sample`).toBeGreaterThan(0);
+        expect(entries, manifest.id).toBe(tool.samples);
+        continue;
+      }
+      if (tool.samples !== undefined) {
+        expect(entries, manifest.id).toBe(tool.samples);
+      } else if (!manifest.readsInput) {
+        expect(entries, manifest.id).toEqual([]);
+      } else {
+        expect(entries, manifest.id).toBe(TEST_INPUTS);
+      }
+    }
   });
 
   it("rejects an unknown id by name", async () => {

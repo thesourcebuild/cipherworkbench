@@ -45,6 +45,12 @@ export const OPTION_AGE_RECIPIENT = "ageRecipient";
 export const OPTION_AGE_IDENTITY = "ageIdentity";
 export const OPTION_AGE_PASSPHRASE = "agePassphrase";
 export const OPTION_AGE_ARMOR = "ageArmor";
+/** Jasypt password-encrypted string profiles and deterministic fixture inputs. */
+export const OPTION_JASYPT_PROFILE = "jasyptProfile";
+export const OPTION_JASYPT_PASSWORD = "jasyptPassword";
+export const OPTION_JASYPT_ITERATIONS = "jasyptIterations";
+export const OPTION_JASYPT_SALT = "jasyptSalt";
+export const OPTION_JASYPT_IV = "jasyptIv";
 
 /** `availableOn` tags. */
 export const TAG_AEAD = "aead";
@@ -60,6 +66,32 @@ export const TAG_RC4 = "rc4";
 export const TAG_CHACHA_COUNTER = "counter";
 export const TAG_XXTEA_TWO_WORD = "xxtea:two-word-block";
 export const TAG_XXTEA_ONLINE_TOOLS = "xxtea:online-tools";
+export const TAG_JASYPT_ENCRYPT = "jasypt:encrypt";
+export const TAG_JASYPT_AES_ENCRYPT = "jasypt:aes-encrypt";
+
+export type JasyptProfile = "PBEWithMD5AndDES" | "PBEWITHHMACSHA512ANDAES_256";
+export const DEFAULT_JASYPT_PROFILE: JasyptProfile = "PBEWITHHMACSHA512ANDAES_256";
+export const DEFAULT_JASYPT_ITERATIONS = 1000;
+
+export function readJasyptProfile(options: OptionValues): JasyptProfile {
+  return optEnumOr(
+    options,
+    OPTION_JASYPT_PROFILE,
+    ["PBEWithMD5AndDES", "PBEWITHHMACSHA512ANDAES_256"] as const,
+    DEFAULT_JASYPT_PROFILE,
+  );
+}
+
+export function readJasyptPassword(options: OptionValues): string {
+  return optString(options, OPTION_JASYPT_PASSWORD) ?? "";
+}
+
+export function readJasyptIterations(options: OptionValues): number {
+  const iterations = optNumber(options, OPTION_JASYPT_ITERATIONS);
+  return iterations !== undefined && Number.isInteger(iterations) && iterations > 0
+    ? iterations
+    : DEFAULT_JASYPT_ITERATIONS;
+}
 
 /**
  * Encrypt or decrypt, held as an option rather than as a first-class UI control.
@@ -349,7 +381,12 @@ export function readEffectiveKeyBits(options: OptionValues, keyBytes: number): n
 }
 
 export function readAgeAuthMode(options: OptionValues): "recipient" | "passphrase" {
-  return optEnumOr(options, OPTION_AGE_AUTH_MODE, ["recipient", "passphrase"] as const, "recipient");
+  return optEnumOr(
+    options,
+    OPTION_AGE_AUTH_MODE,
+    ["recipient", "passphrase"] as const,
+    "recipient",
+  );
 }
 
 export function readAgeRecipient(options: OptionValues): string {

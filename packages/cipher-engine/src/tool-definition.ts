@@ -1,6 +1,6 @@
 import type { ZodType } from "zod";
 import type { LintRule } from "@ocs/contracts/diagnostic";
-import type { OutputEncoding } from "@ocs/contracts/encoding";
+import type { ByteSourceMode, OutputEncoding } from "@ocs/contracts/encoding";
 import type { OptionValue, OptionValues } from "@ocs/contracts/options";
 import type { CliProviderCommand } from "@ocs/contracts/shell";
 import type { OptionCatalogue } from "./catalogue/options";
@@ -61,7 +61,11 @@ export type ToolFamily =
   | "certificates"
   | "openssh"
   | "encoding"
-  | "format";
+  | "format"
+  | "password-artifact";
+
+/** What a tool does, independently of algorithm direction or security strength. */
+export type ToolPurpose = "transform" | "analysis" | "extraction";
 
 /**
  * How much this tool's output should be trusted, shown as a badge in the tool
@@ -85,6 +89,43 @@ export type SecurityPosture = "modern" | "legacy" | "broken" | "not-a-mac" | "no
 /** Which way the bytes flow. Hashes are forward-only; ciphers and encodings do both. */
 export type ToolDirection = "forward" | "inverse";
 
+/** How the generic input controls should describe and constrain a tool's source. */
+export interface ToolSourcePolicy {
+  /**
+   * `bytes` accepts arbitrary byte spellings, `text-artifact` parses UTF-8 records or documents,
+   * and `file-artifact` requires a real file because its parser depends on file structure, metadata,
+   * or bounded random access rather than on an interchangeable byte-string spelling.
+   */
+  semantics: "bytes" | "text-artifact" | "file-artifact";
+  /** Hard refusal point for file input. Omit for algorithms that can process files of any size. */
+  maxFileBytes?: number;
+  /** MIME types and dot-prefixed extensions for the browser file picker. */
+  accept?: readonly string[];
+}
+
+const BYTE_INPUT_MODES: readonly ByteSourceMode[] = [
+  "text",
+  "hex",
+  "hex-lenient",
+  "base64",
+  "base64url",
+  "file",
+];
+
+/** The source modes the generic input panel may offer for one tool contract. */
+export function acceptedInputModes(
+  sourcePolicy: ToolSourcePolicy | undefined,
+  supportsFile: boolean,
+): readonly ByteSourceMode[] {
+  const modes: readonly ByteSourceMode[] =
+    sourcePolicy?.semantics === "file-artifact"
+      ? ["file"]
+      : sourcePolicy?.semantics === "text-artifact"
+        ? ["text", "file"]
+        : BYTE_INPUT_MODES;
+  return supportsFile ? modes : modes.filter((mode) => mode !== "file");
+}
+
 /**
  * Cheap metadata for a tool, safe to bundle eagerly for every registered tool so
  * the sidebar can list them all without loading any tool's compute code.
@@ -97,6 +138,9 @@ export interface ToolManifest {
   category: string;
   tags: string[];
   summary: string;
+  /** Defaults to `transform` for the established algorithm families. */
+  purpose?: ToolPurpose;
+  /** Empty for analysis and extraction tools, where forward/inverse has no meaning. */
   directions: readonly ToolDirection[];
   /**
    * What this tool is and is not, as one word, rendered as the header badge.
@@ -110,7 +154,8 @@ export interface ToolManifest {
    * reads the spec and can therefore be right about the configuration actually selected. `C007` is
    * the worked example: it replaced twenty static notes whose figures were wrong nine times in ten.
    */
-  security: SecurityPosture;
+  /** Deliberately absent when a tool analyzes or extracts rather than providing a primitive. */
+  security?: SecurityPosture;
   /** Output spellings this tool offers, narrowest-first. A digest omits `decimal`; a CRC includes it. */
   outputEncodings: readonly OutputEncoding[];
   /**
@@ -166,6 +211,8 @@ export interface ToolManifest {
   streaming: boolean;
   /** Some configurations stream, selected at runtime by `ToolDefinition.fileProcessingForSpec`. */
   conditionalStreaming?: boolean;
+  /** Omitted for the established arbitrary-byte input policy. */
+  sourcePolicy?: ToolSourcePolicy;
 }
 
 /**
@@ -220,6 +267,10 @@ export interface ToolResult {
    * that can reproduce or automate the tool's computation across shells (Bash, PowerShell, cmd).
    */
   cliProviders?: readonly CliProviderCommand[];
+  /** Preferred name for exporting the primary `text` or `bytes` result. */
+  suggestedFilename?: string;
+  /** MIME type for that primary result. */
+  mimeType?: string;
 }
 
 /** One row in a structured comparison table (e.g. cert-diff property comparison). */
@@ -377,7 +428,40 @@ export interface ToolStream {
   finish(): ToolResult;
 }
 
-export type FileProcessingMode = "streaming" | "buffered" | "unresolved";
+export type FileProcessingMode = "streaming" | "buffered" | "random-access" | "unresolved";
+
+/** Stable metadata available to file extractors without exposing a host `File` object. */
+export interface ToolFileMetadata {
+  name: string;
+  size: number;
+  mimeType?: string;
+  lastModified?: number;
+}
+
+/** Host-neutral details about the input supplied to an ordinary buffered computation. */
+export interface ToolComputeContext {
+  /** Basename of a selected file. Omitted for pasted or typed input. */
+  filename?: string;
+  /** MIME type reported by the host, when one is available. */
+  mimeType?: string;
+  /** Original input size, before any transform. */
+  inputSize?: number;
+  /** Last-modified time reported by the host, in Unix milliseconds. */
+  lastModified?: number;
+}
+
+/**
+ * A bounded, random-access file view for parsers that need headers, trailers, or offset tables.
+ *
+ * `read` returns exactly `length` bytes or rejects. Calls must stay within both the file and
+ * `maxReadBytes`; this keeps an extractor from accidentally turning random access into an unbounded
+ * allocation. Browser adapters implement it with `File.slice`, in both the worker and fallback path.
+ */
+export interface ToolFileSource {
+  metadata: ToolFileMetadata;
+  maxReadBytes: number;
+  read(offset: number, length: number): Promise<Uint8Array>;
+}
 
 /**
  * The full contract a `packages/tools/<family>` package implements for one tool.
@@ -405,6 +489,8 @@ export interface ToolSample {
   /** Tooltip: what it is for, rather than what it says. */
   note: string;
   text: string;
+  /** Optional options to seed or apply when this sample is chosen. */
+  options?: OptionValues;
 }
 
 export interface ToolDefinition<TSpec extends ToolSpecBase> extends ToolManifest {
@@ -499,11 +585,12 @@ export interface ToolDefinition<TSpec extends ToolSpecBase> extends ToolManifest
    */
   variants?(spec: TSpec): ToolVariantTable;
   /**
-   * Inputs worth trying this tool on, offered in the Test input menu above the two generic ones.
+   * Inputs worth trying this tool on, offered in the Test input menu instead of generic strings.
    *
    * Not a function of the spec, unlike everything above: a sample is an *input*, and the whole point
    * is that it can be loaded before any setting has been touched. Omit for a tool whose input is
-   * arbitrary bytes -- which is most of them -- and the generic two are then all that is offered.
+   * arbitrary bytes -- which is most of them -- and the generic two are then offered. An explicit
+   * empty list suppresses the menu for a tool, as file artifacts have no honest text sample.
    *
    * Whatever a family puts here has to compute cleanly under the tool's own default spec. A sample
    * that produces a parse error is worse than no sample, so there is a test over every one of them.
@@ -514,7 +601,9 @@ export interface ToolDefinition<TSpec extends ToolSpecBase> extends ToolManifest
    * SubtleCrypto, Argon2's memory-hard loop yielding to the event loop) even
    * though most digests are synchronous.
    */
-  compute(spec: TSpec, input: Uint8Array): Promise<ToolResult>;
+  compute(spec: TSpec, input: Uint8Array, context?: ToolComputeContext): Promise<ToolResult>;
+  /** Random-access file computation. When present, file input uses this instead of buffering. */
+  computeFile?(spec: TSpec, source: ToolFileSource): Promise<ToolResult>;
   /**
    * Required when `streaming` is true, absent otherwise. The invariant every
    * streaming tool is tested for: feeding the same bytes through `createStream`
@@ -543,6 +632,8 @@ export interface ToolDefinition<TSpec extends ToolSpecBase> extends ToolManifest
    * "Generate" action button.
    */
   readsInputForSpec?(spec: TSpec): boolean;
+  /** Output spellings available for the current settings, when the result type can vary by mode. */
+  outputEncodingsForSpec?(spec: TSpec): readonly OutputEncoding[];
   /**
    * Optional spec transformation when an option is changed by the user.
    * Allows a tool to cascade changes (such as selecting a configuration preset)
@@ -555,5 +646,8 @@ export function fileProcessingModeForSpec<TSpec extends ToolSpecBase>(
   tool: ToolDefinition<TSpec>,
   spec: TSpec,
 ): FileProcessingMode {
-  return tool.fileProcessingForSpec?.(spec) ?? (tool.streaming ? "streaming" : "buffered");
+  return (
+    tool.fileProcessingForSpec?.(spec) ??
+    (tool.computeFile ? "random-access" : tool.streaming ? "streaming" : "buffered")
+  );
 }

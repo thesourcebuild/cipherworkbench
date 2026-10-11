@@ -28,14 +28,23 @@ export function describeSpec(spec: KdfSpec): string {
       return `Derives ${size} with scrypt at N=${r.scryptN}, r=${r.scryptR}, p=${r.scryptP}.`;
     case "argon2":
       return `Derives ${size} with ${r.argon2Variant} at ${r.argon2MemoryKib} KiB, t=${r.argon2Time}, p=${r.argon2Parallelism}.`;
-    case "bcrypt":
-      return `Hashes the password with bcrypt at cost ${r.bcryptCost} — 2^${r.bcryptCost} rounds.`;
+    case "bcrypt": {
+      const variantStr =
+        r.bcryptVariant === "none"
+          ? ""
+          : ` (${r.bcryptVariant === "passlib" ? "Passlib v2" : r.bcryptVariant.toUpperCase()} pre-hash)`;
+      return `Hashes the password with bcrypt${variantStr} at cost ${r.bcryptCost} — 2^${r.bcryptCost} rounds.`;
+    }
     case "bcryptpbkdf":
       return `Derives ${size} with bcrypt-PBKDF over ${r.rounds.toLocaleString()} rounds.`;
     case "bip39":
       return "Generates 12–24 word mnemonic recovery phrases and derives 512-bit master seeds via PBKDF2-HMAC-SHA512.";
     case "bip32":
       return "Hierarchical deterministic key derivation (BIP-32/BIP-44) for multi-chain wallet accounts on secp256k1.";
+    case "crypt3":
+      return `Hashes the password as ${r.scheme} through the unified crypt(3) dispatcher.`;
+    case "htpasswd":
+      return `Emits one Apache htpasswd username:hash record using ${r.scheme}.`;
     default:
       return `${tool.label} — ${size}.`;
   }

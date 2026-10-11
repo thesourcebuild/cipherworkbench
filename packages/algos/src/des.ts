@@ -174,8 +174,8 @@ function rotateLeft(bits: Uint8Array, by: number): Uint8Array {
 }
 
 /** Feistel round function: expand, xor the round key, substitute, permute. */
-function f(right: Uint8Array, roundKey: Uint8Array): Uint8Array {
-  const expanded = permute(right, E);
+function f(right: Uint8Array, roundKey: Uint8Array, expansion: readonly number[]): Uint8Array {
+  const expanded = permute(right, expansion);
   for (let i = 0; i < 48; i++) expanded[i] = expanded[i]! ^ roundKey[i]!;
 
   const substituted = new Uint8Array(32);
@@ -195,13 +195,18 @@ function f(right: Uint8Array, roundKey: Uint8Array): Uint8Array {
   return permute(substituted, P);
 }
 
-function crypt(block: Uint8Array, keys: readonly Uint8Array[], dst: Uint8Array): void {
+function crypt(
+  block: Uint8Array,
+  keys: readonly Uint8Array[],
+  dst: Uint8Array,
+  expansion: readonly number[],
+): void {
   const permuted = permute(bytesToBits(block), IP);
   let left = permuted.subarray(0, 32);
   let right = permuted.subarray(32, 64);
 
   for (const roundKey of keys) {
-    const next = f(right, roundKey);
+    const next = f(right, roundKey, expansion);
     for (let i = 0; i < 32; i++) next[i] = next[i]! ^ left[i]!;
     left = right;
     right = next;
@@ -228,8 +233,27 @@ export function createDes(key: Uint8Array): BlockCipher {
   const reversed = [...keys].reverse();
   return {
     blockSize: DES_BLOCK_SIZE,
-    encryptBlock: (src, dst) => crypt(src, keys, dst),
-    decryptBlock: (src, dst) => crypt(src, reversed, dst),
+    encryptBlock: (src, dst) => crypt(src, keys, dst, E),
+    decryptBlock: (src, dst) => crypt(src, reversed, dst, E),
+  };
+}
+
+/** DES with crypt(3)'s salt-controlled swaps between the two halves of E. */
+export function createDesCrypt(key: Uint8Array, salt: number): BlockCipher {
+  if (key.length !== 8) {
+    throw new Error(`DES takes an 8-byte key; this one is ${key.length}.`);
+  }
+  const expansion = [...E];
+  for (let i = 0; i < 24; i++) {
+    if (((salt >>> i) & 1) === 0) continue;
+    [expansion[i], expansion[i + 24]] = [expansion[i + 24]!, expansion[i]!];
+  }
+  const keys = keySchedule(key);
+  const reversed = [...keys].reverse();
+  return {
+    blockSize: DES_BLOCK_SIZE,
+    encryptBlock: (src, dst) => crypt(src, keys, dst, expansion),
+    decryptBlock: (src, dst) => crypt(src, reversed, dst, expansion),
   };
 }
 

@@ -11,7 +11,15 @@ import type { OptionGroupMeta } from "@ocs/engine";
  * the thing in the box" but the entire input, because there is no box. It is still the rail rather
  * than the Input panel, because the Input panel would then be an empty container with a heading.
  */
-export const OPTION_GROUPS = ["direction", "format", "document", "generate"] as const;
+export const OPTION_GROUPS = [
+  "direction",
+  "format",
+  "document",
+  "generate",
+  "openpgp",
+  "keys",
+  "credentials",
+] as const;
 export type FormatOptionGroup = (typeof OPTION_GROUPS)[number];
 
 export const OPTION_GROUP_META: Record<
@@ -44,6 +52,29 @@ export const OPTION_GROUP_META: Record<
     label: "Generate",
     summary: "What to produce. This tool reads no input.",
     order: 40,
+    collapsedByDefault: false,
+  },
+  openpgp: {
+    id: "openpgp",
+    label: "OpenPGP",
+    summary: "Operation and packet format.",
+    order: 50,
+    collapsedByDefault: false,
+  },
+  keys: {
+    id: "keys",
+    label: "Keys",
+    summary: "Imported OpenPGP public and private keys.",
+    order: 60,
+    placement: "input",
+    collapsedByDefault: false,
+  },
+  credentials: {
+    id: "credentials",
+    label: "Passwords",
+    summary: "Message password and private-key passphrase.",
+    order: 70,
+    placement: "input",
     collapsedByDefault: false,
   },
 };

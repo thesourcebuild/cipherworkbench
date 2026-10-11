@@ -1,10 +1,10 @@
 {
   "name": "@ocs/format",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
-  "//": "Text formats: URL, HTML entities, JWT, JSON, XML, case, UUID, password. Unlike every other family here, almost none of this is implemented in the repo -- each tool is a catalogue over a mature library, because one exists for each job and a second implementation would add a way to be wrong rather than a way to be right. See the note in src/index.ts for what each dependency is and why it was chosen. `./manifests` is eager and dependency-free; `./definition` is the on-demand half that pulls the libraries in.",
+  "//": "Formats and file containers: URL, HTML entities, JWT, JSON, XML, case, UUID, password, random values and OpenPGP. Implementations use mature libraries where one exists. `./manifests` is eager and dependency-free; `./definition` is the on-demand family half, and OpenPGP.js is behind a second literal dynamic import so selecting another format tool does not load it.",
   "exports": {
     ".": "./src/index.ts",
     "./pure": "./src/pure.ts",
@@ -21,11 +21,13 @@
     "change-case": "^5.4.4",
     "entities": "^8.0.0",
     "jsonc-parser": "^3.3.1",
+    "openpgp": "6.3.2",
     "uuid": "^14.0.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@ocs/config": "workspace:*",
+    "@openpgp/web-stream-tools": "0.3.1",
     "typescript": "^5.9.3"
   }
 }

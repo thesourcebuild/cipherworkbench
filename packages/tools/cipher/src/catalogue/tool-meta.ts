@@ -199,6 +199,27 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
       "The block cipher everything uses, in nine modes. The mode matters more than the key size.",
   },
   {
+    id: "cipher-image",
+    label: "Cipher Image",
+    category: "Broken ciphers",
+    aead: false,
+    security: "broken",
+    tags: [
+      "image",
+      "bmp",
+      "bitmap",
+      "aes",
+      "ecb",
+      "penguin",
+      "pattern leakage",
+      "educational",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "Educational AES-ECB BMP visualizer. It preserves the bitmap container so repeated pixel blocks remain visible.",
+  },
+  {
     id: "chacha20poly1305",
     label: "ChaCha20-Poly1305",
     category: "ChaCha",
@@ -239,6 +260,29 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     ],
     summary:
       "Python cryptography's symmetric authenticated encryption recipe. AES-128-CBC with PKCS7 padding and HMAC-SHA256.",
+  },
+  {
+    id: "jasypt",
+    label: "Jasypt PBE String",
+    category: "Container formats",
+    aead: false,
+    security: "legacy",
+    tags: [
+      "jasypt",
+      "java",
+      "jce",
+      "pbe",
+      "pbewithmd5anddes",
+      "pbewithhmacsha512andaes_256",
+      "spring boot",
+      "base64",
+      "hexadecimal",
+      "unauthenticated",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "Jasypt/JCE password-encrypted strings with exact salt and IV framing. Legacy and unauthenticated.",
   },
   {
     id: "cobblestone",
@@ -2495,7 +2539,16 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Other block ciphers",
     aead: false,
     security: "legacy",
-    tags: ["shacal", "shacal-1", "shacal1", "nessie", "sha-1", "davies-meyer", "encrypt", "decrypt"],
+    tags: [
+      "shacal",
+      "shacal-1",
+      "shacal1",
+      "nessie",
+      "sha-1",
+      "davies-meyer",
+      "encrypt",
+      "decrypt",
+    ],
     summary: "SHA-1's compression function as a 160-bit block cipher with keys up to 512 bits.",
     block: {
       size: 20,
@@ -2510,8 +2563,19 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Lightweight",
     aead: false,
     security: "modern",
-    tags: ["qarma", "qarma-64", "qarma64", "arm", "pac", "tweakable", "pointer-authentication", "encrypt", "decrypt"],
-    summary: "Hardware tweakable block cipher with alpha-reflection chosen for ARMv8.3-A Pointer Authentication (PAC).",
+    tags: [
+      "qarma",
+      "qarma-64",
+      "qarma64",
+      "arm",
+      "pac",
+      "tweakable",
+      "pointer-authentication",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "Hardware tweakable block cipher with alpha-reflection chosen for ARMv8.3-A Pointer Authentication (PAC).",
     block: {
       size: 8,
       keyLengths: [16],
@@ -2524,8 +2588,18 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Lightweight",
     aead: false,
     security: "modern",
-    tags: ["mantis", "mantis-7", "tweakable", "memory-encryption", "low-latency", "crypto2016", "encrypt", "decrypt"],
-    summary: "Low-latency tweakable block cipher designed for memory bus and cache line encryption.",
+    tags: [
+      "mantis",
+      "mantis-7",
+      "tweakable",
+      "memory-encryption",
+      "low-latency",
+      "crypto2016",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "Low-latency tweakable block cipher designed for memory bus and cache line encryption.",
     block: {
       size: 8,
       keyLengths: [16],
@@ -2538,8 +2612,17 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Lightweight",
     aead: false,
     security: "modern",
-    tags: ["craft", "tweakable", "fault-attack", "lightweight", "fse2019", "encrypt", "decrypt"],
-    summary: "Lightweight tweakable block cipher optimized for fault-attack resistance and fast round execution.",
+    tags: [
+      "craft",
+      "tweakable",
+      "fault-attack",
+      "lightweight",
+      "fse2019",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "Lightweight tweakable block cipher optimized for fault-attack resistance and fast round execution.",
     block: {
       size: 8,
       keyLengths: [16],
@@ -2552,8 +2635,17 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Lightweight",
     aead: false,
     security: "modern",
-    tags: ["midori", "midori-64", "ultra-low-energy", "iot", "asiacrypt2015", "encrypt", "decrypt"],
-    summary: "Ultra-low energy 64-bit block cipher designed for battery-less IoT and RFID devices.",
+    tags: [
+      "midori",
+      "midori-64",
+      "ultra-low-energy",
+      "iot",
+      "asiacrypt2015",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "Ultra-low energy 64-bit block cipher designed for battery-less IoT and RFID devices.",
     block: {
       size: 8,
       keyLengths: [16],
@@ -2650,8 +2742,20 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Stream",
     aead: false,
     security: "modern",
-    tags: ["snow-v", "snowv", "snow", "5g", "3gpp", "nr", "stream", "256-bit", "encrypt", "decrypt"],
-    summary: "3GPP 5G New Radio stream cipher combining two 16-bit LFSRs with an AES-round FSM with 256-bit security.",
+    tags: [
+      "snow-v",
+      "snowv",
+      "snow",
+      "5g",
+      "3gpp",
+      "nr",
+      "stream",
+      "256-bit",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "3GPP 5G New Radio stream cipher combining two 16-bit LFSRs with an AES-round FSM with 256-bit security.",
     shape: { keyLengths: [32], nonceLengths: [16] },
   },
   {
@@ -2680,8 +2784,18 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Stream",
     aead: false,
     security: "not-encryption",
-    tags: ["xoshiro", "xoshiro256", "xoshiro256++", "prng", "vigna", "blackman", "encrypt", "decrypt"],
-    summary: "Blackman & Vigna's fast high-dimensional PRNG keystream generator (period 2^256-1).",
+    tags: [
+      "xoshiro",
+      "xoshiro256",
+      "xoshiro256++",
+      "prng",
+      "vigna",
+      "blackman",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "Blackman & Vigna's fast high-dimensional PRNG keystream generator (period 2^256-1).",
     shape: { keyLengths: [32], nonceLengths: [] },
   },
   {
@@ -2690,8 +2804,21 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Stream",
     aead: false,
     security: "legacy",
-    tags: ["a51", "a5-1", "a5", "gsm", "cellular", "2g", "stream", "lfsr", "majority", "encrypt", "decrypt"],
-    summary: "GSM 2G mobile communications stream cipher based on 3 clock-controlled LFSRs with majority rule.",
+    tags: [
+      "a51",
+      "a5-1",
+      "a5",
+      "gsm",
+      "cellular",
+      "2g",
+      "stream",
+      "lfsr",
+      "majority",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "GSM 2G mobile communications stream cipher based on 3 clock-controlled LFSRs with majority rule.",
     shape: { keyLengths: [8], nonceLengths: [3] },
   },
   {
@@ -2700,8 +2827,20 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Stream",
     aead: false,
     security: "legacy",
-    tags: ["rc4-drop", "rc4", "arcfour", "stream", "drop768", "drop1024", "drop3072", "fms", "encrypt", "decrypt"],
-    summary: "RC4 stream cipher discarding initial keystream bytes to eliminate Fluhrer-Mantin-Shamir initial state bias.",
+    tags: [
+      "rc4-drop",
+      "rc4",
+      "arcfour",
+      "stream",
+      "drop768",
+      "drop1024",
+      "drop3072",
+      "fms",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "RC4 stream cipher discarding initial keystream bytes to eliminate Fluhrer-Mantin-Shamir initial state bias.",
     shape: { keyLengths: [5, 16, 32], nonceLengths: [] },
   },
   {
@@ -3798,6 +3937,24 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     },
   },
   {
+    id: "repeating-key-xor",
+    label: "Repeating-key XOR",
+    category: "Broken ciphers",
+    aead: false,
+    security: "broken",
+    tags: [
+      "repeating-key xor",
+      "xor cipher",
+      "vigenere",
+      "broken",
+      "insecure",
+      "encrypt",
+      "decrypt",
+    ],
+    summary:
+      "Repeats a byte key across the input. Broken by frequency analysis; not a one-time pad or an XOR checksum.",
+  },
+  {
     id: "rc4",
     label: "RC4",
     category: "Legacy",
@@ -3812,8 +3969,18 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     category: "Disk & Storage",
     aead: false,
     security: "modern",
-    tags: ["adiantum", "wide-block", "android", "disk", "storage", "chacha12", "poly1305", "aes256"],
-    summary: "Wide-block length-preserving cipher designed by Google for Android device storage encryption.",
+    tags: [
+      "adiantum",
+      "wide-block",
+      "android",
+      "disk",
+      "storage",
+      "chacha12",
+      "poly1305",
+      "aes256",
+    ],
+    summary:
+      "Wide-block length-preserving cipher designed by Google for Android device storage encryption.",
     shape: { keyLengths: [32], nonceLengths: [12] },
   },
   {
@@ -3823,7 +3990,8 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     aead: false,
     security: "modern",
     tags: ["hctr2", "wide-block", "linux", "fscrypt", "disk", "storage", "aes256", "polyval"],
-    summary: "Length-preserving wide-block disk encryption mode introduced in Linux Kernel 6.0+.",
+    summary:
+      "Length-preserving wide-block disk encryption mode introduced in Linux Kernel 6.0+.",
     shape: { keyLengths: [32], nonceLengths: [16] },
   },
   {
@@ -3843,7 +4011,8 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     aead: false,
     security: "legacy",
     tags: ["keeloq", "hopping", "automotive", "microchip", "remote", "keyless"],
-    summary: "32-bit block, 64-bit key hopping cipher used in automotive remote keyless entry systems.",
+    summary:
+      "32-bit block, 64-bit key hopping cipher used in automotive remote keyless entry systems.",
     block: { size: 4, keyLengths: [8], modes: ["ecb", "cbc", "ctr"] },
   },
   {
@@ -3883,7 +4052,8 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     aead: false,
     security: "modern",
     tags: ["saturnin", "post-quantum", "256-bit", "nist-lwc", "canteaut", "block"],
-    summary: "Post-quantum 256-bit block cipher with 256-bit key designed for 256-bit security.",
+    summary:
+      "Post-quantum 256-bit block cipher with 256-bit key designed for 256-bit security.",
     block: { size: 32, keyLengths: [32], modes: ["ecb", "cbc", "ctr"] },
   },
   {
@@ -3894,7 +4064,8 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     security: "legacy",
     shape: { keyLengths: [10], nonceLengths: [0, 10] },
     tags: ["mickey", "mickey2", "estream", "hardware", "stream", "cipher"],
-    summary: "eSTREAM Profile 2 hardware-oriented stream cipher with mutual irregular clocking.",
+    summary:
+      "eSTREAM Profile 2 hardware-oriented stream cipher with mutual irregular clocking.",
   },
   {
     id: "a5-2",
@@ -3914,7 +4085,8 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     security: "legacy",
     block: { size: 16, keyLengths: [16], modes: ["ecb", "cbc", "ctr"] },
     tags: ["square", "block", "daemen", "knudsen", "rijmen", "aes", "predecessor"],
-    summary: "128-bit block cipher designed by Daemen, Knudsen, and Rijmen, direct ancestor of AES.",
+    summary:
+      "128-bit block cipher designed by Daemen, Knudsen, and Rijmen, direct ancestor of AES.",
   },
   {
     id: "multi2",
@@ -3924,7 +4096,8 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     security: "legacy",
     block: { size: 8, keyLengths: [32, 40], modes: ["ecb", "cbc", "ctr"] },
     tags: ["multi2", "hitachi", "isdb", "arib", "scrambling", "block", "feistel"],
-    summary: "Hitachi 64-bit Feistel cipher used in Japanese digital TV broadcasting (ISDB / ARIB STD-B25).",
+    summary:
+      "Hitachi 64-bit Feistel cipher used in Japanese digital TV broadcasting (ISDB / ARIB STD-B25).",
   },
   {
     id: "age",
@@ -3933,7 +4106,8 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
     aead: true,
     security: "modern",
     tags: ["age", "container", "x25519", "scrypt", "chacha20-poly1305", "filippo", "rfc"],
-    summary: "Modern, simple, and secure file encryption format (age-encryption.org/v1) supporting X25519 recipients and scrypt passphrases.",
+    summary:
+      "Modern, simple, and secure file encryption format (age-encryption.org/v1) supporting X25519 recipients and scrypt passphrases.",
   },
 ];
 
@@ -3968,6 +4142,7 @@ export const RAW_STREAM_CIPHER_TOOL_IDS = [
   "mickey",
   "a5-2",
   "rc4",
+  "repeating-key-xor",
 ] as const;
 
 const RAW_STREAM_CIPHER_TOOL_ID_SET = new Set<string>(RAW_STREAM_CIPHER_TOOL_IDS);

@@ -76,12 +76,14 @@ async function textOf(variant: string, options: FormatSpec["options"], input = "
 }
 
 describe("the family's shape", () => {
-  it("registers ten tools, none streaming", () => {
-    expect(FORMAT_MANIFESTS).toHaveLength(10);
+  it("registers eleven tools, none pretending buffered work is streaming", () => {
+    expect(FORMAT_MANIFESTS).toHaveLength(11);
     for (const manifest of FORMAT_MANIFESTS) {
       expect(manifest.family).toBe("format");
       expect(manifest.streaming, manifest.id).toBe(false);
-      expect(manifest.security, manifest.id).toBe("not-encryption");
+      expect(manifest.security, manifest.id).toBe(
+        manifest.id === "openpgp" ? "modern" : "not-encryption",
+      );
     }
   });
 
@@ -114,12 +116,15 @@ describe("the family's shape", () => {
         expect(manifest.outputEncodings.length, meta.id).toBeGreaterThan(1);
         expect(manifest.outputEncodings, meta.id).toContain("hex");
         // Not utf-8: random bytes are not text, and decoding them mangles the copy.
-        expect(manifest.outputEncodings, meta.id).not.toContain("utf-8");
+        if (meta.id === "randombytes") expect(manifest.outputEncodings, meta.id).not.toContain("utf-8");
       } else {
         expect(manifest.outputEncodings, meta.id).toEqual(["utf-8"]);
       }
     }
-    expect(FORMAT_TOOLS.filter((t) => t.emitsBytes).map((t) => t.id)).toEqual(["randombytes"]);
+    expect(FORMAT_TOOLS.filter((t) => t.emitsBytes).map((t) => t.id)).toEqual([
+      "openpgp",
+      "randombytes",
+    ]);
   });
 
   /**
@@ -181,7 +186,7 @@ describe("the family's shape", () => {
   it("offers a sample for every tool with an input box and none for the generators", () => {
     for (const meta of FORMAT_TOOLS) {
       const samples = samplesFor(meta.id) ?? [];
-      if (meta.usesInput) {
+      if (meta.usesInput && meta.id !== "openpgp") {
         expect(samples.length, `${meta.id} has no sample`).toBeGreaterThan(0);
       } else {
         expect(samples, meta.id).toEqual([]);
@@ -1044,6 +1049,7 @@ describe("lint rules", () => {
       }),
       specFor("json", { [OPTION_SORT_KEYS]: true }),
       specFor("randombytes", { [OPTION_RANDOM_BYTES]: 8 }),
+      specFor("openpgp"),
     ];
     for (const spec of TRIPS) for (const d of lint(spec).diagnostics) emitted.add(d.code);
     expect([...emitted].sort()).toEqual([...RULE_CODES].sort());

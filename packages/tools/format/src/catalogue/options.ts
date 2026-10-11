@@ -15,6 +15,18 @@ import {
   OPTION_EXCLUDE_AMBIGUOUS,
   OPTION_INDENT,
   OPTION_LENGTH,
+  OPENPGP_ENCRYPT_OPERATIONS,
+  OPENPGP_PACKET_OUTPUT_OPERATIONS,
+  OPENPGP_PRIVATE_KEY_OPERATIONS,
+  OPTION_OPENPGP_COMPRESSION,
+  OPTION_OPENPGP_KEY_PASSPHRASE,
+  OPTION_OPENPGP_OPERATION,
+  OPTION_OPENPGP_OUTPUT,
+  OPTION_OPENPGP_PASSWORD,
+  OPTION_OPENPGP_PRIVATE_KEYS,
+  OPTION_OPENPGP_PROTECTION,
+  OPTION_OPENPGP_RECIPIENT_KEYS,
+  OPTION_OPENPGP_VERIFICATION_KEYS,
   OPTION_RANDOM_BYTES,
   OPTION_RANDOM_DISTINCT,
   OPTION_RANDOM_MAX,
@@ -430,6 +442,160 @@ const RANDOM_BYTES_LENGTH: OptionDef<FormatOptionGroup> = {
   order: 10,
 };
 
+const OPENPGP_OPERATION: OptionDef<FormatOptionGroup> = {
+  id: OPTION_OPENPGP_OPERATION,
+  label: "Operation",
+  group: "openpgp",
+  kind: "enum",
+  choices: [
+    { value: "password-encrypt", label: "Encrypt with password", group: "Password" },
+    { value: "password-decrypt", label: "Decrypt with password", group: "Password" },
+    { value: "public-key-encrypt", label: "Encrypt to public key(s)", group: "Public key" },
+    { value: "private-key-decrypt", label: "Decrypt with private key", group: "Public key" },
+    { value: "sign", label: "Sign", group: "Signatures" },
+    { value: "verify", label: "Verify signed message", group: "Signatures" },
+    { value: "encrypt-and-sign", label: "Encrypt and sign", group: "Combined" },
+    { value: "decrypt-and-verify", label: "Decrypt and verify", group: "Combined" },
+  ],
+  summary: "One OpenPGP packet operation over the input file or bytes.",
+  detail:
+    "Signing produces an attached signed OpenPGP message, so Verify takes that message as its input and recovers the original file. Encrypt and sign uses public-key recipients; decrypt and verify requires both the recipient private key and the signer's public key.",
+  order: 10,
+};
+
+const OPENPGP_OUTPUT: OptionDef<FormatOptionGroup> = {
+  id: OPTION_OPENPGP_OUTPUT,
+  label: "Packet encoding",
+  group: "openpgp",
+  kind: "enum",
+  choices: [
+    { value: "binary", label: "Binary (.pgp / .gpg)" },
+    { value: "armor", label: "ASCII armor (.asc)" },
+  ],
+  availableOn: OPENPGP_PACKET_OUTPUT_OPERATIONS,
+  summary: "Raw packets for files, or printable ASCII armor.",
+  detail:
+    "Armor is Base64 with OpenPGP headers and a checksum. It is convenient for email and copy/paste but larger; binary packets are the normal file representation. Both carry exactly the same cryptographic packet content.",
+  order: 20,
+};
+
+const OPENPGP_COMPRESSION: OptionDef<FormatOptionGroup> = {
+  id: OPTION_OPENPGP_COMPRESSION,
+  label: "Compression",
+  group: "openpgp",
+  kind: "enum",
+  choices: [
+    { value: "uncompressed", label: "None" },
+    { value: "zip", label: "ZIP (raw DEFLATE)" },
+    { value: "zlib", label: "ZLIB" },
+  ],
+  availableOn: OPENPGP_PACKET_OUTPUT_OPERATIONS,
+  summary: "Compression inside the encrypted or signed packet.",
+  detail:
+    "Compression happens before encryption. None is the predictable default for already-compressed files. For public-key encryption the recipient's advertised preferences are authoritative, so an unsupported selection can fall back to uncompressed rather than creating a message the recipient cannot read.",
+  order: 30,
+};
+
+const OPENPGP_PROTECTION: OptionDef<FormatOptionGroup> = {
+  id: OPTION_OPENPGP_PROTECTION,
+  label: "Integrity protection",
+  group: "openpgp",
+  kind: "enum",
+  choices: [
+    {
+      value: "mdc",
+      label: "MDC (widest compatibility)",
+      summary: "RFC 4880 SEIPD v1 with modification detection",
+    },
+    {
+      value: "aead-gcm",
+      label: "RFC 9580 AEAD - GCM",
+      summary: "Modern authenticated encryption; newer implementations only",
+    },
+    {
+      value: "aead-ocb",
+      label: "RFC 9580 AEAD - OCB",
+      summary: "Modern authenticated encryption; newer implementations only",
+    },
+  ],
+  availableOn: OPENPGP_ENCRYPT_OPERATIONS,
+  summary: "Authenticated packet protection; unauthenticated decryption is never enabled.",
+  detail:
+    "MDC is the interoperable RFC 4880 format and detects any ciphertext modification before plaintext is returned. RFC 9580 AEAD is newer. Password encryption can use the selected AEAD directly; public-key encryption uses it only when every recipient key advertises SEIPD v2 support, otherwise OpenPGP.js safely falls back to MDC.",
+  order: 40,
+};
+
+const OPENPGP_PASSWORD: OptionDef<FormatOptionGroup> = {
+  id: OPTION_OPENPGP_PASSWORD,
+  label: "Message password",
+  group: "credentials",
+  kind: "password",
+  arg: { placeholder: "Password for this OpenPGP message" },
+  secret: true,
+  availableOn: ["password-encrypt", "password-decrypt"],
+  summary: "Encrypts or decrypts the message; never included in a share link.",
+  detail:
+    "This is the OpenPGP symmetric-encryption password, not a private-key passphrase. It is passed directly to OpenPGP.js and is removed from share links by the catalogue's secret policy.",
+  order: 10,
+};
+
+const OPENPGP_RECIPIENT_KEYS: OptionDef<FormatOptionGroup> = {
+  id: OPTION_OPENPGP_RECIPIENT_KEYS,
+  label: "Recipient public key(s)",
+  group: "keys",
+  kind: "text",
+  arg: { placeholder: "-----BEGIN PGP PUBLIC KEY BLOCK-----", multiline: true, rows: 9 },
+  binaryFileEncoding: "base64",
+  availableOn: ["public-key-encrypt", "encrypt-and-sign"],
+  summary: "Armored blocks or Base64 binary keyring; every imported key becomes a recipient.",
+  detail:
+    "Paste one or more concatenated ASCII-armored public-key blocks, or Base64 for a binary .gpg keyring. Choosing a binary file stores it as Base64 in the serialisable spec. Private keys are rejected here because this field is public and can be shared.",
+  order: 10,
+};
+
+const OPENPGP_PRIVATE_KEYS: OptionDef<FormatOptionGroup> = {
+  id: OPTION_OPENPGP_PRIVATE_KEYS,
+  label: "Private key",
+  group: "keys",
+  kind: "password",
+  arg: { placeholder: "-----BEGIN PGP PRIVATE KEY BLOCK-----", multiline: true, rows: 10 },
+  binaryFileEncoding: "base64",
+  secret: true,
+  availableOn: OPENPGP_PRIVATE_KEY_OPERATIONS,
+  summary: "Armored private key or Base64 binary secret keyring; stripped from share links.",
+  detail:
+    "Paste an ASCII-armored private key, or prefix the Base64 form of a binary secret keyring with 'base64:'. Passphrase-protected keys are supported by the separate field below. The key material and its passphrase are both secrets and never enter a share link.",
+  order: 20,
+};
+
+const OPENPGP_KEY_PASSPHRASE: OptionDef<FormatOptionGroup> = {
+  id: OPTION_OPENPGP_KEY_PASSPHRASE,
+  label: "Private-key passphrase",
+  group: "credentials",
+  kind: "password",
+  arg: { placeholder: "Leave empty only for an unprotected key" },
+  secret: true,
+  availableOn: OPENPGP_PRIVATE_KEY_OPERATIONS,
+  summary: "Unlocks the imported private key; stripped from share links.",
+  detail:
+    "This unlocks secret key packets and is independent of the password used for symmetric message encryption. A wrong or missing passphrase is reported without attempting the operation.",
+  order: 20,
+};
+
+const OPENPGP_VERIFICATION_KEYS: OptionDef<FormatOptionGroup> = {
+  id: OPTION_OPENPGP_VERIFICATION_KEYS,
+  label: "Signer public key(s)",
+  group: "keys",
+  kind: "text",
+  arg: { placeholder: "-----BEGIN PGP PUBLIC KEY BLOCK-----", multiline: true, rows: 9 },
+  binaryFileEncoding: "base64",
+  availableOn: ["verify", "decrypt-and-verify"],
+  summary: "Armored blocks or Base64 binary keyring used to verify every signature.",
+  detail:
+    "Verification is local and uses only these imported keys. The result names each signing key ID, matching fingerprint and user identity. No keyserver or network lookup is attempted.",
+  order: 30,
+};
+
 const BY_ID: Record<string, OptionDef<FormatOptionGroup>> = {
   [OPTION_DIRECTION]: DIRECTION,
   [OPTION_URL_MODE]: URL_MODE,
@@ -454,6 +620,15 @@ const BY_ID: Record<string, OptionDef<FormatOptionGroup>> = {
   [OPTION_RANDOM_SORTED]: RANDOM_SORTED,
   [OPTION_RANDOM_PLACES]: RANDOM_PLACES,
   [OPTION_RANDOM_BYTES]: RANDOM_BYTES_LENGTH,
+  [OPTION_OPENPGP_OPERATION]: OPENPGP_OPERATION,
+  [OPTION_OPENPGP_OUTPUT]: OPENPGP_OUTPUT,
+  [OPTION_OPENPGP_COMPRESSION]: OPENPGP_COMPRESSION,
+  [OPTION_OPENPGP_PROTECTION]: OPENPGP_PROTECTION,
+  [OPTION_OPENPGP_PASSWORD]: OPENPGP_PASSWORD,
+  [OPTION_OPENPGP_RECIPIENT_KEYS]: OPENPGP_RECIPIENT_KEYS,
+  [OPTION_OPENPGP_PRIVATE_KEYS]: OPENPGP_PRIVATE_KEYS,
+  [OPTION_OPENPGP_KEY_PASSPHRASE]: OPENPGP_KEY_PASSPHRASE,
+  [OPTION_OPENPGP_VERIFICATION_KEYS]: OPENPGP_VERIFICATION_KEYS,
 };
 
 const CACHE = new Map<string, OptionCatalogue<FormatOptionGroup>>();

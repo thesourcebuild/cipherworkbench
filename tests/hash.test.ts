@@ -27,6 +27,10 @@ import {
   OPTION_BLOCK_SIZE,
   OPTION_CUSTOMIZATION,
   OPTION_TUPLE,
+  OPTION_BLAKE_KEY,
+  OPTION_BLAKE_SALT,
+  OPTION_BLAKE_PERSONAL,
+  OPTION_BLAKE_CONTEXT,
 } from "@ocs/hash";
 import { hashToolDefinition, prepareHashAlgorithm, requireHashBinding } from "@ocs/hash/definition";
 import {
@@ -403,9 +407,33 @@ describe("streaming equals one-shot", () => {
     expect(option, "tuplehash128 does not expose the tuple option").toBeDefined();
     expect(tool.groups[option!.group]?.placement, "the tuple group's placement").toBe("input");
     // And the rest of the family's options stay in the rail, which is the half a blanket move breaks.
+    const inputOptionIds = new Set([
+      OPTION_TUPLE,
+      OPTION_BLAKE_KEY,
+      OPTION_BLAKE_SALT,
+      OPTION_BLAKE_PERSONAL,
+      OPTION_BLAKE_CONTEXT,
+    ]);
     for (const other of tool.catalogue.options) {
-      if (other.id === OPTION_TUPLE) continue;
+      if (inputOptionIds.has(other.id)) continue;
       expect(tool.groups[other.group]?.placement, other.id).toBeUndefined();
+    }
+  });
+
+  it("puts BLAKE key, salt, personalisation, and context in the Input panel rather than the Settings rail", () => {
+    for (const id of ["blake2b", "blake2s"]) {
+      const tool = hashToolDefinition(id);
+      for (const optId of [OPTION_BLAKE_KEY, OPTION_BLAKE_SALT, OPTION_BLAKE_PERSONAL]) {
+        const option = tool.catalogue.options.find((o) => o.id === optId);
+        expect(option, `${id} does not expose ${optId}`).toBeDefined();
+        expect(tool.groups[option!.group]?.placement, `${id} ${optId} placement`).toBe("input");
+      }
+    }
+    const b3 = hashToolDefinition("blake3");
+    for (const optId of [OPTION_BLAKE_KEY, OPTION_BLAKE_CONTEXT]) {
+      const option = b3.catalogue.options.find((o) => o.id === optId);
+      expect(option, `blake3 does not expose ${optId}`).toBeDefined();
+      expect(b3.groups[option!.group]?.placement, `blake3 ${optId} placement`).toBe("input");
     }
   });
 

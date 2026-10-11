@@ -1,12 +1,18 @@
 import { createOptionCatalogue, type OptionCatalogue, type OptionDef } from "@ocs/engine";
 import {
+  DEFAULT_AFFINE_MULTIPLIER,
+  DEFAULT_AFFINE_OFFSET,
   DEFAULT_SHIFT,
   LETTER_CASES,
   OPTION_DIRECTION,
   OPTION_DIGITS,
   OPTION_LETTER_CASE,
+  OPTION_MULTIPLIER,
+  OPTION_OFFSET,
+  OPTION_ROT_VARIANT,
   OPTION_SHIFT,
   OPTION_SHOW_ALL,
+  ROT_VARIANTS,
   type LetterCase,
 } from "../pure";
 import type { ClassicalToolMeta } from "./tool-meta";
@@ -20,13 +26,60 @@ const DIRECTION: Def = {
   group: "cipher",
   kind: "enum",
   choices: [
-    { value: "encrypt", label: "Encrypt", summary: "Move each letter forward" },
-    { value: "decrypt", label: "Decrypt", summary: "Move each letter back" },
+    { value: "encrypt", label: "Encrypt", summary: "Apply the forward transformation" },
+    { value: "decrypt", label: "Decrypt", summary: "Apply the inverse transformation" },
   ],
   summary: "Forward, or back.",
   detail:
     "Encryption is E(x) = (x + k) mod 26 and decryption is D(x) = (x - k) mod 26 -- the same shift applied in the other direction, which is why one control covers both. At a shift of 13 the two are identical: ROT13 is its own inverse, and the Checks panel says so when you select it.",
   order: 10,
+};
+
+const MULTIPLIER: Def = {
+  id: OPTION_MULTIPLIER,
+  label: "Multiplier (a)",
+  group: "cipher",
+  kind: "number",
+  arg: { placeholder: String(DEFAULT_AFFINE_MULTIPLIER), min: 1, max: 25 },
+  summary: "Must be coprime with 26.",
+  detail:
+    "The multiplicative part of E(x) = (ax + b) mod 26. Only 1, 3, 5, 7, 9, 11, 15, 17, 19, 21, 23 and 25 have inverses modulo 26.",
+  order: 30,
+};
+
+const OFFSET: Def = {
+  id: OPTION_OFFSET,
+  label: "Offset (b)",
+  group: "cipher",
+  kind: "number",
+  arg: { placeholder: String(DEFAULT_AFFINE_OFFSET), min: 0, max: 25 },
+  summary: "The additive shift, 0 to 25.",
+  detail:
+    "The additive part of E(x) = (ax + b) mod 26. The published AFFINECIPHER example uses a=5 and b=8.",
+  order: 40,
+};
+
+const ROT_VARIANT_LABEL = {
+  rot5: "ROT5 (digits)",
+  rot18: "ROT18 (letters and digits)",
+  rot47: "ROT47 (printable ASCII)",
+} as const;
+
+const ROT_VARIANT: Def = {
+  id: OPTION_ROT_VARIANT,
+  label: "Rotation",
+  group: "cipher",
+  kind: "enum",
+  choices: ROT_VARIANTS.map((value) => ({
+    value,
+    label: ROT_VARIANT_LABEL[value],
+    summary:
+      value === "rot5" ? "0-9" : value === "rot18" ? "A-Z, a-z and 0-9" : "ASCII ! through ~",
+  })),
+  summary: "Which conventional reciprocal alphabet to rotate.",
+  detail:
+    "ROT5 rotates decimal digits, ROT18 combines ROT13 letters with ROT5 digits, and ROT47 rotates all 94 printable non-space ASCII characters. ROT13 remains available as shift 13 in the Caesar tool.",
+  order: 20,
 };
 
 const SHIFT: Def = {
@@ -88,8 +141,16 @@ const DIGITS: Def = {
   kind: "enum",
   choices: [
     { value: "preserve", label: "Preserve (Pass through)", summary: "Leave digits untouched" },
-    { value: "german", label: "German (1=EINS, 2=ZWEI...)", summary: "Historical German Wehrmacht standard" },
-    { value: "english", label: "English (1=ONE, 2=TWO...)", summary: "Convert digits to English words" },
+    {
+      value: "german",
+      label: "German (1=EINS, 2=ZWEI...)",
+      summary: "Historical German Wehrmacht standard",
+    },
+    {
+      value: "english",
+      label: "English (1=ONE, 2=TWO...)",
+      summary: "Convert digits to English words",
+    },
   ],
   summary: "How to handle digits 0-9.",
   detail:
@@ -110,6 +171,9 @@ const BY_ID: Record<string, Def> = {
   [OPTION_LETTER_CASE]: LETTER_CASE,
   [OPTION_SHOW_ALL]: SHOW_ALL,
   [OPTION_DIGITS]: DIGITS,
+  [OPTION_MULTIPLIER]: MULTIPLIER,
+  [OPTION_OFFSET]: OFFSET,
+  [OPTION_ROT_VARIANT]: ROT_VARIANT,
 };
 
 const CACHE = new Map<string, OptionCatalogue<ClassicalOptionGroup>>();

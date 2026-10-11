@@ -19,6 +19,7 @@ import { createRabbit } from "./phase6-ciphers";
 import { createTrivium } from "./phase8-ciphers";
 import { Pcg64 } from "./pcg";
 import { createRc4 } from "./rc4";
+import { RepeatingKeyXorStream } from "./repeating-key-xor";
 import { createSnowV } from "./snow-v";
 import { createSnow3g } from "./snow3g";
 import { createSosemanuk } from "./sosemanuk";
@@ -55,6 +56,7 @@ export const RAW_STREAM_CIPHER_IDS = [
   "mickey",
   "a5-2",
   "rc4",
+  "repeating-key-xor",
 ] as const;
 
 export type RawStreamCipherId = (typeof RAW_STREAM_CIPHER_IDS)[number];
@@ -303,5 +305,7 @@ export function createRawStreamCipher(
     }
     case "rc4":
       return createRc4(key, options.drop ?? 0);
+    case "repeating-key-xor":
+      return new RepeatingKeyXorStream(key);
   }
 }

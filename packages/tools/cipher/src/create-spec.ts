@@ -21,6 +21,10 @@ import {
   OPTION_AGE_AUTH_MODE,
   OPTION_AGE_ARMOR,
   SPEC_VERSION,
+  DEFAULT_JASYPT_ITERATIONS,
+  DEFAULT_JASYPT_PROFILE,
+  OPTION_JASYPT_ITERATIONS,
+  OPTION_JASYPT_PROFILE,
 } from "./pure";
 import { cipherCatalogueFor } from "./catalogue/options";
 import {
@@ -59,6 +63,10 @@ export function createSpec(options?: { variant?: string }): CipherSpec {
     base[OPTION_AGE_AUTH_MODE] = "recipient";
     base[OPTION_AGE_ARMOR] = true;
   }
+  if (variant === "jasypt") {
+    base[OPTION_JASYPT_PROFILE] = DEFAULT_JASYPT_PROFILE;
+    base[OPTION_JASYPT_ITERATIONS] = DEFAULT_JASYPT_ITERATIONS;
+  }
   /**
    * Seed the selects the block ciphers render, for the same reason the hash family does.
    *
@@ -96,11 +104,13 @@ export function createSpec(options?: { variant?: string }): CipherSpec {
    * seeding changes what the form shows and never what a spec computes -- the second registry gate,
    * which strips every enum out and requires the same bytes back.
    */
-  base[OPTION_KEY_SOURCE] = DEFAULT_KEY_SOURCE;
-  base[OPTION_KDF_DERIVES] = DEFAULT_KDF_DERIVES;
-  base[OPTION_KDF_ENVELOPE] = DEFAULT_KDF_ENVELOPE;
-  base[OPTION_KDF_HASH] = DEFAULT_KDF_HASH;
-  base[OPTION_ARGON2_VARIANT] = "argon2id";
+  if (variant !== "jasypt" && variant !== "cipher-image") {
+    base[OPTION_KEY_SOURCE] = DEFAULT_KEY_SOURCE;
+    base[OPTION_KDF_DERIVES] = DEFAULT_KDF_DERIVES;
+    base[OPTION_KDF_ENVELOPE] = DEFAULT_KDF_ENVELOPE;
+    base[OPTION_KDF_HASH] = DEFAULT_KDF_HASH;
+    base[OPTION_ARGON2_VARIANT] = "argon2id";
+  }
   if (tool.paramSets) {
     base[OPTION_PARAM_SET] = tool.defaultParamSet ?? tool.paramSets[0]!.id;
   }

@@ -1,3 +1,4 @@
+import type { OutputEncoding } from "@ocs/contracts";
 import type { ToolDefinition } from "@ocs/engine";
 import { formatCatalogueFor } from "./catalogue/options";
 import { OPTION_GROUP_META } from "./catalogue/groups";
@@ -11,7 +12,10 @@ import { samplesFor } from "./samples";
 import {
   readAction,
   readDirection,
+  OPENPGP_PACKET_OUTPUT_OPERATIONS,
   randomShapeTag,
+  readOpenPgpOperation,
+  readOpenPgpOutput,
   readRandomShape,
   readUuidVersion,
   TAG_DECODE,
@@ -49,6 +53,17 @@ export function formatToolDefinition(toolId: string): ToolDefinition<FormatSpec>
     // anything is typed, which is the test for belonging here rather than in `ToolResult.fields`.
     info: formatInfo,
     compute: computeFormat,
+    outputEncodingsForSpec: (spec) => {
+      if (meta.kind !== "openpgp") return manifest.outputEncodings;
+      const operation = readOpenPgpOperation(spec.options);
+      if (
+        OPENPGP_PACKET_OUTPUT_OPERATIONS.includes(operation) &&
+        readOpenPgpOutput(spec.options) === "armor"
+      ) {
+        return ["utf-8"];
+      }
+      return OPENPGP_BINARY_ENCODINGS;
+    },
     /**
      * The tags, and each gates a control that would otherwise be meaningless.
      *
@@ -82,10 +97,22 @@ export function formatToolDefinition(toolId: string): ToolDefinition<FormatSpec>
        * default spec.
        */
       if (meta.kind === "random") tags.push(randomShapeTag(readRandomShape(spec.options)));
+      if (meta.kind === "openpgp") tags.push(readOpenPgpOperation(spec.options));
       return tags;
     },
   };
 }
+
+const OPENPGP_BINARY_ENCODINGS: readonly OutputEncoding[] = [
+  "hex-upper",
+  "hex",
+  "base64",
+  "base64url",
+  "base32",
+  "decimal",
+  "binary",
+  "utf-8",
+];
 
 export { FORMAT_TOOL_IDS };
 

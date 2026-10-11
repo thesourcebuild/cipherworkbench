@@ -153,6 +153,9 @@ export function buildExportPayload(
       case "format":
         mode = "format";
         break;
+      case "password-artifact":
+        mode = manifest.purpose ?? "analysis";
+        break;
     }
   }
 
@@ -282,6 +285,5 @@ export function downloadBinaryFile(
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
-
 
 

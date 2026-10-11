@@ -5,6 +5,7 @@ import type { OptionValue, OutputEncoding } from "@ocs/contracts";
 import { OutputEncoding as OutputEncodingSchema, setOption } from "@ocs/contracts";
 import {
   decodeInput,
+  acceptedInputModes,
   fileProcessingModeForSpec,
   identifyAmong,
   isAvailableOn,
@@ -38,7 +39,7 @@ import { EndpointProbeModal } from "./endpoint-probe-modal";
 import { isInputBlank, type InputState } from "./input-state";
 import { OptionsForm, visibleOptionGroups } from "./options-form";
 import { ProgressReadout } from "./progress-readout";
-import { CHECK_STRING, TEST_INPUTS } from "./test-inputs";
+import { testInputsFor } from "./test-inputs";
 import { FieldTable } from "./field-table";
 import { ResultPanel } from "./result-panel";
 import { TablePanel } from "./table-panel";
@@ -49,6 +50,7 @@ import { ToolHeader } from "./tool-header";
 import { claimComputeRequest, isComputeBusy, useCompute } from "./use-compute";
 import { useVariants } from "./use-variants";
 import { VerifyPanel } from "./verify-panel";
+import { CipherImagePreview } from "./cipher-image-preview";
 
 export interface ToolWorkbenchProps {
   toolId: string;
@@ -176,6 +178,25 @@ export function ToolWorkbench({
     return tool.readsInput;
   }, [tool, spec]);
 
+  const testInputs = useMemo(() => (tool ? testInputsFor(tool) : []), [tool]);
+
+  useEffect(() => {
+    if (!tool) return;
+    const modes = acceptedInputModes(tool.sourcePolicy, tool.supportsFile);
+    if (modes.includes(input.mode)) return;
+    const mode = modes[0];
+    if (!mode) return;
+    const next = {
+      ...input,
+      mode,
+      ...(mode === "text" && tool.sourcePolicy?.semantics === "text-artifact"
+        ? { textEncoding: "utf-8" as const }
+        : {}),
+    };
+    if (inputIsSeeded) onSeedInput(next);
+    else onInputChange(next);
+  }, [input, inputIsSeeded, onInputChange, onSeedInput, tool]);
+
   const isCertTool = useMemo(
     () =>
       tool?.family === "certificates" &&
@@ -200,6 +221,18 @@ export function ToolWorkbench({
   const [probeTargetSlot, setProbeTargetSlot] = useState<"primary" | "secondary">("primary");
 
   const tag = useMemo(() => (tool && spec ? tool.variantTag?.(spec) : undefined), [tool, spec]);
+  const activeOutputEncodings = useMemo(
+    () =>
+      tool && spec
+        ? (tool.outputEncodingsForSpec?.(spec) ?? tool.outputEncodings)
+        : (["hex-upper"] as const),
+    [tool, spec],
+  );
+
+  useEffect(() => {
+    if (activeOutputEncodings.includes(outputEncoding)) return;
+    setOutputEncoding(activeOutputEncodings[0] ?? "hex-upper");
+  }, [activeOutputEncodings, outputEncoding]);
 
   const secondaryOptionDef = useMemo(() => {
     if (!tool || !spec) return undefined;
@@ -416,12 +449,13 @@ export function ToolWorkbench({
 
   useEffect(() => {
     if (!tool || !inputIsSeeded || !effectiveReadsInput) return;
-    const sample = tool.samples?.[0];
-    const text = sample ? sample.text : CHECK_STRING;
+    const sample = testInputs[0];
+    if (!sample) return;
+    const text = sample.text;
     if (input.mode === "text" && input.text === text) return;
     onSeedInput({ ...input, mode: "text", file: undefined, text });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tool, effectiveReadsInput]);
+  }, [tool, effectiveReadsInput, testInputs]);
 
   /**
    * A generator: reads no input and takes no material either, so the whole interaction is the button.
@@ -592,10 +626,10 @@ export function ToolWorkbench({
      * The tab exists if *any* of its three parts has something to show.
      *
      * Poly1305 has no settings at all and a tool could in principle have nothing but an Info table --
-     * and since the Test input menu moved in here, a tool with neither settings nor info but which
-     * reads input still needs the tab to exist, or the menu would have nowhere to live.
+     * and since the Test input menu moved in here, a tool with neither settings nor info but with
+     * runnable samples still needs the tab to exist, or the menu would have nowhere to live.
      */
-    ...(hasSettings || info.length > 0 || effectiveReadsInput
+    ...(hasSettings || info.length > 0 || testInputs.length > 0
       ? [
           {
             id: "settings",
@@ -618,17 +652,49 @@ export function ToolWorkbench({
                   a block cipher contributes a dozen controls -- so anything under it starts below the
                   fold on a short window, which is the wrong place for the thing you want first.
                 */}
-                {/* Absent for a generator: there is no box to load anything into. */}
-                {effectiveReadsInput && (
+                {/* Absent when no runnable text sample exists, including every file-only artifact. */}
+                {testInputs.length > 0 && (
                   <Panel
-                    title="Test input"
-                    description="Load a known string into the box."
+                    title={effectiveReadsInput ? "Test input" : "Sample passwords"}
+                    description={
+                      effectiveReadsInput
+                        ? "Load a known string into the box."
+                        : "Load a sample password or test vector into the fields."
+                    }
                     collapsible
                   >
                     <TestInputPicker
                       input={input}
-                      samples={tool.samples}
+                      entries={testInputs}
+                      effectiveReadsInput={effectiveReadsInput}
                       onChange={onInputChange}
+                      onSelectSample={(chosen) => {
+                        if (chosen.options) {
+                          setSpec((prev) => {
+                            if (!prev) return prev;
+                            let current = prev;
+                            for (const [k, v] of Object.entries(chosen.options!)) {
+                              if (tool?.onOptionChange) {
+                                current = tool.onOptionChange(current, k, v);
+                              } else {
+                                current = { ...current, options: setOption(current.options, k, v) };
+                              }
+                            }
+                            return current;
+                          });
+                        }
+                        if (!effectiveReadsInput) {
+                          const hasPwInOptions = chosen.options && "password" in chosen.options;
+                          if (!hasPwInOptions) {
+                            const pwOpt =
+                              tool?.catalogue.get("password") ??
+                              tool?.catalogue.options.find((o) => o.kind === "password");
+                            if (pwOpt) {
+                              setOptionValue(pwOpt.id, chosen.text);
+                            }
+                          }
+                        }
+                      }}
                     />
                   </Panel>
                 )}
@@ -868,6 +934,7 @@ export function ToolWorkbench({
                   generates={false}
                   supportsFile={tool.supportsFile}
                   fileProcessing={fileProcessing}
+                  sourcePolicy={tool.sourcePolicy}
                   byteLength={state.inputByteLength}
                   problem={inputProblem ?? (state.status === "error" ? state.error : undefined)}
                   autoUpdate={effectiveAutoUpdate}
@@ -896,6 +963,7 @@ export function ToolWorkbench({
             generates={generates}
             supportsFile={effectiveReadsInput && tool.supportsFile}
             fileProcessing={fileProcessing}
+            sourcePolicy={tool.sourcePolicy}
             byteLength={state.inputByteLength}
             /**
              * The decode failure first, because it is true earlier.
@@ -983,13 +1051,22 @@ export function ToolWorkbench({
           </Panel>
         ))}
 
+        {tool.id === "cipher-image" && (
+          <CipherImagePreview
+            source={
+              resultState.result?.bytes && input.mode === "file" ? input.file : undefined
+            }
+            transformed={resultState.result?.error ? undefined : resultState.result?.bytes}
+          />
+        )}
+
         <ResultPanel
           state={resultState}
           manifest={tool}
           spec={spec}
           input={customResult ? undefined : input}
           infoFields={infoFields}
-          outputEncodings={tool.outputEncodings}
+          outputEncodings={activeOutputEncodings}
           outputEncoding={outputEncoding}
           onOutputEncodingChange={setOutputEncoding}
           isInsecure={lintResult.isInsecure}
@@ -1146,41 +1223,33 @@ function pickOutputEncoding(
  */
 function TestInputPicker({
   input,
-  samples,
+  entries,
+  effectiveReadsInput = true,
   onChange,
+  onSelectSample,
 }: {
   input: InputState;
-  /** The open tool's own, from `ToolDefinition.samples`. Undefined for most tools. */
-  samples: readonly ToolSample[] | undefined;
+  entries: readonly ToolSample[];
+  effectiveReadsInput?: boolean;
   onChange: (next: InputState) => void;
+  onSelectSample?: (sample: ToolSample) => void;
 }) {
-  /**
-   * The tool's own samples, or the generic pair -- never both.
-   *
-   * `123456789` is *the* check string for a CRC or a digest, and `Lorem ipsum` is a multi-kilobyte
-   * input that crosses a hash's block boundary sixty times. Neither is anything to a JSON formatter,
-   * so offering them there under a heading was just labelling the noise: a tool that declares its own
-   * samples has said what its inputs look like, and the two generic entries are then only wrong
-   * answers with a group label on top.
-   *
-   * Which means no `optgroup` either. One list, so the ids need no prefix and stay exactly what the
-   * family or `TEST_INPUTS` called them -- which is what the desktop smoke probe drives this menu by.
-   */
-  const entries = samples && samples.length > 0 ? samples : TEST_INPUTS;
-
   return (
     <select
       data-ocs-test-input=""
-      aria-label="Test input"
+      aria-label={effectiveReadsInput ? "Test input" : "Sample passwords"}
       value=""
       onChange={(event) => {
         const chosen = entries.find((entry) => entry.id === event.target.value);
-        if (chosen) onChange({ ...input, mode: "text", file: undefined, text: chosen.text });
+        if (chosen) {
+          onChange({ ...input, mode: "text", file: undefined, text: chosen.text });
+          onSelectSample?.(chosen);
+        }
       }}
       className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950"
     >
       <option value="" disabled>
-        Choose a test input…
+        {effectiveReadsInput ? "Choose a test input…" : "Choose a sample password…"}
       </option>
       {entries.map((entry) => (
         <option key={entry.id} value={entry.id} title={entry.note}>

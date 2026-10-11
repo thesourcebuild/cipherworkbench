@@ -23,6 +23,11 @@ describe("Advanced Password Hashes & Key Derivation Functions", () => {
       const hash3 = unixDesCrypt("different", "ab");
       expect(hash3).not.toBe(hash1);
     });
+
+    it("matches Hashcat's traditional DES-Crypt fixture", () => {
+      expect(unixDesCrypt("hashcat", "24")).toBe("24leDr0hHfb3A");
+      expect(unixDesCrypt("password", "ab")).toBe("abJnggxhB/yWI");
+    });
   });
 
   describe("BSD Extended Crypt (_ format)", () => {
@@ -30,6 +35,11 @@ describe("Advanced Password Hashes & Key Derivation Functions", () => {
       const hash = bsdExtendedCrypt("password", "abcd", 1000);
       expect(hash.startsWith("_")).toBe(true);
       expect(hash.length).toBe(20);
+    });
+
+    it("matches Hashcat's BSDi-Crypt fixture", () => {
+      expect(bsdExtendedCrypt("hashcat", "8147", 1163)).toBe("_9G..8147mpcfKT8g0U.");
+      expect(bsdExtendedCrypt("ab1234567", "abcd", 13)).toBe("_B...abcd/baGunX9paw");
     });
   });
 

@@ -31,6 +31,8 @@ const BYTE_ENCODINGS: readonly OutputEncoding[] = [
   "binary",
 ];
 
+const OPENPGP_ENCODINGS: readonly OutputEncoding[] = [...BYTE_ENCODINGS, "utf-8"];
+
 function toManifest(meta: FormatToolMeta): ToolManifest {
   return {
     id: meta.id,
@@ -51,8 +53,9 @@ function toManifest(meta: FormatToolMeta): ToolManifest {
      * you do with them. The badge says what the tool is, and the Checks panel is where the caveats
      * about entropy and about JWT verification live.
      */
-    security: "not-encryption",
-    outputEncodings: meta.emitsBytes ? BYTE_ENCODINGS : TEXT_ONLY,
+    security: meta.security ?? "not-encryption",
+    outputEncodings:
+      meta.kind === "openpgp" ? OPENPGP_ENCODINGS : meta.emitsBytes ? BYTE_ENCODINGS : TEXT_ONLY,
     /**
      * File input, except for the generators.
      *
@@ -87,6 +90,15 @@ function toManifest(meta: FormatToolMeta): ToolManifest {
      * panel says so.
      */
     streaming: false,
+    ...(meta.kind === "openpgp"
+      ? {
+          sourcePolicy: {
+            semantics: "bytes" as const,
+            maxFileBytes: 64 * 1024 * 1024,
+            accept: [".pgp", ".gpg", ".asc", "application/pgp-encrypted", "application/octet-stream"],
+          },
+        }
+      : {}),
   };
 }
 

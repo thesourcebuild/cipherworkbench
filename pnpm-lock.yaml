@@ -232,6 +232,9 @@ importers:
       '@ocs/parity':
         specifier: workspace:*
         version: link:packages/tools/parity
+      '@ocs/password-artifact':
+        specifier: workspace:*
+        version: link:packages/tools/password-artifact
       '@ocs/platform':
         specifier: workspace:*
         version: link:packages/platform
@@ -394,6 +397,9 @@ importers:
       '@ocs/parity':
         specifier: workspace:*
         version: link:../../packages/tools/parity
+      '@ocs/password-artifact':
+        specifier: workspace:*
+        version: link:../../packages/tools/password-artifact
       '@ocs/platform':
         specifier: workspace:*
         version: link:../../packages/platform
@@ -538,6 +544,9 @@ importers:
       '@ocs/parity':
         specifier: workspace:*
         version: link:../tools/parity
+      '@ocs/password-artifact':
+        specifier: workspace:*
+        version: link:../tools/password-artifact
     devDependencies:
       '@ocs/config':
         specifier: workspace:*
@@ -825,6 +834,9 @@ importers:
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
+      openpgp:
+        specifier: 6.3.2
+        version: 6.3.2(@openpgp/web-stream-tools@0.3.1(@types/node@22.20.1)(typescript@5.9.3))
       uuid:
         specifier: ^14.0.2
         version: 14.0.2
@@ -835,6 +847,9 @@ importers:
       '@ocs/config':
         specifier: workspace:*
         version: link:../../config
+      '@openpgp/web-stream-tools':
+        specifier: 0.3.1
+        version: 0.3.1(@types/node@22.20.1)(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -962,6 +977,25 @@ importers:
       '@ocs/algos':
         specifier: workspace:*
         version: link:../../algos
+      '@ocs/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@ocs/engine':
+        specifier: workspace:*
+        version: link:../../cipher-engine
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@ocs/config':
+        specifier: workspace:*
+        version: link:../../config
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/tools/password-artifact:
+    dependencies:
       '@ocs/contracts':
         specifier: workspace:*
         version: link:../../contracts
@@ -1650,6 +1684,18 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@openpgp/web-stream-tools@0.3.1':
+    resolution: {integrity: sha512-EV+VQ4Dr8b+JmlGnc74FLgx7EhLyydOr4j6s6Hp+2scQh6sLQMs2h+1oEYUIslXcQPicWKG5ZQx+/dua0dgPWA==}
+    engines: {node: '>= 18.0.0'}
+    peerDependencies:
+      '@types/node': '>=18.0.0'
+      typescript: '>=4.7'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      typescript:
+        optional: true
 
   '@oxc-project/types@0.144.0':
     resolution: {integrity: sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg==}
@@ -3617,6 +3663,15 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
+  openpgp@6.3.2:
+    resolution: {integrity: sha512-wcZTzHz41LV8Y48zH/JlD1JT8YdNmpWOuMAjQ/podvvCwsjBEU37K3znJh4UQcj3hksE5z9TzvhbUbwzsGvlLQ==}
+    engines: {node: '>= 18.0.0', typescript: '>= 5.0.0'}
+    peerDependencies:
+      '@openpgp/web-stream-tools': ~0.3.0
+    peerDependenciesMeta:
+      '@openpgp/web-stream-tools':
+        optional: true
+
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -4997,6 +5052,11 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@openpgp/web-stream-tools@0.3.1(@types/node@22.20.1)(typescript@5.9.3)':
+    optionalDependencies:
+      '@types/node': 22.20.1
+      typescript: 5.9.3
 
   '@oxc-project/types@0.144.0': {}
 
@@ -7224,6 +7284,10 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
+
+  openpgp@6.3.2(@openpgp/web-stream-tools@0.3.1(@types/node@22.20.1)(typescript@5.9.3)):
+    optionalDependencies:
+      '@openpgp/web-stream-tools': 0.3.1(@types/node@22.20.1)(typescript@5.9.3)
 
   optionator@0.9.4:
     dependencies:

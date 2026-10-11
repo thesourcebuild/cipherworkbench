@@ -88,7 +88,7 @@ function buildCsp(scriptHashes: readonly string[] = []): string {
     "worker-src 'self'",
     // Next inlines critical CSS, and hashing that is not worth the coupling.
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
+    "img-src 'self' data: blob:",
     "font-src 'self' data:",
     // 'self' only — this app has no server to talk to, and nothing in it should
     // ever open a socket. A CSP violation here would be a genuine finding.

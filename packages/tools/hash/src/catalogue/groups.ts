@@ -1,6 +1,6 @@
 import type { OptionGroupMeta } from "@ocs/engine";
 
-export const OPTION_GROUPS = ["message", "transform", "output"] as const;
+export const OPTION_GROUPS = ["message", "key", "transform", "output"] as const;
 export type HashOptionGroup = (typeof OPTION_GROUPS)[number];
 
 export const OPTION_GROUP_META: Record<HashOptionGroup, OptionGroupMeta<HashOptionGroup>> = {
@@ -18,6 +18,21 @@ export const OPTION_GROUP_META: Record<HashOptionGroup, OptionGroupMeta<HashOpti
     label: "Message",
     summary: "What is being hashed. TupleHash takes a tuple rather than a byte string.",
     order: 5,
+    placement: "input",
+    collapsedByDefault: false,
+  },
+  /**
+   * BLAKE2 and BLAKE3 key, salt, personalisation, and context material.
+   *
+   * `placement: "input"` because a keyed hash / MAC or salted digest is an input asked of the
+   * message-key pair, matching how MAC and Cipher tools place key material in the Input canvas
+   * rather than the Settings rail.
+   */
+  key: {
+    id: "key",
+    label: "Key",
+    summary: "Key, salt, and personalisation material for BLAKE2 and BLAKE3.",
+    order: 8,
     placement: "input",
     collapsedByDefault: false,
   },

@@ -137,12 +137,12 @@ describe("the Caesar tool", () => {
   });
 
   it("decrypts with the same shift in the other direction", async () => {
-    expect(
-      await textOf({ [OPTION_SHIFT]: 3, [OPTION_DIRECTION]: "decrypt" }, "KHOOR"),
-    ).toBe("HELLO");
-    expect(
-      await textOf({ [OPTION_SHIFT]: 5, [OPTION_DIRECTION]: "decrypt" }, "MJQQT"),
-    ).toBe("HELLO");
+    expect(await textOf({ [OPTION_SHIFT]: 3, [OPTION_DIRECTION]: "decrypt" }, "KHOOR")).toBe(
+      "HELLO",
+    );
+    expect(await textOf({ [OPTION_SHIFT]: 5, [OPTION_DIRECTION]: "decrypt" }, "MJQQT")).toBe(
+      "HELLO",
+    );
   });
 
   /**
@@ -161,8 +161,12 @@ describe("the Caesar tool", () => {
 
   it("clamps a shift outside the control's range rather than refusing it", async () => {
     // Clamped, not reduced: the control offers 0..25, so 30 is a spinner mishap and lands on 25.
-    expect(await textOf({ [OPTION_SHIFT]: 30 }, "A")).toBe(await textOf({ [OPTION_SHIFT]: 25 }, "A"));
-    expect(await textOf({ [OPTION_SHIFT]: -4 }, "A")).toBe(await textOf({ [OPTION_SHIFT]: 0 }, "A"));
+    expect(await textOf({ [OPTION_SHIFT]: 30 }, "A")).toBe(
+      await textOf({ [OPTION_SHIFT]: 25 }, "A"),
+    );
+    expect(await textOf({ [OPTION_SHIFT]: -4 }, "A")).toBe(
+      await textOf({ [OPTION_SHIFT]: 0 }, "A"),
+    );
   });
 
   it("passes non-letters through and says how many", async () => {
@@ -184,9 +188,9 @@ describe("the Caesar tool", () => {
   it("notes that 13 is its own inverse, in the fields and in the checks", async () => {
     const result = await run({ [OPTION_SHIFT]: 13 }, "Spoiler");
     expect(result.fields!.some((f) => f.value.includes("ROT13"))).toBe(true);
-    expect(lint(specFor({ [OPTION_SHIFT]: 13 })).diagnostics.some((d) => d.code === "X003")).toBe(
-      true,
-    );
+    expect(
+      lint(specFor({ [OPTION_SHIFT]: 13 })).diagnostics.some((d) => d.code === "X003"),
+    ).toBe(true);
     // And it really is: encrypt and decrypt agree at this shift.
     expect(await textOf({ [OPTION_SHIFT]: 13 }, "Spoiler")).toBe(
       await textOf({ [OPTION_SHIFT]: 13, [OPTION_DIRECTION]: "decrypt" }, "Spoiler"),
@@ -195,12 +199,12 @@ describe("the Caesar tool", () => {
 
   it("flattens the case when asked", async () => {
     expect(await textOf({ [OPTION_SHIFT]: 3 }, "Hello, World!")).toBe("Khoor, Zruog!");
-    expect(await textOf({ [OPTION_SHIFT]: 3, [OPTION_LETTER_CASE]: "upper" }, "Hello, World!")).toBe(
-      "KHOOR, ZRUOG!",
-    );
-    expect(await textOf({ [OPTION_SHIFT]: 3, [OPTION_LETTER_CASE]: "lower" }, "Hello, World!")).toBe(
-      "khoor, zruog!",
-    );
+    expect(
+      await textOf({ [OPTION_SHIFT]: 3, [OPTION_LETTER_CASE]: "upper" }, "Hello, World!"),
+    ).toBe("KHOOR, ZRUOG!");
+    expect(
+      await textOf({ [OPTION_SHIFT]: 3, [OPTION_LETTER_CASE]: "lower" }, "Hello, World!"),
+    ).toBe("khoor, zruog!");
   });
 });
 
@@ -259,7 +263,9 @@ describe("the brute-force table", () => {
       expect(line.length).toBeLessThan(__testing.PREVIEW_LIMIT + 12);
     }
     // A short input is not truncated and says nothing about it.
-    expect((await run({ [OPTION_SHIFT]: 1 }, "short")).working).not.toContain("Showing the first");
+    expect((await run({ [OPTION_SHIFT]: 1 }, "short")).working).not.toContain(
+      "Showing the first",
+    );
   });
 });
 
@@ -271,6 +277,11 @@ describe("lint rules", () => {
       specFor(),
       specFor({ [OPTION_SHIFT]: 0 }),
       specFor({ [OPTION_SHIFT]: 13 }),
+      createSpec({ variant: "atbash" }),
+      {
+        ...createSpec({ variant: "affine" }),
+        options: { ...createSpec({ variant: "affine" }).options, multiplier: 2 },
+      },
     ];
     for (const spec of TRIPS) for (const d of lint(spec).diagnostics) emitted.add(d.code);
     expect([...emitted].sort()).toEqual([...RULE_CODES].sort());
@@ -341,7 +352,10 @@ describe("samples and describe", () => {
 
   it("computes every sample under the default spec", async () => {
     for (const sample of samplesFor("caesar")!) {
-      const result = await classicalToolDefinition("caesar").compute(specFor(), bytes(sample.text));
+      const result = await classicalToolDefinition("caesar").compute(
+        specFor(),
+        bytes(sample.text),
+      );
       expect(result.error, sample.id).toBeUndefined();
       expect(result.text, sample.id).toBeTruthy();
     }
@@ -379,7 +393,10 @@ Mauris elementum odio nec fermentum feugiat. Curabitur ornare sagittis quam, at 
       // 1. Encrypt
       const encSpec = def.createSpec();
       const encResult = await def.compute(encSpec, loremBytes);
-      expect(encResult.error, `Encrypt error in ${manifest.id}: ${encResult.error}`).toBeUndefined();
+      expect(
+        encResult.error,
+        `Encrypt error in ${manifest.id}: ${encResult.error}`,
+      ).toBeUndefined();
       expect(encResult.text, `Missing encrypt text in ${manifest.id}`).toBeTruthy();
       expect(encResult.text!.length).toBeGreaterThan(0);
 
@@ -392,18 +409,23 @@ Mauris elementum odio nec fermentum feugiat. Curabitur ornare sagittis quam, at 
         },
       };
       const decResult = await def.compute(decSpec, new TextEncoder().encode(encResult.text!));
-      expect(decResult.error, `Decrypt error in ${manifest.id}: ${decResult.error}`).toBeUndefined();
+      expect(
+        decResult.error,
+        `Decrypt error in ${manifest.id}: ${decResult.error}`,
+      ).toBeUndefined();
       expect(decResult.text, `Missing decrypt text in ${manifest.id}`).toBeTruthy();
     }
   });
 
   it("describes itself by the shift and the direction", () => {
-    expect(describeSpec(specFor({ [OPTION_SHIFT]: 3 }))).toBe("Moves each letter forward 3 places.");
+    expect(describeSpec(specFor({ [OPTION_SHIFT]: 3 }))).toBe(
+      "Moves each letter forward 3 places.",
+    );
     // Singular at one, because "1 places" is the kind of thing a reader notices.
     expect(describeSpec(specFor({ [OPTION_SHIFT]: 1 }))).toContain("forward 1 place.");
-    expect(
-      describeSpec(specFor({ [OPTION_SHIFT]: 3, [OPTION_DIRECTION]: "decrypt" })),
-    ).toBe("Moves each letter back 3 places -- forward 23 mod 26.");
+    expect(describeSpec(specFor({ [OPTION_SHIFT]: 3, [OPTION_DIRECTION]: "decrypt" }))).toBe(
+      "Moves each letter back 3 places -- forward 23 mod 26.",
+    );
     expect(describeSpec(specFor({ [OPTION_LETTER_CASE]: "upper" }))).toContain("upper case");
   });
 
@@ -416,7 +438,8 @@ Mauris elementum odio nec fermentum feugiat. Curabitur ornare sagittis quam, at 
     expect(field("Alphabet").hint).toMatch(/bytes or hex/);
     expect(field("Keyspace").value).toContain("26");
     expect(
-      classicalToolDefinition("caesar").info!(specFor({ [OPTION_DIRECTION]: "decrypt" }))[0]!.value,
+      classicalToolDefinition("caesar").info!(specFor({ [OPTION_DIRECTION]: "decrypt" }))[0]!
+        .value,
     ).toBe("D(x) = (x - k) mod 26");
   });
 });

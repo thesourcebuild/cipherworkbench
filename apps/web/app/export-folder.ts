@@ -270,14 +270,32 @@ export function collectExportFiles(
 
   const files: ExportableFile[] = [];
   const baseName = manifest?.id ?? "result";
+  const primaryName = result.suggestedFilename;
+  const primaryMime = result.mimeType;
 
   if (result.text && result.bytes) {
-    files.push({ name: `${baseName}.txt`, content: result.text, mimeType: "text/plain" });
-    files.push({ name: `${baseName}.bin`, content: result.bytes, mimeType: "application/octet-stream" });
+    files.push({
+      name: primaryName ?? `${baseName}.txt`,
+      content: result.text,
+      mimeType: primaryMime ?? "text/plain",
+    });
+    files.push({
+      name: `${baseName}.bin`,
+      content: result.bytes,
+      mimeType: "application/octet-stream",
+    });
   } else if (result.text) {
-    files.push({ name: `${baseName}.txt`, content: result.text, mimeType: "text/plain" });
+    files.push({
+      name: primaryName ?? `${baseName}.txt`,
+      content: result.text,
+      mimeType: primaryMime ?? "text/plain",
+    });
   } else if (result.bytes) {
-    files.push({ name: `${baseName}.bin`, content: result.bytes, mimeType: "application/octet-stream" });
+    files.push({
+      name: primaryName ?? `${baseName}.bin`,
+      content: result.bytes,
+      mimeType: primaryMime ?? "application/octet-stream",
+    });
   }
 
   return files;

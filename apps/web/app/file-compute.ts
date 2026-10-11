@@ -9,6 +9,7 @@ import {
   type ToolSpecBase,
 } from "@ocs/engine";
 import type { ComputeRequest, ComputeResponse } from "./compute.worker";
+import { createBrowserFileSource } from "./browser-file-source";
 
 export interface FileComputeOptions {
   onProgress?: (progress: StreamProgress) => void;
@@ -98,7 +99,14 @@ export async function computeFile(
   file: File,
   options: FileComputeOptions = {},
 ): Promise<ToolResult> {
-  const streamsCurrentSpec = fileProcessingModeForSpec(tool, spec) === "streaming";
+  const processingMode = fileProcessingModeForSpec(tool, spec);
+  const streamsCurrentSpec = processingMode === "streaming";
+  const maxFileBytes = tool.sourcePolicy?.maxFileBytes;
+  if (maxFileBytes !== undefined && file.size > maxFileBytes) {
+    throw new Error(
+      `${tool.label} accepts files up to ${maxFileBytes.toLocaleString()} bytes; this file is ${file.size.toLocaleString()} bytes.`,
+    );
+  }
   if (workerSupported) {
     try {
       return await computeInWorker(
@@ -111,7 +119,10 @@ export async function computeFile(
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") throw error;
       if (!(error instanceof WorkerUnavailableError)) throw error;
-      assertSafeMainThreadFallback(file, streamsCurrentSpec);
+      assertSafeMainThreadFallback(
+        file,
+        streamsCurrentSpec || processingMode === "random-access",
+      );
       // One failure is enough to stop paying the construction cost on every file.
       workerSupported = false;
       console.warn(
@@ -120,7 +131,7 @@ export async function computeFile(
       );
     }
   }
-  assertSafeMainThreadFallback(file, streamsCurrentSpec);
+  assertSafeMainThreadFallback(file, streamsCurrentSpec || processingMode === "random-access");
   return computeOnMainThread(tool, spec, file, options);
 }
 
@@ -330,10 +341,19 @@ async function computeOnMainThread(
   file: File,
   { onProgress, signal }: FileComputeOptions,
 ): Promise<ToolResult> {
-  const streamsCurrentSpec = fileProcessingModeForSpec(tool, spec) === "streaming";
+  const processingMode = fileProcessingModeForSpec(tool, spec);
+  if (tool.computeFile && processingMode === "random-access") {
+    return tool.computeFile(spec, createBrowserFileSource(file));
+  }
+  const streamsCurrentSpec = processingMode === "streaming";
   if (!tool.createStream || !streamsCurrentSpec) {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    return tool.compute(spec, bytes);
+    return tool.compute(spec, bytes, {
+      filename: file.name,
+      mimeType: file.type || undefined,
+      inputSize: file.size,
+      lastModified: file.lastModified,
+    });
   }
 
   return runStream(tool.createStream(spec), iterateStream(file.stream()), {

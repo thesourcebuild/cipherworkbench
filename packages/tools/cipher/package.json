@@ -1,6 +1,6 @@
 {
   "name": "@ocs/cipher",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./pure": "./src/pure.ts",
     "./manifests": "./src/manifest.ts",
-    "./definition": "./src/definition.ts"
+    "./definition": "./src/definition.ts",
+    "./jasypt": "./src/jasypt.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

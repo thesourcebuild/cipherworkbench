@@ -36,6 +36,15 @@ export const OPTION_RANDOM_DISTINCT = "randomDistinct";
 export const OPTION_RANDOM_SORTED = "randomSorted";
 export const OPTION_RANDOM_PLACES = "randomPlaces";
 export const OPTION_RANDOM_BYTES = "randomBytes";
+export const OPTION_OPENPGP_OPERATION = "openPgpOperation";
+export const OPTION_OPENPGP_OUTPUT = "openPgpOutput";
+export const OPTION_OPENPGP_COMPRESSION = "openPgpCompression";
+export const OPTION_OPENPGP_PROTECTION = "openPgpProtection";
+export const OPTION_OPENPGP_PASSWORD = "openPgpPassword";
+export const OPTION_OPENPGP_RECIPIENT_KEYS = "openPgpRecipientKeys";
+export const OPTION_OPENPGP_PRIVATE_KEYS = "openPgpPrivateKeys";
+export const OPTION_OPENPGP_KEY_PASSPHRASE = "openPgpKeyPassphrase";
+export const OPTION_OPENPGP_VERIFICATION_KEYS = "openPgpVerificationKeys";
 export const OPTION_USE_LOWER = "useLower";
 export const OPTION_USE_UPPER = "useUpper";
 export const OPTION_USE_DIGIT = "useDigit";
@@ -126,6 +135,27 @@ export const RANDOM_SHAPES = ["integer", "decimal"] as const;
 export type RandomShape = (typeof RANDOM_SHAPES)[number];
 export type UuidVersion = (typeof UUID_VERSIONS)[number];
 
+export const OPENPGP_OPERATIONS = [
+  "password-encrypt",
+  "password-decrypt",
+  "public-key-encrypt",
+  "private-key-decrypt",
+  "sign",
+  "verify",
+  "encrypt-and-sign",
+  "decrypt-and-verify",
+] as const;
+export type OpenPgpOperation = (typeof OPENPGP_OPERATIONS)[number];
+
+export const OPENPGP_OUTPUTS = ["binary", "armor"] as const;
+export type OpenPgpOutput = (typeof OPENPGP_OUTPUTS)[number];
+
+export const OPENPGP_COMPRESSIONS = ["uncompressed", "zip", "zlib"] as const;
+export type OpenPgpCompression = (typeof OPENPGP_COMPRESSIONS)[number];
+
+export const OPENPGP_PROTECTIONS = ["mdc", "aead-gcm", "aead-ocb"] as const;
+export type OpenPgpProtection = (typeof OPENPGP_PROTECTIONS)[number];
+
 /** RFC 9562 appendix A's four namespaces, plus a custom one the form supplies. */
 export const UUID_NAMESPACE_IDS = ["dns", "url", "oid", "x500", "custom"] as const;
 export type UuidNamespaceId = (typeof UUID_NAMESPACE_IDS)[number];
@@ -187,6 +217,26 @@ export const TAG_UUID_NAMED = "uuid-named";
 export const TAG_RANDOM_INTEGER = "random-integer";
 export const TAG_RANDOM_DECIMAL = "random-decimal";
 
+export const OPENPGP_PACKET_OUTPUT_OPERATIONS: readonly OpenPgpOperation[] = [
+  "password-encrypt",
+  "public-key-encrypt",
+  "sign",
+  "encrypt-and-sign",
+];
+
+export const OPENPGP_ENCRYPT_OPERATIONS: readonly OpenPgpOperation[] = [
+  "password-encrypt",
+  "public-key-encrypt",
+  "encrypt-and-sign",
+];
+
+export const OPENPGP_PRIVATE_KEY_OPERATIONS: readonly OpenPgpOperation[] = [
+  "private-key-decrypt",
+  "sign",
+  "encrypt-and-sign",
+  "decrypt-and-verify",
+];
+
 export function readDirection(options: OptionValues): Direction {
   return optEnumOr(options, OPTION_DIRECTION, DIRECTIONS, "encode");
 }
@@ -231,6 +281,32 @@ export function readUuidNamespace(options: OptionValues): UuidNamespaceId {
 
 export function readRandomShape(options: OptionValues): RandomShape {
   return optEnumOr(options, OPTION_RANDOM_SHAPE, RANDOM_SHAPES, "integer");
+}
+
+export function readOpenPgpOperation(options: OptionValues): OpenPgpOperation {
+  return optEnumOr(
+    options,
+    OPTION_OPENPGP_OPERATION,
+    OPENPGP_OPERATIONS,
+    "password-encrypt",
+  );
+}
+
+export function readOpenPgpOutput(options: OptionValues): OpenPgpOutput {
+  return optEnumOr(options, OPTION_OPENPGP_OUTPUT, OPENPGP_OUTPUTS, "binary");
+}
+
+export function readOpenPgpCompression(options: OptionValues): OpenPgpCompression {
+  return optEnumOr(
+    options,
+    OPTION_OPENPGP_COMPRESSION,
+    OPENPGP_COMPRESSIONS,
+    "uncompressed",
+  );
+}
+
+export function readOpenPgpProtection(options: OptionValues): OpenPgpProtection {
+  return optEnumOr(options, OPTION_OPENPGP_PROTECTION, OPENPGP_PROTECTIONS, "mdc");
 }
 
 /** The tag `availableOn` matches for the selected shape. */

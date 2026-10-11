@@ -11,6 +11,10 @@ export function describeSpec(spec: CipherSpec): string {
   if (!result.ok) return `${tool.label} — ${result.problem}`;
 
   const r = result.resolved;
+  if (r.toolId === "cipher-image") {
+    const verb = r.direction === "encrypt" ? "Encrypts" : "Decrypts";
+    return `${verb} complete BMP pixel-data blocks with AES-${r.key.length * 8}-ECB while preserving the headers and final partial block. Educational only: ECB leaks repeated image patterns.`;
+  }
   const name = constructionLabel(r);
   const verb = r.direction === "encrypt" ? "Encrypts" : "Decrypts";
 

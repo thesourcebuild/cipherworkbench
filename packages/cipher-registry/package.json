@@ -1,6 +1,6 @@
 {
   "name": "@ocs/registry",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -26,7 +26,8 @@
     "@ocs/kdf": "workspace:*",
     "@ocs/mac": "workspace:*",
     "@ocs/openssh": "workspace:*",
-    "@ocs/parity": "workspace:*"
+    "@ocs/parity": "workspace:*",
+    "@ocs/password-artifact": "workspace:*"
   },
   "devDependencies": {
     "@ocs/config": "workspace:*",

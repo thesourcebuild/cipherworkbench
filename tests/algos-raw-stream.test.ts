@@ -18,6 +18,7 @@ import {
   rabbitCrypt,
   rc4,
   rc4DropCrypt,
+  repeatingKeyXor,
   snow3gCrypt,
   snowVCrypt,
   sosemanukCrypt,
@@ -235,6 +236,12 @@ const cases: ParityCase[] = [
     nonce: new Uint8Array(0),
     options: { drop: 3072 },
     oneShot: (data) => rc4(bytes(16, 52), data, 3072),
+  },
+  {
+    id: "repeating-key-xor",
+    key: bytes(7, 53),
+    nonce: new Uint8Array(0),
+    oneShot: (data) => repeatingKeyXor(data, bytes(7, 53)),
   },
 ];
 

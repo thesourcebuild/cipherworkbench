@@ -9,6 +9,9 @@ export const OPTION_SHIFT = "shift";
 export const OPTION_LETTER_CASE = "letterCase";
 export const OPTION_SHOW_ALL = "showAll";
 export const OPTION_DIGITS = "digits";
+export const OPTION_MULTIPLIER = "multiplier";
+export const OPTION_OFFSET = "offset";
+export const OPTION_ROT_VARIANT = "rotVariant";
 
 export const DIRECTIONS = ["encrypt", "decrypt"] as const;
 export type Direction = (typeof DIRECTIONS)[number];
@@ -18,6 +21,13 @@ export type LetterCase = (typeof LETTER_CASES)[number];
 
 export const DIGIT_HANDLINGS = ["preserve", "german", "english"] as const;
 export type DigitHandling = (typeof DIGIT_HANDLINGS)[number];
+
+export const ROT_VARIANTS = ["rot5", "rot18", "rot47"] as const;
+export type RotVariant = (typeof ROT_VARIANTS)[number];
+
+export const DEFAULT_AFFINE_MULTIPLIER = 5;
+export const DEFAULT_AFFINE_OFFSET = 8;
+export const DEFAULT_ROT_VARIANT: RotVariant = "rot47";
 
 /**
  * Three, and it is the classical one.
@@ -43,6 +53,18 @@ export function readLetterCase(options: OptionValues): LetterCase {
 
 export function readDigitHandling(options: OptionValues): DigitHandling {
   return optEnumOr(options, OPTION_DIGITS, DIGIT_HANDLINGS, "preserve");
+}
+
+export function readRotVariant(options: OptionValues): RotVariant {
+  return optEnumOr(options, OPTION_ROT_VARIANT, ROT_VARIANTS, DEFAULT_ROT_VARIANT);
+}
+
+export function readAffineMultiplier(options: OptionValues): number {
+  return optNumber(options, OPTION_MULTIPLIER) ?? DEFAULT_AFFINE_MULTIPLIER;
+}
+
+export function readAffineOffset(options: OptionValues): number {
+  return optNumber(options, OPTION_OFFSET) ?? DEFAULT_AFFINE_OFFSET;
 }
 
 /**

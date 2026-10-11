@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   decodeInput,
+  acceptedInputModes,
   type CliProviderCommand,
   type ShellCommand,
   type StreamProgress,
@@ -93,6 +94,8 @@ export function useCompute(
   inputProblem: string | undefined;
 } {
   const [state, setState] = useState<ComputeState>({ status: "blank" });
+  const inputModeAllowed =
+    tool === undefined || acceptedInputModes(tool.sourcePolicy, tool.supportsFile).includes(input.mode);
 
   /**
    * The WHATWG conversion tables for a legacy character encoding, loaded on demand.
@@ -107,7 +110,11 @@ export function useCompute(
    * the four Unicode encodings, so the common path costs nothing.
    */
   const [tablesEpoch, setTablesEpoch] = useState(0);
-  const awaitingTables = input.mode === "text" && needsTables(input.textEncoding);
+  const awaitingTables =
+    inputModeAllowed &&
+    (tool?.sourcePolicy?.semantics === undefined || tool.sourcePolicy.semantics === "bytes") &&
+    input.mode === "text" &&
+    needsTables(input.textEncoding);
   useEffect(() => {
     if (!awaitingTables || legacyTablesReady()) return;
     let live = true;
@@ -160,17 +167,29 @@ export function useCompute(
    */
   const decoded = useMemo(
     () =>
-      input.mode === "file"
+      !inputModeAllowed || input.mode === "file"
         ? undefined
-        : decodeInput(input.text, input.mode, input.textEncoding),
+        : decodeInput(
+            input.text,
+            input.mode,
+            tool?.sourcePolicy?.semantics === "text-artifact" ? "utf-8" : input.textEncoding,
+          ),
     // `tablesEpoch`: a legacy encoding cannot be decoded until its conversion tables have landed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [input.mode, input.text, input.textEncoding, tablesEpoch],
+    [
+      input.mode,
+      input.text,
+      input.textEncoding,
+      inputModeAllowed,
+      tablesEpoch,
+      tool?.sourcePolicy?.semantics,
+    ],
   );
 
   const run = useCallback(
     async (job: number) => {
       if (!tool || !spec) return;
+      if (!inputModeAllowed) return;
 
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -237,7 +256,7 @@ export function useCompute(
     },
     // `input` is read wholesale but only these parts can change it materially.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tool, specKey, input.mode, decoded, fileKey, tablesEpoch],
+    [tool, specKey, input.mode, inputModeAllowed, decoded, fileKey, tablesEpoch],
   );
 
   /**
@@ -255,6 +274,7 @@ export function useCompute(
   // Text path: debounced auto-update.
   useEffect(() => {
     if (!tool || !spec) return;
+    if (!inputModeAllowed) return;
     if (input.mode === "file") return;
     /**
      * An empty box is "nothing to compute" only for a tool that reads the box.
@@ -323,7 +343,7 @@ export function useCompute(
     );
     return debounce.cancel;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, autoUpdate, manualTrigger, input.mode, input.text, specKey, tablesEpoch]);
+  }, [run, autoUpdate, manualTrigger, input.mode, input.text, inputModeAllowed, specKey, tablesEpoch]);
 
   /**
    * The wait, said out loud.
@@ -340,6 +360,7 @@ export function useCompute(
   // File path: compute when the file itself changes, and on an explicit request.
   useEffect(() => {
     if (!tool || !spec) return;
+    if (!inputModeAllowed) return;
     if (input.mode !== "file") return;
     if (!input.file) {
       setState({ status: "blank" });
@@ -377,7 +398,7 @@ export function useCompute(
     // absent for the same reason -- flipping the switch on with a file already hashed would re-read
     // it, and the effect closes over the current value whenever one of the deps below does fire.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileKey, input.mode, manualTrigger]);
+  }, [fileKey, input.mode, inputModeAllowed, manualTrigger]);
 
   // A spec change with a file loaded leaves the shown digest describing the old
   // settings. Saying so is the honest option; recomputing silently is not.
@@ -408,7 +429,9 @@ export function useCompute(
   const readsInput =
     tool && spec && tool.readsInputForSpec ? tool.readsInputForSpec(spec) : tool?.readsInput;
 
-  const readyToCompute = Boolean(tool && spec && (!readsInput || !isInputBlank(input)));
+  const readyToCompute = Boolean(
+    tool && spec && inputModeAllowed && (!readsInput || !isInputBlank(input)),
+  );
 
   return {
     state: state.inputByteLength === inputByteLength ? state : { ...state, inputByteLength },

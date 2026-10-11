@@ -104,6 +104,7 @@ import {
   createThreefish,
   createXtea,
   createXxtea,
+  repeatingKeyXor,
   xxteaOnlineToolsDecrypt,
   xxteaOnlineToolsEncrypt,
   createSquare,
@@ -224,6 +225,12 @@ export function xxteaOnlineToolsOperation(key: Uint8Array): CipherOperation {
     encrypt: (data) => xxteaOnlineToolsEncrypt(data, key),
     decrypt: (data) => xxteaOnlineToolsDecrypt(data, key),
   };
+}
+
+/** Repeating-key XOR is involutory: applying the same key again recovers the input. */
+export function repeatingKeyXorOperation(key: Uint8Array): CipherOperation {
+  const run = (data: Uint8Array) => repeatingKeyXor(data, key);
+  return { encrypt: run, decrypt: run };
 }
 
 /** AES's block, named because the padding wrappers below would otherwise carry a bare 16. */

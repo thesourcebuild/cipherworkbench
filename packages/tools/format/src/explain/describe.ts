@@ -8,6 +8,8 @@ import {
   readEntityScope,
   readIndent,
   readLength,
+  readOpenPgpOperation,
+  readOpenPgpOutput,
   readUrlMode,
   readRandomShape,
   readUuidVersion,
@@ -92,6 +94,29 @@ export function describeSpec(spec: FormatSpec): string {
       const length = optNumber(spec.options, OPTION_RANDOM_BYTES) ?? 32;
       const each = count === 1 ? "" : " each";
       return `Generates ${count} × ${length} random bytes${each} from crypto.getRandomValues.`;
+    }
+    case "openpgp": {
+      const operation = readOpenPgpOperation(spec.options);
+      const labels: Record<typeof operation, string> = {
+        "password-encrypt": "Encrypts with a password",
+        "password-decrypt": "Decrypts with a password",
+        "public-key-encrypt": "Encrypts to every imported recipient",
+        "private-key-decrypt": "Decrypts with an imported private key",
+        sign: "Creates an attached signature",
+        verify: "Verifies an attached signature and recovers its file",
+        "encrypt-and-sign": "Encrypts to imported recipients and signs",
+        "decrypt-and-verify": "Decrypts and requires a valid imported signer",
+      };
+      const hasPacketOutput = [
+        "password-encrypt",
+        "public-key-encrypt",
+        "sign",
+        "encrypt-and-sign",
+      ].includes(operation);
+      const format = hasPacketOutput
+        ? ` as ${readOpenPgpOutput(spec.options) === "armor" ? "ASCII armor" : "binary packets"}`
+        : "";
+      return `${labels[operation]}${format}.`;
     }
   }
 }

@@ -13,6 +13,7 @@
  * Free of any library import, so listing these costs nothing but the strings.
  */
 import type { OptionValue } from "@ocs/contracts/options";
+import type { SecurityPosture } from "@ocs/engine";
 import {
   OPTION_ACTION,
   OPTION_CASE_STYLE,
@@ -24,6 +25,15 @@ import {
   OPTION_EXCLUDE_AMBIGUOUS,
   OPTION_INDENT,
   OPTION_LENGTH,
+  OPTION_OPENPGP_COMPRESSION,
+  OPTION_OPENPGP_KEY_PASSPHRASE,
+  OPTION_OPENPGP_OPERATION,
+  OPTION_OPENPGP_OUTPUT,
+  OPTION_OPENPGP_PASSWORD,
+  OPTION_OPENPGP_PRIVATE_KEYS,
+  OPTION_OPENPGP_PROTECTION,
+  OPTION_OPENPGP_RECIPIENT_KEYS,
+  OPTION_OPENPGP_VERIFICATION_KEYS,
   OPTION_RANDOM_BYTES,
   OPTION_RANDOM_DISTINCT,
   OPTION_RANDOM_MAX,
@@ -50,7 +60,8 @@ export type FormatKind =
   | "uuid"
   | "password"
   | "random"
-  | "randombytes";
+  | "randombytes"
+  | "openpgp";
 
 export interface FormatToolMeta {
   id: string;
@@ -102,9 +113,55 @@ export interface FormatToolMeta {
    * output against another tool is better served knowing it is `entities` underneath than guessing.
    */
   library: string;
+  /** Overrides the format family's usual not-encryption posture for cryptographic containers. */
+  security?: SecurityPosture;
 }
 
 export const FORMAT_TOOLS: readonly FormatToolMeta[] = [
+  {
+    id: "openpgp",
+    label: "OpenPGP files",
+    kind: "openpgp",
+    category: "Cryptographic files",
+    exposes: [
+      OPTION_OPENPGP_OPERATION,
+      OPTION_OPENPGP_OUTPUT,
+      OPTION_OPENPGP_COMPRESSION,
+      OPTION_OPENPGP_PROTECTION,
+      OPTION_OPENPGP_PASSWORD,
+      OPTION_OPENPGP_RECIPIENT_KEYS,
+      OPTION_OPENPGP_PRIVATE_KEYS,
+      OPTION_OPENPGP_KEY_PASSPHRASE,
+      OPTION_OPENPGP_VERIFICATION_KEYS,
+    ],
+    defaults: {
+      [OPTION_OPENPGP_OPERATION]: "password-encrypt",
+      [OPTION_OPENPGP_OUTPUT]: "binary",
+      [OPTION_OPENPGP_COMPRESSION]: "uncompressed",
+      [OPTION_OPENPGP_PROTECTION]: "mdc",
+    },
+    usesInput: true,
+    bidirectional: true,
+    emitsBytes: true,
+    security: "modern",
+    tags: [
+      "openpgp",
+      "pgp",
+      "gpg",
+      "gnupg",
+      "encrypt file",
+      "decrypt file",
+      "sign file",
+      "verify signature",
+      "ascii armor",
+      "public key",
+      "password encryption",
+      "rfc 4880",
+      "rfc 9580",
+    ],
+    summary: "Encrypt, decrypt, sign and verify OpenPGP files with passwords or imported keys.",
+    library: "OpenPGP.js 6.3.2 browser ESM build (LGPL-3.0-or-later)",
+  },
   {
     id: "url",
     label: "URL encode",

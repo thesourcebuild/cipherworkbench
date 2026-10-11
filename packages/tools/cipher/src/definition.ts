@@ -11,6 +11,10 @@ import {
   TAG_IV_MANUAL,
   TAG_XXTEA_ONLINE_TOOLS,
   TAG_XXTEA_TWO_WORD,
+  TAG_JASYPT_AES_ENCRYPT,
+  TAG_JASYPT_ENCRYPT,
+  readDirection,
+  readJasyptProfile,
 } from "./pure";
 import { keySourceTag, readKdfDerives, readKeySource } from "@ocs/kdf/key-source";
 import { createSpec } from "./create-spec";
@@ -45,11 +49,17 @@ export function cipherVariantTags(toolId: string, spec: CipherSpec): readonly st
   const tags: string[] = [];
 
   const tool = requireCipherTool(toolId);
+  if (toolId === "jasypt") {
+    const encrypting = readDirection(spec.options) === "encrypt";
+    const aes = readJasyptProfile(spec.options) === "PBEWITHHMACSHA512ANDAES_256";
+    return [
+      ...(encrypting ? [TAG_JASYPT_ENCRYPT] : []),
+      ...(encrypting && aes ? [TAG_JASYPT_AES_ENCRYPT] : []),
+    ];
+  }
   const xxteaProfile = readXxteaProfile(spec.options);
   if (toolId === "xxtea") {
-    tags.push(
-      xxteaProfile === "online-tools" ? TAG_XXTEA_ONLINE_TOOLS : TAG_XXTEA_TWO_WORD,
-    );
+    tags.push(xxteaProfile === "online-tools" ? TAG_XXTEA_ONLINE_TOOLS : TAG_XXTEA_TWO_WORD);
   }
   const hasBlockMode = toolId !== "xxtea" || xxteaProfile === "two-word-block";
   const mode =
@@ -172,3 +182,20 @@ export { createSpec } from "./create-spec";
 export { describeSpec } from "./explain/describe";
 export { RULES, RULE_CODES } from "./lint/rules";
 export { lint, applyAllFixes } from "./lint/run";
+export {
+  JASYPT_PROFILES,
+  deriveJasyptKeyMaterial,
+  jasyptDecrypt,
+  jasyptEncrypt,
+  jasyptPasswordBytes,
+  jasyptProfileInfo,
+  parseJasyptFrame,
+  serializeJasyptFrame,
+  type JasyptProfileInfo,
+} from "./jasypt";
+export {
+  parseBmpImage,
+  transformBmpAesEcb,
+  type BmpImageInfo,
+  type CipherImageResult,
+} from "./cipher-image";

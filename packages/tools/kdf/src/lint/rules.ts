@@ -138,7 +138,11 @@ export const RULES: readonly LintRule<KdfSpec>[] = [
         ];
       }
 
-      if (r.toolId === "bcrypt") {
+      if (
+        r.toolId === "bcrypt" ||
+        r.toolId.startsWith("bcrypt-") ||
+        (r.toolId === "htpasswd" && r.scheme === "bcrypt")
+      ) {
         if (r.bcryptCost >= OWASP_BCRYPT_COST) return [];
         return [
           {
@@ -218,9 +222,27 @@ export const RULES: readonly LintRule<KdfSpec>[] = [
       const result = resolveKdf(spec);
       if (!result.ok) return [];
       const r = result.resolved;
-      if (r.mode === "verify" || r.toolId === "bcrypt") return [];
+      if (r.mode === "verify" || r.toolId === "bcrypt" || r.toolId.startsWith("bcrypt-"))
+        return [];
       // HKDF's salt is optional by RFC 5869, so a short or absent one is not a fault there.
       if (r.toolId === "hkdf") return [];
+      // These formats generate a CSPRNG salt during compute when the optional field is empty.
+      if (
+        r.salt.length === 0 &&
+        [
+          "md5crypt",
+          "sha256crypt",
+          "sha512crypt",
+          "crypt3",
+          "apr1",
+          "apache-sha",
+          "htpasswd",
+          "des-crypt",
+          "bs-crypt",
+        ].includes(r.toolId)
+      ) {
+        return [];
+      }
       if (r.salt.length >= RECOMMENDED_SALT_BYTES) return [];
 
       const absent = r.salt.length === 0;
@@ -282,10 +304,11 @@ export const RULES: readonly LintRule<KdfSpec>[] = [
      */
     code: "K005",
     check(spec) {
-      if (spec.variant !== "bcrypt") return [];
+      if (spec.variant !== "bcrypt" && spec.variant !== "htpasswd") return [];
       const result = resolveKdf(spec);
       if (!result.ok) return [];
       const r = result.resolved;
+      if (r.toolId === "htpasswd" && r.scheme !== "bcrypt") return [];
       if (r.password.length <= BCRYPT_PASSWORD_LIMIT) return [];
 
       const characters = r.passwordText.length;

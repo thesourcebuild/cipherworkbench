@@ -44,6 +44,7 @@ import {
   shuffled,
   type ToolResult,
   type ToolResultField,
+  type ToolComputeContext,
 } from "@ocs/engine";
 import { decodeHTML, encodeHTML, escapeUTF8 } from "entities";
 import { getNodeValue, parseTree, printParseErrorCode, type Node } from "jsonc-parser";
@@ -100,7 +101,11 @@ import type { CliProviderCommand } from "@ocs/contracts";
 
 const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
-export async function computeFormat(spec: FormatSpec, input: Uint8Array): Promise<ToolResult> {
+export async function computeFormat(
+  spec: FormatSpec,
+  input: Uint8Array,
+  context?: ToolComputeContext,
+): Promise<ToolResult> {
   const tool = requireFormatTool(spec.variant);
   try {
     switch (tool.kind) {
@@ -124,6 +129,8 @@ export async function computeFormat(spec: FormatSpec, input: Uint8Array): Promis
         return randomResult(spec);
       case "randombytes":
         return randomBytesResult(spec);
+      case "openpgp":
+        return (await import("./openpgp")).computeOpenPgp(spec, input, context);
     }
   } catch (thrown) {
     /**

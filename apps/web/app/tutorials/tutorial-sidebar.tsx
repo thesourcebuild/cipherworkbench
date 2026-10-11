@@ -16,6 +16,8 @@ export interface TutorialSidebarProps {
 
 const FAMILY_STYLE: Record<ToolFamily, string> = {
   hash: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300",
+  "password-artifact":
+    "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900 dark:bg-fuchsia-950/40 dark:text-fuchsia-300",
   crc: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
   checksum:
     "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-300",
@@ -43,6 +45,7 @@ const FAMILY_STYLE: Record<ToolFamily, string> = {
 
 const FAMILY_BADGE: Record<ToolFamily, string> = {
   hash: "hash",
+  "password-artifact": "artifact",
   crc: "CRC",
   checksum: "sum",
   checkdigit: "digit",

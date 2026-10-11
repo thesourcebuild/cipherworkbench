@@ -1,21 +1,53 @@
 import type { LintRule } from "@ocs/contracts/diagnostic";
-import { optBool, optNumber, setOption } from "@ocs/contracts/pure";
+import { optBool, optNumber, optString, setOption } from "@ocs/contracts/pure";
 import { requireFormatTool } from "../catalogue/tool-meta";
 import {
   OPTION_ENTITY_FORM,
   OPTION_LENGTH,
+  OPTION_OPENPGP_PASSWORD,
+  OPTION_OPENPGP_PRIVATE_KEYS,
+  OPTION_OPENPGP_RECIPIENT_KEYS,
+  OPTION_OPENPGP_VERIFICATION_KEYS,
   OPTION_RANDOM_BYTES,
   OPTION_SORT_KEYS,
+  type OpenPgpOperation,
   PASSWORD_ALPHABETS,
   PASSWORD_CLASS_OPTIONS,
   readClasses,
   readEntityForm,
   readLength,
+  readOpenPgpOperation,
   readUuidVersion,
 } from "../pure";
 import type { FormatSpec } from "../spec";
 
-export const RULE_CODES = ["F001", "F002", "F003", "F004", "F005", "F006", "F007"] as const;
+export const RULE_CODES = [
+  "F001",
+  "F002",
+  "F003",
+  "F004",
+  "F005",
+  "F006",
+  "F007",
+  "F008",
+] as const;
+
+const OPENPGP_REQUIRED_OPTIONS = {
+  "password-encrypt": [[OPTION_OPENPGP_PASSWORD, "message password"]],
+  "password-decrypt": [[OPTION_OPENPGP_PASSWORD, "message password"]],
+  "public-key-encrypt": [[OPTION_OPENPGP_RECIPIENT_KEYS, "recipient public key"]],
+  "private-key-decrypt": [[OPTION_OPENPGP_PRIVATE_KEYS, "private key"]],
+  sign: [[OPTION_OPENPGP_PRIVATE_KEYS, "private key"]],
+  verify: [[OPTION_OPENPGP_VERIFICATION_KEYS, "signer public key"]],
+  "encrypt-and-sign": [
+    [OPTION_OPENPGP_RECIPIENT_KEYS, "recipient public key"],
+    [OPTION_OPENPGP_PRIVATE_KEYS, "private key"],
+  ],
+  "decrypt-and-verify": [
+    [OPTION_OPENPGP_PRIVATE_KEYS, "private key"],
+    [OPTION_OPENPGP_VERIFICATION_KEYS, "signer public key"],
+  ],
+} as const satisfies Record<OpenPgpOperation, readonly (readonly [string, string])[]>;
 
 /**
  * One rule per real footgun, and the bar is the same as everywhere else here: would this change what
@@ -204,6 +236,24 @@ export const RULES: readonly LintRule<FormatSpec>[] = [
           optionIds: [OPTION_SORT_KEYS],
         },
       ];
+    },
+  },
+  {
+    code: "F008",
+    check(spec) {
+      if (requireFormatTool(spec.variant).kind !== "openpgp") return [];
+      const operation = readOpenPgpOperation(spec.options);
+      const required = OPENPGP_REQUIRED_OPTIONS[operation];
+
+      return required
+        .filter(([optionId]) => !optString(spec.options, optionId)?.trim())
+        .map(([optionId, label]) => ({
+          code: "F008" as const,
+          level: "error" as const,
+          message: `Enter the ${label}.`,
+          detail: `The selected OpenPGP operation cannot run without a ${label}.`,
+          optionIds: [optionId],
+        }));
     },
   },
   {

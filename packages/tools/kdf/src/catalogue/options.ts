@@ -7,6 +7,8 @@ import {
   OPTION_ARGON2_TIME,
   OPTION_ARGON2_VARIANT,
   OPTION_BCRYPT_COST,
+  OPTION_BCRYPT_VARIANT,
+  BCRYPT_VARIANTS,
   OPTION_EXPECTED,
   OPTION_HASH,
   OPTION_IKM,
@@ -20,6 +22,9 @@ import {
   OPTION_SCRYPT_N,
   OPTION_SCRYPT_P,
   OPTION_SCRYPT_R,
+  OPTION_SCHEME,
+  OPTION_USERNAME,
+  CRYPT_DEFAULT_ROUNDS,
   OWASP_ARGON2_MEMORY_KIB,
   OWASP_BCRYPT_COST,
   OWASP_PBKDF2_SHA256,
@@ -32,7 +37,7 @@ import { ARGON2_VARIANTS, KDF_HASHES, requireKdfTool } from "./tool-meta";
 import type { KdfOptionGroup } from "./groups";
 
 /**
- * The mode switch, shown only for the three tools that can verify.
+ * The mode switch, shown only for tools that can verify.
  *
  * PBKDF2 and HKDF have no standard textual encoding, so their output carries none of the
  * parameters needed to check it later — there is nothing to verify against. Offering the
@@ -88,7 +93,7 @@ const EXPECTED_OPTION: OptionDef<KdfOptionGroup> = {
   availableOn: ["verify"],
   summary: "The hash string to check against.",
   detail:
-    "Paste the whole thing, including the dollar-delimited prefix. The parameters and salt are read out of it, so nothing else needs filling in. That self-describing format is exactly what makes these three verifiable and PBKDF2 not.",
+    "Paste the complete stored hash or record. Where the format is self-describing, its parameters and salt are read from that value rather than the form.",
   order: 20,
 };
 
@@ -335,28 +340,54 @@ const ARGON2_OPTIONS: readonly OptionDef<KdfOptionGroup>[] = [
   keyLengthOption(32),
 ];
 
+const BCRYPT_COST_OPTION: OptionDef<KdfOptionGroup> = {
+  id: OPTION_BCRYPT_COST,
+  label: "Cost",
+  group: "cost",
+  kind: "number",
+  arg: {
+    placeholder: String(OWASP_BCRYPT_COST),
+    unit: "log2 rounds",
+    min: 4,
+    max: 20,
+    step: 1,
+  },
+  summary: "Logarithmic: each step doubles the work.",
+  detail:
+    "The number of key-setup rounds is 2^cost, so 12 is four times the work of 10. bcrypt has no memory parameter — its working set is a fixed 4 KB, small enough to fit in GPU cache, which is the main reason it has aged less well than scrypt or Argon2. 10 is the current floor; 12 is comfortable on server hardware.",
+  order: 10,
+};
+
+const BCRYPT_VARIANT_OPTION: OptionDef<KdfOptionGroup> = {
+  id: OPTION_BCRYPT_VARIANT,
+  label: "Pre-hash",
+  group: "cost",
+  kind: "enum",
+  choices: BCRYPT_VARIANTS.map((v) => ({
+    value: v.id,
+    label: v.label,
+    summary: v.summary,
+  })),
+  summary: "Pre-hashing variant (Standard, Hashcat, or Passlib).",
+  detail:
+    "Standard OpenBSD bcrypt has a 72-byte password ceiling and runs directly on UTF-8 bytes. Systems that need longer passwords pre-hash the password before handing it to bcrypt: MD5 (Hashcat 25600), SHA-1 (Hashcat 25800), SHA-256 (Hashcat 30600), SHA-512 (Hashcat 28400, truncated at 72 bytes), or Passlib v2 (Hashcat 30601, HMAC-SHA256 keyed by salt). None (Standard) is the default.",
+  order: 5,
+};
+
 const BCRYPT_OPTIONS: readonly OptionDef<KdfOptionGroup>[] = [
   MODE_OPTION,
   EXPECTED_OPTION,
   PASSWORD_OPTION,
-  {
-    id: OPTION_BCRYPT_COST,
-    label: "Cost",
-    group: "cost",
-    kind: "number",
-    arg: {
-      placeholder: String(OWASP_BCRYPT_COST),
-      unit: "log2 rounds",
-      min: 4,
-      max: 20,
-      step: 1,
-    },
-    summary: "Logarithmic: each step doubles the work.",
-    detail:
-      "The number of key-setup rounds is 2^cost, so 12 is four times the work of 10. bcrypt has no memory parameter — its working set is a fixed 4 KB, small enough to fit in GPU cache, which is the main reason it has aged less well than scrypt or Argon2. 10 is the current floor; 12 is comfortable on server hardware.",
-    order: 10,
-  },
+  BCRYPT_VARIANT_OPTION,
+  BCRYPT_COST_OPTION,
 ];
+
+const HTPASSWD_BCRYPT_COST_OPTION: OptionDef<KdfOptionGroup> = {
+  ...BCRYPT_COST_OPTION,
+  arg: { ...BCRYPT_COST_OPTION.arg, placeholder: "5", max: 17 },
+  detail:
+    "Apache htpasswd defaults to cost 5. APR-util 1.6 and later accepts costs 4 through 17; higher values are rejected rather than silently changed.",
+};
 
 const BCRYPT_PBKDF_OPTIONS: readonly OptionDef<KdfOptionGroup>[] = [
   PASSWORD_OPTION,
@@ -384,6 +415,61 @@ const BCRYPT_PBKDF_OPTIONS: readonly OptionDef<KdfOptionGroup>[] = [
    */
   keyLengthOption(OPENSSH_KEY_IV_BYTES),
 ];
+
+const USERNAME_OPTION: OptionDef<KdfOptionGroup> = {
+  id: OPTION_USERNAME,
+  label: "Username",
+  group: "secret",
+  kind: "text",
+  arg: { placeholder: "username" },
+  summary: "The name before the colon in the htpasswd record.",
+  detail:
+    "Apache limits usernames to 255 UTF-8 bytes. Colons and line breaks are rejected because they would create additional fields or records.",
+  order: 5,
+};
+
+const CRYPT_SCHEME_OPTION: OptionDef<KdfOptionGroup> = {
+  id: OPTION_SCHEME,
+  label: "Scheme",
+  group: "cost",
+  kind: "enum",
+  choices: [
+    { value: "sha512crypt", label: "SHA-512-Crypt ($6$)" },
+    { value: "sha256crypt", label: "SHA-256-Crypt ($5$)" },
+    { value: "md5crypt", label: "MD5-Crypt ($1$)" },
+    { value: "des-crypt", label: "Traditional DES-Crypt" },
+    { value: "bs-crypt", label: "BSD Extended Crypt" },
+  ],
+  summary: "The crypt(3) serialization and algorithm to generate.",
+  detail:
+    "The prefixes are part of each construction. APR1 is deliberately separate from MD5-Crypt.",
+  order: 5,
+};
+
+const HTPASSWD_SCHEME_OPTION: OptionDef<KdfOptionGroup> = {
+  ...CRYPT_SCHEME_OPTION,
+  choices: [
+    { value: "apr1", label: "APR1 MD5 (-m, default)" },
+    { value: "bcrypt", label: "bcrypt (-B)" },
+    { value: "apache-sha", label: "SHA-1 (-s)" },
+    { value: "sha256crypt", label: "SHA-256-Crypt (-2)" },
+    { value: "sha512crypt", label: "SHA-512-Crypt (-5)" },
+    { value: "des-crypt", label: "Traditional DES-Crypt (-d)" },
+  ],
+  summary: "The password format placed after username:.",
+};
+
+const CRYPT_ROUNDS_OPTION: OptionDef<KdfOptionGroup> = {
+  id: OPTION_ROUNDS,
+  label: "Rounds",
+  group: "cost",
+  kind: "number",
+  arg: { placeholder: String(CRYPT_DEFAULT_ROUNDS), min: 1, max: 999_999_999, step: 1000 },
+  summary: "Rounds for SHA-Crypt or BSD extended DES.",
+  detail:
+    "SHA-256/512-Crypt default to 5,000 and clamp values to the specification's 1,000 minimum.",
+  order: 20,
+};
 
 const CACHE = new Map<string, OptionCatalogue<KdfOptionGroup>>();
 
@@ -422,10 +508,42 @@ const OPTIONS_BY_TOOL: Readonly<Record<string, readonly OptionDef<KdfOptionGroup
   bip32: GENERIC_KDF_OPTIONS,
   "hkdf-label": GENERIC_KDF_OPTIONS,
   md5crypt: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
-  sha256crypt: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
-  sha512crypt: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
-  "des-crypt": [PASSWORD_OPTION, SALT_OPTION],
-  "bs-crypt": [PASSWORD_OPTION, SALT_OPTION],
+  sha256crypt: [
+    MODE_OPTION,
+    EXPECTED_OPTION,
+    PASSWORD_OPTION,
+    SALT_OPTION,
+    CRYPT_ROUNDS_OPTION,
+  ],
+  sha512crypt: [
+    MODE_OPTION,
+    EXPECTED_OPTION,
+    PASSWORD_OPTION,
+    SALT_OPTION,
+    CRYPT_ROUNDS_OPTION,
+  ],
+  crypt3: [
+    MODE_OPTION,
+    EXPECTED_OPTION,
+    PASSWORD_OPTION,
+    SALT_OPTION,
+    CRYPT_SCHEME_OPTION,
+    CRYPT_ROUNDS_OPTION,
+  ],
+  apr1: [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
+  "apache-sha": [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION],
+  htpasswd: [
+    MODE_OPTION,
+    EXPECTED_OPTION,
+    USERNAME_OPTION,
+    PASSWORD_OPTION,
+    SALT_OPTION,
+    HTPASSWD_SCHEME_OPTION,
+    HTPASSWD_BCRYPT_COST_OPTION,
+    CRYPT_ROUNDS_OPTION,
+  ],
+  "des-crypt": [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION],
+  "bs-crypt": [MODE_OPTION, EXPECTED_OPTION, PASSWORD_OPTION, SALT_OPTION, CRYPT_ROUNDS_OPTION],
   "ntlm-lm": [PASSWORD_OPTION],
   "one-step-kdf": GENERIC_KDF_OPTIONS,
   "wpa-psk": [PASSWORD_OPTION, SALT_OPTION],

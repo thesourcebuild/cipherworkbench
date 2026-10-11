@@ -1,6 +1,6 @@
 {
   "name": "cipherworkbench",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "license": "GPL-3.0-only",
   "private": true,
   "//type": "The workspace root itself ships no JS; this is here so vitest.config.ts loads as ESM under Vite's native config loader instead of warning about CommonJS.",
@@ -68,6 +68,7 @@
     "@ocs/mac": "workspace:*",
     "@ocs/openssh": "workspace:*",
     "@ocs/parity": "workspace:*",
+    "@ocs/password-artifact": "workspace:*",
     "@ocs/platform": "workspace:*",
     "@ocs/registry": "workspace:*",
     "@ocs/ui": "workspace:*",

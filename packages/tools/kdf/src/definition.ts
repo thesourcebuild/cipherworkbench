@@ -8,12 +8,13 @@ import { RULES } from "./lint/rules";
 import { KDF_MANIFESTS } from "./manifest";
 import { createSpec } from "./create-spec";
 import { readMode } from "./pure";
+import { samplesFor } from "./samples";
 import { KdfSpec } from "./spec";
 
 /**
  * Builds the full contract for one KDF tool.
  *
- * `createStream` is deliberately absent for all five: a KDF's input is its password, not the
+ * `createStream` is deliberately absent: a KDF's input is its password, not the
  * tool's byte input, so there is nothing to stream. The manifest says `supportsFile: false`
  * and the input panel hides the File tab accordingly.
  */
@@ -27,6 +28,7 @@ export function kdfToolDefinition(toolId: string): ToolDefinition<KdfSpec> {
     groups: OPTION_GROUP_META,
     catalogue: kdfCatalogueFor(toolId),
     lintRules: RULES,
+    samples: samplesFor(toolId),
     createSpec: () => createSpec({ variant: toolId }),
     specSchema: KdfSpec,
     describe: describeSpec,
@@ -37,13 +39,21 @@ export function kdfToolDefinition(toolId: string): ToolDefinition<KdfSpec> {
   };
 }
 
-export { KDF_TOOL_IDS };
+export { KDF_TOOL_IDS, samplesFor };
 
 // Re-exported from the lazy side: all of these reach an implementation.
 export { computeKdf, generateKdfCliProviders } from "./compute";
 // Exported so the OpenSSL differential test can reach it directly, the same way the hash family
 // exposes its bindings for the declared-output-length cross-check.
 export { deriveEvpKdf } from "./bindings";
+export {
+  hashBcrypt,
+  hashBcryptPrehash,
+  hashPasslibBcryptSha256,
+  verifyBcrypt,
+  verifyBcryptPrehash,
+  verifyPasslibBcryptSha256,
+} from "./bindings";
 export { resolveKdf, type ResolvedKdf, type ResolveResult } from "./resolve";
 export { kdfCatalogueFor } from "./catalogue/options";
 export { createSpec } from "./create-spec";

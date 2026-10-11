@@ -34,7 +34,15 @@ import {
   OPTION_AGE_RECIPIENT,
   OPTION_AGE_IDENTITY,
   OPTION_AGE_PASSPHRASE,
+  OPTION_JASYPT_ITERATIONS,
+  OPTION_JASYPT_IV,
+  OPTION_JASYPT_PASSWORD,
+  OPTION_JASYPT_SALT,
+  readJasyptIterations,
+  readJasyptPassword,
+  readJasyptProfile,
   type CipherDirection,
+  type JasyptProfile,
   type XxteaProfile,
 } from "./pure";
 import {
@@ -64,6 +72,8 @@ import {
   type KeySource,
   type KeySourceParams,
 } from "@ocs/kdf/key-source";
+import { jasyptPasswordBytes, jasyptProfileInfo } from "./jasypt";
+import { optNumber } from "@ocs/contracts/pure";
 
 export interface ResolvedCipher {
   toolId: string;
@@ -174,6 +184,9 @@ export interface ResolvedCipher {
   ageIdentity?: string;
   agePassphrase?: string;
   ageArmor?: boolean;
+  jasyptProfile?: JasyptProfile;
+  jasyptPassword?: string;
+  jasyptIterations?: number;
 }
 
 export type ResolveResult =
@@ -344,6 +357,7 @@ export function modeForSpec(spec: CipherSpec): AesModeMeta | undefined {
  * declared key size, then the catalogue's union.
  */
 export function cipherKeyLengths(spec: CipherSpec): readonly number[] | undefined {
+  if (spec.variant === "jasypt") return undefined;
   const tool = requireCipherTool(spec.variant);
   const mode = modeForSpec(spec);
   const paramSetId = readParamSet(spec.options);
@@ -507,6 +521,109 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
   const catalogue = cipherCatalogueFor(spec.variant);
   const derivedParams = keySourceParams(catalogue, spec.options);
 
+  if (spec.variant === "jasypt") {
+    const profile = readJasyptProfile(spec.options);
+    const profileInfo = jasyptProfileInfo(profile);
+    const password = readJasyptPassword(spec.options);
+    try {
+      jasyptPasswordBytes(password);
+    } catch (error) {
+      return {
+        ok: false,
+        problem: error instanceof Error ? error.message : String(error),
+        optionId: OPTION_JASYPT_PASSWORD,
+      };
+    }
+
+    const rawIterations = optNumber(spec.options, OPTION_JASYPT_ITERATIONS);
+    if (
+      rawIterations !== undefined &&
+      (!Number.isInteger(rawIterations) || rawIterations <= 0)
+    ) {
+      return {
+        ok: false,
+        problem: "Jasypt's key-obtention iterations must be a positive integer.",
+        optionId: OPTION_JASYPT_ITERATIONS,
+      };
+    }
+    const iterations = readJasyptIterations(spec.options);
+
+    const saltResult =
+      direction === "encrypt"
+        ? decodeBytesOption(catalogue, spec.options, OPTION_JASYPT_SALT)
+        : { ok: true as const, bytes: new Uint8Array(0) };
+    if (!saltResult.ok) {
+      return { ok: false, problem: saltResult.error, optionId: OPTION_JASYPT_SALT };
+    }
+    const ivResult =
+      direction === "encrypt" && profileInfo.ivLength > 0
+        ? decodeBytesOption(catalogue, spec.options, OPTION_JASYPT_IV)
+        : { ok: true as const, bytes: new Uint8Array(0) };
+    if (!ivResult.ok) return { ok: false, problem: ivResult.error, optionId: OPTION_JASYPT_IV };
+
+    if (
+      direction === "encrypt" &&
+      saltResult.bytes.length !== 0 &&
+      saltResult.bytes.length !== profileInfo.saltLength
+    ) {
+      return {
+        ok: false,
+        problem: `${profile} needs a ${profileInfo.saltLength}-byte salt; this one is ${saltResult.bytes.length}. Leave it empty to generate one.`,
+        optionId: OPTION_JASYPT_SALT,
+      };
+    }
+    if (
+      direction === "encrypt" &&
+      ivResult.bytes.length !== 0 &&
+      ivResult.bytes.length !== profileInfo.ivLength
+    ) {
+      return {
+        ok: false,
+        problem:
+          profileInfo.ivLength === 0
+            ? `${profile} has no separately framed IV; JCE derives its CBC IV from the password and salt.`
+            : `${profile} needs a ${profileInfo.ivLength}-byte IV; this one is ${ivResult.bytes.length}. Leave it empty to generate one.`,
+        optionId: OPTION_JASYPT_IV,
+      };
+    }
+
+    return {
+      ok: true,
+      resolved: {
+        toolId: "jasypt",
+        direction,
+        mode: undefined,
+        paramSet: undefined,
+        speckByteConvention: readSpeckByteConvention(spec.options),
+        xxteaProfile,
+        padding: "pkcs5",
+        keySource: "directinput",
+        keySourceParams: derivedParams,
+        derivedKeyLength: profile === "PBEWithMD5AndDES" ? 8 : 32,
+        derivedIvLength: 0,
+        instance: undefined,
+        blockSize: profileInfo.blockSize,
+        key: new Uint8Array(0),
+        nonce: ivResult.bytes,
+        aad: new Uint8Array(0),
+        counter: 0,
+        effectiveKeyBits: profile === "PBEWithMD5AndDES" ? 56 : 256,
+        rc5Rounds: 12,
+        gostSbox: "test",
+        anubisVariant: "tweaked",
+        tweak: new Uint8Array(0),
+        context: new Uint8Array(0),
+        salt: saltResult.bytes,
+        drop: 0,
+        aead: false,
+        tagLen: 0,
+        jasyptProfile: profile,
+        jasyptPassword: password,
+        jasyptIterations: iterations,
+      },
+    };
+  }
+
   const keySource = readKeySource(spec.options);
   const derivedProblem = keySourceProblem(derivedParams, direction);
   if (derivedProblem) {
@@ -534,14 +651,26 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
 
     if (authMode === "recipient") {
       if (direction === "encrypt" && !recipient) {
-        return { ok: false, problem: "Enter a recipient public key (age1...) or a 32-byte key.", optionId: OPTION_AGE_RECIPIENT };
+        return {
+          ok: false,
+          problem: "Enter a recipient public key (age1...) or a 32-byte key.",
+          optionId: OPTION_AGE_RECIPIENT,
+        };
       }
       if (direction === "decrypt" && !identity) {
-        return { ok: false, problem: "Enter an identity secret key (AGE-SECRET-KEY-1...) or a 32-byte key.", optionId: OPTION_AGE_IDENTITY };
+        return {
+          ok: false,
+          problem: "Enter an identity secret key (AGE-SECRET-KEY-1...) or a 32-byte key.",
+          optionId: OPTION_AGE_IDENTITY,
+        };
       }
     } else {
       if (!passphrase) {
-        return { ok: false, problem: "Enter a passphrase for scrypt encryption/decryption.", optionId: OPTION_AGE_PASSPHRASE };
+        return {
+          ok: false,
+          problem: "Enter a passphrase for scrypt encryption/decryption.",
+          optionId: OPTION_AGE_PASSPHRASE,
+        };
       }
     }
 
@@ -646,9 +775,13 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
   // Skipped where a set has pinned an exact length above: the union's bounds are wider by
   // construction and would only ever accept something the set has already refused.
   const min =
-    keySource !== "directinput" || paramSet || instance ? undefined : keyOption.bytesLength?.min;
+    keySource !== "directinput" || paramSet || instance
+      ? undefined
+      : keyOption.bytesLength?.min;
   const max =
-    keySource !== "directinput" || paramSet || instance ? undefined : keyOption.bytesLength?.max;
+    keySource !== "directinput" || paramSet || instance
+      ? undefined
+      : keyOption.bytesLength?.max;
   if (min !== undefined && keyResult.bytes.length < min) {
     return {
       ok: false,
@@ -764,11 +897,16 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
   }
 
   const contextResult = decodeBytesOption(catalogue, spec.options, OPTION_CONTEXT);
-  if (!contextResult.ok) return { ok: false, problem: contextResult.error, optionId: OPTION_CONTEXT };
+  if (!contextResult.ok)
+    return { ok: false, problem: contextResult.error, optionId: OPTION_CONTEXT };
 
   const saltResult = decodeBytesOption(catalogue, spec.options, OPTION_SALT);
   if (!saltResult.ok) return { ok: false, problem: saltResult.error, optionId: OPTION_SALT };
-  if (spec.variant === "cobblestone" && saltResult.bytes.length !== 0 && saltResult.bytes.length !== 24) {
+  if (
+    spec.variant === "cobblestone" &&
+    saltResult.bytes.length !== 0 &&
+    saltResult.bytes.length !== 24
+  ) {
     return {
       ok: false,
       problem: `Cobblestone salt must be 0 or 24 bytes (leave empty to generate a fresh random salt); this one is ${saltResult.bytes.length} bytes.`,

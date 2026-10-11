@@ -23,6 +23,7 @@ import {
   CIPHER_MANIFESTS,
   requireCipherTool,
   OPTION_DIRECTION as CIPHER_DIR,
+  OPTION_JASYPT_PASSWORD,
   OPTION_KEY as CIPHER_KEY,
   OPTION_NONCE as CIPHER_NONCE,
   OPTION_PARAM_SET as CIPHER_PARAM_SET,
@@ -87,6 +88,26 @@ beforeAll(async () => {
  */
 
 const bytes = new TextEncoder().encode(LOREM);
+
+/** Wraps the Lorem payload as one valid 32-bit BI_RGB scanline for Cipher Image. */
+function loremBmp(): Uint8Array {
+  const pixelOffset = 54;
+  const image = new Uint8Array(pixelOffset + bytes.length);
+  const view = new DataView(image.buffer);
+  image[0] = 0x42;
+  image[1] = 0x4d;
+  view.setUint32(2, image.length, true);
+  view.setUint32(10, pixelOffset, true);
+  view.setUint32(14, 40, true);
+  view.setInt32(18, bytes.length / 4, true);
+  view.setInt32(22, 1, true);
+  view.setUint16(26, 1, true);
+  view.setUint16(28, 32, true);
+  view.setUint32(30, 0, true);
+  view.setUint32(34, bytes.length, true);
+  image.set(bytes, pixelOffset);
+  return image;
+}
 
 /**
  * One OpenSSL AEAD cipher object for an algorithm name built at runtime.
@@ -494,18 +515,22 @@ describe("every cipher tool in CIPHER_MANIFESTS over 3,832 bytes (Lorem Ipsum)",
 
       const isFernet = manifest.id === "fernet";
       const fernetKey = "Wghwi-lJZNNXLSfgDWw2oTpkc2bexPuioh-bgXlED9c=";
+      const input = manifest.id === "cipher-image" ? loremBmp() : bytes;
       const encSpec = {
         ...baseSpec,
         options: {
           ...baseSpec.options,
           [CIPHER_KEY]: isFernet ? fernetKey : keyHex,
           keyEncoding: isFernet ? "base64" : "hex",
+          ...(manifest.id === "jasypt"
+            ? { [OPTION_JASYPT_PASSWORD]: "lorem-round-trip-password" }
+            : {}),
           ...(nLen > 0 ? { [CIPHER_NONCE]: nonceHex, nonceEncoding: "hex" } : {}),
           [CIPHER_DIR]: "encrypt",
         },
       };
 
-      const encResult = await def.compute(encSpec, bytes);
+      const encResult = await def.compute(encSpec, input);
       expect(encResult.error, `Encrypt error in ${manifest.id}: ${encResult.error}`).toBeUndefined();
       expect(encResult.bytes, `Missing encrypt bytes in ${manifest.id}`).toBeDefined();
 
@@ -520,7 +545,7 @@ describe("every cipher tool in CIPHER_MANIFESTS over 3,832 bytes (Lorem Ipsum)",
       const decResult = await def.compute(decSpec, encResult.bytes!);
       expect(decResult.error, `Decrypt error in ${manifest.id}: ${decResult.error}`).toBeUndefined();
       expect(decResult.bytes, `Missing decrypt bytes in ${manifest.id}`).toBeDefined();
-      expect(encodeHex(decResult.bytes!), `${manifest.id} round trip`).toBe(encodeHex(bytes));
+      expect(encodeHex(decResult.bytes!), `${manifest.id} round trip`).toBe(encodeHex(input));
     });
   }
 });

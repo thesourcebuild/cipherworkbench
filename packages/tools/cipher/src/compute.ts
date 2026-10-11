@@ -26,6 +26,7 @@ import {
   fernetOperation,
   lwcOperation,
   rc4Operation,
+  repeatingKeyXorOperation,
   salsaOperation,
   streamCipherOperation,
   wideBlockCipherOperation,
@@ -52,6 +53,8 @@ import { createIncrementalGcmEncryptor } from "@ocs/algos/aead-modes";
 import { createRawStreamCipher, type RawStreamCipherId } from "@ocs/algos/raw-stream";
 import { opensslHeader, type KeySource } from "@ocs/kdf/key-source";
 import { concatBytes, randomBytes } from "@ocs/engine";
+import { jasyptDecrypt, jasyptEncrypt, jasyptProfileInfo, parseJasyptFrame } from "./jasypt";
+import { transformBmpAesEcb } from "./cipher-image";
 
 export function getOpenSslCipherName(r: ResolvedCipher): string | undefined {
   const mode = r.mode?.id ?? "cbc";
@@ -394,6 +397,8 @@ function operationFor(r: ResolvedCipher): CipherOperation {
       return lwcOperation(r.toolId, r.key, r.nonce, r.aad, r.instance?.id);
     case "rc4":
       return rc4Operation(r.key, r.drop);
+    case "repeating-key-xor":
+      return repeatingKeyXorOperation(r.key);
     default:
       throw new Error(`No operation for cipher tool: ${r.toolId}`);
   }
@@ -466,6 +471,8 @@ const keyBytesFor = (r: ResolvedCipher): number =>
  */
 export function constructionLabel(r: ResolvedCipher): string {
   const tool = requireCipherTool(r.toolId);
+
+  if (r.toolId === "jasypt") return `Jasypt ${r.jasyptProfile}`;
 
   if (r.toolId === "xxtea" && r.xxteaProfile === "online-tools") {
     return "XXTEA variable-length";
@@ -723,6 +730,126 @@ export async function computeCipher(spec: CipherSpec, input: Uint8Array): Promis
   if (!result.ok) return { error: result.problem };
 
   let r = result.resolved;
+  if (r.toolId === "cipher-image") {
+    try {
+      const transformed = transformBmpAesEcb(input, r.key, r.direction);
+      const { info } = transformed;
+      return {
+        bytes: transformed.bytes,
+        suggestedFilename:
+          r.direction === "encrypt" ? "cipher-image-encrypted.bmp" : "cipher-image-decrypted.bmp",
+        mimeType: "image/bmp",
+        fields: [
+          { label: "Construction", value: `AES-${r.key.length * 8}-ECB` },
+          {
+            label: "Bitmap",
+            value: `${info.width} x ${info.height}, ${info.bitsPerPixel}-bit${info.topDown ? ", top-down" : ""}`,
+          },
+          { label: "Pixel-data offset", value: `${info.pixelOffset} bytes` },
+          {
+            label: "Transformed blocks",
+            value: `${transformed.transformedBlocks} (${transformed.transformedBlocks * 16} bytes)`,
+            hint: "Each complete 16-byte pixel-data block is transformed independently.",
+          },
+          {
+            label: "Unchanged remainder",
+            value: `${transformed.unchangedRemainderBytes} bytes`,
+            hint: "The final pixel-data bytes that do not fill an AES block remain unchanged so the BMP length and structure stay valid.",
+          },
+        ],
+        working:
+          "AES-ECB has no chaining: equal 16-byte pixel blocks become equal ciphertext blocks, so repeated colors and large shapes can remain visible. The BMP headers, pixel-data offset, any bytes after the pixel array, and the final short pixel block are copied unchanged. This is an educational visualization, not secure image encryption.",
+        workingFormat: "markdown",
+      };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+  if (r.toolId === "jasypt") {
+    const profile = r.jasyptProfile!;
+    const password = r.jasyptPassword!;
+    const iterations = r.jasyptIterations!;
+    const profileInfo = jasyptProfileInfo(profile);
+
+    if (r.direction === "encrypt") {
+      try {
+        const salt = r.salt.length > 0 ? r.salt : randomBytes(profileInfo.saltLength);
+        const iv = r.nonce.length > 0 ? r.nonce : randomBytes(profileInfo.ivLength);
+        const bytes = jasyptEncrypt(profile, password, input, { iterations, salt, iv });
+        return {
+          bytes,
+          fields: [
+            { label: "Construction", value: constructionLabel(r) },
+            { label: "Iterations", value: iterations.toLocaleString("en-US") },
+            {
+              label: "Salt",
+              value: encodeHex(salt),
+              hint: `The first ${salt.length} bytes of the framed result.`,
+            },
+            ...(iv.length > 0
+              ? [
+                  {
+                    label: "IV",
+                    value: encodeHex(iv),
+                    hint: `The next ${iv.length} bytes of the framed result, after the salt.`,
+                  },
+                ]
+              : []),
+            {
+              label: "Authentication",
+              value: "None",
+              hint: "Jasypt's CBC profiles do not authenticate the ciphertext or framing.",
+            },
+            {
+              label: "String formats",
+              value: "Base64 or hexadecimal",
+              hint: "Jasypt encodes these framed bytes as Base64 by default or uppercase hexadecimal when configured.",
+            },
+          ],
+        };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+
+    let parsed: ReturnType<typeof parseJasyptFrame>;
+    try {
+      parsed = parseJasyptFrame(profile, input);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+
+    try {
+      const bytes = jasyptDecrypt(profile, password, input, iterations);
+      return {
+        bytes,
+        fields: [
+          { label: "Construction", value: constructionLabel(r) },
+          { label: "Iterations", value: iterations.toLocaleString("en-US") },
+          { label: "Salt", value: encodeHex(parsed.salt), hint: "Read from the framed input." },
+          ...(parsed.iv.length > 0
+            ? [
+                {
+                  label: "IV",
+                  value: encodeHex(parsed.iv),
+                  hint: "Read from the framed input.",
+                },
+              ]
+            : []),
+          {
+            label: "Authentication",
+            value: "None",
+            hint: "Successful PKCS#5 padding is not proof that the password or ciphertext was correct.",
+          },
+        ],
+      };
+    } catch {
+      return {
+        error:
+          "Could not decrypt the Jasypt value. The password, profile or iteration count is wrong, or the unauthenticated ciphertext was corrupted; PKCS#5 padding cannot distinguish these cases.",
+      };
+    }
+  }
   /**
    * The bytes the cipher actually sees.
    *
@@ -913,13 +1040,7 @@ type IncrementalBlockModeId = "ecb" | "cbc" | "cfb" | "ofb" | "ctr";
 
 type StreamConfiguration = Pick<
   ResolvedCipher,
-  | "toolId"
-  | "direction"
-  | "ageArmor"
-  | "keySource"
-  | "mode"
-  | "padding"
-  | "xxteaProfile"
+  "toolId" | "direction" | "ageArmor" | "keySource" | "mode" | "padding" | "xxteaProfile"
 >;
 
 function canStreamConfiguration(r: StreamConfiguration): boolean {

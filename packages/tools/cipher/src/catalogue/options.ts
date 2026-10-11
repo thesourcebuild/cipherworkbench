@@ -32,6 +32,13 @@ import {
   OPTION_AGE_IDENTITY,
   OPTION_AGE_PASSPHRASE,
   OPTION_AGE_ARMOR,
+  OPTION_JASYPT_PROFILE,
+  OPTION_JASYPT_PASSWORD,
+  OPTION_JASYPT_ITERATIONS,
+  OPTION_JASYPT_SALT,
+  OPTION_JASYPT_IV,
+  TAG_JASYPT_AES_ENCRYPT,
+  TAG_JASYPT_ENCRYPT,
   TAG_CHACHA_COUNTER,
   TAG_IV_MANUAL,
   TAG_RC4,
@@ -420,6 +427,16 @@ const AES_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
   aadOption(MODES_WITH_AAD),
 ];
 
+const CIPHER_IMAGE_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
+  DIRECTION_OPTION,
+  keyOption(
+    { exact: [...AES_KEY_SIZES], generate: 16 },
+    "An explicit AES-128, AES-192 or AES-256 key.",
+    "Exactly 16, 24 or 32 bytes. This educational tool intentionally takes a direct key and does not derive one from a password.",
+    "hex",
+  ),
+];
+
 const CHACHA_POLY_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
   DIRECTION_OPTION,
   keyOption(
@@ -584,6 +601,15 @@ const RC4_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
   },
 ];
 
+const REPEATING_KEY_XOR_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
+  DIRECTION_OPTION,
+  keyOption(
+    { min: 1, generate: 16 },
+    "Any non-empty byte string.",
+    "These exact bytes repeat across the whole input. This is an insecure repeating-key cipher, not a one-time pad (whose key is random, message-length, and never reused) and not an XOR checksum (which reduces data to a short check value).",
+  ),
+];
+
 /**
  * The Salsa family. Key is always 32 bytes; the nonce is what distinguishes them.
  *
@@ -678,7 +704,85 @@ const FERNET_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
   },
 ];
 
-function cobblestoneOptions(instances: readonly CipherInstance[]): readonly OptionDef<CipherOptionGroup>[] {
+const JASYPT_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
+  DIRECTION_OPTION,
+  {
+    id: OPTION_JASYPT_PROFILE,
+    label: "Jasypt profile",
+    group: "algorithm",
+    kind: "enum",
+    choices: [
+      {
+        value: "PBEWITHHMACSHA512ANDAES_256",
+        label: "PBEWITHHMACSHA512ANDAES_256",
+        summary: "PBKDF2-HMAC-SHA-512 and AES-256-CBC; still unauthenticated",
+      },
+      {
+        value: "PBEWithMD5AndDES",
+        label: "PBEWithMD5AndDES",
+        summary: "Jasypt's original MD5 and single-DES profile; broken",
+        insecure: true,
+      },
+    ],
+    summary: "The exact JCE algorithm name used by Jasypt.",
+    detail:
+      "These are interoperability profiles, not interchangeable strength settings. PBEWithMD5AndDES derives a DES key and IV with iterated MD5 and frames salt || ciphertext. PBEWITHHMACSHA512ANDAES_256 derives an AES-256 key with PBKDF2-HMAC-SHA-512 and frames salt || IV || ciphertext when used with Jasypt's RandomIvGenerator. Both use CBC with PKCS#5 padding and neither authenticates the result.",
+    order: 10,
+  },
+  {
+    id: OPTION_JASYPT_PASSWORD,
+    label: "Password",
+    group: "key",
+    kind: "text",
+    secret: true,
+    arg: { placeholder: "Enter the Jasypt password" },
+    summary: "Printable ASCII, exactly as SunJCE accepts it.",
+    detail:
+      "Jasypt first normalizes the Java password to Unicode NFC, then SunJCE's PBEKeyFactory accepts only U+0020 through U+007E. This field is not trimmed or UTF-8-decoded as key bytes: spaces are significant, control characters and non-ASCII passwords are rejected just as the default Java provider rejects them.",
+    order: 10,
+  },
+  {
+    id: OPTION_JASYPT_ITERATIONS,
+    label: "Key-obtention iterations",
+    group: "derivation",
+    kind: "number",
+    arg: { placeholder: "1000", min: 1, max: 10000000, step: 1 },
+    summary: "Jasypt defaults to 1,000. It must match the producer exactly.",
+    detail:
+      "The profile applies this count to MD5 or PBKDF2. Jasypt's default is 1,000, which is retained for interoperability and is far too cheap for new password encryption. Changing it makes existing ciphertext undecryptable.",
+    order: 20,
+  },
+  {
+    id: OPTION_JASYPT_SALT,
+    label: "Deterministic salt (advanced)",
+    group: "key",
+    kind: "bytes",
+    bytesLength: { exact: [0, 8, 16] },
+    defaultBytesEncoding: "hex",
+    availableOn: [TAG_JASYPT_ENCRYPT],
+    summary: "Leave empty for a fresh cryptographically random salt.",
+    detail:
+      "Fixture-only override. Encryption normally generates a new salt and prepends it to the result. Enter exactly 8 bytes for PBEWithMD5AndDES or 16 for the AES profile only when reproducing a known vector; reusing a salt makes password guesses reusable across ciphertexts. Decryption always reads the salt from the frame.",
+    order: 20,
+  },
+  {
+    id: OPTION_JASYPT_IV,
+    label: "Deterministic IV (advanced)",
+    group: "key",
+    kind: "bytes",
+    bytesLength: { exact: [0, 16] },
+    defaultBytesEncoding: "hex",
+    availableOn: [TAG_JASYPT_AES_ENCRYPT],
+    summary: "Leave empty for a fresh cryptographically random 16-byte IV.",
+    detail:
+      "Fixture-only override for PBEWITHHMACSHA512ANDAES_256 with Jasypt's RandomIvGenerator. Encryption prepends the IV after the salt; decryption reads it from there. The DES profile has no separately framed IV because JCE derives its CBC IV from the password and salt.",
+    order: 30,
+  },
+];
+
+function cobblestoneOptions(
+  instances: readonly CipherInstance[],
+): readonly OptionDef<CipherOptionGroup>[] {
   return [
     DIRECTION_OPTION,
     {
@@ -729,7 +833,8 @@ function cobblestoneOptions(instances: readonly CipherInstance[]): readonly Opti
   ];
 }
 
-const COBBLESTONE_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = cobblestoneOptions(COBBLESTONE_INSTANCES);
+const COBBLESTONE_OPTIONS: readonly OptionDef<CipherOptionGroup>[] =
+  cobblestoneOptions(COBBLESTONE_INSTANCES);
 
 const AGE_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
   DIRECTION_OPTION,
@@ -767,7 +872,8 @@ const AGE_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
     kind: "text",
     availableOn: ["recipient"],
     summary: "Bech32 recipient public key (age1...).",
-    detail: "The recipient's public key (age1...). Decryption uses the corresponding AGE-SECRET-KEY-1... identity.",
+    detail:
+      "The recipient's public key (age1...). Decryption uses the corresponding AGE-SECRET-KEY-1... identity.",
     arg: { placeholder: "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p" },
     order: 20,
   },
@@ -801,7 +907,8 @@ const AGE_OPTIONS: readonly OptionDef<CipherOptionGroup>[] = [
     group: "aead",
     kind: "boolean",
     summary: "Wrap ciphertext with standard -----BEGIN AGE ENCRYPTED FILE----- armor.",
-    detail: "ASCII armor encodes the binary container into PEM-like Base64 lines with age headers.",
+    detail:
+      "ASCII armor encodes the binary container into PEM-like Base64 lines with age headers.",
     order: 40,
   },
 ];
@@ -892,7 +999,8 @@ function blockCipherOptions(tool: CipherToolMeta): readonly OptionDef<CipherOpti
               {
                 value: "two-word-block",
                 label: "64-bit blocks (ECB/CBC/etc.)",
-                summary: "Splits input into fixed 8-byte blocks using a conventional block mode",
+                summary:
+                  "Splits input into fixed 8-byte blocks using a conventional block mode",
               },
             ],
             summary: "How XXTEA groups and serializes the input bytes.",
@@ -1310,7 +1418,8 @@ function shapeNotesFor(toolId: string): { key: string; nonce: string; instance?:
     },
     "dect-dsc": {
       key: "64 bits (8 bytes) cordless authentication / encryption key.",
-      nonce: "32 to 40 bits (4-5 bytes) initialization vector from DECT standard frame counter.",
+      nonce:
+        "32 to 40 bits (4-5 bytes) initialization vector from DECT standard frame counter.",
     },
     gea: {
       key: "64 bits (8 bytes) GPRS ciphering key Kc.",
@@ -1653,6 +1762,7 @@ export function cipherCatalogueFor(toolId: string): OptionCatalogue<CipherOption
      */
     const byTool: Record<string, readonly OptionDef<CipherOptionGroup>[]> = {
       aes: AES_OPTIONS,
+      "cipher-image": CIPHER_IMAGE_OPTIONS,
       chacha20poly1305: CHACHA_POLY_OPTIONS,
       xchacha20poly1305: XCHACHA_POLY_OPTIONS,
       chacha20: chachaRawOptions(12, "per RFC 8439"),
@@ -1663,6 +1773,7 @@ export function cipherCatalogueFor(toolId: string): OptionCatalogue<CipherOption
       aegis128l: aegisOptions(16, 16),
       aegis256: aegisOptions(32, 32),
       rc4: RC4_OPTIONS,
+      "repeating-key-xor": REPEATING_KEY_XOR_OPTIONS,
       xsalsa20poly1305: salsaOptions(
         24,
         "192 bits, which is what the X in the name buys: wide enough to pick at random for every message without tracking what has been used. libsodium generates one per `secretbox` call for exactly that reason.",
@@ -1676,6 +1787,7 @@ export function cipherCatalogueFor(toolId: string): OptionCatalogue<CipherOption
         "64 bits, the original width. Small enough that random choice risks a collision, so Salsa20 expects a counter rather than a random nonce — which is precisely the problem XSalsa20 was introduced to remove.",
       ),
       fernet: FERNET_OPTIONS,
+      jasypt: JASYPT_OPTIONS,
       cobblestone: COBBLESTONE_OPTIONS,
       age: AGE_OPTIONS,
     };
@@ -1706,13 +1818,15 @@ export function cipherCatalogueFor(toolId: string): OptionCatalogue<CipherOption
      */
     const withDerivation = [
       ...options,
-      ...keySourceOptions<CipherOptionGroup>({
-        // The select sits in the rail with Mode and Key size -- the three choices that decide which
-        // function runs. The password and salt stay in the Input panel, where the Key field was.
-        select: "algorithm",
-        input: "key",
-        settings: "derivation",
-      }),
+      ...(toolId === "jasypt" || toolId === "cipher-image"
+        ? []
+        : keySourceOptions<CipherOptionGroup>({
+            // The select sits in the rail with Mode and Key size -- the three choices that decide which
+            // function runs. The password and salt stay in the Input panel, where the Key field was.
+            select: "algorithm",
+            input: "key",
+            settings: "derivation",
+          })),
     ];
     catalogue = createOptionCatalogue<CipherOptionGroup>(withDerivation);
     CACHE.set(toolId, catalogue);

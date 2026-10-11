@@ -270,6 +270,25 @@ describe("export-folder: Certificate and mTLS Suite File Exports", () => {
     expect(files[1]?.name).toBe("sha256.bin");
   });
 
+  it("uses primary result filename and MIME suggestions", () => {
+    const files = collectExportFiles(
+      {
+        text: "sha256:10000:c2FsdA==:ZGlnZXN0\n",
+        suggestedFilename: "grafana-hashcat.txt",
+        mimeType: "text/plain;charset=utf-8",
+      },
+      { id: "grafana2hashcat" } as unknown as ToolManifest,
+      undefined,
+    );
+    expect(files).toEqual([
+      {
+        name: "grafana-hashcat.txt",
+        content: "sha256:10000:c2FsdA==:ZGlnZXN0\n",
+        mimeType: "text/plain;charset=utf-8",
+      },
+    ]);
+  });
+
   it("returns empty file list when result has error", () => {
     const errorResult = {
       error: "Something went wrong",

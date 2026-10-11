@@ -21,6 +21,8 @@ import {
   OPTION_PARAM_SET,
   OPTION_PADDING,
   OPTION_XXTEA_PROFILE,
+  OPTION_JASYPT_ITERATIONS,
+  OPTION_JASYPT_PROFILE,
   readMode,
   readParamSet,
   withMode,
@@ -103,6 +105,8 @@ export const RULE_CODES = [
   "C011",
   "C012",
   "C013",
+  "C014",
+  "C015",
 ] as const;
 
 export const RULES: readonly LintRule<CipherSpec>[] = [
@@ -152,7 +156,21 @@ export const RULES: readonly LintRule<CipherSpec>[] = [
       const result = resolveCipher(spec);
       if (!result.ok) return [];
       const r = result.resolved;
+      if (r.toolId === "cipher-image") return [];
       if (r.aead || r.mode?.id === "ecb" || r.toolId === "rc4") return [];
+
+      if (r.toolId === "jasypt") {
+        return [
+          {
+            code: "C002",
+            level: "warning",
+            message: `${r.jasyptProfile} encrypts but does not authenticate.`,
+            detail:
+              "Jasypt's framed salt and IV are public, and CBC plus PKCS#5 padding supplies confidentiality only. An attacker can alter the frame or ciphertext without a cryptographic authentication failure; invalid padding catches some changes by chance, while others decrypt to modified plaintext. Use this profile only to interoperate with existing Jasypt data, and use an authenticated format for new data.",
+            optionIds: [OPTION_JASYPT_PROFILE],
+          },
+        ];
+      }
 
       /**
        * Name the mode wherever there is one. "DES encrypts but does not authenticate" would be true
@@ -295,7 +313,16 @@ export const RULES: readonly LintRule<CipherSpec>[] = [
         {
           code: "C004",
           level: "insecure",
-          message: `${tool.label} is broken. Do not use it to protect anything.`,
+          message:
+            spec.variant === "cipher-image"
+              ? "Cipher Image deliberately uses broken AES-ECB to reveal bitmap patterns."
+              : `${tool.label} is broken. Do not use it to protect anything.`,
+          ...(spec.variant === "cipher-image"
+            ? {
+                detail:
+                  "Equal 16-byte pixel blocks encrypt to equal ciphertext blocks, so repeated colors, edges and silhouettes leak through the result. Any final pixel bytes shorter than one AES block are left unchanged to preserve the BMP file length. Use an authenticated construction such as AES-GCM for real encryption.",
+              }
+            : {}),
           optionIds: [OPTION_KEY],
         },
       ];
@@ -715,6 +742,42 @@ export const RULES: readonly LintRule<CipherSpec>[] = [
           detail:
             "That is what openssl enc does when you do not pass -S, and it is the right default: the salt travels in the Salted__ header, so a recipient needs only the password. It does mean encrypting the same input twice gives different ciphertext, that Verify cannot check this output against another run, and that comparing byte for byte against another tool will not match even when both are correct. Enter a salt if you need the same answer twice.",
           optionIds: [OPTION_KDF_SALT],
+        },
+      ];
+    },
+  },
+  {
+    code: "C014",
+    check(spec) {
+      const result = resolveCipher(spec);
+      if (!result.ok || result.resolved.jasyptProfile !== "PBEWithMD5AndDES") return [];
+      return [
+        {
+          code: "C014",
+          level: "insecure",
+          message: "PBEWithMD5AndDES is a broken legacy encryption profile.",
+          detail:
+            "It derives a 56-bit single-DES key with iterated MD5 and then uses unauthenticated DES-CBC. DES can be brute-forced with dedicated hardware, MD5 adds no useful modern margin here, and Jasypt's default 1,000 iterations makes password guessing cheap. Keep it only to decrypt or reproduce existing values.",
+          optionIds: [OPTION_JASYPT_PROFILE],
+        },
+      ];
+    },
+  },
+  {
+    code: "C015",
+    check(spec) {
+      const result = resolveCipher(spec);
+      if (!result.ok || result.resolved.toolId !== "jasypt") return [];
+      const iterations = result.resolved.jasyptIterations ?? 1000;
+      if (iterations >= 10_000) return [];
+      return [
+        {
+          code: "C015",
+          level: "warning",
+          message: `${iterations.toLocaleString("en-US")} key-obtention iterations is cheap to brute-force.`,
+          detail:
+            "Jasypt defaults to 1,000 for compatibility, not because that is an adequate password-hardening cost today. The count must match existing ciphertext exactly, so this warning cannot be fixed without re-encrypting; for new data, prefer a modern authenticated container with a memory-hard password KDF.",
+          optionIds: [OPTION_JASYPT_ITERATIONS],
         },
       ];
     },

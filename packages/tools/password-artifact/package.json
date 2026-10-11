@@ -1,0 +1,25 @@
+{
+  "name": "@ocs/password-artifact",
+  "version": "0.22.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "//": "Password hash analysis and extraction tools. ./manifests is dependency-free eager metadata; parser definitions remain behind ./definition.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifests": "./src/manifest.ts",
+    "./definition": "./src/definition.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ocs/contracts": "workspace:*",
+    "@ocs/engine": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ocs/config": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

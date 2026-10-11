@@ -44,20 +44,32 @@ export function ToolHeader({
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{manifest.label}</h2>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={cn(
-              "shrink-0 whitespace-nowrap rounded border px-1.5 py-px text-[10px] font-medium",
-              POSTURE_STYLE[manifest.security],
-            )}
-          >
-            {POSTURE_LABEL[manifest.security]}
-          </span>
+          {manifest.security && (
+            <span
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded border px-1.5 py-px text-[10px] font-medium",
+                POSTURE_STYLE[manifest.security],
+              )}
+            >
+              {POSTURE_LABEL[manifest.security]}
+            </span>
+          )}
           {manifest.directions.length === 1 && manifest.directions[0] === "forward" && (
             <span
               title="A one-way function. There is no inverse to compute — nothing here, or anywhere, can turn a digest back into its input."
               className="shrink-0 whitespace-nowrap cursor-help rounded border border-slate-300 px-1.5 py-px text-[10px] font-medium text-slate-500 underline decoration-dotted dark:border-slate-700 dark:text-slate-400"
             >
               One-way
+            </span>
+          )}
+          {manifest.purpose === "analysis" && (
+            <span className="shrink-0 whitespace-nowrap rounded border border-slate-300 px-1.5 py-px text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              Analysis
+            </span>
+          )}
+          {manifest.purpose === "extraction" && (
+            <span className="shrink-0 whitespace-nowrap rounded border border-slate-300 px-1.5 py-px text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              Extraction
             </span>
           )}
           {(streaming ?? manifest.streaming) && (

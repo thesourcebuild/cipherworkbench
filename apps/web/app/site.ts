@@ -44,6 +44,7 @@ export const OG_IMAGE_HEIGHT = 630;
 /** Human-readable category labels for breadcrumbs and schema. */
 export const FAMILY_LABEL: Record<string, string> = {
   hash: "Hashes",
+  "password-artifact": "Password artifacts",
   crc: "CRC",
   checksum: "Checksums",
   checkdigit: "Check Digits",
@@ -97,6 +98,7 @@ export const SITE_KEYWORDS: readonly string[] = [
  */
 const FAMILY_PROSE: Record<string, string> = {
   hash: "cryptographic hash",
+  "password-artifact": "password artifact analysis",
   crc: "cyclic redundancy check",
   checksum: "checksum",
   checkdigit: "check digit algorithm",
@@ -135,6 +137,9 @@ export function toolUrl(id: string): string {
  * name has in a title.
  */
 export function toolTitle(manifest: ToolManifest): string {
+  if (manifest.purpose === "analysis") return `${manifest.label} — analyze online`;
+  if (manifest.purpose === "extraction")
+    return `${manifest.label} — extract and convert online`;
   return `${manifest.label} — calculate and verify online`;
 }
 
@@ -150,7 +155,13 @@ export function toolTitle(manifest: ToolManifest): string {
 export function toolDescription(manifest: ToolManifest): string {
   const family = FAMILY_PROSE[manifest.family] ?? manifest.family;
   const file = manifest.supportsFile
-    ? " Works on typed text or a local file of any size."
+    ? manifest.sourcePolicy?.semantics === "file-artifact"
+      ? manifest.sourcePolicy.maxFileBytes === undefined
+        ? " Works on local files of any size."
+        : ` Works on local files up to ${manifest.sourcePolicy.maxFileBytes.toLocaleString()} bytes.`
+      : manifest.sourcePolicy?.maxFileBytes === undefined
+        ? " Works on typed text or a local file of any size."
+        : ` Works on typed text or local files up to ${manifest.sourcePolicy.maxFileBytes.toLocaleString()} bytes.`
     : "";
   return `${manifest.label}: ${manifest.summary} A ${family} tool that runs entirely in your browser — nothing is uploaded.${file}`;
 }

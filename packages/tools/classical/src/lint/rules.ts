@@ -1,12 +1,20 @@
 import type { LintRule } from "@ocs/contracts/diagnostic";
 import { requireClassicalTool } from "../catalogue/tool-meta";
-import { DEFAULT_SHIFT, OPTION_SHIFT, readDirection, readShift, withShift } from "../pure";
+import {
+  DEFAULT_SHIFT,
+  OPTION_OFFSET,
+  OPTION_SHIFT,
+  readDirection,
+  readShift,
+  withShift,
+} from "../pure";
+import { resolveClassical } from "../resolve";
 import type { ClassicalSpec } from "../spec";
 
-export const RULE_CODES = ["X001", "X002", "X003"] as const;
+export const RULE_CODES = ["X001", "X002", "X003", "X004", "X005"] as const;
 
 /**
- * Three rules, and the bar is the one this repo applies everywhere: would this change what somebody
+ * Five rules, and the bar is the one this repo applies everywhere: would this change what somebody
  * does.
  *
  * Note what is *not* here. There is no rule saying "use AES instead", because that is not a fix for
@@ -92,6 +100,43 @@ export const RULES: readonly LintRule<ClassicalSpec>[] = [
           message: "A shift of 13 is ROT13, which is its own inverse.",
           detail: `Half of 26, so shifting forward 13 and back 13 land on the same letter -- Direction is currently ${direction} and switching it would change nothing. Applying ROT13 twice returns the original text, which is why it is used to hide spoilers rather than secrets.`,
           optionIds: [OPTION_SHIFT],
+        },
+      ];
+    },
+  },
+  {
+    code: "X004",
+    check(spec) {
+      const kind = requireClassicalTool(spec.variant).kind;
+      if (!["affine", "atbash", "polybius", "a1z26", "rot"].includes(kind)) return [];
+      return [
+        {
+          code: "X004",
+          level: "insecure",
+          message:
+            "This classical transformation provides no security against modern analysis.",
+          detail:
+            "Its alphabet and mapping are small enough to reverse directly or exhaustively. Use it for historical examples, puzzles and interoperability, not to protect sensitive data.",
+        },
+      ];
+    },
+  },
+  {
+    code: "X005",
+    check(spec) {
+      if (requireClassicalTool(spec.variant).kind !== "affine") return [];
+      const resolved = resolveClassical(spec);
+      if (resolved.ok) return [];
+      return [
+        {
+          code: "X005",
+          level: "error",
+          message: resolved.problem,
+          detail:
+            resolved.optionId === OPTION_OFFSET
+              ? "The additive offset b is a residue modulo 26, represented here by one of the integers from 0 through 25."
+              : "An affine cipher can be decrypted only when a has a multiplicative inverse modulo 26. Choose one of 1, 3, 5, 7, 9, 11, 15, 17, 19, 21, 23 or 25.",
+          optionIds: [resolved.optionId],
         },
       ];
     },

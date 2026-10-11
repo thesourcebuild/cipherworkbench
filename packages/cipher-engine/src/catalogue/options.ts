@@ -122,6 +122,8 @@ export interface OptionDef<TGroup extends string = string> {
    * Defaults to hex.
    */
   defaultBytesEncoding?: BytesEncoding;
+  /** How a non-UTF-8 file selected for a multiline text field is stored in the serialisable spec. */
+  binaryFileEncoding?: "base64";
   /** One line, shown next to the control. */
   summary: string;
   /** Paragraph, shown in the reference panel and the tooltip. */

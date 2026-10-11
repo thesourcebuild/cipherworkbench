@@ -75,7 +75,7 @@ export interface ToolDetailsProps {
  */
 export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps) {
   const familyName = FAMILY_LABEL[manifest.family] ?? manifest.family;
-  const posture = POSTURE_EXPLANATION[manifest.security];
+  const posture = manifest.security ? POSTURE_EXPLANATION[manifest.security] : undefined;
 
   // Find related algorithms: same category first, then same family (max 8)
   const categorySiblings = TOOL_MANIFESTS.filter(
@@ -99,14 +99,16 @@ export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps)
           <h2 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
             About {manifest.label}
           </h2>
-          <span
-            className={cn(
-              "rounded border px-1.5 py-px text-[10px] font-medium",
-              POSTURE_STYLE[manifest.security],
-            )}
-          >
-            {POSTURE_LABEL[manifest.security]}
-          </span>
+          {manifest.security && (
+            <span
+              className={cn(
+                "rounded border px-1.5 py-px text-[10px] font-medium",
+                POSTURE_STYLE[manifest.security],
+              )}
+            >
+              {POSTURE_LABEL[manifest.security]}
+            </span>
+          )}
           <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
             {familyName}
           </span>
@@ -114,7 +116,7 @@ export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps)
             {manifest.category}
           </span>
           <span className="hidden md:inline-block text-[11px] text-slate-400 dark:text-slate-500">
-            — Specifications, security &amp; details
+            — Specifications{manifest.security ? ", security" : ""} &amp; details
           </span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 text-xs font-medium text-slate-500 transition-colors group-hover:text-slate-800 dark:text-slate-400 dark:group-hover:text-slate-200">
@@ -133,22 +135,29 @@ export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps)
         </div>
 
         {/* Security Posture Notice */}
-        <section className={cn("rounded-md border p-3 text-xs leading-relaxed", POSTURE_STYLE[manifest.security])}>
-          <h3 className="font-semibold">{posture.title}</h3>
-          <p className="mt-1 opacity-90">{posture.description}</p>
-        </section>
+        {manifest.security && posture && (
+          <section
+            className={cn(
+              "rounded-md border p-3 text-xs leading-relaxed",
+              POSTURE_STYLE[manifest.security],
+            )}
+          >
+            <h3 className="font-semibold">{posture.title}</h3>
+            <p className="mt-1 opacity-90">{posture.description}</p>
+          </section>
+        )}
 
         {/* Technical Specifications */}
         <section className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Algorithm Specifications & Capabilities
+            Tool Specifications &amp; Capabilities
           </h3>
           <div className="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-800">
             <table className="w-full text-left text-xs">
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 <tr className="bg-slate-50/60 dark:bg-slate-950/30">
                   <th scope="row" className="w-1/3 px-3 py-2 font-medium text-slate-600 dark:text-slate-400">
-                    Algorithm Family
+                    Tool Family
                   </th>
                   <td className="px-3 py-2 text-slate-900 dark:text-slate-100">
                     {familyName} ({manifest.category})
@@ -159,9 +168,14 @@ export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps)
                     Operation Direction
                   </th>
                   <td className="px-3 py-2 text-slate-900 dark:text-slate-100">
-                    {manifest.directions.length === 1 && manifest.directions[0] === "forward"
-                      ? "One-way transform (irreversible — no inverse function exists)"
-                      : "Bidirectional (reversible forward and inverse transformations)"}
+                    {manifest.purpose === "analysis"
+                      ? "Analysis (no forward or inverse transform)"
+                      : manifest.purpose === "extraction"
+                        ? "Extraction and serialization (no inverse operation)"
+                        : manifest.directions.length === 1 &&
+                            manifest.directions[0] === "forward"
+                          ? "One-way transform (irreversible — no inverse function exists)"
+                          : "Bidirectional (reversible forward and inverse transformations)"}
                   </td>
                 </tr>
                 <tr className="bg-slate-50/60 dark:bg-slate-950/30">
@@ -173,7 +187,7 @@ export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps)
                       ? "Supported — processes file input incrementally in worker chunks"
                       : manifest.conditionalStreaming
                         ? "Mode-dependent — direct-key classical block modes read incrementally; derived-key, authenticated, and whole-message constructions buffer"
-                        : "In-memory block processing"}
+                        : "In-memory processing"}
                   </td>
                 </tr>
                 <tr>
@@ -181,8 +195,22 @@ export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps)
                     Input Modes
                   </th>
                   <td className="px-3 py-2 text-slate-900 dark:text-slate-100">
-                    {manifest.supportsFile
-                      ? "Direct text, hex/base64 byte strings, and local file drag-and-drop"
+                    {manifest.sourcePolicy?.semantics === "file-artifact"
+                      ? `Local file drag-and-drop only${
+                          manifest.sourcePolicy.maxFileBytes === undefined
+                            ? ""
+                            : ` (up to ${manifest.sourcePolicy.maxFileBytes.toLocaleString()} bytes)`
+                        }`
+                      : manifest.sourcePolicy?.semantics === "text-artifact"
+                      ? manifest.supportsFile
+                        ? `UTF-8 text artifacts and local file drag-and-drop${
+                            manifest.sourcePolicy.maxFileBytes === undefined
+                              ? ""
+                              : ` (up to ${manifest.sourcePolicy.maxFileBytes.toLocaleString()} bytes)`
+                          }`
+                        : "UTF-8 text artifacts"
+                      : manifest.supportsFile
+                        ? "Direct text, hex/base64 byte strings, and local file drag-and-drop"
                       : manifest.readsInput
                         ? "Direct text input and byte strings"
                         : "Parameter and configuration generation"}
@@ -217,7 +245,7 @@ export function ToolDetails({ manifest, onSelect, className }: ToolDetailsProps)
         {manifest.tags.length > 0 && (
           <section className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Cryptographic Aliases & Standards
+              Aliases &amp; Standards
             </h3>
             <div className="flex flex-wrap gap-1.5">
               {manifest.tags.map((tag) => (

@@ -29,6 +29,15 @@ const FERNET_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
   "latin1",
 ];
 
+/** StandardPBEStringEncryptor emits Base64 by default or uppercase hexadecimal when configured. */
+const JASYPT_OUTPUT_ENCODINGS: readonly OutputEncoding[] = [
+  "base64",
+  "hex-upper",
+  "hex",
+  "utf-8",
+  "latin1",
+];
+
 function toManifest(meta: CipherToolMeta): ToolManifest {
   return {
     id: meta.id,
@@ -40,13 +49,26 @@ function toManifest(meta: CipherToolMeta): ToolManifest {
     // The first family where `inverse` is decryption rather than verification.
     directions: ["forward", "inverse"],
     security: meta.security,
-    outputEncodings: meta.id === "fernet" ? FERNET_OUTPUT_ENCODINGS : CIPHER_OUTPUT_ENCODINGS,
+    outputEncodings:
+      meta.id === "fernet"
+        ? FERNET_OUTPUT_ENCODINGS
+        : meta.id === "jasypt"
+          ? JASYPT_OUTPUT_ENCODINGS
+          : CIPHER_OUTPUT_ENCODINGS,
     readsInput: true,
-    supportsVerify: true,
+    supportsVerify: meta.id !== "cipher-image",
     supportsFile: true,
     // Static true means every configuration streams; conditional support is resolved from the spec.
     streaming: meta.streaming ?? false,
     ...(hasConditionalCipherStreaming(meta) ? { conditionalStreaming: true } : {}),
+    ...(meta.id === "cipher-image"
+      ? {
+          sourcePolicy: {
+            semantics: "bytes" as const,
+            accept: [".bmp", "image/bmp", "image/x-ms-bmp"],
+          },
+        }
+      : {}),
   };
 }
 

@@ -1,4 +1,9 @@
 import {
+  a1z26Decode,
+  a1z26Encode,
+  affineDecrypt,
+  affineEncrypt,
+  atbash,
   CAESAR_ALPHABET,
   caesarAllShifts,
   caesarShift,
@@ -51,10 +56,14 @@ import {
   fractionatedMorseDecrypt,
   scytaleEncrypt,
   scytaleDecrypt,
+  polybiusDecode,
+  polybiusEncode,
+  rotTransform,
 } from "@ocs/algos";
 import { optBool } from "@ocs/contracts/pure";
 import type { ToolResult, ToolResultField } from "@ocs/engine";
 import { requireClassicalTool } from "./catalogue/tool-meta";
+import { resolveClassical } from "./resolve";
 import {
   OPTION_SHOW_ALL,
   readDigitHandling,
@@ -72,14 +81,35 @@ export async function computeClassical(
   input: Uint8Array,
 ): Promise<ToolResult> {
   const tool = requireClassicalTool(spec.variant);
-  const direction = readDirection(spec.options);
   const msg = text(input);
   try {
+    const resolved = resolveClassical(spec);
+    if (!resolved.ok) return { error: resolved.problem };
+    const direction = resolved.value.direction;
     switch (tool.kind) {
       case "caesar":
         return caesarResult(spec, msg);
+      case "affine": {
+        const options = {
+          multiplier: resolved.value.affineMultiplier,
+          offset: resolved.value.affineOffset,
+        };
+        return {
+          text:
+            direction === "encrypt" ? affineEncrypt(msg, options) : affineDecrypt(msg, options),
+        };
+      }
+      case "atbash":
+        return { text: atbash(msg) };
+      case "polybius":
+        return { text: direction === "encrypt" ? polybiusEncode(msg) : polybiusDecode(msg) };
+      case "a1z26":
+        return { text: direction === "encrypt" ? a1z26Encode(msg) : a1z26Decode(msg) };
+      case "rot":
+        return { text: rotTransform(msg, resolved.value.rotVariant) };
       case "adfgvx": {
-        const res = direction === "encrypt" ? adfgvxEncrypt(msg, "GERMAN") : adfgvxDecrypt(msg, "GERMAN");
+        const res =
+          direction === "encrypt" ? adfgvxEncrypt(msg, "GERMAN") : adfgvxDecrypt(msg, "GERMAN");
         return { text: res };
       }
       case "vic-cipher": {
@@ -91,7 +121,10 @@ export async function computeClassical(
         return { text: res };
       }
       case "foursquare": {
-        const res = direction === "encrypt" ? fourSquareEncrypt(msg, "KEYONE", "KEYTWO") : fourSquareDecrypt(msg, "KEYONE", "KEYTWO");
+        const res =
+          direction === "encrypt"
+            ? fourSquareEncrypt(msg, "KEYONE", "KEYTWO")
+            : fourSquareDecrypt(msg, "KEYONE", "KEYTWO");
         return { text: res };
       }
       case "chaocipher": {
@@ -104,19 +137,31 @@ export async function computeClassical(
         return { text: res };
       }
       case "vigenere": {
-        const res = direction === "encrypt" ? vigenereEncrypt(msg, { key: "LEMON" }) : vigenereDecrypt(msg, { key: "LEMON" });
+        const res =
+          direction === "encrypt"
+            ? vigenereEncrypt(msg, { key: "LEMON" })
+            : vigenereDecrypt(msg, { key: "LEMON" });
         return { text: res };
       }
       case "playfair": {
-        const res = direction === "encrypt" ? playfairEncrypt(msg, { key: "PLAYFAIR" }) : playfairDecrypt(msg, { key: "PLAYFAIR" });
+        const res =
+          direction === "encrypt"
+            ? playfairEncrypt(msg, { key: "PLAYFAIR" })
+            : playfairDecrypt(msg, { key: "PLAYFAIR" });
         return { text: res };
       }
       case "bifid": {
-        const res = direction === "encrypt" ? bifidEncrypt(msg, { key: "BIFID" }) : bifidDecrypt(msg, { key: "BIFID" });
+        const res =
+          direction === "encrypt"
+            ? bifidEncrypt(msg, { key: "BIFID" })
+            : bifidDecrypt(msg, { key: "BIFID" });
         return { text: res };
       }
       case "trifid": {
-        const res = direction === "encrypt" ? trifidEncrypt(msg, { key: "TRIFID" }) : trifidDecrypt(msg, { key: "TRIFID" });
+        const res =
+          direction === "encrypt"
+            ? trifidEncrypt(msg, { key: "TRIFID" })
+            : trifidDecrypt(msg, { key: "TRIFID" });
         return { text: res };
       }
       case "bacon": {
@@ -124,7 +169,10 @@ export async function computeClassical(
         return { text: res };
       }
       case "railfence": {
-        const res = direction === "encrypt" ? railFenceEncrypt(msg, { rails: 3 }) : railFenceDecrypt(msg, { rails: 3 });
+        const res =
+          direction === "encrypt"
+            ? railFenceEncrypt(msg, { rails: 3 })
+            : railFenceDecrypt(msg, { rails: 3 });
         return { text: res };
       }
       case "m209": {
@@ -136,19 +184,31 @@ export async function computeClassical(
         return { text: res };
       }
       case "solitaire": {
-        const res = direction === "encrypt" ? solitaireEncrypt(msg, { passphrase: "CRYPTONOMICON" }) : solitaireDecrypt(msg, { passphrase: "CRYPTONOMICON" });
+        const res =
+          direction === "encrypt"
+            ? solitaireEncrypt(msg, { passphrase: "CRYPTONOMICON" })
+            : solitaireDecrypt(msg, { passphrase: "CRYPTONOMICON" });
         return { text: res };
       }
       case "adfgx": {
-        const res = direction === "encrypt" ? adfgxEncrypt(msg, { gridKey: "GERMAN", transpositionKey: "CIPHER" }) : adfgxDecrypt(msg, { gridKey: "GERMAN", transpositionKey: "CIPHER" });
+        const res =
+          direction === "encrypt"
+            ? adfgxEncrypt(msg, { gridKey: "GERMAN", transpositionKey: "CIPHER" })
+            : adfgxDecrypt(msg, { gridKey: "GERMAN", transpositionKey: "CIPHER" });
         return { text: res };
       }
       case "nihilist": {
-        const res = direction === "encrypt" ? nihilistEncrypt(msg, { alphabetKey: "RUSSIAN", keyPhrase: "SECRET" }) : nihilistDecrypt(msg, { alphabetKey: "RUSSIAN", keyPhrase: "SECRET" });
+        const res =
+          direction === "encrypt"
+            ? nihilistEncrypt(msg, { alphabetKey: "RUSSIAN", keyPhrase: "SECRET" })
+            : nihilistDecrypt(msg, { alphabetKey: "RUSSIAN", keyPhrase: "SECRET" });
         return { text: res };
       }
       case "straddling-checkerboard": {
-        const res = direction === "encrypt" ? straddlingCheckerboardEncrypt(msg, { keyword: "CIPHER" }) : straddlingCheckerboardDecrypt(msg, { keyword: "CIPHER" });
+        const res =
+          direction === "encrypt"
+            ? straddlingCheckerboardEncrypt(msg, { keyword: "CIPHER" })
+            : straddlingCheckerboardDecrypt(msg, { keyword: "CIPHER" });
         return { text: res };
       }
       case "typex": {
@@ -181,17 +241,22 @@ export async function computeClassical(
       }
       case "autokey": {
         const key = typeof spec.options.key === "string" ? spec.options.key : "QUEENLY";
-        const res = direction === "encrypt" ? autokeyEncrypt(msg, key) : autokeyDecrypt(msg, key);
+        const res =
+          direction === "encrypt" ? autokeyEncrypt(msg, key) : autokeyDecrypt(msg, key);
         return { text: res };
       }
       case "beaufort": {
         const key = typeof spec.options.key === "string" ? spec.options.key : "FORTIFICATION";
-        const res = direction === "encrypt" ? beaufortEncrypt(msg, key) : beaufortDecrypt(msg, key);
+        const res =
+          direction === "encrypt" ? beaufortEncrypt(msg, key) : beaufortDecrypt(msg, key);
         return { text: res };
       }
       case "columnar": {
         const key = typeof spec.options.key === "string" ? spec.options.key : "ZEBRAS";
-        const res = direction === "encrypt" ? columnarTranspositionEncrypt(msg, key) : columnarTranspositionDecrypt(msg, key);
+        const res =
+          direction === "encrypt"
+            ? columnarTranspositionEncrypt(msg, key)
+            : columnarTranspositionDecrypt(msg, key);
         return { text: res };
       }
       case "two-square": {
@@ -202,12 +267,18 @@ export async function computeClassical(
       }
       case "fractionated-morse": {
         const key = typeof spec.options.key === "string" ? spec.options.key : "ROUNDTABLE";
-        const res = direction === "encrypt" ? fractionatedMorseEncrypt(msg, key) : fractionatedMorseDecrypt(msg, key);
+        const res =
+          direction === "encrypt"
+            ? fractionatedMorseEncrypt(msg, key)
+            : fractionatedMorseDecrypt(msg, key);
         return { text: res };
       }
       case "scytale": {
         const diameter = typeof spec.options.diameter === "number" ? spec.options.diameter : 4;
-        const res = direction === "encrypt" ? scytaleEncrypt(msg, diameter) : scytaleDecrypt(msg, diameter);
+        const res =
+          direction === "encrypt"
+            ? scytaleEncrypt(msg, diameter)
+            : scytaleDecrypt(msg, diameter);
         return { text: res };
       }
     }
@@ -317,25 +388,83 @@ function bruteForceTable(
  * most: whether it applies to digits, to bytes, or to hex.
  */
 export function classicalInfo(spec: ClassicalSpec): ToolResultField[] {
-  const direction = readDirection(spec.options);
-  const shift = readShift(spec.options);
-  return [
-    {
-      label: "Formula",
-      value: direction === "encrypt" ? "E(x) = (x + k) mod 26" : "D(x) = (x - k) mod 26",
-      hint: `With k = ${shift}. x is a letter's position in the alphabet, A being 0.`,
-    },
-    {
-      label: "Alphabet",
-      value: "A-Z and a-z, 26 letters",
-      hint: "Everything else passes through: digits, punctuation, spaces, and letters outside these 26. A shift over bytes or hex digits would be a different cipher, not this one.",
-    },
-    {
-      label: "Keyspace",
-      value: `${CAESAR_ALPHABET} shifts, of which ${CAESAR_ALPHABET - 1} change anything`,
-      hint: "Small enough to read rather than search, which is what the table under the result is for.",
-    },
-  ];
+  const resolved = resolveClassical(spec);
+  if (!resolved.ok) return [{ label: "Configuration", value: resolved.problem }];
+  const { tool, direction, shift, affineMultiplier, affineOffset, rotVariant } = resolved.value;
+
+  switch (tool.kind) {
+    case "caesar":
+      return [
+        {
+          label: "Formula",
+          value: direction === "encrypt" ? "E(x) = (x + k) mod 26" : "D(x) = (x - k) mod 26",
+          hint: `With k = ${shift}. x is a letter's position in the alphabet, A being 0.`,
+        },
+        {
+          label: "Alphabet",
+          value: "A-Z and a-z, 26 letters",
+          hint: "Everything else passes through: digits, punctuation, spaces, and letters outside these 26. A shift over bytes or hex digits would be a different cipher, not this one.",
+        },
+        {
+          label: "Keyspace",
+          value: `${CAESAR_ALPHABET} shifts, of which ${CAESAR_ALPHABET - 1} change anything`,
+          hint: "Small enough to read rather than search, which is what the table under the result is for.",
+        },
+      ];
+    case "affine":
+      return [
+        {
+          label: "Formula",
+          value:
+            direction === "encrypt" ? "E(x) = (ax + b) mod 26" : "D(y) = a^-1(y - b) mod 26",
+          hint: `Using a = ${affineMultiplier} and b = ${affineOffset}.`,
+        },
+        {
+          label: "Keyspace",
+          value: "312 invertible keys",
+          hint: "There are 12 valid multipliers and 26 offsets.",
+        },
+      ];
+    case "atbash":
+      return [
+        {
+          label: "Mapping",
+          value: "A <-> Z, B <-> Y, ...",
+          hint: "Atbash is reciprocal and has no key.",
+        },
+      ];
+    case "polybius":
+      return [
+        {
+          label: "Square",
+          value: "5 x 5, I/J share 24",
+          hint: "Coordinates run from 11 through 55.",
+        },
+      ];
+    case "a1z26":
+      return [
+        {
+          label: "Mapping",
+          value: "A=1, B=2, ..., Z=26",
+          hint: "Hyphens separate letters; spaces separate words.",
+        },
+      ];
+    case "rot":
+      return [
+        {
+          label: "Alphabet",
+          value:
+            rotVariant === "rot5"
+              ? "Digits 0-9"
+              : rotVariant === "rot18"
+                ? "ASCII letters and digits"
+                : "Printable ASCII ! through ~",
+          hint: "Every offered rotation is reciprocal, so applying it twice restores the input.",
+        },
+      ];
+    default:
+      return [];
+  }
 }
 
 /** Re-exported for the tests, which check the table's shape rather than trusting it. */

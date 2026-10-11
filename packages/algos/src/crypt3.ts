@@ -10,6 +10,9 @@
 
 import { md5 } from "@noble/hashes/legacy.js";
 import { sha256, sha512 } from "@noble/hashes/sha2.js";
+import { bsdExtendedCrypt } from "./bsd-crypt";
+import { unixDesCrypt } from "./descrypt";
+import { passwordArtifactEqual } from "./password-constructions";
 
 const B64T = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
@@ -35,12 +38,16 @@ export interface CryptOptions {
 /**
  * Computes MD5-Crypt ($1$).
  */
-export function md5Crypt(password: string | Uint8Array, salt: string): string {
+function md5CryptGeneric(
+  password: string | Uint8Array,
+  salt: string,
+  magic: "$1$" | "$apr1$",
+): string {
   const pw = typeof password === "string" ? new TextEncoder().encode(password) : password;
 
-  // Extract salt: up to 8 chars, strip "$1$" if present
+  // Extract salt: up to 8 chars, stripping only this construction's own prefix.
   let cleanSalt = salt;
-  if (cleanSalt.startsWith("$1$")) cleanSalt = cleanSalt.slice(3);
+  if (cleanSalt.startsWith(magic)) cleanSalt = cleanSalt.slice(magic.length);
   const dollarIdx = cleanSalt.indexOf("$");
   if (dollarIdx !== -1) cleanSalt = cleanSalt.slice(0, dollarIdx);
   cleanSalt = cleanSalt.slice(0, 8);
@@ -54,7 +61,7 @@ export function md5Crypt(password: string | Uint8Array, salt: string): string {
   const altB = md5(bData);
 
   // Digest A = MD5(pw || "$1$" || salt || altB chunks || bits)
-  const prefix = new TextEncoder().encode("$1$");
+  const prefix = new TextEncoder().encode(magic);
   const chunks: Uint8Array[] = [pw, prefix, saltBytes];
 
   for (let i = pw.length; i > 0; i -= 16) {
@@ -62,7 +69,7 @@ export function md5Crypt(password: string | Uint8Array, salt: string): string {
   }
 
   for (let i = pw.length; i > 0; i >>= 1) {
-    chunks.push(new Uint8Array([(i & 1) ? 0 : pw[0]!]));
+    chunks.push(new Uint8Array([i & 1 ? 0 : pw[0]!]));
   }
 
   const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
@@ -107,7 +114,16 @@ export function md5Crypt(password: string | Uint8Array, salt: string): string {
   hashStr += b64From24Bit(d[4]!, d[10]!, d[5]!, 4);
   hashStr += b64From24Bit(0, 0, d[11]!, 2);
 
-  return `$1$${cleanSalt}$${hashStr}`;
+  return `${magic}${cleanSalt}$${hashStr}`;
+}
+
+export function md5Crypt(password: string | Uint8Array, salt: string): string {
+  return md5CryptGeneric(password, salt, "$1$");
+}
+
+/** Apache's APR1 variant. Its `$apr1$` magic participates in the MD5 transcript. */
+export function apr1Crypt(password: string | Uint8Array, salt: string): string {
+  return md5CryptGeneric(password, salt, "$apr1$");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,7 +134,7 @@ function shaCryptGeneric(
   isSha512: boolean,
   password: string | Uint8Array,
   salt: string,
-  optionsRounds?: number
+  optionsRounds?: number,
 ): string {
   const hashFn = isSha512 ? sha512 : sha256;
   const hashSize = isSha512 ? 64 : 32;
@@ -274,14 +290,22 @@ function shaCryptGeneric(
 /**
  * Computes SHA-256-Crypt ($5$).
  */
-export function sha256Crypt(password: string | Uint8Array, salt: string, rounds?: number): string {
+export function sha256Crypt(
+  password: string | Uint8Array,
+  salt: string,
+  rounds?: number,
+): string {
   return shaCryptGeneric(false, password, salt, rounds);
 }
 
 /**
  * Computes SHA-512-Crypt ($6$).
  */
-export function sha512Crypt(password: string | Uint8Array, salt: string, rounds?: number): string {
+export function sha512Crypt(
+  password: string | Uint8Array,
+  salt: string,
+  rounds?: number,
+): string {
   return shaCryptGeneric(true, password, salt, rounds);
 }
 
@@ -289,10 +313,13 @@ export function sha512Crypt(password: string | Uint8Array, salt: string, rounds?
  * Verifies a password against an MD5-Crypt, SHA-256-Crypt, or SHA-512-Crypt hash string.
  */
 export function cryptVerify(password: string | Uint8Array, hash: string): boolean {
+  if (hash.startsWith("$apr1$")) {
+    return passwordArtifactEqual(apr1Crypt(password, hash), hash);
+  }
   if (hash.startsWith("$1$")) {
     const parts = hash.split("$");
     const salt = parts[2] ?? "";
-    return md5Crypt(password, salt) === hash;
+    return passwordArtifactEqual(md5Crypt(password, salt), hash);
   }
   if (hash.startsWith("$5$")) {
     const parts = hash.split("$");
@@ -304,7 +331,7 @@ export function cryptVerify(password: string | Uint8Array, hash: string): boolea
     } else {
       salt = parts[2] ?? "";
     }
-    return sha256Crypt(password, salt, rounds) === hash;
+    return passwordArtifactEqual(sha256Crypt(password, salt, rounds), hash);
   }
   if (hash.startsWith("$6$")) {
     const parts = hash.split("$");
@@ -316,7 +343,49 @@ export function cryptVerify(password: string | Uint8Array, hash: string): boolea
     } else {
       salt = parts[2] ?? "";
     }
-    return sha512Crypt(password, salt, rounds) === hash;
+    return passwordArtifactEqual(sha512Crypt(password, salt, rounds), hash);
+  }
+  return false;
+}
+
+export type Crypt3Scheme =
+  "des-crypt" | "bs-crypt" | "md5crypt" | "sha256crypt" | "sha512crypt";
+
+export interface Crypt3Params {
+  scheme: Crypt3Scheme;
+  salt: string;
+  rounds?: number;
+}
+
+/** One crypt(3) entry point over the existing pure scheme implementations. */
+export function crypt3(password: string | Uint8Array, params: Crypt3Params): string {
+  switch (params.scheme) {
+    case "des-crypt":
+      return unixDesCrypt(password, params.salt);
+    case "bs-crypt":
+      return bsdExtendedCrypt(password, params.salt, params.rounds);
+    case "md5crypt":
+      return md5Crypt(password, params.salt);
+    case "sha256crypt":
+      return sha256Crypt(password, params.salt, params.rounds);
+    case "sha512crypt":
+      return sha512Crypt(password, params.salt, params.rounds);
+  }
+}
+
+/** Verifies every format emitted by `crypt3()` by recovering its parameters from the hash. */
+export function crypt3Verify(password: string | Uint8Array, hash: string): boolean {
+  if (hash.startsWith("$1$") || hash.startsWith("$5$") || hash.startsWith("$6$")) {
+    return cryptVerify(password, hash);
+  }
+
+  if (/^_[./0-9A-Za-z]{19}$/.test(hash)) {
+    let rounds = 0;
+    for (let i = 0; i < 4; i++) rounds |= B64T.indexOf(hash[i + 1]!) << (6 * i);
+    return passwordArtifactEqual(bsdExtendedCrypt(password, hash.slice(5, 9), rounds), hash);
+  }
+  if (/^[./0-9A-Za-z]{13}$/.test(hash)) {
+    return passwordArtifactEqual(unixDesCrypt(password, hash.slice(0, 2)), hash);
   }
   return false;
 }

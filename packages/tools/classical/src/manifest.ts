@@ -3,7 +3,7 @@ import type { ToolManifest } from "@ocs/engine";
 import { CLASSICAL_TOOLS, type ClassicalToolMeta } from "./catalogue/tool-meta";
 
 /**
- * One entry, which is what hides the Result panel's encoding selector.
+ * Text-only entries, which hide the Result panel's encoding selector.
  *
  * A Caesar cipher's output is *letters*. Offering to spell it as Base64 or as decimal would be a
  * control that either does nothing useful or answers a question nobody asked -- and it would invite
@@ -33,15 +33,8 @@ function toManifest(meta: ClassicalToolMeta): ToolManifest {
     security: "broken",
     outputEncodings: TEXT_ONLY,
     readsInput: true,
-    /**
-     * Yes: a Caesar ciphertext is exactly the kind of value somebody already has.
-     *
-     * The output is text rather than bytes, so `VerifyPanel` compares it with `verifyText` -- a plain
-     * trimmed comparison, which is right here. There is no encoding to auto-detect when the value *is*
-     * the string, and no case folding, because case is a setting of this tool and folding it away would
-     * make the Letter case control unverifiable.
-     */
-    supportsVerify: true,
+    // Verify is audited per tool rather than inferred merely because its output is text.
+    supportsVerify: meta.supportsVerify ?? true,
     supportsFile: true,
     /**
      * No streaming, and it is a property of the working rather than of the cipher.

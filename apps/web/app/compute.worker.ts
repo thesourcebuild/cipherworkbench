@@ -8,6 +8,7 @@ import {
   type ToolResult,
 } from "@ocs/engine";
 import { loadTool } from "@ocs/registry";
+import { createBrowserFileSource } from "./browser-file-source";
 
 /**
  * Streams a file through a tool off the main thread.
@@ -117,13 +118,31 @@ async function handle(req: Exclude<ComputeRequest, { kind: "output-ack" }>): Pro
       return;
     }
 
-    const streamsCurrentSpec = fileProcessingModeForSpec(tool, spec as never) === "streaming";
+    const processingMode = fileProcessingModeForSpec(tool, spec as never);
+    if (tool.computeFile && processingMode === "random-access") {
+      post({
+        jobId,
+        type: "done",
+        result: await tool.computeFile(spec as never, createBrowserFileSource(file)),
+      });
+      return;
+    }
+    const streamsCurrentSpec = processingMode === "streaming";
     if (!tool.createStream || !streamsCurrentSpec) {
       // A tool that cannot stream reads the whole file instead. AEAD ciphers are
       // in this category by nature: there is no authenticated output to emit
       // until every byte has been seen.
       const bytes = new Uint8Array(await file.arrayBuffer());
-      post({ jobId, type: "done", result: await tool.compute(spec as never, bytes) });
+      post({
+        jobId,
+        type: "done",
+        result: await tool.compute(spec as never, bytes, {
+          filename: file.name,
+          mimeType: file.type || undefined,
+          inputSize: file.size,
+          lastModified: file.lastModified,
+        }),
+      });
       return;
     }
 

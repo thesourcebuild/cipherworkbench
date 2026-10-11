@@ -10,6 +10,7 @@ import {
   OPTION_ARGON2_TIME,
   OPTION_ARGON2_VARIANT,
   OPTION_BCRYPT_COST,
+  OPTION_BCRYPT_VARIANT,
   OPTION_EXPECTED,
   OPTION_HASH,
   OPTION_IKM,
@@ -23,6 +24,8 @@ import {
   OPTION_SCRYPT_N,
   OPTION_SCRYPT_P,
   OPTION_SCRYPT_R,
+  OPTION_SCHEME,
+  OPTION_USERNAME,
   OPENSSH_DEFAULT_ROUNDS,
   OPENSSH_KEY_IV_BYTES,
   OWASP_BCRYPT_COST,
@@ -38,11 +41,16 @@ import {
   describeSpec,
   formatPhc,
   deriveEvpKdf,
+  hashBcrypt,
+  hashBcryptPrehash,
+  hashPasslibBcryptSha256,
   kdfToolDefinition,
   lint,
   parsePhc,
   resolveKdf,
+  samplesFor,
 } from "@ocs/kdf/definition";
+import { testInputsFor, TEST_INPUTS } from "../apps/web/app/test-inputs";
 import { encodeHex, validateCatalogue } from "@ocs/engine";
 
 function specFor(variant: string, options: KdfSpec["options"] = {}): KdfSpec {
@@ -406,6 +414,172 @@ describe("bcrypt", () => {
   });
 });
 
+describe("bcrypt prehash constructions", () => {
+  const HASHCAT_CASES = [
+    ["md5", "$2a$05$/VT2Xs2dMd8GJKfrXhjYP.DkTjOVrY12yDN7/6I8ZV0q/1lEohLru"],
+    ["sha1", "$2a$05$Uo385Fa0g86uUXHwZxB90.qMMdRFExaXePGka4WGFv.86I45AEjmO"],
+    ["sha256", "$2b$10$FxDtpTNaL303lLcWtd6LFO2U6Gc63VJ07qycHcfqbQQ71GhO/qSzu"],
+    ["sha512", "$2a$12$KhivLhCuLhSyMBOxLxCyLu78x4z2X/EJdZNfS3Gy36fvRt56P2jbS"],
+  ] as const;
+
+  for (const [variant, stored] of HASHCAT_CASES) {
+    it(`bcrypt(${variant}) matches its Hashcat fixture`, async () => {
+      expect(hashBcryptPrehash("hashcat", variant, Number(stored.slice(4, 6)), stored)).toBe(
+        stored,
+      );
+      const verified = await kdfToolDefinition("bcrypt").compute(
+        specFor("bcrypt", {
+          [OPTION_MODE]: "verify",
+          [OPTION_BCRYPT_VARIANT]: variant,
+          [OPTION_PASSWORD]: "hashcat",
+          [OPTION_EXPECTED]: stored,
+        }),
+        new Uint8Array(0),
+      );
+      expect(verified.text).toBe("MATCH");
+    });
+  }
+
+  it("preserves bcrypt's exact 72-byte behavior", () => {
+    const salt = "$2b$04$abcdefghijklmnopqrstuu";
+    expect(hashBcrypt("a".repeat(72), 4, salt)).toBe(
+      hashBcrypt(`${"a".repeat(72)}ignored`, 4, salt),
+    );
+  });
+
+  it("matches Passlib bcrypt_sha256 v2 including HMAC key and padded base64", async () => {
+    const stored =
+      "$bcrypt-sha256$v=2,t=2b,r=12$n79VH.0Q2TMWmt3Oqt9uku$Kq4Noyk3094Y2QlB8NdRT8SvGiI4ft2";
+    expect(hashPasslibBcryptSha256("password", 12, "n79VH.0Q2TMWmt3Oqt9uku")).toBe(stored);
+    const verified = await kdfToolDefinition("bcrypt").compute(
+      specFor("bcrypt", {
+        [OPTION_MODE]: "verify",
+        [OPTION_BCRYPT_VARIANT]: "passlib",
+        [OPTION_PASSWORD]: "password",
+        [OPTION_EXPECTED]: stored,
+      }),
+      new Uint8Array(0),
+    );
+    expect(verified.text).toBe("MATCH");
+  });
+});
+
+describe("Apache password tools", () => {
+  it("emits exact htpasswd SHA and APR1 fixtures", async () => {
+    const sha = await derive("htpasswd", {
+      [OPTION_USERNAME]: "alice",
+      [OPTION_PASSWORD]: "hashcat",
+      [OPTION_SCHEME]: "apache-sha",
+    });
+    expect(sha.fields!.find((field) => field.label === "Encoded form")?.value).toBe(
+      "alice:{SHA}uJ6qx+YUFzQbcQtyd2gpTQ5qJ3s=",
+    );
+
+    const apr1 = await derive(
+      "htpasswd",
+      saltedText("62722340", {
+        [OPTION_USERNAME]: "alice",
+        [OPTION_PASSWORD]: "hashcat",
+        [OPTION_SCHEME]: "apr1",
+      }),
+    );
+    expect(apr1.fields!.find((field) => field.label === "Encoded form")?.value).toBe(
+      "alice:$apr1$62722340$zGjeAwVP2KwY6MtumUI1N/",
+    );
+  });
+
+  it("verifies complete htpasswd records and reports the stored username", async () => {
+    const result = await kdfToolDefinition("htpasswd").compute(
+      specFor("htpasswd", {
+        [OPTION_MODE]: "verify",
+        [OPTION_PASSWORD]: "hashcat",
+        [OPTION_EXPECTED]: "alice:{SHA}uJ6qx+YUFzQbcQtyd2gpTQ5qJ3s=",
+      }),
+      new Uint8Array(0),
+    );
+    expect(result.text).toBe("MATCH");
+    expect(result.fields?.find((field) => field.label === "Username")?.value).toBe("alice");
+  });
+
+  it("round-trips every supported htpasswd password format", async () => {
+    const cases = [
+      ["apr1", "12345678", undefined],
+      ["bcrypt", "abcdefghijklmnopqrstuu", 4],
+      ["apache-sha", "", undefined],
+      ["sha256crypt", "abcdefghijklmnop", 1000],
+      ["sha512crypt", "abcdefghijklmnop", 1000],
+      ["des-crypt", "24", undefined],
+    ] as const;
+
+    for (const [scheme, salt, rounds] of cases) {
+      const generated = await derive("htpasswd", {
+        ...saltedText(salt),
+        [OPTION_USERNAME]: "alice",
+        [OPTION_PASSWORD]: "hashcat",
+        [OPTION_SCHEME]: scheme,
+        ...(rounds === undefined ? {} : { [OPTION_ROUNDS]: rounds }),
+        ...(scheme === "bcrypt" ? { [OPTION_BCRYPT_COST]: 4 } : {}),
+      });
+      const record = generated.fields!.find((field) => field.label === "Encoded form")!.value;
+      const verified = await kdfToolDefinition("htpasswd").compute(
+        specFor("htpasswd", {
+          [OPTION_MODE]: "verify",
+          [OPTION_PASSWORD]: "hashcat",
+          [OPTION_EXPECTED]: record,
+        }),
+        new Uint8Array(0),
+      );
+      expect(verified.text, scheme).toBe("MATCH");
+    }
+  });
+
+  it("rejects unsupported schemes and out-of-range Apache bcrypt costs", async () => {
+    const tool = kdfToolDefinition("htpasswd");
+    const unsupported = await tool.compute(
+      specFor("htpasswd", {
+        [OPTION_USERNAME]: "alice",
+        [OPTION_PASSWORD]: "pw",
+        [OPTION_SCHEME]: "unknown",
+      }),
+      new Uint8Array(0),
+    );
+    expect(unsupported.error).toMatch(/unsupported htpasswd scheme/i);
+
+    const expensive = await tool.compute(
+      specFor("htpasswd", {
+        [OPTION_USERNAME]: "alice",
+        [OPTION_PASSWORD]: "pw",
+        [OPTION_SCHEME]: "bcrypt",
+        [OPTION_BCRYPT_COST]: 18,
+      }),
+      new Uint8Array(0),
+    );
+    expect(expensive.error).toMatch(/between 4 and 17/i);
+  });
+
+  it("rejects colon, line breaks, and usernames over 255 UTF-8 bytes", async () => {
+    for (const username of ["a:b", "a\nb", "a\rb", "é".repeat(128)]) {
+      const result = await kdfToolDefinition("htpasswd").compute(
+        specFor("htpasswd", {
+          [OPTION_USERNAME]: username,
+          [OPTION_PASSWORD]: "pw",
+        }),
+        new Uint8Array(0),
+      );
+      expect(result.error, JSON.stringify(username)).toBeDefined();
+    }
+  });
+
+  it("generates fresh salts instead of fixed fallback values", async () => {
+    const a = await derive("apr1", { [OPTION_PASSWORD]: "pw" });
+    const b = await derive("apr1", { [OPTION_PASSWORD]: "pw" });
+    const encoded = (result: Awaited<ReturnType<typeof derive>>) =>
+      result.fields!.find((field) => field.label === "Encoded form")!.value;
+    expect(encoded(a)).toMatch(/^\$apr1\$[./0-9A-Za-z]{8}\$/);
+    expect(encoded(a)).not.toBe(encoded(b));
+  });
+});
+
 // ── verify mode ─────────────────────────────────────────────────────────────
 
 // -- bcrypt-PBKDF ------------------------------------------------------------
@@ -417,7 +591,11 @@ describe("bcrypt-PBKDF", () => {
     // or a rounds option the resolver never reads.
     const result = await derive(
       "bcryptpbkdf",
-      saltedText("salt", { [OPTION_PASSWORD]: "password", [OPTION_ROUNDS]: 12, [OPTION_KEY_LENGTH]: 32 }),
+      saltedText("salt", {
+        [OPTION_PASSWORD]: "password",
+        [OPTION_ROUNDS]: 12,
+        [OPTION_KEY_LENGTH]: 32,
+      }),
     );
     expect(encodeHex(result.bytes!)).toBe(
       "1ae42c05d487bc02f64921a4ebe4ea93bcacfe135fda99974c06b7b01fae149a",
@@ -426,7 +604,10 @@ describe("bcrypt-PBKDF", () => {
 
   it("defaults to ssh-keygen's 16 rounds and 48 bytes", () => {
     const resolved = resolveKdf(
-      specFor("bcryptpbkdf", salted("00112233445566778899aabbccddeeff", { [OPTION_PASSWORD]: "pw" })),
+      specFor(
+        "bcryptpbkdf",
+        salted("00112233445566778899aabbccddeeff", { [OPTION_PASSWORD]: "pw" }),
+      ),
     );
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
@@ -468,7 +649,11 @@ describe("bcrypt-PBKDF", () => {
   it("refuses an empty salt for the same reason", async () => {
     const tool = kdfToolDefinition("bcryptpbkdf");
     const result = await tool.compute(
-      specFor("bcryptpbkdf", { [OPTION_PASSWORD]: "pw", [OPTION_SALT]: "", saltEncoding: "hex" }),
+      specFor("bcryptpbkdf", {
+        [OPTION_PASSWORD]: "pw",
+        [OPTION_SALT]: "",
+        saltEncoding: "hex",
+      }),
       new Uint8Array(0),
     );
     expect(result.error).toMatch(/at least 1 byte/);
@@ -515,8 +700,9 @@ describe("verify mode", () => {
             : { [OPTION_BCRYPT_COST]: 4 };
 
       const derived = await derive(meta.id, {
-        ...salted("00".repeat(16)),
+        ...saltedText("abcdefghijklmnop"),
         [OPTION_PASSWORD]: "pw",
+        ...(meta.id === "htpasswd" ? { username: "alice" } : {}),
         ...cheap,
       });
       const encoded = derived.fields!.find((f) => f.label === "Encoded form")!.value;
@@ -944,7 +1130,32 @@ describe("catalogue and manifests", () => {
       KDF_MANIFESTS.filter((m) => m.security === "legacy")
         .map((m) => m.id)
         .sort(),
-    ).toEqual(["bcrypt", "bs-crypt", "md5crypt", "openpgp-s2k", "pbkdf2", "wpa-psk"]);
+    ).toEqual([
+      "apr1",
+      "bcrypt",
+      "bs-crypt",
+      "crypt3",
+      "htpasswd",
+      "md5crypt",
+      "openpgp-s2k",
+      "pbkdf2",
+      "wpa-psk",
+    ]);
+  });
+
+  it("bcrypt exposes pre-hash variant options with all six choices", () => {
+    const def = kdfToolDefinition("bcrypt");
+    const variantOpt = def.catalogue.options.find((o) => o.id === OPTION_BCRYPT_VARIANT);
+    expect(variantOpt).toBeDefined();
+    expect(variantOpt?.kind).toBe("enum");
+    expect(variantOpt?.choices?.map((c) => c.value)).toEqual([
+      "none",
+      "md5",
+      "sha1",
+      "sha256",
+      "sha512",
+      "passlib",
+    ]);
   });
 });
 
@@ -1141,7 +1352,9 @@ describe("OpenSSL KDF & Passwd CLI Command Parity", () => {
     const pbkdfOpenssl = pbkdfRes.cliProviders?.find((p) => p.id === "openssl");
     expect(pbkdfOpenssl).toBeDefined();
     const pbkdfBash = formatShellCommands(pbkdfOpenssl!.commands, "bash", "single-line");
-    expect(pbkdfBash).toContain('openssl kdf -keylen 32 -kdfopt pass:"myPassword" -kdfopt hexsalt:0011223344556677 -kdfopt iter:10000 -kdfopt digest:SHA256 PBKDF2');
+    expect(pbkdfBash).toContain(
+      'openssl kdf -keylen 32 -kdfopt pass:"myPassword" -kdfopt hexsalt:0011223344556677 -kdfopt iter:10000 -kdfopt digest:SHA256 PBKDF2',
+    );
 
     // 3. scrypt
     const scryptTool = kdfToolDefinition("scrypt");
@@ -1157,7 +1370,9 @@ describe("OpenSSL KDF & Passwd CLI Command Parity", () => {
     const scryptOpenssl = scryptRes.cliProviders?.find((p) => p.id === "openssl");
     expect(scryptOpenssl).toBeDefined();
     const scryptBash = formatShellCommands(scryptOpenssl!.commands, "bash", "single-line");
-    expect(scryptBash).toContain('openssl kdf -keylen 32 -kdfopt pass:"myPassword" -kdfopt hexsalt:0011223344556677 -kdfopt n:1024 -kdfopt r:8 -kdfopt p:16 SCRYPT');
+    expect(scryptBash).toContain(
+      'openssl kdf -keylen 32 -kdfopt pass:"myPassword" -kdfopt hexsalt:0011223344556677 -kdfopt n:1024 -kdfopt r:8 -kdfopt p:16 SCRYPT',
+    );
   });
 
   it("generates OpenSSL passwd commands for crypt hashes", async () => {
@@ -1196,6 +1411,48 @@ describe("OpenSSL KDF & Passwd CLI Command Parity", () => {
     expect(md5Openssl).toBeDefined();
     const md5Bash = formatShellCommands(md5Openssl!.commands, "bash", "single-line");
     expect(md5Bash).toContain('openssl passwd -1 -salt "saltsalt" "testpass"');
+  });
+});
+
+describe("KDF password samples", () => {
+  it("provides rich password samples for bcrypt rather than generic byte strings", () => {
+    const tool = kdfToolDefinition("bcrypt");
+    expect(tool.samples).toBeDefined();
+    expect(samplesFor("bcrypt")).toEqual(tool.samples);
+    const samples = tool.samples!;
+    expect(samples.length).toBeGreaterThanOrEqual(5);
+
+    const ids = samples.map((s) => s.id);
+    expect(ids).toContain("simple");
+    expect(ids).toContain("passphrase");
+    expect(ids).toContain("boundary-72");
+    expect(ids).toContain("truncated-long");
+    expect(ids).toContain("hashcat");
+    expect(ids).toContain("verify-sample");
+
+    // 72-byte boundary
+    const boundary = samples.find((s) => s.id === "boundary-72")!;
+    expect(new TextEncoder().encode(boundary.text).length).toBe(72);
+
+    // Truncated long password
+    const truncated = samples.find((s) => s.id === "truncated-long")!;
+    expect(new TextEncoder().encode(truncated.text).length).toBeGreaterThan(72);
+
+    // testInputsFor offers these samples, not the generic 123456789 / Lorem
+    const offered = testInputsFor(tool);
+    expect(offered).toBe(samples);
+    expect(offered).not.toBe(TEST_INPUTS);
+  });
+
+  it("verify sample for bcrypt round-trips correctly", async () => {
+    const tool = kdfToolDefinition("bcrypt");
+    const verifySample = tool.samples!.find((s) => s.id === "verify-sample")!;
+    expect(verifySample.options).toBeDefined();
+
+    const spec = specFor("bcrypt", verifySample.options);
+    const result = await tool.compute(spec, new Uint8Array(0));
+    expect(result.error).toBeUndefined();
+    expect(result.text).toBe("MATCH");
   });
 });
 

@@ -37,6 +37,76 @@ const SAMPLES_BY_TOOL: Record<string, readonly ToolSample[]> = {
       text: LOREM_IPSUM,
     },
   ],
+  affine: [
+    {
+      id: "published-vector",
+      label: "AFFINE CIPHER",
+      note: "Published a=5, b=8 vector: AFFINECIPHER encrypts to IHHWVCSWFRCP.",
+      text: "AFFINECIPHER",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  atbash: [
+    {
+      id: "alphabet",
+      label: "THE QUICK BROWN FOX",
+      note: "Reciprocal reverse-alphabet substitution.",
+      text: "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  polybius: [
+    {
+      id: "hello",
+      label: "HELLO",
+      note: "Standard square vector: 23 15 31 31 34.",
+      text: "HELLO",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  a1z26: [
+    {
+      id: "attack",
+      label: "ATTACK AT DAWN",
+      note: "A=1 through Z=26, with hyphens between letters.",
+      text: "ATTACK AT DAWN",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
+  rot: [
+    {
+      id: "hello",
+      label: "Hello, World!",
+      note: "The default ROT47 maps this to w6==@[ (@C=5P.",
+      text: "Hello, World!",
+    },
+    {
+      id: "lorem",
+      label: "Lorem Ipsum",
+      note: "Full standard multi-paragraph Latin passage.",
+      text: LOREM_IPSUM,
+    },
+  ],
   adfgvx: [
     {
       id: "attack",

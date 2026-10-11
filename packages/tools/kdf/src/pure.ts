@@ -28,8 +28,27 @@ export const OPTION_ARGON2_PARALLELISM = "parallelism";
 export const OPTION_ARGON2_SECRET = "secret";
 export const OPTION_ARGON2_AD = "associatedData";
 export const OPTION_BCRYPT_COST = "cost";
+export const OPTION_BCRYPT_VARIANT = "bcryptVariant";
+export const DEFAULT_BCRYPT_VARIANT = "none";
+
+export const BCRYPT_VARIANTS = [
+  { id: "none", label: "None (Standard)", summary: "Standard OpenBSD bcrypt ($2a$ / $2b$)" },
+  { id: "md5", label: "MD5 (Hashcat 25600)", summary: "Pre-hashes password with MD5 hex digest" },
+  { id: "sha1", label: "SHA-1 (Hashcat 25800)", summary: "Pre-hashes password with SHA-1 hex digest" },
+  { id: "sha256", label: "SHA-256 (Hashcat 30600)", summary: "Pre-hashes password with SHA-256 hex digest" },
+  { id: "sha512", label: "SHA-512 (Hashcat 28400)", summary: "Pre-hashes with SHA-512 hex, truncated at 72 bytes" },
+  { id: "passlib", label: "Passlib v2 (Hashcat 30601)", summary: "HMAC-SHA256 keyed by salt, Base64-encoded" },
+] as const;
+
+export type BcryptVariant = (typeof BCRYPT_VARIANTS)[number]["id"];
+
 export const OPTION_ROUNDS = "rounds";
 export const OPTION_EXPECTED = "expected";
+export const OPTION_SCHEME = "scheme";
+export const OPTION_USERNAME = "username";
+
+export const CRYPT_DEFAULT_ROUNDS = 5000;
+export const HTPASSWD_DEFAULT_BCRYPT_COST = 5;
 
 /** `availableOn` tags — one per tool, since each has a disjoint parameter set. */
 export const TAG_PBKDF2 = "pbkdf2";

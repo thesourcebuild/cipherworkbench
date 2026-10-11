@@ -233,9 +233,9 @@ async function* singleChunk(bytes: Uint8Array) {
 }
 
 describe("cipher catalogue completeness", () => {
-  it("keeps all 121 cipher tools under the catalogue-wide tests", () => {
-    expect(CIPHER_TOOLS).toHaveLength(121);
-    expect(new Set(CIPHER_TOOLS.map((tool) => tool.id)).size).toBe(121);
+  it("keeps all 124 cipher tools under the catalogue-wide tests", () => {
+    expect(CIPHER_TOOLS).toHaveLength(124);
+    expect(new Set(CIPHER_TOOLS.map((tool) => tool.id)).size).toBe(124);
   });
 });
 
@@ -596,6 +596,68 @@ describe("RC4", () => {
   });
 });
 
+describe("repeating-key XOR", () => {
+  const plaintext = ascii(
+    "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal",
+  );
+  const ciphertext =
+    "0b3637272a2b2e63622c2e69692a2369" +
+    "3a2a3c6324202d623d63343c2a262263" +
+    "24272765272a282b2f20430a652e2c65" +
+    "2a3124333a653e2b2027630c692b2028" +
+    "3165286326302e27282f";
+
+  it("matches the Cryptopals Set 1 Challenge 5 vector through the tool", async () => {
+    const options = { [OPTION_KEY]: "ICE", keyEncoding: "utf-8" };
+    const encrypted = await run("repeating-key-xor", options, plaintext);
+    expect(encodeHex(encrypted.bytes!)).toBe(ciphertext);
+
+    const decrypted = await run(
+      "repeating-key-xor",
+      { ...options, [OPTION_DIRECTION]: "decrypt" },
+      encrypted.bytes!,
+    );
+    expect(decrypted.bytes).toEqual(plaintext);
+  });
+
+  it("uses the standard byte-key encoding control and rejects an empty key", () => {
+    const definition = cipherToolDefinition("repeating-key-xor");
+    const key = definition.catalogue.require(OPTION_KEY);
+    expect(key.kind).toBe("bytes");
+    expect(key.defaultBytesEncoding).toBe("utf-8");
+    expect(key.bytesLength?.min).toBe(1);
+    expect(toolOwnOptionIds("repeating-key-xor")).toEqual(
+      [OPTION_DIRECTION, OPTION_KEY].sort(),
+    );
+    const fileSpec = specFor("repeating-key-xor", {
+      [OPTION_KEY]: "ICE",
+      keyEncoding: "utf-8",
+    });
+    expect(definition.supportsFile).toBe(true);
+    expect(definition.fileProcessingForSpec!(fileSpec)).toBe("streaming");
+
+    const result = resolveCipher(specFor("repeating-key-xor"));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.optionId).toBe(OPTION_KEY);
+      expect(result.problem).toMatch(/enter a key/i);
+    }
+  });
+
+  it("is explicitly classified and linted as broken, not as a one-time pad or checksum", () => {
+    const meta = requireCipherTool("repeating-key-xor");
+    expect(meta.security).toBe("broken");
+    expect(meta.summary).toMatch(/not a one-time pad/i);
+    expect(meta.summary).toMatch(/not .*checksum/i);
+
+    const diagnostic = lint(
+      specFor("repeating-key-xor", { [OPTION_KEY]: "ICE", keyEncoding: "utf-8" }),
+    ).diagnostics.find((item) => item.code === "C004");
+    expect(diagnostic?.level).toBe("insecure");
+    expect(diagnostic?.message).toMatch(/broken/i);
+  });
+});
+
 // ── lint rules ──────────────────────────────────────────────────────────────
 
 describe("lint rules", () => {
@@ -775,17 +837,24 @@ describe("lint rules", () => {
        * block cipher this repo implements. A stream cipher gets a single mode-less seed, and RC4
        * has no nonce at all.
        */
-      const starts: CipherSpec[] = seedModes(meta.id).map((mode) => {
-        const nonceLen = requiredNonceLength(meta.id, mode);
-        return specFor(
-          meta.id,
-          keyed(
-            "11".repeat(seedKeyLength(meta.id)),
-            nonceLen > 0 ? "22".repeat(nonceLen) : undefined,
-            mode ? { [OPTION_MODE]: mode.id } : {},
-          ),
-        );
-      });
+      const starts: CipherSpec[] =
+        meta.id === "jasypt"
+          ? [
+              specFor("jasypt", {
+                jasyptPassword: "fixture-password",
+              }),
+            ]
+          : seedModes(meta.id).map((mode) => {
+              const nonceLen = requiredNonceLength(meta.id, mode);
+              return specFor(
+                meta.id,
+                keyed(
+                  "11".repeat(seedKeyLength(meta.id)),
+                  nonceLen > 0 ? "22".repeat(nonceLen) : undefined,
+                  mode ? { [OPTION_MODE]: mode.id } : {},
+                ),
+              );
+            });
 
       for (const spec of starts) {
         const fixed = applyAllFixes(spec);
@@ -814,13 +883,16 @@ describe("lint rules", () => {
     expect(broken).toContain("des");
 
     for (const meta of CIPHER_TOOLS) {
-      const spec = specFor(
-        meta.id,
-        keyed(
-          "11".repeat(seedKeyLength(meta.id)),
-          "22".repeat(requiredNonceLength(meta.id, getAesMode("cbc")) || 12),
-        ),
-      );
+      const spec =
+        meta.id === "jasypt"
+          ? specFor("jasypt", { jasyptPassword: "fixture-password" })
+          : specFor(
+              meta.id,
+              keyed(
+                "11".repeat(seedKeyLength(meta.id)),
+                "22".repeat(requiredNonceLength(meta.id, getAesMode("cbc")) || 12),
+              ),
+            );
       const has = lint(spec).diagnostics.some((d) => d.code === "C004");
       expect(has, meta.id).toBe(meta.security === "broken");
     }
@@ -899,7 +971,9 @@ describe("catalogue and manifests", () => {
      */
     for (const meta of CIPHER_TOOLS) {
       const catalogue = cipherToolDefinition(meta.id).catalogue;
-      expect(catalogue.secretIds(), meta.id).toContain(OPTION_KEY);
+      expect(catalogue.secretIds(), meta.id).toContain(
+        meta.id === "jasypt" ? "jasyptPassword" : OPTION_KEY,
+      );
       const nonce = catalogue.get(OPTION_NONCE);
       if (nonce) expect(nonce.secret, `${meta.id} nonce`).toBeFalsy();
     }
@@ -1061,7 +1135,7 @@ describe("catalogue and manifests", () => {
       expect(encodeHex(opened.bytes!), `${id}/decrypt`).toBe(encodeHex(message));
     }
 
-    expect(RAW_STREAM_CIPHER_TOOL_IDS).toHaveLength(29);
+    expect(RAW_STREAM_CIPHER_TOOL_IDS).toHaveLength(30);
   });
 
   it("streams GCM encryption for every standardized block cipher but buffers decryption", async () => {
@@ -1181,6 +1255,9 @@ describe("catalogue and manifests", () => {
       expect(manifest.outputEncodings).toContain("latin1");
       if (manifest.id === "fernet") {
         expect(manifest.outputEncodings[0]).toBe("base64url");
+      } else if (manifest.id === "jasypt") {
+        // StandardPBEStringEncryptor's own default, rather than the family's raw-cipher default.
+        expect(manifest.outputEncodings[0]).toBe("base64");
       } else {
         expect(manifest.outputEncodings[0]).toBe("hex-upper");
       }
@@ -1975,15 +2052,20 @@ describe("the block ciphers this repo implements", () => {
      */
     const labels = new Map<string, string>();
     for (const meta of CIPHER_TOOLS) {
+      // Cipher Image accepts a validated BMP document rather than arbitrary bytes; its dedicated
+      // suite checks the Construction field through a programmatically authoritative BMP fixture.
+      if (meta.id === "cipher-image") continue;
       const mode = seedMode(meta.id);
       const nonceLen = requiredNonceLength(meta.id, mode);
       const result = await run(
         meta.id,
-        keyed(
-          "11".repeat(seedKeyLength(meta.id)),
-          nonceLen > 0 ? "22".repeat(nonceLen) : undefined,
-          mode ? { [OPTION_MODE]: mode.id } : {},
-        ),
+        meta.id === "jasypt"
+          ? { jasyptPassword: "fixture-password" }
+          : keyed(
+              "11".repeat(seedKeyLength(meta.id)),
+              nonceLen > 0 ? "22".repeat(nonceLen) : undefined,
+              mode ? { [OPTION_MODE]: mode.id } : {},
+            ),
         ascii("x".repeat(32)),
       );
       const construction = result.fields?.find((f) => f.label === "Construction")?.value;
@@ -2000,6 +2082,7 @@ describe("the block ciphers this repo implements", () => {
     expect(labels.get("sm4")).toBe("SM4-CBC");
     expect(labels.get("salsa20")).toBe("Salsa20");
     expect(labels.get("chacha20poly1305")).toBe("ChaCha20-Poly1305");
+    expect(labels.get("jasypt")).toBe("Jasypt PBEWITHHMACSHA512ANDAES_256");
   });
 
   it("every advertised mode round-trips, at a length that is not a whole block", async () => {
@@ -2264,7 +2347,7 @@ describe("the block ciphers this repo implements", () => {
     // An 8-byte weak DES key repeated to 32 bytes is not a weak AES key -- the concept does not
     // exist there -- and the rule must not go looking.
     for (const meta of CIPHER_TOOLS) {
-      if (meta.id === "des" || meta.id === "3des") continue;
+      if (meta.id === "des" || meta.id === "3des" || meta.id === "jasypt") continue;
       const spec = specFor(
         meta.id,
         keyed(
@@ -2837,9 +2920,7 @@ describe("the four ciphers added on top of the mode layer", () => {
     expect(encodeHex(opened.bytes!)).toBe(encodeHex(plaintext));
 
     const streamOpened = await runStream(
-      tool.createStream!(
-        specFor("speck", { ...options, [OPTION_DIRECTION]: "decrypt" }),
-      ),
+      tool.createStream!(specFor("speck", { ...options, [OPTION_DIRECTION]: "decrypt" })),
       rechunk(singleChunk(streamed.bytes!), 5),
     );
     expect(encodeHex(streamOpened.bytes!)).toBe(encodeHex(plaintext));
@@ -2873,9 +2954,7 @@ describe("the four ciphers added on top of the mode layer", () => {
       { value: "online-tools", label: "Variable-length" },
       { value: "two-word-block", label: "64-bit blocks (ECB/CBC/etc.)" },
     ]);
-    expect(createSpec({ variant: "xxtea" }).options[OPTION_XXTEA_PROFILE]).toBe(
-      "online-tools",
-    );
+    expect(createSpec({ variant: "xxtea" }).options[OPTION_XXTEA_PROFILE]).toBe("online-tools");
     expect(tool.catalogue.require(OPTION_KEY).defaultBytesEncoding).toBe("utf-8");
 
     const options = keyed("3644606e446422696f6e2f2731302c59", "22".repeat(8), {
@@ -2914,7 +2993,9 @@ describe("the four ciphers added on top of the mode layer", () => {
     const visible = (profile: "two-word-block" | "online-tools") => {
       const spec = specFor("xxtea", { [OPTION_XXTEA_PROFILE]: profile });
       const tags = tool.variantTag!(spec);
-      return tool.catalogue.options.filter((option) => isAvailableOn(option, tags)).map((o) => o.id);
+      return tool.catalogue.options
+        .filter((option) => isAvailableOn(option, tags))
+        .map((o) => o.id);
     };
 
     expect(visible("two-word-block")).toEqual(

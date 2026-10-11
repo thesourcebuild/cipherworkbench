@@ -2,7 +2,8 @@
 
 import { useCallback, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { ByteSourceMode, TextEncoding } from "@ocs/contracts";
-import type { FileProcessingMode } from "@ocs/engine";
+import type { FileProcessingMode, ToolSourcePolicy } from "@ocs/engine";
+import { acceptedInputModes } from "@ocs/engine";
 import { BYTE_SOURCE_MODE_LABEL, ENCODING_GROUP_LABEL, encodingsByGroup } from "@ocs/contracts";
 import { Button, ClearButton, CopyIconButton, Panel, Toggle, cn } from "@ocs/ui";
 import { platform } from "@ocs/platform";
@@ -15,15 +16,6 @@ import {
   type InputState,
 } from "./input-state";
 import { INPUT_DEBOUNCE_LABEL } from "./use-debounce";
-
-const MODES: readonly ByteSourceMode[] = [
-  "text",
-  "hex",
-  "hex-lenient",
-  "base64",
-  "base64url",
-  "file",
-];
 
 /** Grouped once at module scope — the list is static and 40 entries is enough to matter. */
 const ENCODING_GROUPS = encodingsByGroup();
@@ -43,7 +35,7 @@ const MODE_HINT: Record<ByteSourceMode, string> = {
     "Hex out of a debugger or a source file — 0x prefixes, commas, braces and \\x escapes are all stripped before parsing.",
   base64: "Standard Base64, with or without padding.",
   base64url: "Base64 with - and _ in place of + and /, as used in JWTs and URLs.",
-  file: "Streamed from disk in chunks, so file size is not bounded by memory.",
+  file: "Read locally using the current tool's file-processing policy.",
 };
 
 export interface InputPanelProps {
@@ -72,6 +64,7 @@ export interface InputPanelProps {
   supportsFile: boolean;
   /** How the current settings process files; unresolved avoids making a false claim. */
   fileProcessing: FileProcessingMode;
+  sourcePolicy?: ToolSourcePolicy;
   /** Decoded byte count, from the compute hook. Undefined while the input is unparseable. */
   byteLength: number | undefined;
   /** Decode error for the current mode, shown inline. */
@@ -134,6 +127,7 @@ export function InputPanel({
   generates,
   supportsFile,
   fileProcessing,
+  sourcePolicy,
   byteLength,
   problem,
   autoUpdate,
@@ -148,7 +142,7 @@ export function InputPanel({
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const modes = supportsFile ? MODES : MODES.filter((m) => m !== "file");
+  const modes = acceptedInputModes(sourcePolicy, supportsFile);
 
   const setMode = (mode: ByteSourceMode) => onChange({ ...input, mode });
 
@@ -234,7 +228,7 @@ export function InputPanel({
                 </select>
               </label>
 
-              {input.mode === "text" && (
+              {input.mode === "text" && sourcePolicy?.semantics !== "text-artifact" && (
                 <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
                   Encoding
                   <select
@@ -325,6 +319,7 @@ export function InputPanel({
                 <input
                   ref={fileInputRef}
                   type="file"
+                  accept={sourcePolicy?.accept?.join(",")}
                   className="hidden"
                   onChange={(event) => takeFile(event.target.files?.[0])}
                 />
@@ -349,7 +344,9 @@ export function InputPanel({
                     ? "This tool cannot process a file incrementally, so the whole thing is read into memory. Keep it modest."
                     : fileProcessing === "streaming"
                       ? "Processed locally in chunks and never uploaded. For encryption and other transforms, the complete output is kept in memory so you can view or export it."
-                      : "Complete the required settings to determine whether this configuration can process files incrementally."}
+                      : fileProcessing === "random-access"
+                        ? "Read locally in bounded slices as the parser needs them; the file is never uploaded or loaded whole into memory."
+                        : "Complete the required settings to determine whether this configuration can process files incrementally."}
                 </p>
               </div>
             ) : (

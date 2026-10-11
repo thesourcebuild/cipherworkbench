@@ -9,6 +9,8 @@ import {
   OPTION_ARGON2_TIME,
   OPTION_ARGON2_VARIANT,
   OPTION_BCRYPT_COST,
+  OPTION_BCRYPT_VARIANT,
+  DEFAULT_BCRYPT_VARIANT,
   OPTION_HASH,
   OPTION_ITERATIONS,
   OPTION_KEY_LENGTH,
@@ -17,6 +19,8 @@ import {
   OPTION_SCRYPT_N,
   OPTION_SCRYPT_P,
   OPTION_SCRYPT_R,
+  OPTION_SCHEME,
+  HTPASSWD_DEFAULT_BCRYPT_COST,
   OWASP_ARGON2_MEMORY_KIB,
   OWASP_BCRYPT_COST,
   OWASP_PBKDF2_SHA256,
@@ -76,11 +80,22 @@ export function createSpec(options?: { variant?: string }): KdfSpec {
       base[OPTION_KEY_LENGTH] = 32;
       break;
     case "bcrypt":
+      base[OPTION_BCRYPT_VARIANT] = DEFAULT_BCRYPT_VARIANT;
       base[OPTION_BCRYPT_COST] = OWASP_BCRYPT_COST;
       break;
     case "bcryptpbkdf":
       base[OPTION_ROUNDS] = OPENSSH_DEFAULT_ROUNDS;
       base[OPTION_KEY_LENGTH] = OPENSSH_KEY_IV_BYTES;
+      break;
+    case "bs-crypt":
+      base[OPTION_ROUNDS] = 1000;
+      break;
+    case "crypt3":
+      base[OPTION_SCHEME] = "sha512crypt";
+      break;
+    case "htpasswd":
+      base[OPTION_SCHEME] = "apr1";
+      base[OPTION_BCRYPT_COST] = HTPASSWD_DEFAULT_BCRYPT_COST;
       break;
     default:
       base[OPTION_KEY_LENGTH] = 32;

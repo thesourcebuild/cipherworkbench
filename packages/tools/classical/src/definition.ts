@@ -46,7 +46,9 @@ export function classicalToolDefinition(toolId: string): ToolDefinition<Classica
      * is the defect the MAC family shipped four controls of. A tag with no consumer costs nothing; a
      * consumer with no tag costs a control.
      */
-    variantTag: (spec) => [readDirection(spec.options) === "decrypt" ? TAG_DECRYPT : TAG_ENCRYPT],
+    variantTag: (spec) => [
+      readDirection(spec.options) === "decrypt" ? TAG_DECRYPT : TAG_ENCRYPT,
+    ],
   };
 }
 
@@ -59,5 +61,6 @@ export { classicalCatalogueFor, ALL_CLASSICAL_OPTIONS } from "./catalogue/option
 export { createSpec } from "./create-spec";
 export { samplesFor } from "./samples";
 export { describeSpec } from "./explain/describe";
+export { resolveClassical } from "./resolve";
 export { RULES, RULE_CODES } from "./lint/rules";
 export { lint, applyAllFixes } from "./lint/run";

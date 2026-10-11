@@ -596,10 +596,14 @@ function MultilineTextControl({
           const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
           onChange(option.id, text);
         } catch {
-          // Binary DER - preserve as PEM so certificates/asymmetric parsers accept it directly
-          const isCert = option.id.toLowerCase().includes("cert");
-          const label = isCert ? "CERTIFICATE" : "PRIVATE KEY";
-          onChange(option.id, encodePemDirect(label, bytes));
+          if (option.binaryFileEncoding === "base64") {
+            onChange(option.id, `base64:${encodeBase64Direct(bytes)}`);
+          } else {
+            // Binary DER - preserve as PEM so certificates/asymmetric parsers accept it directly
+            const isCert = option.id.toLowerCase().includes("cert");
+            const label = isCert ? "CERTIFICATE" : "PRIVATE KEY";
+            onChange(option.id, encodePemDirect(label, bytes));
+          }
         }
       }
     };
@@ -817,16 +821,20 @@ function MultilineTextControl({
 }
 
 function encodePemDirect(label: string, bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!);
-  }
-  const b64 = btoa(binary);
+  const b64 = encodeBase64Direct(bytes);
   const lines: string[] = [];
   for (let i = 0; i < b64.length; i += 64) {
     lines.push(b64.slice(i, i + 64));
   }
   return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----`;
+}
+
+function encodeBase64Direct(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
 }
 
 /**

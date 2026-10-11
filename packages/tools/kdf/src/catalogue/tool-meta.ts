@@ -113,9 +113,29 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     category: "Password hashing",
     purpose: "password-hashing",
     security: "legacy",
-    tags: ["bcrypt", "kdf", "password", "blowfish", "eksblowfish", "openbsd", "phc"],
+    tags: [
+      "bcrypt",
+      "kdf",
+      "password",
+      "blowfish",
+      "eksblowfish",
+      "openbsd",
+      "phc",
+      "prehash",
+      "md5",
+      "sha1",
+      "sha256",
+      "sha512",
+      "passlib",
+      "hashcat",
+      "25600",
+      "25800",
+      "30600",
+      "28400",
+      "30601",
+    ],
     summary:
-      "The Blowfish-based password hash from OpenBSD. Self-describing output, and a 72-byte password limit.",
+      "The Blowfish-based password hash from OpenBSD. Supports standard bcrypt, Hashcat pre-hashes (MD5, SHA-1, SHA-256, SHA-512), and Passlib.",
     supportsVerify: true,
   },
   {
@@ -146,7 +166,8 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     purpose: "password-hashing",
     security: "modern",
     tags: ["yescrypt", "kdf", "password", "shadow", "linux", "phc", "memory-hard"],
-    summary: "Memory-hard password hash by Solar Designer. Default in modern Linux /etc/shadow.",
+    summary:
+      "Memory-hard password hash by Solar Designer. Default in modern Linux /etc/shadow.",
     supportsVerify: false,
   },
   {
@@ -176,7 +197,8 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     purpose: "key-derivation",
     security: "legacy",
     tags: ["openpgp", "s2k", "rfc4880", "rfc9580", "pgp", "gnupg", "string-to-key"],
-    summary: "OpenPGP String-to-Key: Simple, Salted, and Iterated+Salted passphrase derivation.",
+    summary:
+      "OpenPGP String-to-Key: Simple, Salted, and Iterated+Salted passphrase derivation.",
     supportsVerify: false,
   },
   {
@@ -256,7 +278,8 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     purpose: "key-derivation",
     security: "modern",
     tags: ["hkdf-label", "tls13", "quic", "rfc8446", "hkdf", "label"],
-    summary: "HKDF-Expand-Label key derivation used in TLS 1.3 and QUIC protocol key schedules.",
+    summary:
+      "HKDF-Expand-Label key derivation used in TLS 1.3 and QUIC protocol key schedules.",
     supportsVerify: false,
   },
   {
@@ -267,6 +290,48 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     security: "legacy",
     tags: ["md5crypt", "crypt3", "freebsd", "phk", "shadow", "password", "unix"],
     summary: "Poul-Henning Kamp's MD5-Crypt ($1$) standard Unix shadow password hash.",
+    supportsVerify: true,
+  },
+  {
+    id: "crypt3",
+    label: "crypt(3)",
+    category: "Password hashing",
+    purpose: "password-hashing",
+    security: "legacy",
+    tags: ["crypt", "crypt3", "shadow", "unix", "password", "des", "sha-crypt"],
+    summary:
+      "Unified crypt(3) generator for DES, BSD extended DES, MD5, SHA-256 and SHA-512 formats.",
+    supportsVerify: true,
+  },
+  {
+    id: "apr1",
+    label: "Apache APR1 ($apr1$)",
+    category: "Password hashing",
+    purpose: "password-hashing",
+    security: "legacy",
+    tags: ["apache", "apr1", "htpasswd", "md5", "hashcat", "1600", "password"],
+    summary: "Apache's APR1 MD5 password format, with its own transcript and $apr1$ prefix.",
+    supportsVerify: true,
+  },
+  {
+    id: "apache-sha",
+    label: "Apache {SHA}",
+    category: "Password hashing",
+    purpose: "password-hashing",
+    security: "broken",
+    tags: ["apache", "sha1", "htpasswd", "netscape", "ldap", "101", "password"],
+    summary: "Apache and Netscape's unsalted {SHA} base64-encoded SHA-1 password format.",
+    supportsVerify: true,
+  },
+  {
+    id: "htpasswd",
+    label: "Apache htpasswd",
+    category: "Password files",
+    purpose: "password-hashing",
+    security: "legacy",
+    tags: ["apache", "httpd", "htpasswd", "basic auth", "apr1", "bcrypt", "password file"],
+    summary:
+      "Generates and verifies complete username:hash records accepted by Apache htpasswd.",
     supportsVerify: true,
   },
   {
@@ -286,7 +351,8 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     purpose: "password-hashing",
     security: "modern",
     tags: ["sha512crypt", "crypt3", "glibc", "shadow", "password", "linux"],
-    summary: "Ulrich Drepper's SHA-512-Crypt ($6$) glibc standard Unix/Linux shadow password hash.",
+    summary:
+      "Ulrich Drepper's SHA-512-Crypt ($6$) glibc standard Unix/Linux shadow password hash.",
     supportsVerify: true,
   },
   {
@@ -296,8 +362,9 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     purpose: "password-hashing",
     security: "broken",
     tags: ["des-crypt", "crypt3", "unix", "traditional", "shadow", "password"],
-    summary: "AT&T Bell Labs traditional 25-round DES Unix crypt(3) password hash with 12-bit salt.",
-    supportsVerify: false,
+    summary:
+      "AT&T Bell Labs traditional 25-round DES Unix crypt(3) password hash with 12-bit salt.",
+    supportsVerify: true,
   },
   {
     id: "bs-crypt",
@@ -307,7 +374,7 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     security: "legacy",
     tags: ["bs-crypt", "crypt3", "bsd", "extended", "shadow", "password"],
     summary: "FreeBSD/OpenBSD extended DES crypt(3) password hash with 24-bit round count.",
-    supportsVerify: false,
+    supportsVerify: true,
   },
   {
     id: "ntlm-lm",
@@ -326,7 +393,8 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     purpose: "key-derivation",
     security: "modern",
     tags: ["one-step", "kdf", "nist", "sp800-56a", "sp800-56c", "concatenation"],
-    summary: "NIST SP 800-56A / SP 800-56C Concatenation Key Derivation Function using Hash/HMAC.",
+    summary:
+      "NIST SP 800-56A / SP 800-56C Concatenation Key Derivation Function using Hash/HMAC.",
     supportsVerify: false,
   },
   {
@@ -336,7 +404,8 @@ export const KDF_TOOLS: readonly KdfToolMeta[] = [
     purpose: "key-derivation",
     security: "legacy",
     tags: ["wpa-psk", "wpa2", "wifi", "pmk", "pbkdf2", "ieee802.11i"],
-    summary: "IEEE 802.11i Wi-Fi Protected Access Pre-Shared Key (PBKDF2-HMAC-SHA1 4096 rounds).",
+    summary:
+      "IEEE 802.11i Wi-Fi Protected Access Pre-Shared Key (PBKDF2-HMAC-SHA1 4096 rounds).",
     supportsVerify: false,
   },
 ];

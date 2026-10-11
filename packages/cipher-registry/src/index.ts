@@ -13,6 +13,7 @@ import { CIPHER_MANIFESTS } from "@ocs/cipher/manifests";
 import { KDF_MANIFESTS } from "@ocs/kdf/manifests";
 import { MAC_MANIFESTS } from "@ocs/mac/manifests";
 import { PARITY_MANIFESTS } from "@ocs/parity/manifests";
+import { PASSWORD_ARTIFACT_MANIFESTS } from "@ocs/password-artifact/manifests";
 
 /**
  * Every tool the app ships, as cheap metadata.
@@ -24,6 +25,7 @@ import { PARITY_MANIFESTS } from "@ocs/parity/manifests";
  */
 export const TOOL_MANIFESTS: readonly ToolManifest[] = [
   ...HASH_MANIFESTS,
+  ...PASSWORD_ARTIFACT_MANIFESTS,
   ...CRC_MANIFESTS,
   ...CHECKSUM_MANIFESTS,
   ...CHECKDIGIT_MANIFESTS,
@@ -79,6 +81,7 @@ export const FAMILY_ORDER: readonly ToolFamily[] = [
    */
   "parity",
   "hash",
+  "password-artifact",
   "mac",
   "kdf",
   "cipher",
@@ -125,6 +128,11 @@ export async function loadTool(id: string): Promise<ToolDefinition<ToolSpecBase>
       // cannot see it. The generic UI only ever hands a spec back to the same tool
       // that produced it, which is what makes this safe in practice.
       return hashToolDefinition(id) as unknown as ToolDefinition<ToolSpecBase>;
+    }
+    case "password-artifact": {
+      const { passwordArtifactToolDefinition } =
+        await import("@ocs/password-artifact/definition");
+      return passwordArtifactToolDefinition(id) as unknown as ToolDefinition<ToolSpecBase>;
     }
     case "crc": {
       const { crcToolDefinition } = await import("@ocs/crc/definition");

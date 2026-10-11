@@ -1,3 +1,5 @@
+import type { ToolSample, ToolSourcePolicy } from "@ocs/engine";
+
 /**
  * Canned inputs, for checking a tool against something known and for seeing how one behaves on more
  * than a handful of bytes.
@@ -80,3 +82,22 @@ export const TEST_INPUTS: readonly TestInput[] = [
     text: LOREM,
   },
 ];
+
+/**
+ * Inputs the workbench may honestly offer for a tool.
+ *
+ * Generic strings are valid only where arbitrary bytes are valid. Structured text tools must
+ * provide records that match their parser, while file artifacts cannot be represented by text in a
+ * select menu at all. An explicit empty sample list therefore means exactly that rather than falling
+ * back to unrelated prose.
+ */
+export function testInputsFor(
+  tool: { samples?: readonly ToolSample[]; sourcePolicy?: ToolSourcePolicy; readsInput?: boolean },
+): readonly ToolSample[] {
+  if (tool.samples !== undefined) return tool.samples;
+  if (tool.readsInput === false) return [];
+  return tool.sourcePolicy?.semantics === undefined || tool.sourcePolicy.semantics === "bytes"
+    ? TEST_INPUTS
+    : [];
+}
+
