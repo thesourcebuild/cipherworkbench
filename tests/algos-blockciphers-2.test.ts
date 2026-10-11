@@ -10,6 +10,8 @@ import {
   createXtea,
   createXxtea,
   SKIPJACK_F_TABLE,
+  xxteaOnlineToolsDecrypt,
+  xxteaOnlineToolsEncrypt,
   xxteaWords,
   type BlockCipher,
 } from "@ocs/algos";
@@ -208,6 +210,41 @@ describe("XXTEA", () => {
 
   it("refuses fewer than two words", () => {
     expect(() => xxteaWords([1], [1, 2, 3, 4], true)).toThrow(/at least two/);
+  });
+
+  it("matches the Online Tools little-endian length-wrapped profile", () => {
+    const key = unhex("3644606e446422696f6e2f2731302c59");
+    const plaintext = unhex("313233343536373839");
+    const ciphertext = xxteaOnlineToolsEncrypt(plaintext, key);
+    expect(hex(ciphertext)).toBe("58c1e76b8d9ca9551c9addfd2bf9aecf");
+    expect(hex(xxteaOnlineToolsDecrypt(ciphertext, key))).toBe(hex(plaintext));
+  });
+
+  it("round-trips the Online Tools envelope across partial words and empty input", () => {
+    const key = unhex(KEY);
+    for (const length of [0, 1, 3, 4, 5, 8, 9, 31]) {
+      const plaintext = Uint8Array.from({ length }, (_, i) => (length * 17 + i * 29) & 0xff);
+      const ciphertext = xxteaOnlineToolsEncrypt(plaintext, key);
+      expect(ciphertext.length, `length ${length}`).toBe(
+        length === 0 ? 0 : (Math.ceil(length / 4) + 1) * 4,
+      );
+      expect(hex(xxteaOnlineToolsDecrypt(ciphertext, key)), `length ${length}`).toBe(hex(plaintext));
+    }
+  });
+
+  it("rejects malformed Online Tools envelopes", () => {
+    const key = unhex(KEY);
+    expect(() => xxteaOnlineToolsDecrypt(new Uint8Array(7), key)).toThrow(/malformed/);
+
+    // Encrypt an otherwise valid two-word array whose claimed one-word payload length is zero.
+    const words = [0, 0];
+    const keyWords = [0x67452301, 0xefcdab89, 0x67452301, 0xefcdab89];
+    xxteaWords(words, keyWords, true);
+    const malformed = new Uint8Array(8);
+    for (let i = 0; i < malformed.length; i++) {
+      malformed[i] = (words[i >>> 2]! >>> ((i & 3) * 8)) & 0xff;
+    }
+    expect(() => xxteaOnlineToolsDecrypt(malformed, key)).toThrow(/invalid embedded length/);
   });
 });
 

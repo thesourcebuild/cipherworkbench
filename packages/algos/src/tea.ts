@@ -44,6 +44,23 @@ function store(value: number, dst: Uint8Array, at: number): void {
   dst[at + 3] = value & 0xff;
 }
 
+const loadLe = (src: Uint8Array, at: number): number =>
+  u32(src[at]! | (src[at + 1]! << 8) | (src[at + 2]! << 16) | (src[at + 3]! << 24));
+
+function bytesToLeWords(src: Uint8Array): number[] {
+  const words = new Array<number>(Math.ceil(src.length / 4)).fill(0);
+  for (let i = 0; i < src.length; i++) {
+    words[i >>> 2] = u32(words[i >>> 2]! | (src[i]! << ((i & 3) * 8)));
+  }
+  return words;
+}
+
+function leWordsToBytes(words: readonly number[], length: number): Uint8Array {
+  const out = new Uint8Array(length);
+  for (let i = 0; i < length; i++) out[i] = (words[i >>> 2]! >>> ((i & 3) * 8)) & 0xff;
+  return out;
+}
+
 function requireKey(key: Uint8Array, name: string): void {
   if (key.length !== 16) {
     throw new Error(`${name}'s key is exactly 16 bytes; this one is ${key.length}.`);
@@ -146,10 +163,9 @@ export function createXtea(key: Uint8Array): BlockCipher {
  * **It has no published test vector, and that is why it was left out of this repo for several rounds.**
  * There is no standard: XXTEA appears only in Needham and Wheeler's two-page note, which prints the
  * reference C and no values. Crypto++ carries TEA and XTEA and not this. The `xxtea.io` family of
- * libraries looks like a source and is not -- its own README says it "is different from the original
- * XXTEA encryption algorithm", because it wraps the primitive in a length header and a string codec, so
- * its outputs are not XXTEA outputs. So this rests on a transcription of the reference `btea` and
- * nothing else. It is offered on the user's explicit instruction; do not describe it as verified.
+ * libraries wraps the primitive in a length header and a string codec, so it is a useful compatibility
+ * oracle for that envelope but not a vector for the bare `btea` primitive below. The core therefore
+ * rests on a transcription of the reference `btea`; do not describe it as independently verified.
  *
  * What partly covers it: XXTEA's `MX` expression is checked against TEA's and XTEA's *shape* by
  * sharing this file's word loading and delta, and `tests/algos-legacy-ciphers.test.ts` pins that all
@@ -212,6 +228,45 @@ export function xxteaWords(v: number[], key: readonly number[], encrypt: boolean
       sum = u32(sum - XXTEA_DELTA);
     }
   }
+}
+
+/**
+ * The byte envelope used by emn178's Online Tools XXTEA page.
+ *
+ * This is deliberately separate from `createXxtea`: it treats the complete message as one
+ * little-endian word array and appends its byte length, rather than applying a block mode and padding
+ * to independent two-word blocks. The key remains exactly sixteen decoded bytes; Online Tools' separate
+ * text-key truncation and zero-padding UI is not part of this byte-level profile.
+ */
+export function xxteaOnlineToolsEncrypt(data: Uint8Array, key: Uint8Array): Uint8Array {
+  requireKey(key, "XXTEA");
+  if (data.length === 0) return new Uint8Array(0);
+
+  const words = bytesToLeWords(data);
+  words.push(data.length);
+  const keyWords = [loadLe(key, 0), loadLe(key, 4), loadLe(key, 8), loadLe(key, 12)];
+  xxteaWords(words, keyWords, true);
+  return leWordsToBytes(words, words.length * 4);
+}
+
+/** Decrypts and validates the length-wrapped Online Tools XXTEA byte envelope. */
+export function xxteaOnlineToolsDecrypt(data: Uint8Array, key: Uint8Array): Uint8Array {
+  requireKey(key, "XXTEA");
+  if (data.length === 0) return new Uint8Array(0);
+  if (data.length < 8 || data.length % 4 !== 0) {
+    throw new Error("XXTEA Online Tools ciphertext is malformed.");
+  }
+
+  const words = bytesToLeWords(data);
+  const keyWords = [loadLe(key, 0), loadLe(key, 4), loadLe(key, 8), loadLe(key, 12)];
+  xxteaWords(words, keyWords, false);
+
+  const length = words.pop()!;
+  const capacity = words.length * 4;
+  if (length < capacity - 3 || length > capacity) {
+    throw new Error("XXTEA Online Tools ciphertext has an invalid embedded length.");
+  }
+  return leWordsToBytes(words, length);
 }
 
 /** XXTEA at two words: a 64-bit block, 128-bit key, 32 rounds. See the note above. */

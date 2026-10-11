@@ -2023,10 +2023,9 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
      * `legacy`. No published break of the full cipher, and a 64-bit block collides after about 32 GB
      * under one key, which `C007` computes.
      *
-     * Registered here at **two words**, which is the 64-bit-block instantiation: the same block, key
-     * and 32 rounds as TEA and XTEA, so the three are directly comparable -- which is the only reason
-     * to want this one. XXTEA is really variable-length (`6 + 52/n` rounds over `n` words, so a
-     * different function per length); `xxteaWords` in `@ocs/algos` exposes that for anyone who needs it.
+     * The default variable-length profile exposes the construction with Online Tools' little-endian
+     * byte packing and appended original length, without pretending it is an ECB/CBC mode. The
+     * two-word 64-bit-block instantiation remains selectable for direct TEA/XTEA comparison.
      *
      * **It has no published test vector anywhere.** The note prints reference C and no values;
      * Crypto++ has TEA and XTEA and not this; and the `xxtea.io` libraries are not a source, since
@@ -2052,7 +2051,7 @@ export const CIPHER_TOOLS: readonly CipherToolMeta[] = [
       "decrypt",
     ],
     summary:
-      "Corrected Block TEA, at two words. Same shape as TEA and XTEA; no published vector.",
+      "Corrected Block TEA, defaulting to the variable-length Online Tools-compatible format.",
     block: { size: 8, keyLengths: [16], modes: ["cbc", "cfb", "ofb", "ctr", "ecb"] },
   },
   {

@@ -20,6 +20,7 @@ import {
   OPTION_NONCE,
   OPTION_PARAM_SET,
   OPTION_PADDING,
+  OPTION_XXTEA_PROFILE,
   readMode,
   readParamSet,
   withMode,
@@ -184,6 +185,18 @@ export const RULES: readonly LintRule<CipherSpec>[] = [
             detail:
               "An attacker who changes a byte of ciphertext cannot predict the plaintext that results, but nothing detects the change either — the 16-byte block simply decrypts to different random-looking data. That is not a flaw in the mode: a disk sector must encrypt to exactly one sector, so there is no room for an authentication tag anywhere in the format. It also means XTS leaks whether a sector's contents are unchanged, since the same plaintext at the same sector number always gives the same ciphertext. Full-disk encryption accepts both trade-offs; if you are encrypting a message rather than a sector, use AES-GCM instead.",
             optionIds: [OPTION_MODE],
+          },
+        ];
+      }
+      if (r.toolId === "xxtea" && r.xxteaProfile === "online-tools") {
+        return [
+          {
+            code: "C002",
+            level: "warning",
+            message: "Variable-length XXTEA encrypts but does not authenticate.",
+            detail:
+              "Changing the ciphertext produces different plaintext or an invalid embedded length, but that length check is not authentication and cannot prove the message is genuine. Add a MAC over the ciphertext, or use an authenticated construction such as AES-GCM for new data.",
+            optionIds: [OPTION_XXTEA_PROFILE],
           },
         ];
       }

@@ -104,6 +104,8 @@ import {
   createThreefish,
   createXtea,
   createXxtea,
+  xxteaOnlineToolsDecrypt,
+  xxteaOnlineToolsEncrypt,
   createSquare,
   createMulti2,
   mickeyEncrypt,
@@ -214,6 +216,14 @@ import { randomBytes } from "@ocs/engine";
 export interface CipherOperation {
   encrypt(plaintext: Uint8Array): Uint8Array;
   decrypt(ciphertext: Uint8Array): Uint8Array;
+}
+
+/** Variable-length, little-endian XXTEA envelope used by emn178's Online Tools. */
+export function xxteaOnlineToolsOperation(key: Uint8Array): CipherOperation {
+  return {
+    encrypt: (data) => xxteaOnlineToolsEncrypt(data, key),
+    decrypt: (data) => xxteaOnlineToolsDecrypt(data, key),
+  };
 }
 
 /** AES's block, named because the padding wrappers below would otherwise carry a bare 16. */

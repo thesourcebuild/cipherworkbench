@@ -19,6 +19,7 @@ import {
   OPTION_MODE,
   OPTION_PARAM_SET,
   OPTION_BYTE_CONVENTION,
+  OPTION_XXTEA_PROFILE,
   OPTION_NONCE,
   OPTION_TAG_LEN,
   OPTION_TIMESTAMP_FORMAT,
@@ -34,6 +35,7 @@ import {
   TAG_CHACHA_COUNTER,
   TAG_IV_MANUAL,
   TAG_RC4,
+  TAG_XXTEA_TWO_WORD,
 } from "../pure";
 import {
   AES_MODES,
@@ -873,6 +875,33 @@ function blockCipherOptions(tool: CipherToolMeta): readonly OptionDef<CipherOpti
           } satisfies OptionDef<CipherOptionGroup>,
         ]
       : []),
+    ...(toolId === "xxtea"
+      ? [
+          {
+            id: OPTION_XXTEA_PROFILE,
+            label: "Format",
+            group: "algorithm" as const,
+            kind: "enum" as const,
+            choices: [
+              {
+                value: "online-tools",
+                label: "Variable-length",
+                summary:
+                  "Online Tools compatible: the entire input is one variable-size XXTEA block",
+              },
+              {
+                value: "two-word-block",
+                label: "64-bit blocks (ECB/CBC/etc.)",
+                summary: "Splits input into fixed 8-byte blocks using a conventional block mode",
+              },
+            ],
+            summary: "How XXTEA groups and serializes the input bytes.",
+            detail:
+              "The variable-length format packs the entire input into little-endian 32-bit words, appends its original byte length, and treats the resulting array as one XXTEA block. This matches Online Tools and has no separate mode, IV, or padding. The 64-bit format instead encrypts fixed 8-byte blocks through ECB, CBC, CFB, OFB, or CTR. Both use the decoded key bytes exactly as entered and require all sixteen bytes.",
+            order: 7,
+          } satisfies OptionDef<CipherOptionGroup>,
+        ]
+      : []),
     {
       id: OPTION_MODE,
       label: "Mode",
@@ -887,6 +916,7 @@ function blockCipherOptions(tool: CipherToolMeta): readonly OptionDef<CipherOpti
       summary: "How blocks are chained.",
       detail:
         "The same modes AES offers, over a different block permutation. GCM and CCM authenticate and are available wherever the block is 128 bits — SM4-GCM and SM4-CCM are the pair RFC 8998 specifies for TLS 1.3, and Camellia and ARIA get both for free, because neither mode needs anything but a 128-bit block. The classical five do not authenticate, so anything relying on the data being unaltered needs a MAC as well — and with a 64-bit block, CBC and CFB additionally need the total encrypted under one key kept well below a few gigabytes, because a block collision then leaks plaintext relationships.",
+      ...(toolId === "xxtea" ? { availableOn: [TAG_XXTEA_TWO_WORD] } : {}),
       order: 10,
     },
     keyOption(
@@ -1502,7 +1532,7 @@ function keyNoteFor(toolId: string): string {
     tea: "Exactly 128 bits, in four big-endian words. Note that TEA's effective key size is 126 bits rather than 128: every key has three equivalents that encrypt identically, which is part of why it was superseded.",
     xtea: "Exactly 128 bits, in four big-endian words \u2014 the same key TEA takes, which is what makes the two so easy to confuse. XTEA selects one of the four words per half-round from bits of the running sum, where TEA uses all four in the same order every round; that is the whole difference in the schedule.",
     xxtea:
-      "Exactly 128 bits, four 32-bit words, and there is no key schedule -- but unlike TEA the word used in each step is selected by `(p & 3) ^ ((sum >> 2) & 3)`, so it depends on both the position in the block and the round. That is the difference between XTEA's repair and XXTEA's: XTEA varies the word by round, XXTEA varies it by round *and* position.",
+      "Exactly 128 bits, decoded from the selected key encoding without truncation or zero-padding. The 64-bit-block format reads four big-endian words; the variable-length Online Tools-compatible format reads the same sixteen bytes as four little-endian words. There is no key schedule: the word used in each step is selected by `(p & 3) ^ ((sum >> 2) & 3)`, so it depends on both the position and the round.",
     skipjack:
       "Exactly 80 bits, and there is no key schedule at all. Round k reads bytes 4k through 4k+3 modulo 10, so because 4 and 10 share a factor the 32 rounds see the key in a five-round cycle. Eighty bits is the cipher's real weakness \u2014 the design has no practical attack, and the key size has been within reach of dedicated hardware for two decades.",
     lea: "128, 192 or 256 bits, and unusually the three are three different *key schedules* rather than one parameterised by length \u2014 a 128-bit key repeats one derived word three times per round, a 192-bit key uses six distinct ones, and a 256-bit key walks eight through a rotating index. The round count follows: 24, 28, 32.",

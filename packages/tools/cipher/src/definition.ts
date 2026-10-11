@@ -6,7 +6,12 @@ import { cipherFileProcessing, computeCipher, createCipherStream } from "./compu
 import { describeSpec } from "./explain/describe";
 import { RULES } from "./lint/rules";
 import { CIPHER_MANIFESTS } from "./manifest";
-import { TAG_IV_MANUAL } from "./pure";
+import {
+  readXxteaProfile,
+  TAG_IV_MANUAL,
+  TAG_XXTEA_ONLINE_TOOLS,
+  TAG_XXTEA_TWO_WORD,
+} from "./pure";
 import { keySourceTag, readKdfDerives, readKeySource } from "@ocs/kdf/key-source";
 import { createSpec } from "./create-spec";
 import { cipherAcceptedByteLengths, cipherGenerateLength } from "./resolve";
@@ -40,10 +45,17 @@ export function cipherVariantTags(toolId: string, spec: CipherSpec): readonly st
   const tags: string[] = [];
 
   const tool = requireCipherTool(toolId);
+  const xxteaProfile = readXxteaProfile(spec.options);
+  if (toolId === "xxtea") {
+    tags.push(
+      xxteaProfile === "online-tools" ? TAG_XXTEA_ONLINE_TOOLS : TAG_XXTEA_TWO_WORD,
+    );
+  }
+  const hasBlockMode = toolId !== "xxtea" || xxteaProfile === "two-word-block";
   const mode =
     toolId === "aes"
       ? readMode(spec.options, DEFAULT_AES_MODE)
-      : tool.block
+      : tool.block && hasBlockMode
         ? readMode(spec.options, tool.block.modes[0]!)
         : undefined;
   if (mode) tags.push(mode);

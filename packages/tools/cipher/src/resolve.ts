@@ -20,6 +20,7 @@ import {
   readPadding,
   readParamSet,
   readSpeckByteConvention,
+  readXxteaProfile,
   readRc5Rounds,
   readTagLen,
   readTagLenFrom,
@@ -34,6 +35,7 @@ import {
   OPTION_AGE_IDENTITY,
   OPTION_AGE_PASSPHRASE,
   type CipherDirection,
+  type XxteaProfile,
 } from "./pure";
 import {
   COBBLESTONE_INSTANCES,
@@ -85,6 +87,8 @@ export interface ResolvedCipher {
   paramSet: CipherParamSet | undefined;
   /** Speck's external byte serialization; ignored by every other block cipher. */
   speckByteConvention: SpeckByteConvention;
+  /** XXTEA's byte-level construction; ignored by every other cipher. */
+  xxteaProfile: XxteaProfile;
   /**
    * The padding scheme, which only ECB and CBC read.
    *
@@ -307,6 +311,9 @@ export function acceptedNonceLengths(
  */
 export function modeForSpec(spec: CipherSpec): AesModeMeta | undefined {
   const tool = requireCipherTool(spec.variant);
+  if (spec.variant === "xxtea" && readXxteaProfile(spec.options) === "online-tools") {
+    return undefined;
+  }
   if (spec.variant === "aes") {
     return (
       getAesMode(readMode(spec.options, DEFAULT_AES_MODE_FALLBACK)) ??
@@ -485,13 +492,17 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
    */
   const paramSetId = readParamSet(spec.options);
   const paramSet = getParamSet(tool, paramSetId);
+  const xxteaProfile = readXxteaProfile(spec.options);
   // Instances share `OPTION_PARAM_SET` with block ciphers' parameter sets -- see the note on
   // `shape.instances`. Exactly one of the two is ever defined, because a tool has `block` or `shape`.
   const instance =
     spec.variant === "cobblestone"
       ? (COBBLESTONE_INSTANCES.find((i) => i.id === paramSetId) ?? COBBLESTONE_INSTANCES[0])
       : getCipherInstance(tool, paramSetId);
-  const blockSize = paramSet?.blockSize ?? tool.block?.size;
+  const blockSize =
+    spec.variant === "xxtea" && xxteaProfile === "online-tools"
+      ? undefined
+      : (paramSet?.blockSize ?? tool.block?.size);
 
   const catalogue = cipherCatalogueFor(spec.variant);
   const derivedParams = keySourceParams(catalogue, spec.options);
@@ -542,6 +553,7 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
         mode: undefined,
         paramSet: undefined,
         speckByteConvention: readSpeckByteConvention(spec.options),
+        xxteaProfile,
         padding: "pkcs7",
         keySource,
         keySourceParams: derivedParams,
@@ -795,6 +807,7 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
       mode,
       paramSet,
       speckByteConvention: readSpeckByteConvention(spec.options),
+      xxteaProfile,
       instance,
       blockSize,
       padding: readPadding(spec.options),
@@ -814,7 +827,10 @@ export function resolveCipher(spec: CipherSpec): ResolveResult {
           ? requiredNonceLength(spec.variant, mode, paramSetId)
           : 0,
       key: keyResult.bytes,
-      nonce: nonceResult.bytes,
+      nonce:
+        spec.variant === "xxtea" && xxteaProfile === "online-tools"
+          ? new Uint8Array(0)
+          : nonceResult.bytes,
       aad: aadResult.bytes,
       counter: readCounter(spec.options),
       effectiveKeyBits: readEffectiveKeyBits(spec.options, keyResult.bytes.length),

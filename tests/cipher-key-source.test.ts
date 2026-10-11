@@ -4,6 +4,7 @@ import {
   CIPHER_TOOLS,
   OPTION_DIRECTION,
   OPTION_MODE,
+  OPTION_XXTEA_PROFILE,
   type CipherSpec,
 } from "@ocs/cipher";
 import {
@@ -393,26 +394,31 @@ describe("option reachability", () => {
 
       const authModes: readonly (string | undefined)[] =
         tool.id === "age" ? ["recipient", "passphrase"] : [undefined];
+      const xxteaProfiles: readonly (string | undefined)[] =
+        tool.id === "xxtea" ? ["online-tools", "two-word-block"] : [undefined];
 
       const reachable = new Set<string>();
       for (const mode of modes) {
         for (const authMode of authModes) {
-          for (const source of KEY_SOURCES) {
-            for (const derives of KDF_DERIVES) {
-              const spec = {
-                ...base,
-                options: {
-                  ...base.options,
-                  ...(mode ? { [OPTION_MODE]: mode } : {}),
-                  ...(authMode ? { authMode } : {}),
-                  [OPTION_KEY_SOURCE]: source,
-                  [OPTION_KDF_DERIVES]: derives,
-                },
-              } as CipherSpec;
-              const tag = definition.variantTag?.(spec);
-              const tags = tag === undefined ? [] : Array.isArray(tag) ? tag : [tag];
-              for (const option of cipherCatalogueFor(tool.id).options) {
-                if (isAvailableOn(option, tags)) reachable.add(option.id);
+          for (const xxteaProfile of xxteaProfiles) {
+            for (const source of KEY_SOURCES) {
+              for (const derives of KDF_DERIVES) {
+                const spec = {
+                  ...base,
+                  options: {
+                    ...base.options,
+                    ...(mode ? { [OPTION_MODE]: mode } : {}),
+                    ...(authMode ? { authMode } : {}),
+                    ...(xxteaProfile ? { [OPTION_XXTEA_PROFILE]: xxteaProfile } : {}),
+                    [OPTION_KEY_SOURCE]: source,
+                    [OPTION_KDF_DERIVES]: derives,
+                  },
+                } as CipherSpec;
+                const tag = definition.variantTag?.(spec);
+                const tags = tag === undefined ? [] : Array.isArray(tag) ? tag : [tag];
+                for (const option of cipherCatalogueFor(tool.id).options) {
+                  if (isAvailableOn(option, tags)) reachable.add(option.id);
+                }
               }
             }
           }

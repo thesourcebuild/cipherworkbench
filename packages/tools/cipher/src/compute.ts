@@ -29,6 +29,7 @@ import {
   salsaOperation,
   streamCipherOperation,
   wideBlockCipherOperation,
+  xxteaOnlineToolsOperation,
   xchachaPolyOperation,
   xsalsaPolyOperation,
   type CipherOperation,
@@ -209,6 +210,9 @@ const tagLength = (r: ResolvedCipher): number => (r.tagLen > 0 ? r.tagLen : 16);
 const MAX_INLINE_CIPHERTEXT_FIELD_BYTES = 4096;
 
 function operationFor(r: ResolvedCipher): CipherOperation {
+  if (r.toolId === "xxtea" && r.xxteaProfile === "online-tools") {
+    return xxteaOnlineToolsOperation(r.key);
+  }
   switch (r.toolId) {
     case "aes":
       return aesOperation(r.mode!.id, r.key, r.nonce, r.aad, tagLength(r), r.padding);
@@ -462,6 +466,10 @@ const keyBytesFor = (r: ResolvedCipher): number =>
  */
 export function constructionLabel(r: ResolvedCipher): string {
   const tool = requireCipherTool(r.toolId);
+
+  if (r.toolId === "xxtea" && r.xxteaProfile === "online-tools") {
+    return "XXTEA variable-length";
+  }
 
   /**
    * XTS is named for the cipher it uses, not for the key string it is handed.
@@ -905,7 +913,13 @@ type IncrementalBlockModeId = "ecb" | "cbc" | "cfb" | "ofb" | "ctr";
 
 type StreamConfiguration = Pick<
   ResolvedCipher,
-  "toolId" | "direction" | "ageArmor" | "keySource" | "mode" | "padding"
+  | "toolId"
+  | "direction"
+  | "ageArmor"
+  | "keySource"
+  | "mode"
+  | "padding"
+  | "xxteaProfile"
 >;
 
 function canStreamConfiguration(r: StreamConfiguration): boolean {
@@ -913,6 +927,7 @@ function canStreamConfiguration(r: StreamConfiguration): boolean {
   // Keep it buffered rather than claiming a raw-only capability that one-shot computation lacks.
   if (r.toolId === "age") return r.direction === "encrypt" && !r.ageArmor;
   if (r.keySource !== "directinput") return false;
+  if (r.toolId === "xxtea" && r.xxteaProfile === "online-tools") return false;
   if (r.toolId === "cobblestone" || isRawStreamCipherTool(r.toolId)) return true;
 
   const hasBlockCipher = r.toolId === "aes" || requireCipherTool(r.toolId).block !== undefined;

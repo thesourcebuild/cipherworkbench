@@ -17,6 +17,7 @@ export const OPTION_MODE = "mode";
  */
 export const OPTION_PARAM_SET = "paramSet";
 export const OPTION_BYTE_CONVENTION = "byteConvention";
+export const OPTION_XXTEA_PROFILE = "xxteaProfile";
 export const OPTION_KEY = "key";
 export const OPTION_NONCE = "nonce";
 export const OPTION_AAD = "aad";
@@ -57,6 +58,8 @@ export const TAG_IV_MANUAL = "iv:manual";
 
 export const TAG_RC4 = "rc4";
 export const TAG_CHACHA_COUNTER = "counter";
+export const TAG_XXTEA_TWO_WORD = "xxtea:two-word-block";
+export const TAG_XXTEA_ONLINE_TOOLS = "xxtea:online-tools";
 
 /**
  * Encrypt or decrypt, held as an option rather than as a first-class UI control.
@@ -92,6 +95,18 @@ export function readSpeckByteConvention(options: OptionValues): SpeckByteConvent
     OPTION_BYTE_CONVENTION,
     ["paper", "implementation-guide"] as const,
     DEFAULT_SPECK_BYTE_CONVENTION,
+  );
+}
+
+export type XxteaProfile = "two-word-block" | "online-tools";
+export const DEFAULT_XXTEA_PROFILE: XxteaProfile = "online-tools";
+
+export function readXxteaProfile(options: OptionValues): XxteaProfile {
+  return optEnumOr(
+    options,
+    OPTION_XXTEA_PROFILE,
+    ["two-word-block", "online-tools"] as const,
+    DEFAULT_XXTEA_PROFILE,
   );
 }
 

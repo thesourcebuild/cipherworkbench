@@ -20,6 +20,7 @@ import {
   OPTION_MODE,
   OPTION_PARAM_SET,
   OPTION_BYTE_CONVENTION,
+  OPTION_XXTEA_PROFILE,
   OPTION_NONCE,
   OPTION_TAG_LEN,
   getAesMode,
@@ -991,7 +992,10 @@ describe("catalogue and manifests", () => {
         const options = keyed(
           "11".repeat(seedKeyLength(meta.id)),
           nonceLength > 0 ? "22".repeat(nonceLength) : undefined,
-          { [OPTION_MODE]: modeId },
+          {
+            [OPTION_MODE]: modeId,
+            ...(meta.id === "xxtea" ? { [OPTION_XXTEA_PROFILE]: "two-word-block" } : {}),
+          },
         );
         const spec = specFor(meta.id, options);
         const label = `${meta.id}/${modeId}`;
@@ -2010,7 +2014,10 @@ describe("the block ciphers this repo implements", () => {
         const options = keyed(
           "11".repeat(seedKeyLength(meta.id)),
           nonceLen > 0 ? "22".repeat(nonceLen) : undefined,
-          { [OPTION_MODE]: mode!.id },
+          {
+            [OPTION_MODE]: mode!.id,
+            ...(meta.id === "xxtea" ? { [OPTION_XXTEA_PROFILE]: "two-word-block" } : {}),
+          },
         );
         const label = `${meta.id}/${mode!.id}`;
         const sealed = await run(meta.id, options, message);
@@ -2043,7 +2050,12 @@ describe("the block ciphers this repo implements", () => {
     for (const meta of BLOCK_TOOLS) {
       const tool = cipherToolDefinition(meta.id);
       const visible = (modeId: string) => {
-        const tag = tool.variantTag!(specFor(meta.id, { [OPTION_MODE]: modeId }));
+        const tag = tool.variantTag!(
+          specFor(meta.id, {
+            [OPTION_MODE]: modeId,
+            ...(meta.id === "xxtea" ? { [OPTION_XXTEA_PROFILE]: "two-word-block" } : {}),
+          }),
+        );
         return tool.catalogue.options.filter((o) => isAvailableOn(o, tag)).map((o) => o.id);
       };
 
@@ -2852,6 +2864,82 @@ describe("the four ciphers added on top of the mode layer", () => {
     const oldResult = await cipherToolDefinition("speck").compute(oldSpec, plaintext);
     expect(oldResult.error).toBeUndefined();
     expect(encodeHex(oldResult.bytes!)).toBe(encodeHex(seeded.bytes!));
+  });
+
+  it("matches variable-length Online Tools XXTEA without changing key encoding", async () => {
+    const tool = cipherToolDefinition("xxtea");
+    const profile = tool.catalogue.require(OPTION_XXTEA_PROFILE);
+    expect(profile.choices?.map(({ value, label }) => ({ value, label }))).toEqual([
+      { value: "online-tools", label: "Variable-length" },
+      { value: "two-word-block", label: "64-bit blocks (ECB/CBC/etc.)" },
+    ]);
+    expect(createSpec({ variant: "xxtea" }).options[OPTION_XXTEA_PROFILE]).toBe(
+      "online-tools",
+    );
+    expect(tool.catalogue.require(OPTION_KEY).defaultBytesEncoding).toBe("utf-8");
+
+    const options = keyed("3644606e446422696f6e2f2731302c59", "22".repeat(8), {
+      [OPTION_XXTEA_PROFILE]: "online-tools",
+    });
+    const plaintext = ascii("123456789");
+    const sealed = await run("xxtea", options, plaintext);
+    expect(encodeHex(sealed.bytes!)).toBe("58c1e76b8d9ca9551c9addfd2bf9aecf");
+    expect(sealed.fields?.find((field) => field.label === "Construction")?.value).toBe(
+      "XXTEA variable-length",
+    );
+
+    const spec = specFor("xxtea", options);
+    const resolved = resolveCipher(spec);
+    expect(resolved.ok).toBe(true);
+    if (resolved.ok) {
+      expect(resolved.resolved.xxteaProfile).toBe("online-tools");
+      expect(resolved.resolved.mode).toBeUndefined();
+      expect(resolved.resolved.blockSize).toBeUndefined();
+      expect(resolved.resolved.nonce).toHaveLength(0);
+    }
+    expect(tool.fileProcessingForSpec!(spec)).toBe("buffered");
+    expect(describeSpec(spec)).toContain("XXTEA variable-length");
+    expect(sealed.fields?.some((field) => field.label === "Nonce")).toBe(false);
+
+    const opened = await run(
+      "xxtea",
+      { ...options, [OPTION_DIRECTION]: "decrypt" },
+      sealed.bytes!,
+    );
+    expect(encodeHex(opened.bytes!)).toBe(encodeHex(plaintext));
+  });
+
+  it("shows block controls only for XXTEA's 64-bit-block format", () => {
+    const tool = cipherToolDefinition("xxtea");
+    const visible = (profile: "two-word-block" | "online-tools") => {
+      const spec = specFor("xxtea", { [OPTION_XXTEA_PROFILE]: profile });
+      const tags = tool.variantTag!(spec);
+      return tool.catalogue.options.filter((option) => isAvailableOn(option, tags)).map((o) => o.id);
+    };
+
+    expect(visible("two-word-block")).toEqual(
+      expect.arrayContaining([OPTION_MODE, OPTION_NONCE, OPTION_PADDING, OPTION_KEY]),
+    );
+    expect(visible("online-tools")).not.toContain(OPTION_MODE);
+    expect(visible("online-tools")).not.toContain(OPTION_NONCE);
+    expect(visible("online-tools")).not.toContain(OPTION_PADDING);
+    expect(visible("online-tools")).toContain(OPTION_KEY);
+  });
+
+  it("uses the Online Tools profile when no XXTEA profile is stored", async () => {
+    const options = keyed("3644606e446422696f6e2f2731302c59");
+    const plaintext = ascii("123456789");
+    const explicit = await run(
+      "xxtea",
+      { ...options, [OPTION_XXTEA_PROFILE]: "online-tools" },
+      plaintext,
+    );
+
+    const optionless = specFor("xxtea", options);
+    delete optionless.options[OPTION_XXTEA_PROFILE];
+    const result = await cipherToolDefinition("xxtea").compute(optionless, plaintext);
+    expect(result.error).toBeUndefined();
+    expect(encodeHex(result.bytes!)).toBe(encodeHex(explicit.bytes!));
   });
 
   it("accepts Blowfish's whole key range and nothing outside it", () => {
