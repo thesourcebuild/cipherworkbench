@@ -237,7 +237,7 @@ export async function computeHash(spec: HashSpec, input: Uint8Array): Promise<To
   }
 
   hasher.update(input);
-  const cliProviders = generateHashCliProviders(spec.algorithm, input);
+  const cliProviders = generateHashCliProviders(spec.algorithm, input, undefined, spec.options);
   return {
     bytes: iterate(hasher.digest(), resolved),
     cliProviders,
@@ -248,15 +248,16 @@ export function generateHashCliProviders(
   algorithm: string,
   input?: Uint8Array,
   fileName?: string,
+  options?: HashSpec["options"],
 ): CliProviderCommand[] | undefined {
   if (fileName) {
-    return generateHashFileProviders(algorithm, fileName);
+    return generateHashFileProviders(algorithm, fileName, undefined, options);
   }
 
   const textSample = getInlineTextSample(input);
   if (textSample === undefined && input && input.length > 0) {
     const { note, defaultFileName } = describeInputExclusion(input);
-    return generateHashFileProviders(algorithm, defaultFileName, note);
+    return generateHashFileProviders(algorithm, defaultFileName, note, options);
   }
 
   const safeBashText = textSample ? textSample.replace(/'/g, "'\\''") : "";
@@ -541,7 +542,7 @@ export function generateHashCliProviders(
     ];
   }
 
-  if (algorithm === "ripemd160" || algorithm === "rmd160") {
+  if (algorithm === "ripemd160" || algorithm === "rmd160" || algorithm === "ripemd") {
     return [
       {
         id: "openssl",
@@ -614,29 +615,18 @@ export function generateHashCliProviders(
     ];
   }
 
-  if (algorithm === "shake128") {
+  if (algorithm === "shake" || algorithm === "shake128" || algorithm === "shake256") {
+    const is256 = algorithm === "shake256" || (options && readHashVariant(options) === "256");
+    const flag = is256 ? "-shake256" : "-shake128";
+    const name = is256 ? "SHAKE256" : "SHAKE128";
     return [
       {
         id: "openssl",
         label: "OpenSSL",
         commands: buildPipedShellVariants(
-          "openssl dgst -shake128",
+          `openssl dgst ${flag}`,
           textSample,
-          "Compute SHAKE128 digest with OpenSSL dgst",
-        ),
-      },
-    ];
-  }
-
-  if (algorithm === "shake256") {
-    return [
-      {
-        id: "openssl",
-        label: "OpenSSL",
-        commands: buildPipedShellVariants(
-          "openssl dgst -shake256",
-          textSample,
-          "Compute SHAKE256 digest with OpenSSL dgst",
+          `Compute ${name} digest with OpenSSL dgst`,
         ),
       },
     ];
@@ -677,6 +667,7 @@ export function generateHashCliProviders(
 function buildHashFileProviders(
   algorithm: string,
   fileName: string,
+  options?: HashSpec["options"],
 ): CliProviderCommand[] | undefined {
   const safePyFile = fileName.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 
@@ -978,7 +969,7 @@ function buildHashFileProviders(
     ];
   }
 
-  if (algorithm === "ripemd160" || algorithm === "rmd160") {
+  if (algorithm === "ripemd160" || algorithm === "rmd160" || algorithm === "ripemd") {
     return [
       {
         id: "openssl",
@@ -1051,29 +1042,18 @@ function buildHashFileProviders(
     ];
   }
 
-  if (algorithm === "shake128") {
+  if (algorithm === "shake" || algorithm === "shake128" || algorithm === "shake256") {
+    const is256 = algorithm === "shake256" || (options && readHashVariant(options) === "256");
+    const flag = is256 ? "-shake256" : "-shake128";
+    const name = is256 ? "SHAKE256" : "SHAKE128";
     return [
       {
         id: "openssl",
         label: "OpenSSL",
         commands: buildFileShellVariants(
-          "openssl dgst -shake128",
+          `openssl dgst ${flag}`,
           fileName,
-          "Compute SHAKE128 digest of a file with OpenSSL dgst",
-        ),
-      },
-    ];
-  }
-
-  if (algorithm === "shake256") {
-    return [
-      {
-        id: "openssl",
-        label: "OpenSSL",
-        commands: buildFileShellVariants(
-          "openssl dgst -shake256",
-          fileName,
-          "Compute SHAKE256 digest of a file with OpenSSL dgst",
+          `Compute ${name} digest of a file with OpenSSL dgst`,
         ),
       },
     ];
@@ -1115,8 +1095,9 @@ export function generateHashFileProviders(
   algorithm: string,
   fileName: string = "file.txt",
   note?: string,
+  options?: HashSpec["options"],
 ): CliProviderCommand[] | undefined {
-  const providers = buildHashFileProviders(algorithm, fileName);
+  const providers = buildHashFileProviders(algorithm, fileName, options);
   if (!providers || !note) return providers;
   return providers.map((provider) => ({
     ...provider,
@@ -1183,8 +1164,897 @@ function tupleFields(resolved: ResolvedSpec) {
  * TupleHash algorithms form their own sibling family comparing the 128-bit, 256-bit and XOF
  * variants over the shared tuple and customisation string options.
  */
+function createTupleVariantStream(algorithmId: string, spec: HashSpec): ToolStream {
+  const base = createSpec({ algorithm: algorithmId });
+  const rowSpec: HashSpec = {
+    ...base,
+    options: { ...base.options, ...spec.options },
+  };
+  const resolved = resolve(rowSpec);
+  const hasher = resolved.binding.create(resolved.params);
+  let finished = false;
+  return {
+    update(_chunk: Uint8Array) {},
+    finish(): ToolResult {
+      if (finished) throw new Error("finish() called twice on the same hash stream.");
+      finished = true;
+      if (resolved.problem) return { error: resolved.problem };
+      for (const element of resolved.tuple) hasher.update(element);
+      return { bytes: iterate(hasher.digest(), resolved) };
+    },
+  };
+}
+
+interface ConsolidatedVariantDef {
+  id: string;
+  label: string;
+  outputLen: number;
+  blockLen: number;
+  selected: (spec: HashSpec) => boolean;
+  tuple?: boolean;
+}
+
+const CONSOLIDATED_VARIANTS: Record<string, readonly ConsolidatedVariantDef[]> = {
+  shake: [
+    {
+      id: "shake128",
+      label: "SHAKE128",
+      outputLen: 32,
+      blockLen: 168,
+      selected: (spec) =>
+        spec.algorithm === "shake128" || (readHashVariant(spec.options) ?? "128") === "128",
+    },
+    {
+      id: "shake256",
+      label: "SHAKE256",
+      outputLen: 64,
+      blockLen: 136,
+      selected: (spec) =>
+        spec.algorithm === "shake256" || readHashVariant(spec.options) === "256",
+    },
+  ],
+  turboshake: [
+    {
+      id: "turboshake128",
+      label: "TurboSHAKE128",
+      outputLen: 32,
+      blockLen: 168,
+      selected: (spec) =>
+        spec.algorithm === "turboshake128" ||
+        (readHashVariant(spec.options) ?? "128") === "128",
+    },
+    {
+      id: "turboshake256",
+      label: "TurboSHAKE256",
+      outputLen: 32,
+      blockLen: 136,
+      selected: (spec) =>
+        spec.algorithm === "turboshake256" || readHashVariant(spec.options) === "256",
+    },
+  ],
+  kangarootwelve: [
+    {
+      id: "kt128",
+      label: "KT128",
+      outputLen: 32,
+      blockLen: 168,
+      selected: (spec) =>
+        spec.algorithm === "kt128" || (readHashVariant(spec.options) ?? "128") === "128",
+    },
+    {
+      id: "kt256",
+      label: "KT256",
+      outputLen: 32,
+      blockLen: 136,
+      selected: (spec) =>
+        spec.algorithm === "kt256" || readHashVariant(spec.options) === "256",
+    },
+  ],
+  cshake: [
+    {
+      id: "cshake128",
+      label: "cSHAKE128",
+      outputLen: 32,
+      blockLen: 168,
+      selected: (spec) =>
+        spec.algorithm === "cshake128" || (readHashVariant(spec.options) ?? "128") === "128",
+    },
+    {
+      id: "cshake256",
+      label: "cSHAKE256",
+      outputLen: 64,
+      blockLen: 136,
+      selected: (spec) =>
+        spec.algorithm === "cshake256" || readHashVariant(spec.options) === "256",
+    },
+  ],
+  tuplehash: [
+    {
+      id: "tuplehash128xof",
+      label: "TupleHash128 (XOF)",
+      outputLen: 32,
+      blockLen: 168,
+      selected: (spec) =>
+        spec.algorithm === "tuplehash128xof" ||
+        (readHashVariant(spec.options) ?? "128xof") === "128xof",
+      tuple: true,
+    },
+    {
+      id: "tuplehash256xof",
+      label: "TupleHash256 (XOF)",
+      outputLen: 64,
+      blockLen: 136,
+      selected: (spec) =>
+        spec.algorithm === "tuplehash256xof" || readHashVariant(spec.options) === "256xof",
+      tuple: true,
+    },
+    {
+      id: "tuplehash128",
+      label: "TupleHash128",
+      outputLen: 32,
+      blockLen: 168,
+      selected: (spec) =>
+        spec.algorithm === "tuplehash128" || readHashVariant(spec.options) === "128",
+      tuple: true,
+    },
+    {
+      id: "tuplehash256",
+      label: "TupleHash256",
+      outputLen: 64,
+      blockLen: 136,
+      selected: (spec) =>
+        spec.algorithm === "tuplehash256" || readHashVariant(spec.options) === "256",
+      tuple: true,
+    },
+  ],
+  parallelhash: [
+    {
+      id: "parallelhash128xof",
+      label: "ParallelHash128 (XOF)",
+      outputLen: 32,
+      blockLen: 168,
+      selected: (spec) =>
+        spec.algorithm === "parallelhash128xof" ||
+        (readHashVariant(spec.options) ?? "128xof") === "128xof",
+    },
+    {
+      id: "parallelhash256xof",
+      label: "ParallelHash256 (XOF)",
+      outputLen: 64,
+      blockLen: 136,
+      selected: (spec) =>
+        spec.algorithm === "parallelhash256xof" || readHashVariant(spec.options) === "256xof",
+    },
+    {
+      id: "parallelhash128",
+      label: "ParallelHash128",
+      outputLen: 32,
+      blockLen: 168,
+      selected: (spec) =>
+        spec.algorithm === "parallelhash128" || readHashVariant(spec.options) === "128",
+    },
+    {
+      id: "parallelhash256",
+      label: "ParallelHash256",
+      outputLen: 64,
+      blockLen: 136,
+      selected: (spec) =>
+        spec.algorithm === "parallelhash256" || readHashVariant(spec.options) === "256",
+    },
+  ],
+  skein: [
+    {
+      id: "skein256",
+      label: "Skein-256",
+      outputLen: 32,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "skein256" || readRequestedOutputLength(spec.options) === 32,
+    },
+    {
+      id: "skein512",
+      label: "Skein-512",
+      outputLen: 64,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "skein512" ||
+        (readRequestedOutputLength(spec.options) ?? 64) === 64,
+    },
+    {
+      id: "skein1024",
+      label: "Skein-1024",
+      outputLen: 128,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "skein1024" || readRequestedOutputLength(spec.options) === 128,
+    },
+  ],
+  groestl: [
+    {
+      id: "groestl224",
+      label: "Grøstl-224",
+      outputLen: 28,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "groestl224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "groestl256",
+      label: "Grøstl-256",
+      outputLen: 32,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "groestl256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "groestl384",
+      label: "Grøstl-384",
+      outputLen: 48,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "groestl384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "groestl512",
+      label: "Grøstl-512",
+      outputLen: 64,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "groestl512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  ripemd: [
+    {
+      id: "ripemd128",
+      label: "RIPEMD-128",
+      outputLen: 16,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "ripemd128" || readRequestedOutputLength(spec.options) === 16,
+    },
+    {
+      id: "ripemd160",
+      label: "RIPEMD-160",
+      outputLen: 20,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "ripemd160" ||
+        (readRequestedOutputLength(spec.options) ?? 20) === 20,
+    },
+    {
+      id: "ripemd256",
+      label: "RIPEMD-256",
+      outputLen: 32,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "ripemd256" || readRequestedOutputLength(spec.options) === 32,
+    },
+    {
+      id: "ripemd320",
+      label: "RIPEMD-320",
+      outputLen: 40,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "ripemd320" || readRequestedOutputLength(spec.options) === 40,
+    },
+  ],
+  xxhash: [
+    {
+      id: "xxh32",
+      label: "XXH32",
+      outputLen: 4,
+      blockLen: 16,
+      selected: (spec) =>
+        spec.algorithm === "xxh32" || (readHashVariant(spec.options) ?? "xxh32") === "xxh32",
+    },
+    {
+      id: "xxh64",
+      label: "XXH64",
+      outputLen: 8,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "xxh64" || readHashVariant(spec.options) === "xxh64",
+    },
+    {
+      id: "xxh3",
+      label: "XXH3 (64-bit)",
+      outputLen: 8,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "xxh3" || readHashVariant(spec.options) === "xxh3",
+    },
+    {
+      id: "xxh128",
+      label: "XXH128",
+      outputLen: 16,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "xxh128" || readHashVariant(spec.options) === "xxh128",
+    },
+  ],
+  fnv: [
+    {
+      id: "fnv132",
+      label: "FNV-1 32",
+      outputLen: 4,
+      blockLen: 1,
+      selected: (spec) =>
+        spec.algorithm === "fnv132" ||
+        (readHashVariant(spec.options) === "1" &&
+          (readRequestedOutputLength(spec.options) ?? 4) === 4),
+    },
+    {
+      id: "fnv1a32",
+      label: "FNV-1a 32",
+      outputLen: 4,
+      blockLen: 1,
+      selected: (spec) =>
+        spec.algorithm === "fnv1a32" ||
+        ((readHashVariant(spec.options) ?? "1a") === "1a" &&
+          (readRequestedOutputLength(spec.options) ?? 4) === 4),
+    },
+    {
+      id: "fnv164",
+      label: "FNV-1 64",
+      outputLen: 8,
+      blockLen: 1,
+      selected: (spec) =>
+        spec.algorithm === "fnv164" ||
+        (readHashVariant(spec.options) === "1" &&
+          readRequestedOutputLength(spec.options) === 8),
+    },
+    {
+      id: "fnv1a64",
+      label: "FNV-1a 64",
+      outputLen: 8,
+      blockLen: 1,
+      selected: (spec) =>
+        spec.algorithm === "fnv1a64" ||
+        ((readHashVariant(spec.options) ?? "1a") === "1a" &&
+          readRequestedOutputLength(spec.options) === 8),
+    },
+  ],
+  gost94: [
+    {
+      id: "gost94",
+      label: "GOST R 34.11-94 (Test)",
+      outputLen: 32,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "gost94" || (readHashVariant(spec.options) ?? "test") === "test",
+    },
+    {
+      id: "gost94-crypto",
+      label: "GOST R 34.11-94 (CryptoPro)",
+      outputLen: 32,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "gost94-crypto" || readHashVariant(spec.options) === "crypto",
+    },
+  ],
+  radiogatun: [
+    {
+      id: "radiogatun32",
+      label: "RadioGatun[32]",
+      outputLen: 32,
+      blockLen: 12,
+      selected: (spec) =>
+        spec.algorithm === "radiogatun32" || (readHashVariant(spec.options) ?? "32") === "32",
+    },
+    {
+      id: "radiogatun64",
+      label: "RadioGatun[64]",
+      outputLen: 32,
+      blockLen: 24,
+      selected: (spec) =>
+        spec.algorithm === "radiogatun64" || readHashVariant(spec.options) === "64",
+    },
+  ],
+  haraka: [
+    {
+      id: "haraka256",
+      label: "Haraka-256",
+      outputLen: 32,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "haraka256" || (readHashVariant(spec.options) ?? "256") === "256",
+    },
+    {
+      id: "haraka512",
+      label: "Haraka-512",
+      outputLen: 64,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "haraka512" || readHashVariant(spec.options) === "512",
+    },
+  ],
+  streebog: [
+    {
+      id: "streebog256",
+      label: "Streebog-256",
+      outputLen: 32,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "streebog256" || readRequestedOutputLength(spec.options) === 32,
+    },
+    {
+      id: "streebog512",
+      label: "Streebog-512",
+      outputLen: 64,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "streebog512" ||
+        (readRequestedOutputLength(spec.options) ?? 64) === 64,
+    },
+  ],
+  jh: [
+    {
+      id: "jh224",
+      label: "JH-224",
+      outputLen: 28,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "jh224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "jh256",
+      label: "JH-256",
+      outputLen: 32,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "jh256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "jh384",
+      label: "JH-384",
+      outputLen: 48,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "jh384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "jh512",
+      label: "JH-512",
+      outputLen: 64,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "jh512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  cubehash: [
+    {
+      id: "cubehash224",
+      label: "CubeHash-224",
+      outputLen: 28,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "cubehash224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "cubehash256",
+      label: "CubeHash-256",
+      outputLen: 32,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "cubehash256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "cubehash384",
+      label: "CubeHash-384",
+      outputLen: 48,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "cubehash384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "cubehash512",
+      label: "CubeHash-512",
+      outputLen: 64,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "cubehash512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  luffa: [
+    {
+      id: "luffa224",
+      label: "Luffa-224",
+      outputLen: 28,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "luffa224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "luffa256",
+      label: "Luffa-256",
+      outputLen: 32,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "luffa256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "luffa384",
+      label: "Luffa-384",
+      outputLen: 48,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "luffa384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "luffa512",
+      label: "Luffa-512",
+      outputLen: 64,
+      blockLen: 32,
+      selected: (spec) =>
+        spec.algorithm === "luffa512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  fugue: [
+    {
+      id: "fugue224",
+      label: "Fugue-224",
+      outputLen: 28,
+      blockLen: 4,
+      selected: (spec) =>
+        spec.algorithm === "fugue224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "fugue256",
+      label: "Fugue-256",
+      outputLen: 32,
+      blockLen: 4,
+      selected: (spec) =>
+        spec.algorithm === "fugue256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "fugue384",
+      label: "Fugue-384",
+      outputLen: 48,
+      blockLen: 4,
+      selected: (spec) =>
+        spec.algorithm === "fugue384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "fugue512",
+      label: "Fugue-512",
+      outputLen: 64,
+      blockLen: 4,
+      selected: (spec) =>
+        spec.algorithm === "fugue512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  shavite: [
+    {
+      id: "shavite224",
+      label: "SHAvite-224",
+      outputLen: 28,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "shavite224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "shavite256",
+      label: "SHAvite-256",
+      outputLen: 32,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "shavite256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "shavite384",
+      label: "SHAvite-384",
+      outputLen: 48,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "shavite384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "shavite512",
+      label: "SHAvite-512",
+      outputLen: 64,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "shavite512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  shabal: [
+    {
+      id: "shabal192",
+      label: "Shabal-192",
+      outputLen: 24,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "shabal192" || readRequestedOutputLength(spec.options) === 24,
+    },
+    {
+      id: "shabal224",
+      label: "Shabal-224",
+      outputLen: 28,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "shabal224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "shabal256",
+      label: "Shabal-256",
+      outputLen: 32,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "shabal256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "shabal384",
+      label: "Shabal-384",
+      outputLen: 48,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "shabal384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "shabal512",
+      label: "Shabal-512",
+      outputLen: 64,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "shabal512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  echo: [
+    {
+      id: "echo224",
+      label: "ECHO-224",
+      outputLen: 28,
+      blockLen: 192,
+      selected: (spec) =>
+        spec.algorithm === "echo224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "echo256",
+      label: "ECHO-256",
+      outputLen: 32,
+      blockLen: 192,
+      selected: (spec) =>
+        spec.algorithm === "echo256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "echo384",
+      label: "ECHO-384",
+      outputLen: 48,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "echo384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "echo512",
+      label: "ECHO-512",
+      outputLen: 64,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "echo512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  hamsi: [
+    {
+      id: "hamsi224",
+      label: "Hamsi-224",
+      outputLen: 28,
+      blockLen: 4,
+      selected: (spec) =>
+        spec.algorithm === "hamsi224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "hamsi256",
+      label: "Hamsi-256",
+      outputLen: 32,
+      blockLen: 4,
+      selected: (spec) =>
+        spec.algorithm === "hamsi256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "hamsi384",
+      label: "Hamsi-384",
+      outputLen: 48,
+      blockLen: 8,
+      selected: (spec) =>
+        spec.algorithm === "hamsi384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "hamsi512",
+      label: "Hamsi-512",
+      outputLen: 64,
+      blockLen: 8,
+      selected: (spec) =>
+        spec.algorithm === "hamsi512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  simd: [
+    {
+      id: "simd224",
+      label: "SIMD-224",
+      outputLen: 28,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "simd224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "simd256",
+      label: "SIMD-256",
+      outputLen: 32,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "simd256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "simd384",
+      label: "SIMD-384",
+      outputLen: 48,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "simd384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "simd512",
+      label: "SIMD-512",
+      outputLen: 64,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "simd512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  kupyna: [
+    {
+      id: "kupyna256",
+      label: "Kupyna-256",
+      outputLen: 32,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "kupyna256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "kupyna384",
+      label: "Kupyna-384",
+      outputLen: 48,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "kupyna384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "kupyna512",
+      label: "Kupyna-512",
+      outputLen: 64,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "kupyna512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  lsh: [
+    {
+      id: "lsh224",
+      label: "LSH-224",
+      outputLen: 28,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "lsh224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "lsh256",
+      label: "LSH-256",
+      outputLen: 32,
+      blockLen: 64,
+      selected: (spec) =>
+        spec.algorithm === "lsh256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "lsh384",
+      label: "LSH-384",
+      outputLen: 48,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "lsh384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "lsh512",
+      label: "LSH-512",
+      outputLen: 64,
+      blockLen: 128,
+      selected: (spec) =>
+        spec.algorithm === "lsh512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  keccak: [
+    {
+      id: "keccak-224",
+      label: "Keccak-224",
+      outputLen: 28,
+      blockLen: 144,
+      selected: (spec) =>
+        spec.algorithm === "keccak-224" || readRequestedOutputLength(spec.options) === 28,
+    },
+    {
+      id: "keccak-256",
+      label: "Keccak-256",
+      outputLen: 32,
+      blockLen: 136,
+      selected: (spec) =>
+        spec.algorithm === "keccak-256" ||
+        (readRequestedOutputLength(spec.options) ?? 32) === 32,
+    },
+    {
+      id: "keccak-384",
+      label: "Keccak-384",
+      outputLen: 48,
+      blockLen: 104,
+      selected: (spec) =>
+        spec.algorithm === "keccak-384" || readRequestedOutputLength(spec.options) === 48,
+    },
+    {
+      id: "keccak-512",
+      label: "Keccak-512",
+      outputLen: 64,
+      blockLen: 72,
+      selected: (spec) =>
+        spec.algorithm === "keccak-512" || readRequestedOutputLength(spec.options) === 64,
+    },
+  ],
+  poseidon: [
+    {
+      id: "poseidon",
+      label: "Poseidon",
+      outputLen: 32,
+      blockLen: 31,
+      selected: (spec) =>
+        spec.algorithm === "poseidon" &&
+        (readHashVariant(spec.options) ?? "poseidon") === "poseidon",
+    },
+    {
+      id: "poseidon2",
+      label: "Poseidon2",
+      outputLen: 32,
+      blockLen: 31,
+      selected: (spec) =>
+        spec.algorithm === "poseidon2" || readHashVariant(spec.options) === "poseidon2",
+    },
+  ],
+};
+
 export function hashVariants(spec: HashSpec): ToolVariantTable {
   const meta = requireHashAlgorithm(spec.algorithm);
+
+  const consolidated = CONSOLIDATED_VARIANTS[meta.id];
+  if (consolidated) {
+    return {
+      noun: "variant",
+      columns: ["Output", "Block"],
+      rows: consolidated.map((v) => ({
+        id: v.id,
+        label: v.label,
+        ...(requireHashBinding(v.id).prepare
+          ? { prepare: () => requireHashBinding(v.id).prepare!() }
+          : {}),
+        stream: () => {
+          if (v.tuple) {
+            return createTupleVariantStream(v.id, spec);
+          }
+          return createHashStream(createSpec({ algorithm: v.id }));
+        },
+        selected: v.selected(spec),
+        cells: [`${v.outputLen} bytes`, `${v.blockLen} bytes`],
+      })),
+    };
+  }
+
   /**
    * Algorithms needing async setup are excluded, and the reason is structural rather than a policy.
    *
@@ -1216,24 +2086,7 @@ export function hashVariants(spec: HashSpec): ToolVariantTable {
         : {}),
       stream: () => {
         if (other.tupleInput) {
-          const base = createSpec({ algorithm: other.id });
-          const rowSpec: HashSpec = {
-            ...base,
-            options: { ...base.options, ...spec.options },
-          };
-          const resolved = resolve(rowSpec);
-          const hasher = resolved.binding.create(resolved.params);
-          let finished = false;
-          return {
-            update(_chunk: Uint8Array) {},
-            finish(): ToolResult {
-              if (finished) throw new Error("finish() called twice on the same hash stream.");
-              finished = true;
-              if (resolved.problem) return { error: resolved.problem };
-              for (const element of resolved.tuple) hasher.update(element);
-              return { bytes: iterate(hasher.digest(), resolved) };
-            },
-          };
+          return createTupleVariantStream(other.id, spec);
         }
         return createHashStream(createSpec({ algorithm: other.id }));
       },

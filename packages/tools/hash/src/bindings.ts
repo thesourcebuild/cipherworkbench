@@ -577,6 +577,21 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   md6: { create: ({ outputLen }) => createMd6(outputLen * 8) },
   md5: fixed(md5),
   sha1: fixed(sha1),
+  ripemd: {
+    create: ({ outputLen }) => {
+      switch (outputLen) {
+        case 16:
+          return createRipemd128();
+        case 32:
+          return createRipemd256();
+        case 40:
+          return createRipemd320();
+        case 20:
+        default:
+          return ripemd160.create();
+      }
+    },
+  },
   ripemd160: fixed(ripemd160),
   // The other three widths come from @ocs/algos; noble carries only 160.
   ripemd128: local(createRipemd128),
@@ -595,16 +610,52 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   "sha3-384": fixed(sha3_384),
   "sha3-512": fixed(sha3_512),
 
+  keccak: {
+    create: ({ outputLen }) => {
+      switch (outputLen) {
+        case 28:
+          return keccak_224.create();
+        case 48:
+          return keccak_384.create();
+        case 64:
+          return keccak_512.create();
+        case 32:
+        default:
+          return keccak_256.create();
+      }
+    },
+  },
+
   "keccak-224": fixed(keccak_224),
   "keccak-256": fixed(keccak_256),
   "keccak-384": fixed(keccak_384),
   "keccak-512": fixed(keccak_512),
 
+  shake: {
+    create: (params) => {
+      const fn = params.variant === "256" ? shake256 : shake128;
+      return variable(fn).create(params);
+    },
+  },
   shake128: variable(shake128),
   shake256: variable(shake256),
 
-  // The original BLAKE. Fixed output, unlike everything else in this category -- BLAKE1 has no
-  // parameterised length, which is one of the things BLAKE2 added.
+  // The original BLAKE. Fixed output per variant, now unified with parameterized length.
+  blake: {
+    create: ({ outputLen }) => {
+      switch (outputLen) {
+        case 28:
+          return blake224.create();
+        case 48:
+          return blake384.create();
+        case 64:
+          return blake512.create();
+        case 32:
+        default:
+          return blake256.create();
+      }
+    },
+  },
   blake224: fixed(blake224),
   blake256: fixed(blake256),
   blake384: fixed(blake384),
@@ -615,32 +666,80 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
 
   "md5-sha1": md5Sha1(),
 
+  cshake: {
+    create: (params) => {
+      const fn = params.variant === "256" ? cshake256 : cshake128;
+      return cshake(fn).create(params);
+    },
+  },
   cshake128: cshake(cshake128),
   cshake256: cshake(cshake256),
 
+  tuplehash: {
+    create: (params) => {
+      const v = params.variant ?? "128xof";
+      const fn =
+        v === "256"
+          ? tuplehash256
+          : v === "128"
+            ? tuplehash128
+            : v === "256xof"
+              ? tuplehash256xof
+              : tuplehash128xof;
+      return customizable(fn).create(params);
+    },
+  },
   tuplehash128: customizable(tuplehash128),
   tuplehash256: customizable(tuplehash256),
   tuplehash128xof: customizable(tuplehash128xof),
   tuplehash256xof: customizable(tuplehash256xof),
 
+  parallelhash: {
+    create: (params) => {
+      const v = params.variant ?? "128xof";
+      const fn =
+        v === "256"
+          ? parallelhash256
+          : v === "128"
+            ? parallelhash128
+            : v === "256xof"
+              ? parallelhash256xof
+              : parallelhash128xof;
+      return blockSized(fn).create(params);
+    },
+  },
   parallelhash128: blockSized(parallelhash128),
   parallelhash256: blockSized(parallelhash256),
   parallelhash128xof: blockSized(parallelhash128xof),
   parallelhash256xof: blockSized(parallelhash256xof),
 
+  turboshake: {
+    create: (params) => {
+      const fn = params.variant === "256" ? turboshake256 : turboshake128;
+      return domainSeparated(fn).create(params);
+    },
+  },
   turboshake128: domainSeparated(turboshake128),
   turboshake256: domainSeparated(turboshake256),
 
+  kangarootwelve: {
+    create: (params) => {
+      const fn = params.variant === "256" ? kt256 : kt128;
+      return customizable(fn).create(params);
+    },
+  },
   kt128: customizable(kt128),
   kt256: customizable(kt256),
 
-  /**
-   * Skein's three state sizes. The output length reaches `createSkein` because it is part of the
-   * function -- see the note on the metadata -- which is exactly what `HashParams` exists to carry.
-   */
-  skein256: { create: ({ outputLen }) => createSkein(32, outputLen) },
-  skein512: { create: ({ outputLen }) => createSkein(64, outputLen) },
-  skein1024: { create: ({ outputLen }) => createSkein(128, outputLen) },
+  skein: {
+    create: ({ outputLen }) => {
+      const stateBytes = outputLen === 128 ? 128 : outputLen === 64 ? 64 : 32;
+      return createSkein(stateBytes, outputLen);
+    },
+  },
+  skein256: local(() => createSkein(32, 32)),
+  skein512: local(() => createSkein(64, 64)),
+  skein1024: local(() => createSkein(128, 128)),
 
   asconhash256: local(createAsconHash256),
   // The one XOF here that is not a noble hash: `variable` expects noble's `create({ dkLen })`, and
@@ -665,49 +764,55 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   tiger2: local(createTiger2),
 
   /**
-   * The three SHA-3 competition designs, all from `@ocs/algos`.
-   *
-   * Each buffers its input rather than compressing per chunk -- Groestl's and JH's paddings carry a
-   * total count, so neither can finalise before the whole message is seen -- which is why their
-   * manifests report `streaming: false` rather than showing a progress bar they cannot honour.
+   * The SHA-3 competition designs, all from `@ocs/algos`.
    */
+  groestl: { create: ({ outputLen }) => createGroestl(outputLen as 28 | 32 | 48 | 64) },
   groestl224: local(() => createGroestl(28)),
   groestl256: local(() => createGroestl(32)),
   groestl384: local(() => createGroestl(48)),
   groestl512: local(() => createGroestl(64)),
+  jh: { create: ({ outputLen }) => createJh(outputLen as 28 | 32 | 48 | 64) },
   jh224: local(() => createJh(28)),
   jh256: local(() => createJh(32)),
   jh384: local(() => createJh(48)),
   jh512: local(() => createJh(64)),
+  cubehash: { create: ({ outputLen }) => createCubehash(outputLen as 28 | 32 | 48 | 64) },
   cubehash224: local(() => createCubehash(28)),
   cubehash256: local(() => createCubehash(32)),
   cubehash384: local(() => createCubehash(48)),
   cubehash512: local(() => createCubehash(64)),
+  luffa: { create: ({ outputLen }) => createLuffa(outputLen as 28 | 32 | 48 | 64) },
   luffa224: local(() => createLuffa(28)),
   luffa256: local(() => createLuffa(32)),
   luffa384: local(() => createLuffa(48)),
   luffa512: local(() => createLuffa(64)),
+  fugue: { create: ({ outputLen }) => createFugue(outputLen as 28 | 32 | 48 | 64) },
   fugue224: local(() => createFugue(28)),
   fugue256: local(() => createFugue(32)),
   fugue384: local(() => createFugue(48)),
   fugue512: local(() => createFugue(64)),
+  shavite: { create: ({ outputLen }) => createShavite(outputLen as 28 | 32 | 48 | 64) },
   shavite224: local(() => createShavite(28)),
   shavite256: local(() => createShavite(32)),
   shavite384: local(() => createShavite(48)),
   shavite512: local(() => createShavite(64)),
+  shabal: { create: ({ outputLen }) => createShabal(outputLen as 24 | 28 | 32 | 48 | 64) },
   shabal192: local(() => createShabal(24)),
   shabal224: local(() => createShabal(28)),
   shabal256: local(() => createShabal(32)),
   shabal384: local(() => createShabal(48)),
   shabal512: local(() => createShabal(64)),
+  echo: { create: ({ outputLen }) => createEcho(outputLen as 28 | 32 | 48 | 64) },
   echo224: local(() => createEcho(28)),
   echo256: local(() => createEcho(32)),
   echo384: local(() => createEcho(48)),
   echo512: local(() => createEcho(64)),
+  hamsi: { create: ({ outputLen }) => createHamsi(outputLen as 28 | 32 | 48 | 64) },
   hamsi224: local(() => createHamsi(28)),
   hamsi256: local(() => createHamsi(32)),
   hamsi384: local(() => createHamsi(48)),
   hamsi512: local(() => createHamsi(64)),
+  simd: { create: ({ outputLen }) => createSimd(outputLen as 28 | 32 | 48 | 64) },
   simd224: local(() => createSimd(28)),
   simd256: local(() => createSimd(32)),
   simd384: local(() => createSimd(48)),
@@ -715,15 +820,22 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   "belt-hash": local(() => createBeltHash()),
 
   // LSH, the second Korean standard here. Two engines, four digest sizes.
+  lsh: {
+    create: ({ outputLen }) => createLsh(((outputLen ?? 32) * 8) as 224 | 256 | 384 | 512),
+  },
   lsh224: local(() => createLsh(224)),
   lsh256: local(() => createLsh(256)),
   lsh384: local(() => createLsh(384)),
   lsh512: local(() => createLsh(512)),
 
   // The belt-and-mill pair, the two Ukrainian standards and the Korean one.
+  radiogatun: parameterised(({ variant }) => createRadioGatun(variant === "64" ? 64 : 32)),
   radiogatun32: local(() => createRadioGatun(32)),
   radiogatun64: local(() => createRadioGatun(64)),
   panama: local(createPanama),
+  kupyna: {
+    create: ({ outputLen }) => createKupyna(((outputLen ?? 32) * 8) as 256 | 384 | 512),
+  },
   kupyna256: local(() => createKupyna(256)),
   kupyna384: local(() => createKupyna(384)),
   kupyna512: local(() => createKupyna(512)),
@@ -731,6 +843,9 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
 
   // The four NIST lightweight hashes. All incremental -- see `lwc-hash.ts` for why that took work.
   "xoodyak-hash": { create: ({ outputLen }) => createXoodyakHash(outputLen) },
+  esch: {
+    create: ({ outputLen }) => createEsch(outputLen === 48 ? 384 : 256),
+  },
   esch256: local(() => createEsch(256)),
   esch384: local(() => createEsch(384)),
   "photonbeetle-hash": local(createPhotonBeetleHash),
@@ -800,19 +915,34 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   haval: { create: ({ passes, outputLen }) => createHaval(passes!, outputLen) },
 
   snefru: local(createSnefru),
-  gost94: { create: () => createGost("test") },
+  gost94: parameterised(({ variant }) => createGost(variant === "crypto" ? "crypto" : "test")),
   "gost94-crypto": { create: () => createGost("crypto") },
 
+  fnv: parameterised(({ outputLen, variant }) => {
+    const is1 = variant === "1";
+    const is64 = outputLen === 8;
+    const v = is64 ? (is1 ? "fnv164" : "fnv1a64") : (is1 ? "fnv132" : "fnv1a32");
+    return createFnv(v);
+  }),
   fnv132: { create: () => createFnv("fnv132") },
   fnv1a32: { create: () => createFnv("fnv1a32") },
   fnv164: { create: () => createFnv("fnv164") },
   fnv1a64: { create: () => createFnv("fnv1a64") },
   joaat: local(createJoaat),
+  murmur3: parameterised(({ outputLen, variant }) => {
+    if (outputLen === 16) {
+      return createMurmur3(variant === "x64" ? "murmur3f" : "murmur3c");
+    }
+    return createMurmur3("murmur3a");
+  }),
   murmur3a: { create: () => createMurmur3("murmur3a") },
   murmur3c: { create: () => createMurmur3("murmur3c") },
   murmur3f: { create: () => createMurmur3("murmur3f") },
   // Two entries over one implementation, because the output length picks the initialising value
   // rather than truncating -- see the note on the 256-bit metadata entry.
+  streebog: {
+    create: ({ outputLen }) => createStreebog(outputLen === 64 ? 64 : 32),
+  },
   streebog512: local(() => createStreebog(64)),
   streebog256: local(() => createStreebog(32)),
   whirlpool: local(createWhirlpool),
@@ -839,6 +969,18 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   ),
   t1ha: parameterised((params) => bufferedHasher((m) => t1haBytes(params, m))),
 
+  xxhash: {
+    create: (params) => {
+      const { outputLen, variant } = params;
+      if (outputLen === 4) return seeded32().create(params);
+      if (outputLen === 16) return seededXxh3(createXxh3_128).create(params);
+      if (variant === "classic") return seeded64().create(params);
+      return seededXxh3(createXxh3_64).create(params);
+    },
+    prepare: async () => {
+      await Promise.all([M_XXHASH3.prepare(), M_XXHASH32.prepare(), M_XXHASH64.prepare()]);
+    },
+  },
   xxh32: seeded32(),
   xxh64: seeded64(),
   // XXH3 takes a 64-bit seed; the form's seed control is 32-bit, matching XXH32 and XXH64, so it
@@ -846,8 +988,17 @@ export const HASH_BINDINGS: Readonly<Record<string, HashBinding>> = {
   // algorithms, which is not worth a second control kind.
   xxh3: seededXxh3(createXxh3_64),
   xxh128: seededXxh3(createXxh3_128),
-  poseidon: { create: () => bufferedHasher(poseidonHash) },
+  poseidon: {
+    create: (params) =>
+      bufferedHasher(params?.variant === "poseidon2" ? poseidon2Hash : poseidonHash),
+    prepare: async () => {
+      await Promise.all([M_POSEIDON.prepare(), M_POSEIDON2.prepare()]);
+    },
+  },
   rescueprime: { create: () => bufferedHasher(rescuePrimeHash) },
+  haraka: parameterised(({ variant }) =>
+    bufferedHasher(variant === "512" ? haraka512Hash : haraka256Hash),
+  ),
   haraka256: { create: () => bufferedHasher(haraka256Hash) },
   haraka512: { create: () => bufferedHasher(haraka512Hash) },
   meowhash: { create: () => bufferedHasher(meowHash) },
@@ -898,22 +1049,27 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   "belt-hash": M_BELT,
   cityhash: M_CITYHASH,
   cityhashcrc: M_CITYCRC,
+  cubehash: M_CUBEHASH,
   cubehash224: M_CUBEHASH,
   cubehash256: M_CUBEHASH,
   cubehash384: M_CUBEHASH,
   cubehash512: M_CUBEHASH,
+  echo: M_ECHO,
   echo224: M_ECHO,
   echo256: M_ECHO,
   echo384: M_ECHO,
   echo512: M_ECHO,
+  esch: M_LWC_SPARKLE,
   esch256: M_LWC_SPARKLE,
   esch384: M_LWC_SPARKLE,
   farmhash: M_FARMHASH,
+  fnv: M_FNV,
   fnv132: M_FNV,
   fnv164: M_FNV,
   fnv1a32: M_FNV,
   fnv1a64: M_FNV,
   fsb: M_FSB,
+  fugue: M_FUGUE,
   fugue224: M_FUGUE,
   fugue256: M_FUGUE,
   fugue384: M_FUGUE,
@@ -921,28 +1077,34 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   gimli: M_GIMLI,
   gost94: M_GOST,
   "gost94-crypto": M_GOST,
+  groestl: M_GROESTL,
   groestl224: M_GROESTL,
   groestl256: M_GROESTL,
   groestl384: M_GROESTL,
   groestl512: M_GROESTL,
+  hamsi: M_HAMSI,
   hamsi224: M_HAMSI,
   hamsi256: M_HAMSI,
   hamsi384: M_HAMSI,
   hamsi512: M_HAMSI,
   has160: M_HAS160,
   haval: M_HAVAL,
+  jh: M_JH,
   jh224: M_JH,
   jh256: M_JH,
   jh384: M_JH,
   jh512: M_JH,
   joaat: M_FNV,
+  kupyna: M_KUPYNA,
   kupyna256: M_KUPYNA,
   kupyna384: M_KUPYNA,
   kupyna512: M_KUPYNA,
+  lsh: M_LSH,
   lsh224: M_LSH,
   lsh256: M_LSH,
   lsh384: M_LSH,
   lsh512: M_LSH,
+  luffa: M_LUFFA,
   luffa224: M_LUFFA,
   luffa256: M_LUFFA,
   luffa384: M_LUFFA,
@@ -952,6 +1114,7 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   md6: M_MD6,
   metrohash: M_METROHASH,
   metrohash128crc: M_METROHASH_CRC,
+  murmur3: M_MURMUR3,
   murmur3a: M_MURMUR3,
   murmur3c: M_MURMUR3,
   murmur3f: M_MURMUR3,
@@ -959,32 +1122,39 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   photon: M_PHOTON,
   "photonbeetle-hash": M_LWC_PHOTONBEETLE,
   quark: M_QUARK,
+  radiogatun: M_BELTMILL,
   radiogatun32: M_BELTMILL,
   radiogatun64: M_BELTMILL,
   rapidhash: M_RAPIDHASH,
+  ripemd: M_RIPEMD,
   ripemd128: M_RIPEMD,
   ripemd256: M_RIPEMD,
   ripemd320: M_RIPEMD,
   "romulus-h": M_LWC_ROMULUS,
+  shabal: M_SHABAL,
   shabal192: M_SHABAL,
   shabal224: M_SHABAL,
   shabal256: M_SHABAL,
   shabal384: M_SHABAL,
   shabal512: M_SHABAL,
+  shavite: M_SHAVITE,
   shavite224: M_SHAVITE,
   shavite256: M_SHAVITE,
   shavite384: M_SHAVITE,
   shavite512: M_SHAVITE,
+  simd: M_SIMD,
   simd224: M_SIMD,
   simd256: M_SIMD,
   simd384: M_SIMD,
   simd512: M_SIMD,
+  skein: M_SKEIN,
   skein1024: M_SKEIN,
   skein256: M_SKEIN,
   skein512: M_SKEIN,
   sm3: M_SM3,
   snefru: M_SNEFRU,
   spookyhash: M_SPOOKYHASH,
+  streebog: M_STREEBOG,
   streebog256: M_STREEBOG,
   streebog512: M_STREEBOG,
   t1ha: M_T1HA,
@@ -993,12 +1163,14 @@ const MODULE_FOR_ALGORITHM: Readonly<Record<string, LazyModule<unknown>>> = {
   whirlpool: M_WHIRLPOOL,
   wyhash: M_WYHASH,
   "xoodyak-hash": M_LWC_XOODYAK,
+  xxhash: M_XXHASH3,
   xxh128: M_XXHASH3,
   xxh3: M_XXHASH3,
   xxh32: M_XXHASH32,
   xxh64: M_XXHASH64,
   poseidon: M_POSEIDON,
   rescueprime: M_RESCUEPRIME,
+  haraka: M_HARAKA,
   haraka256: M_HARAKA,
   haraka512: M_HARAKA,
   meowhash: M_MEOWHASH,

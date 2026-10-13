@@ -8,7 +8,7 @@ import { CRC_MANIFESTS } from "@ocs/crc/manifests";
 import { ENCODING_MANIFESTS } from "@ocs/encoding/manifests";
 import { CLASSICAL_MANIFESTS } from "@ocs/classical/manifests";
 import { FORMAT_MANIFESTS } from "@ocs/format/manifests";
-import { HASH_MANIFESTS } from "@ocs/hash/manifests";
+import { HASH_MANIFESTS, LEGACY_HASH_ALIASES } from "@ocs/hash/manifests";
 import { CIPHER_MANIFESTS } from "@ocs/cipher/manifests";
 import { KDF_MANIFESTS } from "@ocs/kdf/manifests";
 import { MAC_MANIFESTS } from "@ocs/mac/manifests";
@@ -44,7 +44,8 @@ export const TOOL_MANIFESTS: readonly ToolManifest[] = [
 const BY_ID = new Map(TOOL_MANIFESTS.map((m) => [m.id, m]));
 
 export function getManifest(id: string): ToolManifest | undefined {
-  return BY_ID.get(id);
+  const resolvedId = BY_ID.has(id) ? id : (LEGACY_HASH_ALIASES[id] ?? id);
+  return BY_ID.get(resolvedId);
 }
 
 export function manifestsInFamily(family: ToolFamily): ToolManifest[] {
@@ -113,7 +114,8 @@ export function presentFamilies(): ToolFamily[] {
  * ability to split them into separate chunks, which is the entire point.
  */
 export async function loadTool(id: string): Promise<ToolDefinition<ToolSpecBase>> {
-  const manifest = BY_ID.get(id);
+  const resolvedId = BY_ID.has(id) ? id : (LEGACY_HASH_ALIASES[id] ?? id);
+  const manifest = BY_ID.get(resolvedId);
   if (!manifest) throw new Error(`Unknown tool id: ${id}`);
 
   switch (manifest.family) {
@@ -121,13 +123,13 @@ export async function loadTool(id: string): Promise<ToolDefinition<ToolSpecBase>
       const { hashToolDefinition, prepareHashAlgorithm } = await import("@ocs/hash/definition");
       // FSB's matrix table is a 266 KB dynamic import; awaiting it here is what keeps the synchronous
       // `Hasher` and `ToolStream` contracts intact. A no-op for every other algorithm.
-      await prepareHashAlgorithm(id);
+      await prepareHashAlgorithm(resolvedId);
       // The cast widens the concrete spec type to the shared base. It is sound in
       // the direction that matters — every spec has `specVersion` and `options` —
       // but `specSchema`'s zod type and `createSpec`'s return are invariant, so TS
       // cannot see it. The generic UI only ever hands a spec back to the same tool
       // that produced it, which is what makes this safe in practice.
-      return hashToolDefinition(id) as unknown as ToolDefinition<ToolSpecBase>;
+      return hashToolDefinition(resolvedId) as unknown as ToolDefinition<ToolSpecBase>;
     }
     case "password-artifact": {
       const { passwordArtifactToolDefinition } =

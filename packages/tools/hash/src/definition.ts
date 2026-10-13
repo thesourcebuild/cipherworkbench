@@ -24,7 +24,7 @@ import { HashSpec } from "./spec";
  */
 export function hashToolDefinition(algorithmId: string): ToolDefinition<HashSpec> {
   const meta = requireHashAlgorithm(algorithmId);
-  const manifest = HASH_MANIFESTS.find((m) => m.id === algorithmId);
+  const manifest = HASH_MANIFESTS.find((m) => m.id === meta.id);
   if (!manifest) throw new Error(`No manifest for hash algorithm: ${algorithmId}`);
 
   return {

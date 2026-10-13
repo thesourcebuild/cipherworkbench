@@ -83,10 +83,10 @@ const PROVIDERS: Record<string, Provider> = {
   "sha3-256": "sha3-256",
   "sha3-384": "sha3-384",
   "sha3-512": "sha3-512",
-  ripemd128: "ripemd128",
-  ripemd160: "ripemd160",
-  ripemd256: "ripemd256",
-  ripemd320: "ripemd320",
+  ripemd128: { family: "hash", tool: "ripemd", options: { outputLength: "16" } },
+  ripemd160: { family: "hash", tool: "ripemd", options: { outputLength: "20" } },
+  ripemd256: { family: "hash", tool: "ripemd", options: { outputLength: "32" } },
+  ripemd320: { family: "hash", tool: "ripemd", options: { outputLength: "40" } },
   whirlpool: "whirlpool",
   "tiger128,3": { family: "hash", tool: "tiger", options: { outputLength: "16", passes: "3" } },
   "tiger160,3": { family: "hash", tool: "tiger", options: { outputLength: "20", passes: "3" } },
@@ -97,25 +97,25 @@ const PROVIDERS: Record<string, Provider> = {
   // PHP registers `snefru` and `snefru256` as separate names for one function; asserted below.
   snefru: "snefru",
   snefru256: "snefru",
-  gost: "gost94",
-  "gost-crypto": "gost94-crypto",
+  gost: { family: "hash", tool: "gost94", options: { hashVariant: "test" } },
+  "gost-crypto": { family: "hash", tool: "gost94", options: { hashVariant: "crypto" } },
   adler32: { family: "checksum", tool: "adler32" },
   // Same value as CRC-32/BZIP2, printed the other way round -- see the note at the top.
   crc32: { family: "crc", tool: "crc32", model: "CRC-32/BZIP2", littleEndian: true },
   crc32b: { family: "crc", tool: "crc32", model: "CRC-32/ISO-HDLC" },
   crc32c: { family: "crc", tool: "crc32", model: "CRC-32/ISCSI" },
-  fnv132: "fnv132",
-  fnv1a32: "fnv1a32",
-  fnv164: "fnv164",
-  fnv1a64: "fnv1a64",
+  fnv132: { family: "hash", tool: "fnv", options: { outputLength: "4", hashVariant: "1" } },
+  fnv1a32: { family: "hash", tool: "fnv", options: { outputLength: "4", hashVariant: "1a" } },
+  fnv164: { family: "hash", tool: "fnv", options: { outputLength: "8", hashVariant: "1" } },
+  fnv1a64: { family: "hash", tool: "fnv", options: { outputLength: "8", hashVariant: "1a" } },
   joaat: "joaat",
-  murmur3a: "murmur3a",
-  murmur3c: "murmur3c",
-  murmur3f: "murmur3f",
-  xxh32: "xxh32",
-  xxh64: "xxh64",
-  xxh3: "xxh3",
-  xxh128: "xxh128",
+  murmur3a: { family: "hash", tool: "murmur3", options: { outputLength: "4", hashVariant: "x86" } },
+  murmur3c: { family: "hash", tool: "murmur3", options: { outputLength: "16", hashVariant: "x86" } },
+  murmur3f: { family: "hash", tool: "murmur3", options: { outputLength: "16", hashVariant: "x64" } },
+  xxh32: { family: "hash", tool: "xxhash", options: { outputLength: "4", hashVariant: "classic" } },
+  xxh64: { family: "hash", tool: "xxhash", options: { outputLength: "8", hashVariant: "classic" } },
+  xxh3: { family: "hash", tool: "xxhash", options: { outputLength: "8", hashVariant: "modern" } },
+  xxh128: { family: "hash", tool: "xxhash", options: { outputLength: "16", hashVariant: "modern" } },
   "haval128,3": { family: "hash", tool: "haval", options: { outputLength: "16", passes: "3" } },
   "haval160,3": { family: "hash", tool: "haval", options: { outputLength: "20", passes: "3" } },
   "haval192,3": { family: "hash", tool: "haval", options: { outputLength: "24", passes: "3" } },
@@ -150,8 +150,12 @@ async function compute(provider: Provider, message: Uint8Array): Promise<string>
     // Same route as the plain string case, with the grid cell selected on top of the default spec.
     const tool = hashToolDefinition(provider.tool);
     const base = tool.createSpec();
+    const opts = { ...base.options, ...provider.options };
+    if (provider.options.variant && !opts.hashVariant) {
+      opts.hashVariant = provider.options.variant;
+    }
     const result = await tool.compute(
-      { ...base, options: { ...base.options, ...provider.options } },
+      { ...base, options: opts },
       message,
     );
     expect(result.error, provider.tool).toBeUndefined();

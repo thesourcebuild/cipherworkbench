@@ -255,28 +255,40 @@ export const getOption = CATALOGUE.get;
 export const requireOption = CATALOGUE.require;
 export const optionsInGroup = CATALOGUE.inGroup;
 
-/** Bytes to a label a reader recognises: HAVAL is named in bits everywhere it appears. */
-function bitsLabel(bytes: number): string {
-  return `${bytes * 8} bits`;
+function formatDigestVariantLabel(meta: HashAlgorithmMeta, bytes: number): string {
+  const bits = bytes * 8;
+  if (meta.variants) {
+    return `${bits} bits (${bytes} bytes)`;
+  }
+  let baseName = meta.label;
+  if (baseName === "SpookyHash V2") {
+    baseName = "SpookyHash";
+  } else if (baseName === "SHAvite-3") {
+    baseName = "SHAvite";
+  }
+  return `${baseName}-${bits}`;
 }
 
 function outputChoiceOption(meta: HashAlgorithmMeta): OptionDef<HashOptionGroup> {
+  const hasOtherVariants = Boolean(meta.variants);
   return {
     id: OPTION_OUTPUT_LENGTH,
-    label: "Digest length",
-    group: "output",
+    label: hasOtherVariants ? "Digest size" : "Variant",
+    group: "variant",
     kind: "enum",
     choices: meta.outputLengths!.map((bytes) => ({
       value: String(bytes),
-      label: bitsLabel(bytes),
-      summary: `${bytes} bytes`,
+      label: formatDigestVariantLabel(meta, bytes),
+      summary: `${bytes * 8} bits (${bytes} bytes)`,
     })),
     availableOn: [TAG_OUTPUT_CHOICE],
-    summary: "Which of this algorithm's digest sizes to produce.",
+    summary: hasOtherVariants
+      ? "Which of this algorithm's digest sizes to produce."
+      : "Which named variant of this algorithm to compute.",
     detail: meta.truncation
       ? "A select rather than a free number, because only these lengths are defined. For this algorithm the shorter forms are genuine truncations -- the 128-bit digest is the first 16 bytes of the 192-bit one -- so a value truncated by hand elsewhere will still agree with this."
       : "A select rather than a free number, because only these lengths are defined and nothing in between exists. Note that these are NOT truncations of one another -- the requested length changes the computation rather than trimming its result, so the 128-bit digest is unrelated to the first 16 bytes of the 256-bit one. HAVAL folds the length into a tailoring step at the end; MD6 puts it in the control word every node reads and derives its round count from it, so a shorter MD6 does fewer rounds. Either way, truncating by hand gives a wrong answer with no error.",
-    order: 10,
+    order: hasOtherVariants ? 12 : 10,
   };
 }
 
@@ -290,14 +302,14 @@ function variantOption(meta: HashAlgorithmMeta): OptionDef<HashOptionGroup> {
   return {
     id: OPTION_HASH_VARIANT,
     label: "Variant",
-    group: "transform",
+    group: "variant",
     kind: "enum",
     choices: meta.variants!.map((v) => ({ value: v.id, label: v.label })),
     availableOn: [TAG_HASH_VARIANT],
     summary: "Which named variant of this algorithm to compute.",
     detail:
       "Not an output length and not a round count: these are separate functions published under one name. MetroHash's two variants have the same width, the same structure and the same round count, and differ only in four constants and a handful of rotation counts -- so their outputs are unrelated and there is nothing in either to say which produced it. t1ha's two versions differ more substantially than that. Reproducing a stored value means matching whichever variant produced it.",
-    order: 12,
+    order: 10,
   };
 }
 

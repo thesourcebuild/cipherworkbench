@@ -11,7 +11,7 @@ import {
 } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { LOREM } from "../apps/web/app/test-inputs";
-import { HASH_ALGORITHMS } from "@ocs/hash";
+import { HASH_ALGORITHMS, LEGACY_HASH_ALIASES } from "@ocs/hash";
 import { hashToolDefinition, prepareHashAlgorithm } from "@ocs/hash/definition";
 import { HMAC_HASHES, OPTION_HASH as MAC_OPTION_HASH, OPTION_KEY } from "@ocs/mac";
 import { macToolDefinition } from "@ocs/mac/definition";
@@ -115,12 +115,14 @@ interface DigestMapping {
   aliases: readonly string[];
   /** Passed as the tool's `outputLength` option when OpenSSL's size is not our default. */
   outputLength?: number;
+  /** Passed as the tool's `variant` option when targeting a specific variant. */
+  variant?: string;
 }
 
 const DIGEST_MAP: readonly DigestMapping[] = [
   { id: "md5", aliases: ["md5", "RSA-MD5", "md5WithRSAEncryption", "ssl3-md5"] },
   {
-    id: "ripemd160",
+    id: "ripemd",
     aliases: ["ripemd160", "ripemd", "rmd160", "RSA-RIPEMD160", "ripemd160WithRSA"],
   },
   {
@@ -161,8 +163,8 @@ const DIGEST_MAP: readonly DigestMapping[] = [
   { id: "blake2b", aliases: ["blake2b512"], outputLength: 64 },
   { id: "blake2s", aliases: ["blake2s256"], outputLength: 32 },
   // OpenSSL exposes SHAKE at one length each; ours is variable, so the length is requested.
-  { id: "shake128", aliases: ["shake128"], outputLength: 16 },
-  { id: "shake256", aliases: ["shake256"], outputLength: 32 },
+  { id: "shake", aliases: ["shake128"], outputLength: 16, variant: "128" },
+  { id: "shake", aliases: ["shake256"], outputLength: 32, variant: "256" },
   // MD5 ‖ SHA-1: the 36-byte TLS 1.0/1.1 handshake digest.
   { id: "md5-sha1", aliases: ["md5-sha1"] },
 ];
@@ -170,10 +172,10 @@ const DIGEST_MAP: readonly DigestMapping[] = [
 async function ourDigest(mapping: DigestMapping, input: Uint8Array): Promise<string> {
   const tool = hashToolDefinition(mapping.id);
   const base = tool.createSpec();
-  const spec =
-    mapping.outputLength === undefined
-      ? base
-      : { ...base, options: { ...base.options, outputLength: mapping.outputLength } };
+  const options = { ...base.options };
+  if (mapping.outputLength !== undefined) options.outputLength = mapping.outputLength;
+  if (mapping.variant !== undefined) options.hashVariant = mapping.variant;
+  const spec = { ...base, options };
   const result = await tool.compute(spec, input);
   expect(result.error, `${mapping.id}: ${result.error}`).toBeUndefined();
   return encodeHex(result.bytes!);
@@ -383,8 +385,11 @@ describe("HMAC matches OpenSSL", () => {
   it("offers HMAC over every OpenSSL digest that has one", () => {
     // The gate for this half: a digest in DIGEST_MAP must either be offered for HMAC or be
     // one of the two the construction does not apply to.
-    const noHmac = new Set(["shake128", "shake256", "md5-sha1"]);
-    const offered = new Set(HMAC_HASHES.map((h) => h.id));
+    const noHmac = new Set(["shake", "shake128", "shake256", "md5-sha1"]);
+    const offered = new Set([
+      ...HMAC_HASHES.map((h) => h.id),
+      ...HMAC_HASHES.map((h) => LEGACY_HASH_ALIASES[h.id]).filter((id): id is string => Boolean(id)),
+    ]);
     const missing = DIGEST_MAP.map((m) => m.id).filter(
       (id) => !offered.has(id) && !noHmac.has(id),
     );
@@ -690,7 +695,10 @@ describe("completeness", () => {
         return false;
       }
     });
-    const offered = new Set(RSA_HASHES.map((h) => h.algosHashId));
+    const offered = new Set([
+      ...RSA_HASHES.map((h) => h.algosHashId),
+      ...RSA_HASHES.map((h) => LEGACY_HASH_ALIASES[h.algosHashId]).filter((id): id is string => Boolean(id)),
+    ]);
     expect(
       signable.filter((id) => !offered.has(id)),
       "hashes OpenSSL signs with that the RSA tool does not offer",

@@ -1,9 +1,19 @@
 import type { OptionGroupMeta } from "@ocs/engine";
 
-export const OPTION_GROUPS = ["message", "key", "transform", "output"] as const;
+export const OPTION_GROUPS = ["variant", "message", "key", "transform", "output"] as const;
 export type HashOptionGroup = (typeof OPTION_GROUPS)[number];
 
 export const OPTION_GROUP_META: Record<HashOptionGroup, OptionGroupMeta<HashOptionGroup>> = {
+  /**
+   * The algorithm variant selector, rendered directly above the Transform section with no extra heading.
+   */
+  variant: {
+    id: "variant",
+    label: "",
+    summary: "Which variant of the algorithm to compute.",
+    order: 1,
+    collapsedByDefault: false,
+  },
   /**
    * The TupleHash set's tuple, and nothing else in this family.
    *

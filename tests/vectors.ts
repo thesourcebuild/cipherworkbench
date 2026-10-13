@@ -46,13 +46,15 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
    * way there is for the other 48 algorithms. That is stated rather than glossed over.
    */
   {
-    algorithm: "blake256",
+    algorithm: "blake",
+    options: { outputLength: "32" },
     input: "",
     hex: "716f6e863f744b9ac22c97ec7b76ea5f5908bc5b2f67c61510bfc4751384ea7a",
     source: "BLAKE submission paper (round 3), worked example",
   },
   {
-    algorithm: "blake512",
+    algorithm: "blake",
+    options: { outputLength: "64" },
     input: "",
     hex: "a8cfbbd73726062df0c6864dda65defe58ef0cc52a5625090fa17601e1eecd1b628e94f396ae402a00acc9eab77b4d4c2e852aaaa25a636d80af3fc7913ef5b8",
     source: "BLAKE submission paper (round 3), worked example",
@@ -189,45 +191,51 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
   // the whole reason both are offered. The empty-input Keccak-256 value is the
   // most widely quoted constant in the Ethereum ecosystem.
   {
-    algorithm: "keccak-256",
+    algorithm: "keccak",
     input: "",
     hex: "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-    source: "Keccak reference / Ethereum's keccak256 of empty input",
+    source: "Keccak reference / Ethereum's keccak256 of empty input (default 256-bit)",
   },
   {
-    algorithm: "keccak-256",
+    algorithm: "keccak",
+    options: { outputLength: "32" },
     input: "abc",
     hex: "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45",
-    source: "Keccak reference implementation",
+    source: "Keccak reference implementation (explicit 256-bit)",
   },
   {
-    algorithm: "keccak-512",
+    algorithm: "keccak",
+    options: { outputLength: "64" },
     input: "",
     hex: "0eab42de4c3ceb9235fc91acffe746b29c29a8c366b7c60e4e67c466f36a4304c00fa9caf9d87976ba469bcbe06713b435f091ef2769fb160cdab33d3670680e",
-    source: "Keccak reference implementation",
+    source: "Keccak reference implementation (512-bit)",
   },
   {
-    algorithm: "keccak-224",
+    algorithm: "keccak",
+    options: { outputLength: "28" },
     input: "",
     hex: "f71837502ba8e10837bdd8d365adb85591895602fc552b48b7390abd",
-    source: "Keccak reference implementation",
+    source: "Keccak reference implementation (224-bit)",
   },
   {
-    algorithm: "keccak-384",
+    algorithm: "keccak",
+    options: { outputLength: "48" },
     input: "",
     hex: "2c23146a63a29acf99e73b88f8c24eaa7dc60aa771780ccc006afbfa8fe2479b2dd2b21362337441ac12b515911957ff",
-    source: "Keccak reference implementation",
+    source: "Keccak reference implementation (384-bit)",
   },
 
   // RFC 1320 / ISO-IEC 10118-3.
   {
-    algorithm: "ripemd160",
+    algorithm: "ripemd",
+    options: { outputLength: "20" },
     input: "",
     hex: "9c1185a5c5e9fc54612808977ee8f548b2258d31",
     source: "RIPEMD-160 reference (Dobbertin, Bosselaers, Preneel)",
   },
   {
-    algorithm: "ripemd160",
+    algorithm: "ripemd",
+    options: { outputLength: "20" },
     input: "abc",
     hex: "8eb208f7e05d987a9b044a8e98c6b087f15a0bfc",
     source: "RIPEMD-160 reference (Dobbertin, Bosselaers, Preneel)",
@@ -323,25 +331,29 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
      * entry exists so the "every algorithm ships a published vector" gate is satisfied from the same
      * source the family's other hashes use.
      */
-    algorithm: "groestl224",
+    algorithm: "groestl",
+    options: { outputLength: "28" },
     input: "",
     hex: "f2e180fb5947be964cd584e22e496242c6a329c577fc4ce8c36d34c3",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "groestl256",
+    algorithm: "groestl",
+    options: { outputLength: "32" },
     input: "",
     hex: "1a52d11d550039be16107f9c58db9ebcc417f16f736adb2502567119f0083467",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "groestl384",
+    algorithm: "groestl",
+    options: { outputLength: "48" },
     input: "",
     hex: "ac353c1095ace21439251007862d6c62f829ddbe6de4f78e68d310a9205a736d8b11d99bffe448f57a1cfa2934f044a5",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "groestl512",
+    algorithm: "groestl",
+    options: { outputLength: "64" },
     input: "",
     hex: "6d3ad29d279110eef3adbd66de2a0345a77baede1557f5d099fce0c03d6dc2ba8e6d4a6633dfbd66053c20faa87d1a11f39a7fbe4a6c2f009801370308fc4ad8",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
@@ -351,50 +363,58 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
      * JH's empty-message digest. The block-aligned case, which is the one JH pads differently from
      * every other length -- see the note in `packages/algos/src/jh.ts`.
      */
-    algorithm: "jh224",
+    algorithm: "jh",
+    options: { outputLength: "28" },
     input: "",
     hex: "2c99df889b019309051c60fecc2bd285a774940e43175b76b2626630",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "jh256",
+    algorithm: "jh",
+    options: { outputLength: "32" },
     input: "",
     hex: "46e64619c18bb0a92a5e87185a47eef83ca747b8fcc8e1412921357e326df434",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "jh384",
+    algorithm: "jh",
+    options: { outputLength: "48" },
     input: "",
     hex: "2fe5f71b1b3290d3c017fb3c1a4d02a5cbeb03a0476481e25082434a881994b0ff99e078d2c16b105ad069b569315328",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "jh512",
+    algorithm: "jh",
+    options: { outputLength: "64" },
     input: "",
     hex: "90ecf2f76f9d2c8017d979ad5ab96b87d58fc8fc4b83060f3f900774faa2c8fabe69c5f4ff1ec2b61d6b316941cedee117fb04b1f4c5bc1b919ae841c50eec4f",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
     /** CubeHash16/32's empty-message digest. */
-    algorithm: "cubehash224",
+    algorithm: "cubehash",
+    options: { outputLength: "28" },
     input: "",
     hex: "f9802aa6955f4b7cf3b0f5a378fa0c9f138e0809d250966879c873ab",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "cubehash256",
+    algorithm: "cubehash",
+    options: { outputLength: "32" },
     input: "",
     hex: "44c6de3ac6c73c391bf0906cb7482600ec06b216c7c54a2a8688a6a42676577d",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "cubehash384",
+    algorithm: "cubehash",
+    options: { outputLength: "48" },
     input: "",
     hex: "98ae93ebf4e58958497f610a22c8cf60f2292319283ca6459daed1707be06e7591c5f2d84bd3339e66c770e485bfa1fb",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "cubehash512",
+    algorithm: "cubehash",
+    options: { outputLength: "64" },
     input: "",
     hex: "4a1d00bbcfcb5a9562fb981e7f7db3350fe2658639d948b9d57452c22328bb32f468b072208450bad5ee178271408be0b16e5633ac8a1e3cf9864cfbfc8e043a",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
@@ -406,75 +426,87 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
      * `tests/algos-sha3-candidates.test.ts` carries all 72; these four exist so the "every algorithm
      * ships a published vector" gate reads from the same source the rest of the family uses.
      */
-    algorithm: "luffa224",
+    algorithm: "luffa",
+    options: { outputLength: "28" },
     input: "",
     hex: "dbb8665871f4154d3e4396aefbba417cb7837dd683c332ba6be87e02",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "luffa256",
+    algorithm: "luffa",
+    options: { outputLength: "32" },
     input: "",
     hex: "dbb8665871f4154d3e4396aefbba417cb7837dd683c332ba6be87e02a2712d6f",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "luffa384",
+    algorithm: "luffa",
+    options: { outputLength: "48" },
     input: "",
     hex: "117d3ad49024dfe2994f4e335c9b330b48c537a13a9b7fa465938e1a02ff862bcdf33838bc0f371b045d26952d3ea0c5",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "luffa512",
+    algorithm: "luffa",
+    options: { outputLength: "64" },
     input: "",
     hex: "6e7de4501189b3ca58f3ac114916654bbcd4922024b4cc1cd764acfe8ab4b7805df133eab345ffdb1c414564c924f48e0a301824e2ac4c34bd4efde2e43da90e",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
     /** Fugue's empty-message digest, one per output length. All 72 are in the candidates test. */
-    algorithm: "fugue224",
+    algorithm: "fugue",
+    options: { outputLength: "28" },
     input: "",
     hex: "e2cd30d51a913c4ed2388a141f90caa4914de43010849e7b8a7a9ccd",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "fugue256",
+    algorithm: "fugue",
+    options: { outputLength: "32" },
     input: "",
     hex: "d6ec528980c130aad1d1acd28b9dd8dbdeae0d79eded1fca72c2af9f37c2246f",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "fugue384",
+    algorithm: "fugue",
+    options: { outputLength: "48" },
     input: "",
     hex: "466d05f6812b58b8628e53816b2a99d173b804a964de971829159c3791ac8b524eebbf5fc73ba40ea8eea446d5424a30",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "fugue512",
+    algorithm: "fugue",
+    options: { outputLength: "64" },
     input: "",
     hex: "3124f0cbb5a1c2fb3ce747ada63ed2ab3bcd74795cef2b0e805d5319fcc360b4617b6a7eb631d66f6d106ed0724b56fa8c1110f9b8df1c6898e7ca3c2dfccf79",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
     /** SHAvite-3's empty-message digest. All 72 are in the candidates test. */
-    algorithm: "shavite224",
+    algorithm: "shavite",
+    options: { outputLength: "28" },
     input: "",
     hex: "b33f761f0d3a86bb1051905aec7a691bd0b5a24c3721f67d8e48d839",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "shavite256",
+    algorithm: "shavite",
+    options: { outputLength: "32" },
     input: "",
     hex: "08c5825af2e9e5947286a8fe208bd5f8c6a7c8e4da598947d7ff8eda0fcd2bd7",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "shavite384",
+    algorithm: "shavite",
+    options: { outputLength: "48" },
     input: "",
     hex: "814b55553ce7c0841f8ff0321e6287f9f50a8e0cae811932385ecc1b7c386b4eb14edb79c8381babf09276b69d1bb3ee",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "shavite512",
+    algorithm: "shavite",
+    options: { outputLength: "64" },
     input: "",
     hex: "a485c1b2578459d1efc5dddd840bb0b4a650ac82fe68f58c4442ccda747da006b2d1dc6b4a4eb7d84ff91e1f466fef429d259acd995dddcad16fa545c7a6e5ba",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
@@ -485,32 +517,37 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
      * reference implementation checks itself against. It is the only published vector covering
      * that length's initial values, which is why the message is a sentence rather than empty.
      */
-    algorithm: "shabal192",
+    algorithm: "shabal",
+    options: { outputLength: "24" },
     input: "abcdefghijklmnopqrstuvwxyz-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789-abcdefghijklmnopqrstuvwxyz",
     hex: "690fae79226d95760ae8fdb4f58c0537111756557d307b15",
     source: "sphlib test_shabal.c self-test value",
   },
   {
     /** The other four lengths carry eighteen vectors each; see the candidates test. */
-    algorithm: "shabal224",
+    algorithm: "shabal",
+    options: { outputLength: "28" },
     input: "",
     hex: "562b4fdbe1706247552927f814b66a3d74b465a090af23e277bf8029",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "shabal256",
+    algorithm: "shabal",
+    options: { outputLength: "32" },
     input: "",
     hex: "aec750d11feee9f16271922fbaf5a9be142f62019ef8d720f858940070889014",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "shabal384",
+    algorithm: "shabal",
+    options: { outputLength: "48" },
     input: "",
     hex: "ff093d67d22b06a674b5f384719150d617e0ff9c8923569a2ab60cda886df63c91a25f33cd71cc22c9eebc5cd6aee52a",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "shabal512",
+    algorithm: "shabal",
+    options: { outputLength: "64" },
     input: "",
     hex: "fc2d5dff5d70b7f6b1f8c2fcc8c1f9fe9934e54257eded0cf2b539a2ef0a19ccffa84f8d9fa135e4bd3c09f590f3a927ebd603ac29eb729e6f2a9af031ad8dc6",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
@@ -566,73 +603,85 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
      * `tests/algos-sha3-candidates.test.ts` carries all 72 vectors apiece; these are here to satisfy
      * the "every algorithm ships a published vector" gate against the same source.
      */
-    algorithm: "echo224",
+    algorithm: "echo",
+    options: { outputLength: "28" },
     input: "",
     hex: "17da087595166f733fff7cdb0bca6438f303d0e00c48b5e7a3075905",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "echo256",
+    algorithm: "echo",
+    options: { outputLength: "32" },
     input: "",
     hex: "4496cd09d425999aefa75189ee7fd3c97362aa9e4ca898328002d20a4b519788",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "echo384",
+    algorithm: "echo",
+    options: { outputLength: "48" },
     input: "",
     hex: "134040763f840559b84b7a1ae5d6d64fc3659821a789cc64a7f1444c09ee7f81a54d72beee8273bae5ef18ec43aa5f34",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "echo512",
+    algorithm: "echo",
+    options: { outputLength: "64" },
     input: "",
     hex: "158f58cc79d300a9aa292515049275d051a28ab931726d0ec44bdd9faef4a702c36db9e7922fff077402236465833c5cc76af4efc352b4b44c7fa15aa0ef234e",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "hamsi224",
+    algorithm: "hamsi",
+    options: { outputLength: "28" },
     input: "",
     hex: "b9f6eb1a9b990373f9d2cb125584333c69a3d41ae291845f05da221f",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "hamsi256",
+    algorithm: "hamsi",
+    options: { outputLength: "32" },
     input: "",
     hex: "750e9ec469f4db626bee7e0c10ddaa1bd01fe194b94efbabebd24764dc2b13e9",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "hamsi384",
+    algorithm: "hamsi",
+    options: { outputLength: "48" },
     input: "",
     hex: "3943cd34e3b96b197a8bf4bac7aa982d18530dd12f41136b26d7e88759255f21153f4a4bd02e523612b8427f9dd96c8d",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "hamsi512",
+    algorithm: "hamsi",
+    options: { outputLength: "64" },
     input: "",
     hex: "5cd7436a91e27fc809d7015c3407540633dab391127113ce6ba360f0c1e35f404510834a551610d6e871e75651ea381a8ba628af1dcf2b2be13af2eb6247290f",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "simd224",
+    algorithm: "simd",
+    options: { outputLength: "28" },
     input: "",
     hex: "43e1d53656d7b85d10d5499e28afdef90bb497730d2853c8609b534b",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "simd256",
+    algorithm: "simd",
+    options: { outputLength: "32" },
     input: "",
     hex: "8029e81e7320e13ed9001dc3d8021fec695b7a25cd43ad805260181c35fcaea8",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "simd384",
+    algorithm: "simd",
+    options: { outputLength: "48" },
     input: "",
     hex: "5fdd62778fc213221890ad3bac742a4af107ce2692d6112e795b54b25dcd5e0f4bf3ef1b770ab34b38f074a5e0ecfcb5",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
   },
   {
-    algorithm: "simd512",
+    algorithm: "simd",
+    options: { outputLength: "64" },
     input: "",
     hex: "51a5af7e243cd9a5989f7792c880c4c3168c3d60c4518725fe5757d1f7a69c6366977eaba7905ce2da5d7cfd07773725f0935b55f3efb954996689a49b6d29e0",
     source: "NIST SHA-3 competition KAT, via sphlib test data",
@@ -690,28 +739,32 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
     source: "the Xoodyak submission KAT, Count = 17",
   },
   {
-    algorithm: "esch256",
+    algorithm: "esch",
+    options: { outputLength: "32" },
     input: "the empty message",
     inputHex: "",
     hex: "c0e815d78b875dc768c6c8b3afa51987cd69e5c087d387368628a511cfad5730",
     source: "the SPARKLE submission KAT, Count = 1",
   },
   {
-    algorithm: "esch256",
+    algorithm: "esch",
+    options: { outputLength: "32" },
     input: "the 16 bytes 00..0f",
     inputHex: "000102030405060708090a0b0c0d0e0f",
     hex: "acff841e2a526d83d6e94ab5564d6d64c98f5e8016bb1c2950386ed156c6c174",
     source: "the SPARKLE submission KAT, Count = 17",
   },
   {
-    algorithm: "esch384",
+    algorithm: "esch",
+    options: { outputLength: "48" },
     input: "the empty message",
     inputHex: "",
     hex: "2981715e2263ebd0cb6e5c2c99d0776d5e691ee737fde05247895e75d02e7447fd6ab707e2ec8385a539777965e472ee",
     source: "the SPARKLE submission KAT, Count = 1",
   },
   {
-    algorithm: "esch384",
+    algorithm: "esch",
+    options: { outputLength: "48" },
     input: "the 16 bytes 00..0f",
     inputHex: "000102030405060708090a0b0c0d0e0f",
     hex: "0008f97d6bbb701d5e33fcc178efe3e3d5e77915d4a4daf6e1ae34cd28edb895a053e19d930b50f72837e1a8f5b1f450",
@@ -983,14 +1036,16 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
    * *tool*, which is a different path: options, resolver, binding and streaming.
    */
   {
-    algorithm: "radiogatun32",
+    algorithm: "radiogatun",
+    options: { hashVariant: "32" },
     input: "the empty message",
     inputHex: "",
     hex: "f30028b54afab6b3e55355d277711109a19beda7091067e9a492fb5ed9f20117",
     source: "the RadioGatun designers' own test file, via sphlib",
   },
   {
-    algorithm: "radiogatun64",
+    algorithm: "radiogatun",
+    options: { hashVariant: "64" },
     input: "the empty message",
     inputHex: "",
     hex: "64a9a7fa139905b57bdab35d33aa216370d5eae13e77bfcdd85513408311a584",
@@ -1004,21 +1059,24 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
     source: "the Panama designers' own test file, via sphlib",
   },
   {
-    algorithm: "kupyna256",
+    algorithm: "kupyna",
+    options: { outputLength: "32" },
     input: "0 bytes, 0x00 upward",
     inputHex: "",
     hex: "cd5101d1ccdf0d1d1f4ada56e888cd724ca1a0838a3521e7131d4fb78d0f5eb6",
     source: "DSTU 7564 annex, via Bouncy Castle's DSTU7564Test",
   },
   {
-    algorithm: "kupyna384",
+    algorithm: "kupyna",
+    options: { outputLength: "48" },
     input: "95 bytes, 0x00 upward",
     inputHex: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e",
     hex: "d9021692d84e5175735654846ba751e6d0ed0fac36dfbc0841287dcb0b5584c75016c3decc2a6e47c50b2f3811e351b8",
     source: "DSTU 7564 annex, via Bouncy Castle's DSTU7564Test",
   },
   {
-    algorithm: "kupyna512",
+    algorithm: "kupyna",
+    options: { outputLength: "64" },
     input: "0 bytes, 0x00 upward",
     inputHex: "",
     hex: "656b2f4cd71462388b64a37043ea55dbe445d452aecd46c3298343314ef04019bcfa3f04265a9857f91be91fce197096187ceda78c9c1c021c294a0689198538",
@@ -1038,28 +1096,32 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
    * algorithm to ship a vector through the *tool*: options, resolver, binding and streaming.
    */
   {
-    algorithm: "lsh224",
+    algorithm: "lsh",
+    options: { outputLength: "28" },
     input: "one byte, 0xca",
     inputHex: "ca",
     hex: "4253e6e91b3c37f75c231d53ca6dc8464885250d2058c41d495bd08f",
     source: "KISA's reference, via Crypto++ TestVectors/lsh256.txt",
   },
   {
-    algorithm: "lsh256",
+    algorithm: "lsh",
+    options: { outputLength: "32" },
     input: "one byte, 0xce",
     inputHex: "ce",
     hex: "862f86db654094840d86df7881732fd69b7227ee4f7943868162feb733a9ca5b",
     source: "KISA's reference, via Crypto++ TestVectors/lsh256.txt",
   },
   {
-    algorithm: "lsh384",
+    algorithm: "lsh",
+    options: { outputLength: "48" },
     input: "one byte, 0x76",
     inputHex: "76",
     hex: "52ff6386afce2189733ab9f206dd87774c22c1475b22f4e72cb7f603c1ac54402c63cabe2cf10cf01697a0da717de9ec",
     source: "KISA's reference, via Crypto++ TestVectors/lsh512.txt",
   },
   {
-    algorithm: "lsh512",
+    algorithm: "lsh",
+    options: { outputLength: "64" },
     input: "one byte, 0x41",
     inputHex: "41",
     hex: "32e896b21bec19c15254f7a1f089f748e05918a68e6d829fb1a62b7d5822ad98b7de274f7dc6c73e6f52c5f0b7633666dbe6048661351d811105ee015b9dcac9",
@@ -1304,31 +1366,36 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
     source: "php-src ext/hash/tests/gost.phpt",
   },
   {
-    algorithm: "gost94-crypto",
+    algorithm: "gost94",
+    options: { hashVariant: "crypto" },
     input: "",
     hex: "981e5f3ca30c841487830f84fb433e13ac1101569b9c13584ac483234cd656c0",
     source: "php-src ext/hash/tests/gost.phpt",
   },
   {
-    algorithm: "fnv132",
+    algorithm: "fnv",
+    options: { outputLength: "4", hashVariant: "1" },
     input: "",
     hex: "811c9dc5",
     source: "FNV specification: the offset basis",
   },
   {
-    algorithm: "fnv1a32",
+    algorithm: "fnv",
+    options: { outputLength: "4", hashVariant: "1a" },
     input: "",
     hex: "811c9dc5",
     source: "FNV specification: the offset basis",
   },
   {
-    algorithm: "fnv164",
+    algorithm: "fnv",
+    options: { outputLength: "8", hashVariant: "1" },
     input: "",
     hex: "cbf29ce484222325",
     source: "FNV specification: the offset basis",
   },
   {
-    algorithm: "fnv1a64",
+    algorithm: "fnv",
+    options: { outputLength: "8", hashVariant: "1a" },
     input: "",
     hex: "cbf29ce484222325",
     source: "FNV specification: the offset basis",
@@ -1340,19 +1407,22 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
     source: "php-src ext/hash/tests/joaat.phpt",
   },
   {
-    algorithm: "murmur3a",
+    algorithm: "murmur3",
+    options: { outputLength: "4", hashVariant: "x86" },
     input: "foo",
     hex: "f6a5c420",
     source: "php-src ext/hash/tests/murmurhash3.phpt",
   },
   {
-    algorithm: "murmur3c",
+    algorithm: "murmur3",
+    options: { outputLength: "16", hashVariant: "x86" },
     input: "hash me!",
     hex: "c7009299985a5627a9280372a9280372",
     source: "php-src ext/hash/tests/murmurhash3.phpt",
   },
   {
-    algorithm: "murmur3f",
+    algorithm: "murmur3",
+    options: { outputLength: "16", hashVariant: "x64" },
     input: "hash me!",
     hex: "c43668294e89db0ba5772846e5804467",
     source: "php-src ext/hash/tests/murmurhash3.phpt",
@@ -1364,19 +1434,22 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
    * family-level gate needs. The empty message is the first case in the reference file for each size.
    */
   {
-    algorithm: "skein256",
+    algorithm: "skein",
+    options: { outputLength: "32" },
     input: "",
     hex: "c8877087da56e072870daa843f176e9453115929094c3a40c463a196c29bf7ba",
     source: "Skein 1.3 skein_golden_kat.txt, Skein-256-256 of the empty message",
   },
   {
-    algorithm: "skein512",
+    algorithm: "skein",
+    options: { outputLength: "64" },
     input: "",
     hex: "bc5b4c50925519c290cc634277ae3d6257212395cba733bbad37a4af0fa06af41fca7903d06564fea7a2d3730dbdb80c1f85562dfcc070334ea4d1d9e72cba7a",
     source: "Skein 1.3 skein_golden_kat.txt, Skein-512-512 of the empty message",
   },
   {
-    algorithm: "skein1024",
+    algorithm: "skein",
+    options: { outputLength: "128" },
     input: "",
     hex: "0fff9563bb3279289227ac77d319b6fff8d7e9f09da1247b72a0a265cd6d2a62645ad547ed8193db48cff847c06494a03f55666d3b47eb4c20456c9373c86297d630d5578ebd34cb40991578f9f52b18003efa35d3da6553ff35db91b81ab890bec1b189b7f52cb2a783ebb7d823d725b0b4a71f6824e88f68f982eefc6d19c6",
     source: "Skein 1.3 skein_golden_kat.txt, Skein-1024-1024 of the empty message",
@@ -1415,13 +1488,15 @@ export const DIGEST_VECTORS: readonly DigestVector[] = [
    * so the RFC is the only check there is.
    */
   {
-    algorithm: "streebog512",
+    algorithm: "streebog",
+    options: { outputLength: "64" },
     input: "012345678901234567890123456789012345678901234567890123456789012",
     hex: "1b54d01a4af5b9d5cc3d86d68d285462b19abc2475222f35c085122be4ba1ffa00ad30f8767b3a82384c6574f024c311e2a481332b08ef7f41797891c1646f48",
     source: "RFC 6986 §10.1.1 (byte order reversed)",
   },
   {
-    algorithm: "streebog256",
+    algorithm: "streebog",
+    options: { outputLength: "32" },
     input: "012345678901234567890123456789012345678901234567890123456789012",
     hex: "9d151eefd8590b89daa6ba6cb74af9275dd051026bb149a452fd84e5e57b5500",
     source: "RFC 6986 §10.1.2 (byte order reversed)",
@@ -1508,6 +1583,13 @@ export const XOF_VECTORS: readonly {
   source: string;
 }[] = [
   {
+    algorithm: "shake",
+    input: "",
+    outputLen: 32,
+    hex: "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26",
+    source: "FIPS 202 / NIST CAVP (SHAKE128 default, 256-bit output)",
+  },
+  {
     algorithm: "shake128",
     input: "",
     outputLen: 32,
@@ -1582,6 +1664,7 @@ export const BASE_ENCODING_VECTORS: readonly {
  */
 export interface Sha3AddonVector {
   algorithm: string;
+  variant?: string;
   /** Message bytes as hex. Absent for TupleHash, whose input is `tuple`. */
   inputHex?: string;
   /** TupleHash's elements, as hex. */
@@ -1605,7 +1688,8 @@ const PARALLEL_DATA = "000102030405060710111213141516172021222324252627";
 
 export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
   {
-    algorithm: "cshake128",
+    algorithm: "cshake",
+    variant: "128",
     inputHex: CSHAKE_DATA_4,
     customization: "Email Signature",
     outputLen: 32,
@@ -1613,7 +1697,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST cSHAKE_samples.pdf, Sample #1",
   },
   {
-    algorithm: "cshake128",
+    algorithm: "cshake",
+    variant: "128",
     inputHex: CSHAKE_DATA_200,
     customization: "Email Signature",
     outputLen: 32,
@@ -1621,7 +1706,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST cSHAKE_samples.pdf, Sample #2",
   },
   {
-    algorithm: "cshake256",
+    algorithm: "cshake",
+    variant: "256",
     inputHex: CSHAKE_DATA_4,
     customization: "Email Signature",
     outputLen: 64,
@@ -1631,7 +1717,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST cSHAKE_samples.pdf, Sample #3",
   },
   {
-    algorithm: "cshake256",
+    algorithm: "cshake",
+    variant: "256",
     inputHex: CSHAKE_DATA_200,
     customization: "Email Signature",
     outputLen: 64,
@@ -1642,14 +1729,16 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
   },
   // ── TupleHash (NIST TupleHash_samples.pdf) ────────────────────────────────
   {
-    algorithm: "tuplehash128",
+    algorithm: "tuplehash",
+    variant: "128",
     tuple: ["000102", "101112131415"],
     outputLen: 32,
     hex: "c5d8786c1afb9b82111ab34b65b2c0048fa64e6d48e263264ce1707d3ffc8ed1",
     source: "NIST TupleHash_samples.pdf, Sample #1",
   },
   {
-    algorithm: "tuplehash128",
+    algorithm: "tuplehash",
+    variant: "128",
     tuple: ["000102", "101112131415"],
     customization: "My Tuple App",
     outputLen: 32,
@@ -1657,7 +1746,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST TupleHash_samples.pdf, Sample #2",
   },
   {
-    algorithm: "tuplehash128",
+    algorithm: "tuplehash",
+    variant: "128",
     tuple: ["000102", "101112131415", "202122232425262728"],
     customization: "My Tuple App",
     outputLen: 32,
@@ -1665,7 +1755,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST TupleHash_samples.pdf, Sample #3",
   },
   {
-    algorithm: "tuplehash256",
+    algorithm: "tuplehash",
+    variant: "256",
     tuple: ["000102", "101112131415"],
     outputLen: 64,
     hex:
@@ -1674,7 +1765,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST TupleHash_samples.pdf, Sample #4",
   },
   {
-    algorithm: "tuplehash256",
+    algorithm: "tuplehash",
+    variant: "256",
     tuple: ["000102", "101112131415"],
     customization: "My Tuple App",
     outputLen: 64,
@@ -1684,7 +1776,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST TupleHash_samples.pdf, Sample #5",
   },
   {
-    algorithm: "tuplehash256",
+    algorithm: "tuplehash",
+    variant: "256",
     tuple: ["000102", "101112131415", "202122232425262728"],
     customization: "My Tuple App",
     outputLen: 64,
@@ -1696,7 +1789,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
 
   // ── ParallelHash (NIST ParallelHash_samples.pdf) ──────────────────────────
   {
-    algorithm: "parallelhash128",
+    algorithm: "parallelhash",
+    variant: "128",
     inputHex: PARALLEL_DATA,
     blockSize: 8,
     outputLen: 32,
@@ -1704,7 +1798,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST ParallelHash_samples.pdf, Sample #1",
   },
   {
-    algorithm: "parallelhash128",
+    algorithm: "parallelhash",
+    variant: "128",
     inputHex: PARALLEL_DATA,
     blockSize: 8,
     customization: "Parallel Data",
@@ -1713,7 +1808,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST ParallelHash_samples.pdf, Sample #2",
   },
   {
-    algorithm: "parallelhash256",
+    algorithm: "parallelhash",
+    variant: "256",
     inputHex: PARALLEL_DATA,
     blockSize: 8,
     outputLen: 64,
@@ -1723,7 +1819,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "NIST ParallelHash_samples.pdf, Sample #1 (256-bit strength)",
   },
   {
-    algorithm: "parallelhash256",
+    algorithm: "parallelhash",
+    variant: "256",
     inputHex: PARALLEL_DATA,
     blockSize: 8,
     customization: "Parallel Data",
@@ -1736,14 +1833,16 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
 
   // ── TurboSHAKE and KangarooTwelve ─────────────────────────────────────────
   {
-    algorithm: "turboshake128",
+    algorithm: "turboshake",
+    variant: "128",
     inputHex: "",
     outputLen: 32,
     hex: "1e415f1c5983aff2169217277d17bb538cd945a397ddec541f1ce41af2c1b74c",
     source: "draft-irtf-cfrg-kangarootwelve-17 §5, TurboSHAKE128(M=empty, D=0x1F, 32)",
   },
   {
-    algorithm: "turboshake256",
+    algorithm: "turboshake",
+    variant: "256",
     inputHex: "",
     outputLen: 64,
     hex:
@@ -1752,14 +1851,16 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "draft-irtf-cfrg-kangarootwelve-17 §5, TurboSHAKE256(M=empty, D=0x1F, 64)",
   },
   {
-    algorithm: "kt128",
+    algorithm: "kangarootwelve",
+    variant: "128",
     inputHex: "",
     outputLen: 32,
     hex: "1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e5",
     source: "XKCP tests/TestVectors/KangarooTwelve.txt, empty message and customisation",
   },
   {
-    algorithm: "kt128",
+    algorithm: "kangarootwelve",
+    variant: "128",
     inputHex: "",
     outputLen: 64,
     hex:
@@ -1768,7 +1869,8 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
     source: "XKCP tests/TestVectors/KangarooTwelve.txt, 64-byte output",
   },
   {
-    algorithm: "kt256",
+    algorithm: "kangarootwelve",
+    variant: "256",
     inputHex: "",
     outputLen: 64,
     hex:
@@ -1811,10 +1913,6 @@ export const SHA3_ADDON_VECTORS: readonly Sha3AddonVector[] = [
 export const NO_PUBLISHED_VECTOR: readonly string[] = [
   "blake224",
   "blake384",
-  "tuplehash128xof",
-  "tuplehash256xof",
-  "parallelhash128xof",
-  "parallelhash256xof",
   /**
    * XXH3 and XXH128, for a different reason from the four above.
    *
@@ -1825,8 +1923,7 @@ export const NO_PUBLISHED_VECTOR: readonly string[] = [
    * up to 5000 bytes, four seeds, and 320 streaming length/chunk combinations. That is broader
    * coverage than a quoted vector, and it is stated here rather than hidden behind a passing test.
    */
-  "xxh3",
-  "xxh128",
+  "xxhash",
   /**
    * FSB, and it is the only genuinely *unverifiable* entry on this list rather than an awkwardly-cited
    * one -- so it is worth being precise about how thoroughly that was established.
@@ -1851,8 +1948,7 @@ export const NO_PUBLISHED_VECTOR: readonly string[] = [
   "fsb",
   "poseidon",
   "rescueprime",
-  "haraka256",
-  "haraka512",
+  "haraka",
   "meowhash",
   "komihash",
   "nhash",
@@ -1861,7 +1957,6 @@ export const NO_PUBLISHED_VECTOR: readonly string[] = [
   "reinforced-concrete",
   "anemoi",
   "griffin",
-  "poseidon2",
   "mimc",
   "tip5",
   "sinsemilla",

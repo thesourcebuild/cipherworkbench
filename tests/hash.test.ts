@@ -118,18 +118,21 @@ describe("published XOF vectors", () => {
      * Keccak lengths (224, 384) whose own vectors come from the reference
      * implementation rather than a separate standards document.
      */
-    const pairs: [string, string][] = [
-      ["keccak-224", "sha3-224"],
-      ["keccak-256", "sha3-256"],
-      ["keccak-384", "sha3-384"],
-      ["keccak-512", "sha3-512"],
+    const pairs: [{ length: number; label: string }, string][] = [
+      [{ length: 28, label: "224" }, "sha3-224"],
+      [{ length: 32, label: "256" }, "sha3-256"],
+      [{ length: 48, label: "384" }, "sha3-384"],
+      [{ length: 64, label: "512" }, "sha3-512"],
     ];
 
-    for (const [keccak, sha3] of pairs) {
-      const k = await hashToolDefinition(keccak).compute(specFor(keccak), ascii("abc"));
+    for (const [keccakChoice, sha3] of pairs) {
+      const k = await hashToolDefinition("keccak").compute(
+        specFor("keccak", { [OPTION_OUTPUT_LENGTH]: String(keccakChoice.length) }),
+        ascii("abc"),
+      );
       const s = await hashToolDefinition(sha3).compute(specFor(sha3), ascii("abc"));
-      expect(k.bytes!.length, `${keccak} length`).toBe(s.bytes!.length);
-      expect(encodeHex(k.bytes!), `${keccak} must differ from ${sha3}`).not.toBe(
+      expect(k.bytes!.length, `keccak-${keccakChoice.label} length`).toBe(s.bytes!.length);
+      expect(encodeHex(k.bytes!), `keccak-${keccakChoice.label} must differ from ${sha3}`).not.toBe(
         encodeHex(s.bytes!),
       );
     }
@@ -379,9 +382,7 @@ describe("streaming equals one-shot", () => {
 
   it("only the TupleHash set declines to stream", () => {
     const declining = HASH_ALGORITHMS.filter((a) => !usesInputPanel(a)).map((a) => a.id);
-    expect(declining.sort()).toEqual(
-      ["tuplehash128", "tuplehash128xof", "tuplehash256", "tuplehash256xof"].sort(),
-    );
+    expect(declining.sort()).toEqual(["tuplehash"]);
     // And the manifest has to agree, since that is what the app actually reads.
     for (const id of declining) {
       const manifest = HASH_MANIFESTS.find((m) => m.id === id)!;
@@ -402,9 +403,9 @@ describe("streaming equals one-shot", () => {
    * it is a *group* field, so this asserts the group rather than the option.
    */
   it("puts the tuple in the Input panel rather than the Settings rail", () => {
-    const tool = hashToolDefinition("tuplehash128");
+    const tool = hashToolDefinition("tuplehash");
     const option = tool.catalogue.options.find((o) => o.id === OPTION_TUPLE);
-    expect(option, "tuplehash128 does not expose the tuple option").toBeDefined();
+    expect(option, "tuplehash does not expose the tuple option").toBeDefined();
     expect(tool.groups[option!.group]?.placement, "the tuple group's placement").toBe("input");
     // And the rest of the family's options stay in the rail, which is the half a blanket move breaks.
     const inputOptionIds = new Set([
@@ -700,21 +701,20 @@ describe("metadata and bindings agree", () => {
      * length. Two variants colliding, or a truncation matching its longer sibling, is what that looks
      * like from outside. See NO_PUBLISHED_VECTOR in `vectors.ts`.
      */
-    const ids = ["blake224", "blake256", "blake384", "blake512"];
-    const digests = new Map<string, string>();
-    for (const id of ids) {
-      const meta = HASH_ALGORITHMS.find((m) => m.id === id)!;
-      const hasher = requireHashBinding(id).create({ outputLen: meta.outputLen });
+    const lengths = [28, 32, 48, 64];
+    const digests = new Map<number, string>();
+    for (const len of lengths) {
+      const hasher = requireHashBinding("blake").create({ outputLen: len });
       hasher.update(ascii("abc"));
-      digests.set(id, encodeHex(hasher.digest()));
+      digests.set(len, encodeHex(hasher.digest()));
     }
     expect(new Set(digests.values()).size, "two BLAKE variants produced the same digest").toBe(
       4,
     );
     // And a shorter variant is not merely its sibling cut short, which is what sharing an IV
     // would produce.
-    expect(digests.get("blake256")!.startsWith(digests.get("blake224")!)).toBe(false);
-    expect(digests.get("blake512")!.startsWith(digests.get("blake384")!)).toBe(false);
+    expect(digests.get(32)!.startsWith(digests.get(28)!)).toBe(false);
+    expect(digests.get(64)!.startsWith(digests.get(48)!)).toBe(false);
   });
 
   it("declares the real block size — HMAC and the key-length rules depend on it", async () => {
@@ -743,64 +743,27 @@ describe("metadata and bindings agree", () => {
       "md6",
       "sm3",
       "whirlpool",
-      "xxh32",
-      "xxh64",
-      "ripemd128",
-      "ripemd256",
-      "ripemd320",
-      "xxh3",
-      "xxh128",
-      "streebog512",
-      "streebog256",
+      "xxhash",
+      "streebog",
       "asconhash256",
       "asconxof128",
-      "skein256",
-      "skein512",
-      "skein1024",
+      "skein",
       "tiger",
       "tiger2",
-      "groestl224",
-      "groestl256",
-      "groestl384",
-      "groestl512",
-      "jh224",
-      "jh256",
-      "jh384",
-      "jh512",
-      "cubehash224",
-      "cubehash256",
-      "cubehash384",
-      "cubehash512",
-      "luffa224",
-      "luffa256",
-      "luffa384",
-      "luffa512",
-      "fugue224",
-      "fugue256",
-      "fugue384",
-      "fugue512",
-      "shavite224",
-      "shavite256",
-      "shavite384",
-      "shavite512",
-      "shabal192",
-      "shabal224",
-      "shabal256",
-      "shabal384",
-      "shabal512",
+      "groestl",
+      "jh",
+      "cubehash",
+      "luffa",
+      "fugue",
+      "shavite",
+      "shabal",
       "belt-hash",
       "haval",
       "snefru",
       "gost94",
-      "gost94-crypto",
-      "fnv132",
-      "fnv1a32",
-      "fnv164",
-      "fnv1a64",
+      "fnv",
       "joaat",
-      "murmur3a",
-      "murmur3c",
-      "murmur3f",
+      "murmur3",
       /**
        * The five NIST lightweight hashes. Their `blockLen` is a sponge *rate*, not a compression block,
        * and none is offered under HMAC -- so nothing reads these numbers for padding. They are here for
@@ -812,20 +775,13 @@ describe("metadata and bindings agree", () => {
        * compression block and neither is offered under HMAC. Kupyna's and HAS-160's *are* real block
        * sizes -- 64 or 128 and 64 -- and are asserted below rather than waived.
        */
-      "radiogatun32",
-      "radiogatun64",
+      "radiogatun",
       "panama",
-      "kupyna256",
-      "kupyna384",
-      "kupyna512",
+      "kupyna",
       "has160",
-      "lsh224",
-      "lsh256",
-      "lsh384",
-      "lsh512",
+      "lsh",
       "xoodyak-hash",
-      "esch256",
-      "esch384",
+      "esch",
       "photonbeetle-hash",
       "romulus-h",
       /**
@@ -837,18 +793,9 @@ describe("metadata and bindings agree", () => {
        * words through a linear code. HMAC is not offered over any of the three -- none of the three
        * submissions specifies a keyed construction, and no HMAC value for them exists to check.
        */
-      "echo224",
-      "echo256",
-      "echo384",
-      "echo512",
-      "hamsi224",
-      "hamsi256",
-      "hamsi384",
-      "hamsi512",
-      "simd224",
-      "simd256",
-      "simd384",
-      "simd512",
+      "echo",
+      "hamsi",
+      "simd",
       /**
        * The five non-cryptographic families. None is offered under HMAC and none has a compression
        * block in the Merkle-Damgard sense, so these numbers describe a *stride*: CityHash's 64-byte
@@ -894,8 +841,7 @@ describe("metadata and bindings agree", () => {
       "fsb",
       "poseidon",
       "rescueprime",
-      "haraka256",
-      "haraka512",
+      "haraka",
       "meowhash",
       "komihash",
       "nhash",
@@ -904,7 +850,6 @@ describe("metadata and bindings agree", () => {
       "reinforced-concrete",
       "anemoi",
       "griffin",
-      "poseidon2",
       "mimc",
       "tip5",
       "sinsemilla",
@@ -933,41 +878,27 @@ describe("metadata and bindings agree", () => {
        * Merkle-Damgard applies. HMAC is deliberately not offered over it, so no padding reads this.
        */
       md6: 512,
-      // DSTU 7564: eight or sixteen 64-bit columns, so 64 bytes at 256 bits and 128 above it.
-      kupyna256: 64,
-      kupyna384: 128,
-      kupyna512: 128,
+      // DSTU 7564: 64 bytes default block length.
+      kupyna: 64,
       // TTAS.KO-12.0011 uses SHA-1's 512-bit block.
       has160: 64,
-      // KS X 3262: 128 bytes for the 256-bit family and 256 for the 512-bit one.
-      lsh224: 128,
-      lsh256: 128,
-      lsh384: 256,
-      lsh512: 256,
+      // KS X 3262: 128 bytes default block length.
+      lsh: 128,
       sm3: 64,
       whirlpool: 64,
-      // Not compression blocks — xxHash's stripe widths.
-      xxh32: 16,
-      xxh64: 32,
       // All four RIPEMD widths share MD4's 512-bit block; only the state and round count differ.
-      ripemd128: 64,
-      ripemd256: 64,
-      ripemd320: 64,
-      // XXH3's long path consumes 64-byte stripes; that is the nearest thing it has to a block.
-      xxh3: 64,
-      xxh128: 64,
+      ripemd: 64,
+      // xxHash's long path consumes 64-byte stripes; that is the nearest thing it has to a block.
+      xxhash: 64,
       // Streebog compresses 512 bits at a time at both output lengths -- GOST R 34.11-2012 changes
       // the initialising value between the two, not the block.
-      streebog512: 64,
-      streebog256: 64,
+      streebog: 64,
       // Ascon's sponge rate, which is the nearest thing it has to a block: 8 bytes absorbed between
       // permutations, for both the hash and the XOF.
       asconhash256: 8,
       asconxof128: 8,
       // Skein's block is its state, which is what its name counts.
-      skein256: 32,
-      skein512: 64,
-      skein1024: 128,
+      skein: 64,
       // Tiger compresses 512 bits at a time, like MD4 and the SHA-2 family below 384 bits, whatever
       // its pass count or output width.
       tiger: 64,
@@ -977,65 +908,37 @@ describe("metadata and bindings agree", () => {
        * variants and 1024 for the long ones -- JH's is 512 bits at every output length, and
        * CubeHash's is the 32 bytes its name's second number gives.
        */
-      groestl224: 64,
-      groestl256: 64,
-      groestl384: 128,
-      groestl512: 128,
-      jh224: 64,
-      jh256: 64,
-      jh384: 64,
-      jh512: 64,
-      cubehash224: 32,
-      cubehash256: 32,
-      cubehash384: 32,
-      cubehash512: 32,
+      groestl: 64,
+      jh: 64,
+      cubehash: 32,
       // Luffa absorbs 32 bytes at a time whatever its lane count.
-      luffa224: 32,
-      luffa256: 32,
-      luffa384: 32,
-      luffa512: 32,
+      luffa: 32,
       /**
        * Fugue has no block: it absorbs one 32-bit word per round, so four bytes is the honest
        * answer here rather than a block size it does not have.
        */
-      fugue224: 4,
-      fugue256: 4,
-      fugue384: 4,
-      fugue512: 4,
+      fugue: 4,
       /**
        * Shabal's block is 64 bytes at every output length -- unusually for this family, the length
        * changes only the initial values and how much of B is read out at the end.
        */
-      shabal192: 64,
-      shabal224: 64,
-      shabal256: 64,
-      shabal384: 64,
-      shabal512: 64,
+      shabal: 64,
       // STB 34.101.31 compresses 32 bytes at a time -- half of what most of this list uses.
       "belt-hash": 32,
       // SHAvite-3's block is the message that keys its cipher: 64 bytes short, 128 long.
-      shavite224: 64,
-      shavite256: 64,
-      shavite384: 128,
-      shavite512: 128,
+      shavite: 64,
       // HAVAL's block is 1024 bits -- twice everything else here.
       // All fifteen HAVAL functions share the 128-byte block; only the state folding differs.
       haval: 128,
       // Snefru and GOST both compress 256 bits at a time.
       snefru: 32,
       gost94: 32,
-      "gost94-crypto": 32,
       // FNV and joaat consume one byte at a time; there is no block, and 1 says so rather than
       // pretending otherwise.
-      fnv132: 1,
-      fnv1a32: 1,
-      fnv164: 1,
-      fnv1a64: 1,
+      fnv: 1,
       joaat: 1,
       // MurmurHash3's blocks: 4 bytes for the 32-bit variant, 16 for both 128-bit ones.
-      murmur3a: 4,
-      murmur3c: 16,
-      murmur3f: 16,
+      murmur3: 4,
     };
     for (const [id, blockLen] of Object.entries(expected)) {
       expect(requireHashAlgorithm(id).blockLen, id).toBe(blockLen);
@@ -1189,10 +1092,11 @@ describe("catalogue", () => {
     }
   });
 
-  it("gives a variant select to exactly the six families that have named variants", () => {
+  it("gives a variant select to exactly the seven families that have named variants", () => {
     /**
-     * MetroHash's two constant sets, t1ha's two versions, Quark's four instances and rapidhash's four
-     * *published versions*. None is an output length nor a pass count, which is why `variants` exists.
+     * MetroHash's two constant sets, t1ha's two versions, Quark's four instances, rapidhash's four
+     * *published versions*, and GOST R 34.11-94's test/cryptopro S-box variants. None is an output
+     * length nor a pass count, which is why `variants` exists.
      *
      * rapidhash is the case that stretched the field furthest: its four variants are four separately
      * published revisions of one algorithm that agree on almost no input, so the variant is not a
@@ -1201,12 +1105,25 @@ describe("catalogue", () => {
      */
     const withVariants = HASH_ALGORITHMS.filter((a) => a.variants);
     expect(withVariants.map((a) => a.id).sort()).toEqual([
+      "cshake",
       "farmhash",
+      "fnv",
+      "gost94",
+      "haraka",
+      "kangarootwelve",
       "metrohash",
       "metrohash128crc",
+      "murmur3",
+      "parallelhash",
+      "poseidon",
       "quark",
+      "radiogatun",
       "rapidhash",
+      "shake",
       "t1ha",
+      "tuplehash",
+      "turboshake",
+      "xxhash",
     ]);
     /**
      * A variant-carried output length is all-or-nothing within an algorithm.
@@ -1249,10 +1166,7 @@ describe("catalogue", () => {
       "metrohash128crc",
       "murmur1",
       "murmur2",
-      "xxh128",
-      "xxh3",
-      "xxh32",
-      "xxh64",
+      "xxhash",
     ]);
   });
 });
@@ -1348,7 +1262,7 @@ describe("all variants", () => {
      * question and answers it badly -- MD5 next to MurmurHash3 invites a comparison between things
      * with nothing to do with each other.
      */
-    for (const id of ["md5", "sha256", "sha3-256", "blake2b", "shake128"]) {
+    for (const id of ["md5", "sha256", "sha3-256", "blake2b"]) {
       const { rows } = hashToolDefinition(id).variants!(specFor(id));
       expect(
         rows.map((r) => r.id),
@@ -1381,46 +1295,134 @@ describe("all variants", () => {
 
   it("offers nothing for an algorithm with no siblings", () => {
     // A single row would restate the Result panel above it. SHA-1 is its own category.
-    for (const id of ["sha1", "whirlpool", "sm3"]) {
+    for (const id of ["sha1", "whirlpool", "sm3", "fsb", "panama", "has160", "belt-hash"]) {
       expect(hashToolDefinition(id).variants!(specFor(id)).rows, id).toEqual([]);
     }
   });
 
-  it("includes all four TupleHash variants and computes over the tuple options", async () => {
-    const spec = specFor("tuplehash128", {
-      [OPTION_TUPLE]: ["000102", "101112131415"],
-      tupleEncoding: "hex",
-    });
-    const table = hashToolDefinition("tuplehash128").variants!(spec);
-    expect(table.columns).toEqual(["Output", "Block"]);
-    expect(table.rows.map((r) => r.id)).toEqual([
-      "tuplehash128",
-      "tuplehash256",
+  it("offers internal variants for consolidated multi-variant algorithms", () => {
+    expect(hashToolDefinition("shake").variants!(specFor("shake")).rows.map((r) => r.id)).toEqual([
+      "shake128",
+      "shake256",
+    ]);
+    expect(hashToolDefinition("poseidon").variants!(specFor("poseidon")).rows.map((r) => r.id)).toEqual([
+      "poseidon",
+      "poseidon2",
+    ]);
+    expect(hashToolDefinition("turboshake").variants!(specFor("turboshake")).rows.map((r) => r.id)).toEqual([
+      "turboshake128",
+      "turboshake256",
+    ]);
+    expect(hashToolDefinition("kangarootwelve").variants!(specFor("kangarootwelve")).rows.map((r) => r.id)).toEqual([
+      "kt128",
+      "kt256",
+    ]);
+    expect(hashToolDefinition("tuplehash").variants!(specFor("tuplehash")).rows.map((r) => r.id)).toEqual([
       "tuplehash128xof",
       "tuplehash256xof",
+      "tuplehash128",
+      "tuplehash256",
     ]);
+    expect(hashToolDefinition("parallelhash").variants!(specFor("parallelhash")).rows.map((r) => r.id)).toEqual([
+      "parallelhash128xof",
+      "parallelhash256xof",
+      "parallelhash128",
+      "parallelhash256",
+    ]);
+    expect(hashToolDefinition("groestl").variants!(specFor("groestl")).rows.map((r) => r.id)).toEqual([
+      "groestl224",
+      "groestl256",
+      "groestl384",
+      "groestl512",
+    ]);
+    expect(hashToolDefinition("skein").variants!(specFor("skein")).rows.map((r) => r.id)).toEqual([
+      "skein256",
+      "skein512",
+      "skein1024",
+    ]);
+    expect(hashToolDefinition("xxhash").variants!(specFor("xxhash")).rows.map((r) => r.id)).toEqual([
+      "xxh32",
+      "xxh64",
+      "xxh3",
+      "xxh128",
+    ]);
+  });
 
-    const results = await runStreams(
-      table.rows.map((r) => r.stream()),
-      (async function* () {
-        yield new Uint8Array(0);
-      })(),
-    );
-    expect(results.every((r) => r.bytes !== undefined)).toBe(true);
-    expect(results[0]!.bytes).toHaveLength(32);
-    expect(results[1]!.bytes).toHaveLength(64);
-    expect(results[2]!.bytes).toHaveLength(32);
-    expect(results[3]!.bytes).toHaveLength(64);
-
-    const expected128 = await hashToolDefinition("tuplehash128").compute(
-      spec,
-      new Uint8Array(0),
-    );
-    expect(encodeHex(results[0]!.bytes!)).toBe(encodeHex(expected128.bytes!));
+  it("computes over the tuple options for TupleHash variants", async () => {
+    const spec = specFor("tuplehash", {
+      [OPTION_TUPLE]: ["000102", "101112131415"],
+      tupleEncoding: "hex",
+      [OPTION_HASH_VARIANT]: "128",
+    });
+    const tool = hashToolDefinition("tuplehash");
+    const res128 = await tool.compute(spec, new Uint8Array(0));
+    expect(res128.bytes).toHaveLength(32);
     // Sample #1 from NIST TupleHash_samples.pdf
-    expect(encodeHex(results[0]!.bytes!)).toBe(
+    expect(encodeHex(res128.bytes!)).toBe(
       "c5d8786c1afb9b82111ab34b65b2c0048fa64e6d48e263264ce1707d3ffc8ed1",
     );
+
+    const res256 = await tool.compute(
+      {
+        ...spec,
+        options: {
+          ...spec.options,
+          [OPTION_HASH_VARIANT]: "256",
+          [OPTION_OUTPUT_LENGTH]: 64,
+        },
+      },
+      new Uint8Array(0),
+    );
+    expect(res256.bytes).toHaveLength(64);
+
+    const res128xof = await tool.compute(
+      {
+        ...spec,
+        options: {
+          ...spec.options,
+          [OPTION_HASH_VARIANT]: "128xof",
+          [OPTION_OUTPUT_LENGTH]: 48,
+        },
+      },
+      new Uint8Array(0),
+    );
+    expect(res128xof.bytes).toHaveLength(48);
+
+    const res256xof = await tool.compute(
+      {
+        ...spec,
+        options: {
+          ...spec.options,
+          [OPTION_HASH_VARIANT]: "256xof",
+          [OPTION_OUTPUT_LENGTH]: 48,
+        },
+      },
+      new Uint8Array(0),
+    );
+    expect(res256xof.bytes).toHaveLength(48);
+  });
+
+  it("computes distinct hashes for Poseidon and Poseidon2 variants", async () => {
+    const tool = hashToolDefinition("poseidon");
+    const input = ascii("hello zk proof");
+
+    const resPoseidon = await tool.compute(
+      specFor("poseidon", { [OPTION_HASH_VARIANT]: "poseidon" }),
+      input,
+    );
+    const resPoseidon2 = await tool.compute(
+      specFor("poseidon", { [OPTION_HASH_VARIANT]: "poseidon2" }),
+      input,
+    );
+
+    expect(resPoseidon.bytes).toHaveLength(32);
+    expect(resPoseidon2.bytes).toHaveLength(32);
+    expect(encodeHex(resPoseidon.bytes!)).not.toBe(encodeHex(resPoseidon2.bytes!));
+
+    // Backward compatibility: resolving poseidon2 via legacy alias
+    const toolLegacy = hashToolDefinition("poseidon2");
+    const resLegacy = await toolLegacy.compute(specFor("poseidon2"), input);
+    expect(encodeHex(resLegacy.bytes!)).toBe(encodeHex(resPoseidon2.bytes!));
   });
 
   it("states each row's own output length, which is what settles a family", () => {
@@ -1630,32 +1632,20 @@ async function nobleBlockLens(): Promise<Map<string, number>> {
     // The original BLAKE: two cores, 64-byte blocks for the 32-bit pair and 128 for the 64-bit pair,
     // which is the one thing a wrong IV would not change and so is worth reading off the
     // implementation rather than trusting four hand-copied numbers.
-    ["blake224", blake1.blake224.blockLen],
-    ["blake256", blake1.blake256.blockLen],
-    ["blake384", blake1.blake384.blockLen],
-    ["blake512", blake1.blake512.blockLen],
+    ["blake", blake1.blake256.blockLen],
     // The SHA-3 derived functions. Their block length is the sponge rate of the SHAKE they are
     // built on -- 168 for the 128-bit strength, 136 for the 256-bit -- which is worth
-    // cross-checking rather than trusting, because it is copied into 14 metadata entries by hand.
-    ["cshake128", addons.cshake128.blockLen],
-    ["cshake256", addons.cshake256.blockLen],
-    ["tuplehash128", addons.tuplehash128.blockLen],
-    ["tuplehash256", addons.tuplehash256.blockLen],
-    ["tuplehash128xof", addons.tuplehash128xof.blockLen],
-    ["tuplehash256xof", addons.tuplehash256xof.blockLen],
-    ["parallelhash128", addons.parallelhash128.blockLen],
-    ["parallelhash256", addons.parallelhash256.blockLen],
-    ["parallelhash128xof", addons.parallelhash128xof.blockLen],
-    ["parallelhash256xof", addons.parallelhash256xof.blockLen],
-    ["turboshake128", addons.turboshake128.blockLen],
-    ["turboshake256", addons.turboshake256.blockLen],
-    ["kt128", addons.kt128.blockLen],
-    ["kt256", addons.kt256.blockLen],
+    // cross-checking rather than trusting, because it is copied into metadata entries by hand.
+    ["cshake", addons.cshake128.blockLen],
+    ["tuplehash", addons.tuplehash128.blockLen],
+    ["parallelhash", addons.parallelhash128.blockLen],
+    ["turboshake", addons.turboshake128.blockLen],
+    ["kangarootwelve", addons.kt128.blockLen],
 
     ["md5", legacy.md5.blockLen],
     ["sha1", legacy.sha1.blockLen],
     ["md5-sha1", legacy.md5.blockLen],
-    ["ripemd160", legacy.ripemd160.blockLen],
+    ["ripemd", legacy.ripemd160.blockLen],
     ["sha224", sha2.sha224.blockLen],
     ["sha256", sha2.sha256.blockLen],
     ["sha384", sha2.sha384.blockLen],
@@ -1666,12 +1656,8 @@ async function nobleBlockLens(): Promise<Map<string, number>> {
     ["sha3-256", sha3.sha3_256.blockLen],
     ["sha3-384", sha3.sha3_384.blockLen],
     ["sha3-512", sha3.sha3_512.blockLen],
-    ["keccak-224", sha3.keccak_224.blockLen],
-    ["keccak-256", sha3.keccak_256.blockLen],
-    ["keccak-384", sha3.keccak_384.blockLen],
-    ["keccak-512", sha3.keccak_512.blockLen],
-    ["shake128", sha3.shake128.blockLen],
-    ["shake256", sha3.shake256.blockLen],
+    ["keccak", sha3.keccak_256.blockLen],
+    ["shake", sha3.shake128.blockLen],
     ["blake2b", blake2.blake2b.blockLen],
     ["blake2s", blake2.blake2s.blockLen],
     ["blake3", blake3.blake3.blockLen],
@@ -1701,6 +1687,7 @@ describe("SHA-3 derived functions", () => {
         options[OPTION_CUSTOMIZATION] = vector.customization;
         options.customizationEncoding = "utf-8";
       }
+      if (vector.variant !== undefined) options[OPTION_HASH_VARIANT] = vector.variant;
       if (vector.blockSize !== undefined) options[OPTION_BLOCK_SIZE] = vector.blockSize;
       if (vector.tuple !== undefined) {
         options[OPTION_TUPLE] = [...vector.tuple];
@@ -1726,7 +1713,7 @@ describe("OpenSSL Message Digest (dgst) CLI Command Parity", () => {
       { id: "blake2s", expectedFlag: "-blake2s256" },
       { id: "md4", expectedFlag: "-md4" },
       { id: "md5", expectedFlag: "-md5" },
-      { id: "ripemd160", expectedFlag: "-rmd160" },
+      { id: "ripemd", expectedFlag: "-rmd160" },
       { id: "sha1", expectedFlag: "-sha1" },
       { id: "sha224", expectedFlag: "-sha224" },
       { id: "sha256", expectedFlag: "-sha256" },

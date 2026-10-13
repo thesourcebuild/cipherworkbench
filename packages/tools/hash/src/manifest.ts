@@ -61,3 +61,5 @@ function toManifest(meta: HashAlgorithmMeta): ToolManifest {
  * from here (see `catalogue/algorithm-meta.ts`).
  */
 export const HASH_MANIFESTS: readonly ToolManifest[] = HASH_ALGORITHMS.map(toManifest);
+
+export { LEGACY_HASH_ALIASES } from "./catalogue/algorithm-meta";

@@ -77,10 +77,16 @@ describe("TOOL_MANIFESTS", () => {
     }
   });
 
-  it("registers all four original-padding Keccak digests", async () => {
+  it("registers original-padding Keccak digest with all four output lengths", async () => {
+    expect(getManifest("keccak")).toMatchObject({ id: "keccak", family: "hash", category: "Keccak" });
+    const tool = await loadTool("keccak");
+    expect(tool).toMatchObject({ id: "keccak" });
+    const meta = (tool as { catalogue?: unknown }).catalogue;
+    expect(meta).toBeDefined();
+
     for (const id of ["keccak-224", "keccak-256", "keccak-384", "keccak-512"]) {
-      expect(getManifest(id)).toMatchObject({ id, family: "hash", category: "Keccak" });
-      await expect(loadTool(id)).resolves.toMatchObject({ id });
+      expect(getManifest(id)).toMatchObject({ id: "keccak", family: "hash", category: "Keccak" });
+      await expect(loadTool(id)).resolves.toMatchObject({ id: "keccak" });
     }
   });
 
