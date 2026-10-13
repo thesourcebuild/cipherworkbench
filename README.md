@@ -4,7 +4,7 @@
 
 ## What it does today
 
-Cipher Workbench ships **476 tools** organized across 12 families:
+Cipher Workbench ships **400+ tools** organized across 12 families:
 
 | Family | Tools | Algorithms & Capabilities |
 |---|---|---|
