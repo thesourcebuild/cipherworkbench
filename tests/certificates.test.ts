@@ -1270,4 +1270,35 @@ describe("Full mTLS Suite Generator", () => {
       expect(result.working).toContain("vault.company.lan");
     });
   });
+
+  describe("PKI Architecture Guide synchronization", () => {
+    it("keeps in-app tool guide and web documentation page in sync with server.crt conventions", async () => {
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+
+      const toolGuidePath = path.resolve(
+        __dirname,
+        "../packages/tools/certificates/guide/guide.mdx",
+      );
+      const webGuidePath = path.resolve(__dirname, "../apps/web/app/guides/page.mdx");
+
+      expect(fs.existsSync(toolGuidePath), "tool guide file exists").toBe(true);
+      expect(fs.existsSync(webGuidePath), "web guide file exists").toBe(true);
+
+      const toolGuide = fs.readFileSync(toolGuidePath, "utf8").replace(/\r\n/g, "\n").trim();
+      const webGuide = fs.readFileSync(webGuidePath, "utf8").replace(/\r\n/g, "\n").trim();
+
+      // Ensure both guides stay completely synchronized
+      expect(toolGuide).toBe(webGuide);
+
+      // Ensure neither guide contains stale certificate.crt or cert.crt references
+      expect(toolGuide).not.toContain("certificate.crt");
+      expect(toolGuide).not.toContain("verify=\"cert.crt\"");
+
+      // Ensure server.crt is consistently documented for server leaves
+      expect(toolGuide).toContain("server.crt");
+      expect(toolGuide).toContain("verify=\"server.crt\"");
+    });
+  });
 });
+
