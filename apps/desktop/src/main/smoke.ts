@@ -3143,14 +3143,14 @@ function checkStreebog(window: BrowserWindow): Promise<ComputeProbe> {
          // Assigned before the break test, not after: a tool an earlier probe left already
          // selected must still record its row here, or the check below reports it missing from a
          // sidebar it is sitting in. That shipped for one run and failed deterministically.
-         button = document.querySelector('[data-ocs-tool="streebog256"]') || button;
-         if (document.querySelector('[data-ocs-tool="streebog256"][aria-current="true"]')) break;
+         button = document.querySelector('[data-ocs-tool="streebog"]') || button;
+         if (document.querySelector('[data-ocs-tool="streebog"][aria-current="true"]')) break;
          if (button) button.click();
          await sleep(100);
        }
-       if (!button) return { error: "the streebog256 tool is not listed in the sidebar" };
-       if (!(await waitFor('[data-ocs-tool="streebog256"][aria-current="true"]', 10000))) {
-         return { error: "clicking streebog256 did not select it" };
+       if (!button) return { error: "the streebog tool is not listed in the sidebar" };
+       if (!(await waitFor('[data-ocs-tool="streebog"][aria-current="true"]', 10000))) {
+         return { error: "clicking streebog did not select it" };
        }
 
        // The previous probe left the input encoding on Shift_JIS, which would change the bytes.
