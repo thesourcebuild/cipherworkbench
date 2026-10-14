@@ -156,9 +156,11 @@ export function ResultPanel({
     ? presentation.totalBytes !== undefined
       ? `${presentation.totalBytes} bytes total; previewing ${presentation.totalBytes - (presentation.omittedBytes ?? 0)} bytes; ${presentation.omittedBytes ?? 0} bytes omitted`
       : `${presentation.totalCharacters ?? 0} characters total; previewing ${(presentation.totalCharacters ?? 0) - (presentation.omittedCharacters ?? 0)} characters; ${presentation.omittedCharacters ?? 0} characters omitted`
-    : `${resultLen} ${resultLen === 1 ? "byte" : "bytes"} · ${primary.length} ${
-        primary.length === 1 ? "character" : "characters"
-      } as shown`;
+    : primary.length === 0
+      ? ""
+      : `${resultLen} ${resultLen === 1 ? "byte" : "bytes"} · ${primary.length} ${
+          primary.length === 1 ? "character" : "characters"
+        } as shown`;
 
   // Dimmed, not replaced: during the debounce window the value on screen is still the right answer
   // for the input that produced it, and blanking it on every keystroke is what a spinner here would

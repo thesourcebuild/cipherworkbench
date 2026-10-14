@@ -52,7 +52,7 @@ export function presentResult(
   }
 
   const bytes = result.bytes;
-  if (!bytes) return { value: "", truncated: false };
+  if (!bytes || bytes.length === 0) return { value: "", truncated: false };
 
   const prefix = (value: string) => (value === "" ? value : `${hexPrefix}${value}`);
   if (bytes.length <= RESULT_PREVIEW_BYTES) {

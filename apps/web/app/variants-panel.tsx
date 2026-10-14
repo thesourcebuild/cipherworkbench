@@ -87,7 +87,11 @@ export function VariantsPanel({
 
   const shown = useMemo(() => {
     const out = new Map<string, string>();
-    for (const [id, bytes] of values) out.set(id, encodeOutput(bytes, encoding));
+    for (const [id, bytes] of values) {
+      if (bytes && bytes.length > 0) {
+        out.set(id, encodeOutput(bytes, encoding));
+      }
+    }
     return out;
   }, [values, encoding]);
 
@@ -99,7 +103,7 @@ export function VariantsPanel({
   const copyText = useMemo(() => {
     const head = ["Model", "Result", ...columns].join("\t");
     const body = rows.map((row) =>
-      [row.label, shown.get(row.id) ?? "", ...row.cells].join("\t"),
+      [row.label, shown.get(row.id) || "—", ...row.cells].join("\t"),
     );
     return [head, ...body].join("\n");
   }, [columns, rows, shown]);
@@ -277,7 +281,9 @@ export function VariantsPanel({
                           stale && "opacity-50",
                         )}
                       >
-                        {shown.get(row.id) ?? (
+                        {shown.get(row.id) ? (
+                          shown.get(row.id)
+                        ) : (
                           <span className="text-slate-300 dark:text-slate-600">—</span>
                         )}
                       </span>

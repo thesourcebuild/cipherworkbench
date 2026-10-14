@@ -199,7 +199,7 @@ export function useVariants(
           const next = new Map<string, Uint8Array>();
           results.forEach((result, index) => {
             const row = table.rows[index];
-            if (row && result.bytes) next.set(row.id, result.bytes);
+            if (row && result.bytes && result.bytes.length > 0) next.set(row.id, result.bytes);
           });
           setValues(next);
           setRanKey(inputKey);

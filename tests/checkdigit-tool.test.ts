@@ -232,6 +232,67 @@ describe("check digit tool suite", () => {
     });
   });
 
+  describe("empty and arbitrary text handling", () => {
+    const loremIpsum =
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean eu varius leo, at iaculis orci. " +
+      "Nunc a risus fringilla, suscipit turpis ac, gravida sem. Ut at metus nec mi laoreet posuere et et nibh.";
+
+    it("emits empty bytes and dash field when input has no digits/valid payload", async () => {
+      for (const tool of CHECK_DIGIT_TOOLS) {
+        const def = checkDigitToolDefinition(tool.id);
+        const res = await def.compute(specFor(tool.id), ascii(loremIpsum));
+        expect(res.error).toBeUndefined();
+        expect(res.bytes).toBeDefined();
+        expect(res.bytes!.length, `${tool.id} bytes length`).toBe(0);
+
+        const checkField = res.fields?.find(
+          (f: ToolResultField) => f.label === "Check digit" || f.label === "Check digits",
+        );
+        expect(checkField?.value, `${tool.id} check field`).toBe("—");
+      }
+    });
+
+    it("variants table produces 0-length bytes for all tools on prose input", async () => {
+      const table = checkDigitToolDefinition("luhn").variants!(specFor("luhn"));
+      const results = await runStreams(
+        table.rows.map((row: ToolVariant) => row.stream()),
+        single(ascii(loremIpsum)),
+      );
+      for (const [index, row] of table.rows.entries()) {
+        expect(results[index]!.bytes?.length, `row ${row.id}`).toBe(0);
+      }
+    });
+
+    it("rejects overlength inputs for fixed-length formats", async () => {
+      const longDigits = "12345678901234567890";
+      // ISBN > 13
+      const isbn = await checkDigitToolDefinition("isbn").compute(specFor("isbn"), ascii(longDigits));
+      expect(isbn.bytes?.length).toBe(0);
+      expect(isbn.fields?.find((f) => f.label === "Check digit")?.value).toBe("—");
+
+      // ABA Routing > 9
+      const aba = await checkDigitToolDefinition("aba-routing").compute(specFor("aba-routing"), ascii(longDigits));
+      expect(aba.bytes?.length).toBe(0);
+      expect(aba.fields?.find((f) => f.label === "Check digit")?.value).toBe("—");
+
+      // CUSIP & ISIN > 12
+      const cusip = await checkDigitToolDefinition("cusip-isin").compute(specFor("cusip-isin"), ascii(longDigits));
+      expect(cusip.bytes?.length).toBe(0);
+      expect(cusip.fields?.find((f) => f.label === "Check digit")?.value).toBe("—");
+
+      // SEDOL > 9
+      const sedol = await checkDigitToolDefinition("sedol").compute(specFor("sedol"), ascii(longDigits));
+      expect(sedol.bytes?.length).toBe(0);
+      expect(sedol.fields?.find((f) => f.label === "Check digit")?.value).toBe("—");
+
+      // IBAN > 34
+      const longIban = "DE89".padEnd(40, "0");
+      const iban = await checkDigitToolDefinition("iban").compute(specFor("iban"), ascii(longIban));
+      expect(iban.bytes?.length).toBe(0);
+      expect(iban.fields?.find((f) => f.label === "Check digits")?.value).toBe("—");
+    });
+  });
+
   describe("lint rules", () => {
     it("CD001 fires on every check digit tool", () => {
       expect(RULE_CODES).toEqual(["CD001"]);

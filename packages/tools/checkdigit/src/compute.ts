@@ -48,7 +48,7 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
       // Flush any remaining characters
       text += decoder.decode();
       const fields: ToolResultField[] = [];
-      let checkByte = 0;
+      let checkByte: number | undefined = undefined;
 
       switch (meta.kind) {
         case "verhoeff": {
@@ -157,7 +157,13 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
               value: "—",
               hint: "Enter 9 digits for ISBN-10 or 12 digits for ISBN-13 / EAN-13.",
             });
-          } else if (digits.length >= 12) {
+          } else if (digits.length > 13) {
+            fields.push({
+              label: "Check digit",
+              value: "—",
+              hint: `Input has ${digits.length} digits; ISBN requires 9-10 (ISBN-10) or 12-13 (ISBN-13) digits.`,
+            });
+          } else if (digits.length === 12 || digits.length === 13) {
             const cd = isbn13Compute(digits.slice(0, 12));
             checkByte = cd;
             fields.push({
@@ -181,7 +187,7 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
                 });
               }
             }
-          } else if (digits.length >= 9) {
+          } else if (digits.length === 9 || digits.length === 10) {
             const cdStr = isbn10Compute(digits.slice(0, 9));
             const cdVal = cdStr === "X" ? 10 : parseInt(cdStr, 10) || 0;
             checkByte = cdVal;
@@ -207,7 +213,7 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
             fields.push({
               label: "Check digit",
               value: "—",
-              hint: `Input has ${digits.length} digits; ISBN requires 9 (ISBN-10) or 12 (ISBN-13) payload digits.`,
+              hint: `Input has ${digits.length} digits; ISBN requires 9-10 (ISBN-10) or 12-13 (ISBN-13) digits.`,
             });
           }
           break;
@@ -221,25 +227,46 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
               value: "—",
               hint: "Enter bank account string to compute or validate ISO 13616 IBAN check digits.",
             });
-          } else {
-            const res = ibanValidate(clean);
-            const cdStr = res.checkDigits || res.expectedCheckDigits || "0";
-            checkByte = parseInt(cdStr, 10) || 0;
+          } else if (clean.length > 34) {
             fields.push({
               label: "Check digits",
-              value: cdStr.padStart(2, "0"),
-              hint: "ISO 13616 MOD 97-10 two-digit check value.",
+              value: "—",
+              hint: `Input has ${clean.length} characters; exceeds maximum IBAN length of 34 characters.`,
             });
-            fields.push({
-              label: "Status",
-              value: res.valid ? "Valid IBAN" : "Invalid",
-              hint: res.reason ?? (res.valid ? "Valid IBAN checksum and country structure." : "Checksum mismatch."),
-            });
-            if (res.country) {
+          } else {
+            const res = ibanValidate(clean);
+            const rawCheckDigits =
+              res.checkDigits && /^\d{2}$/.test(res.checkDigits)
+                ? res.checkDigits
+                : res.expectedCheckDigits && /^\d{2}$/.test(res.expectedCheckDigits)
+                  ? res.expectedCheckDigits
+                  : undefined;
+            if (rawCheckDigits !== undefined && /^\d+$/.test(rawCheckDigits)) {
+              checkByte = parseInt(rawCheckDigits, 10);
               fields.push({
-                label: "Country",
-                value: res.country,
-                hint: "ISO 3166-1 alpha-2 country code.",
+                label: "Check digits",
+                value: rawCheckDigits.padStart(2, "0"),
+                hint: "ISO 13616 MOD 97-10 two-digit check value.",
+              });
+              fields.push({
+                label: "Status",
+                value: res.valid ? "Valid IBAN" : "Invalid",
+                hint:
+                  res.reason ??
+                  (res.valid ? "Valid IBAN checksum and country structure." : "Checksum mismatch."),
+              });
+              if (res.country) {
+                fields.push({
+                  label: "Country",
+                  value: res.country,
+                  hint: "ISO 3166-1 alpha-2 country code.",
+                });
+              }
+            } else {
+              fields.push({
+                label: "Check digits",
+                value: "—",
+                hint: res.reason ?? "Invalid IBAN structure.",
               });
             }
           }
@@ -254,8 +281,14 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
               value: "—",
               hint: "Enter 8 digits to compute or 9 digits to validate an ABA routing number.",
             });
+          } else if (digits.length > 9) {
+            fields.push({
+              label: "Check digit",
+              value: "—",
+              hint: `Input has ${digits.length} digits; ABA routing number must be 8 or 9 digits.`,
+            });
           } else if (digits.length >= 8) {
-            const cd = abaRoutingCheckDigit(digits);
+            const cd = abaRoutingCheckDigit(digits.slice(0, 8));
             checkByte = cd;
             fields.push({
               label: "Check digit",
@@ -288,8 +321,14 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
               value: "—",
               hint: "Enter 8 characters for CUSIP or 11 characters for ISIN.",
             });
-          } else if (clean.length >= 11) {
-            const cd = isinCheckDigit(clean);
+          } else if (clean.length > 12) {
+            fields.push({
+              label: "Check digit",
+              value: "—",
+              hint: `Input has ${clean.length} characters; exceeds maximum length (9 characters for CUSIP, 12 characters for ISIN).`,
+            });
+          } else if (clean.length === 11 || clean.length === 12) {
+            const cd = isinCheckDigit(clean.slice(0, 11));
             checkByte = cd;
             fields.push({
               label: "Check digit",
@@ -304,8 +343,8 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
                 hint: val.reason ?? "ISO 6166 international securities identification number.",
               });
             }
-          } else if (clean.length >= 8) {
-            const cd = cusipCheckDigit(clean);
+          } else if (clean.length === 8 || clean.length === 9) {
+            const cd = cusipCheckDigit(clean.slice(0, 8));
             checkByte = cd;
             fields.push({
               label: "Check digit",
@@ -324,7 +363,7 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
             fields.push({
               label: "Check digit",
               value: "—",
-              hint: "Requires 8 characters (CUSIP) or 11 characters (ISIN).",
+              hint: `Input has ${clean.length} characters; requires 8-9 characters (CUSIP) or 11-12 characters (ISIN).`,
             });
           }
           break;
@@ -338,8 +377,14 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
               value: "—",
               hint: "Enter 6 alphanumeric characters to calculate SEDOL check digit.",
             });
+          } else if (clean.length > 9) {
+            fields.push({
+              label: "Check digit",
+              value: "—",
+              hint: `Input has ${clean.length} characters; SEDOL security identifier cannot exceed 7 characters.`,
+            });
           } else if (clean.length >= 6) {
-            const cd = sedolCheckDigit(clean);
+            const cd = sedolCheckDigit(clean.slice(0, 6));
             checkByte = cd;
             fields.push({
               label: "Check digit",
@@ -366,7 +411,7 @@ function createEngine(spec: CheckDigitSpec, meta: CheckDigitToolMeta): CheckDigi
       }
 
       return {
-        bytes: new Uint8Array([checkByte & 0xff]),
+        bytes: checkByte !== undefined ? new Uint8Array([checkByte & 0xff]) : new Uint8Array(0),
         fields,
       };
     },

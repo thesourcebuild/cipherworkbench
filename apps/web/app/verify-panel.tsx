@@ -54,9 +54,9 @@ export function VerifyPanel({
    */
   const outcome: VerifyOutcome | undefined = useMemo(
     () =>
-      bytes
+      bytes && bytes.length > 0
         ? verifyAgainst(bytes, expected)
-        : text === undefined
+        : text === undefined || text === ""
           ? undefined
           : verifyText(text, expected),
     [bytes, text, expected],
