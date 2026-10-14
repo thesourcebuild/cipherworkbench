@@ -1,6 +1,12 @@
 import type { ToolDefinition } from "@ocs/engine";
 import { requireHashBinding } from "./bindings";
-import { HASH_ALGORITHMS, requireHashAlgorithm, variantTags } from "./catalogue/algorithm-meta";
+import {
+  HASH_ALGORITHMS,
+  requireHashAlgorithm,
+  resolveOutputLen,
+  resolveVariant,
+  variantTags,
+} from "./catalogue/algorithm-meta";
 import { OPTION_GROUP_META } from "./catalogue/groups";
 import { hashCatalogueFor } from "./catalogue/options";
 import { computeHash, createHashStream, hashVariants } from "./compute";
@@ -9,6 +15,7 @@ import { RULES } from "./lint/rules";
 import { HASH_MANIFESTS } from "./manifest";
 import { createSpec } from "./create-spec";
 import { HashSpec } from "./spec";
+import { OPTION_OUTPUT_LENGTH, readHashVariant } from "./pure";
 
 /**
  * Builds the full contract for one digest algorithm.
@@ -36,6 +43,16 @@ export function hashToolDefinition(algorithmId: string): ToolDefinition<HashSpec
     specSchema: HashSpec,
     describe: describeSpec,
     compute: computeHash,
+    generateLength: (spec, optionId) => {
+      if (optionId === OPTION_OUTPUT_LENGTH) {
+        return resolveOutputLen(
+          meta,
+          undefined,
+          resolveVariant(meta, spec.algorithm, readHashVariant(spec.options)),
+        );
+      }
+      return undefined;
+    },
     /**
      * Present for every algorithm but the TupleHash set.
      *

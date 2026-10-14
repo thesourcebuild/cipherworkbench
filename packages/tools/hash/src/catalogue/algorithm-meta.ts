@@ -140,6 +140,11 @@ export interface HashAlgorithmMeta {
      * Absent for MetroHash and t1ha, whose variants share a width with each other.
      */
     readonly outputLen?: number;
+    /**
+     * The default digest width in bytes when output length is variable (e.g. XOFs).
+     * For example, 128-bit variants default to 32 bytes and 256-bit variants default to 64 bytes.
+     */
+    readonly defaultOutputLen?: number;
   }[];
   /** Which of `variants` the form opens on. Explicit, because the first is not always right. */
   defaultVariant?: string;
@@ -445,8 +450,8 @@ export const HASH_ALGORITHMS: readonly HashAlgorithmMeta[] = [
     blockLen: 168,
     outputMode: "xof",
     variants: [
-      { id: "128", label: "SHAKE128 (128-bit security)" },
-      { id: "256", label: "SHAKE256 (256-bit security)" },
+      { id: "128", label: "SHAKE128 (128-bit security)", defaultOutputLen: 32 },
+      { id: "256", label: "SHAKE256 (256-bit security)", defaultOutputLen: 64 },
     ],
     defaultVariant: "128",
     security: "modern",
@@ -483,8 +488,8 @@ export const HASH_ALGORITHMS: readonly HashAlgorithmMeta[] = [
     customizable: true,
     namedFunction: true,
     variants: [
-      { id: "128", label: "cSHAKE128 (128-bit security)" },
-      { id: "256", label: "cSHAKE256 (256-bit security)" },
+      { id: "128", label: "cSHAKE128 (128-bit security)", defaultOutputLen: 32 },
+      { id: "256", label: "cSHAKE256 (256-bit security)", defaultOutputLen: 64 },
     ],
     defaultVariant: "128",
     security: "modern",
@@ -502,10 +507,10 @@ export const HASH_ALGORITHMS: readonly HashAlgorithmMeta[] = [
     customizable: true,
     tupleInput: true,
     variants: [
-      { id: "128xof", label: "TupleHashXOF128" },
-      { id: "256xof", label: "TupleHashXOF256" },
-      { id: "128", label: "TupleHash128" },
-      { id: "256", label: "TupleHash256" },
+      { id: "128xof", label: "TupleHashXOF128", defaultOutputLen: 32 },
+      { id: "256xof", label: "TupleHashXOF256", defaultOutputLen: 64 },
+      { id: "128", label: "TupleHash128", defaultOutputLen: 32 },
+      { id: "256", label: "TupleHash256", defaultOutputLen: 64 },
     ],
     defaultVariant: "128xof",
     security: "modern",
@@ -522,10 +527,10 @@ export const HASH_ALGORITHMS: readonly HashAlgorithmMeta[] = [
     customizable: true,
     blockSized: true,
     variants: [
-      { id: "128xof", label: "ParallelHashXOF128" },
-      { id: "256xof", label: "ParallelHashXOF256" },
-      { id: "128", label: "ParallelHash128" },
-      { id: "256", label: "ParallelHash256" },
+      { id: "128xof", label: "ParallelHashXOF128", defaultOutputLen: 32 },
+      { id: "256xof", label: "ParallelHashXOF256", defaultOutputLen: 64 },
+      { id: "128", label: "ParallelHash128", defaultOutputLen: 32 },
+      { id: "256", label: "ParallelHash256", defaultOutputLen: 64 },
     ],
     defaultVariant: "128xof",
     security: "modern",
@@ -541,8 +546,8 @@ export const HASH_ALGORITHMS: readonly HashAlgorithmMeta[] = [
     outputMode: "xof",
     domainSeparated: true,
     variants: [
-      { id: "128", label: "TurboSHAKE128" },
-      { id: "256", label: "TurboSHAKE256" },
+      { id: "128", label: "TurboSHAKE128", defaultOutputLen: 32 },
+      { id: "256", label: "TurboSHAKE256", defaultOutputLen: 64 },
     ],
     defaultVariant: "128",
     security: "modern",
@@ -558,8 +563,8 @@ export const HASH_ALGORITHMS: readonly HashAlgorithmMeta[] = [
     outputMode: "xof",
     customizable: true,
     variants: [
-      { id: "128", label: "KT128" },
-      { id: "256", label: "KT256" },
+      { id: "128", label: "KT128", defaultOutputLen: 32 },
+      { id: "256", label: "KT256", defaultOutputLen: 64 },
     ],
     defaultVariant: "128",
     security: "modern",
@@ -2119,6 +2124,26 @@ export function variantOutputLen(
   return chosen?.outputLen;
 }
 
+/** Resolves the variant ID from the options, algorithm name suffix, or default. */
+export function resolveVariant(
+  meta: HashAlgorithmMeta,
+  algorithm?: string,
+  requestedVariant?: string,
+): string | undefined {
+  if (!meta.variants) return undefined;
+  if (requestedVariant !== undefined && meta.variants.some((v) => v.id === requestedVariant)) {
+    return requestedVariant;
+  }
+  if (algorithm !== undefined) {
+    const matching = meta.variants
+      .slice()
+      .sort((a, b) => b.id.length - a.id.length)
+      .find((v) => algorithm.endsWith(v.id) || algorithm === v.id);
+    if (matching) return matching.id;
+  }
+  return meta.defaultVariant ?? meta.variants[0]?.id;
+}
+
 export function maxOutputLen(meta: HashAlgorithmMeta): number {
   // A variant-carried width is its own ceiling, and the widest variant is the algorithm's.
   if (meta.variants?.some((v) => v.outputLen !== undefined)) {
@@ -2146,6 +2171,23 @@ export function maxOutputLen(meta: HashAlgorithmMeta): number {
  * digest plus `H005` telling them the number in the field is not what they are
  * looking at, which beats an error message and no result.
  */
+/** The default output width in bytes for an algorithm and variant when none was requested. */
+export function defaultOutputLen(
+  meta: HashAlgorithmMeta,
+  variant: string | undefined,
+): number {
+  if (meta.variants) {
+    const chosen =
+      meta.variants.find((v) => v.id === variant) ??
+      meta.variants.find((v) => v.id === meta.defaultVariant);
+    if (chosen?.defaultOutputLen !== undefined) return chosen.defaultOutputLen;
+    if (chosen?.outputLen !== undefined) return chosen.outputLen;
+    if (variant === "256" || variant === "256xof") return 64;
+    if (variant === "128" || variant === "128xof") return 32;
+  }
+  return meta.outputLen;
+}
+
 export function resolveOutputLen(
   meta: HashAlgorithmMeta,
   requested: number | undefined,
@@ -2157,7 +2199,7 @@ export function resolveOutputLen(
   if (fromVariant !== undefined) return fromVariant;
   if (meta.outputMode === "fixed") return meta.outputLen;
   if (requested === undefined || !Number.isInteger(requested) || requested < 1) {
-    return meta.outputLen;
+    return defaultOutputLen(meta, variant);
   }
   /**
    * A fixed set is snapped to, not clamped into.
@@ -2168,7 +2210,9 @@ export function resolveOutputLen(
    * left over from another algorithm looks like.
    */
   if (meta.outputLengths) {
-    return meta.outputLengths.includes(requested) ? requested : meta.outputLen;
+    return meta.outputLengths.includes(requested)
+      ? requested
+      : defaultOutputLen(meta, variant);
   }
   return Math.min(requested, maxOutputLen(meta));
 }

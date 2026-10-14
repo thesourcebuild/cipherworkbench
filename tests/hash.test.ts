@@ -1425,6 +1425,47 @@ describe("all variants", () => {
     expect(encodeHex(resLegacy.bytes!)).toBe(encodeHex(resPoseidon2.bytes!));
   });
 
+  it("defaults to 64 bytes for 256-bit variants of ParallelHash and other XOFs", async () => {
+    const parallelTool = hashToolDefinition("parallelhash");
+    const input = ascii("SP 800-185 ParallelHash test");
+
+    // 128-bit variants default to 32 bytes (256 bits)
+    const res128xof = await parallelTool.compute(
+      specFor("parallelhash", { [OPTION_HASH_VARIANT]: "128xof" }),
+      input,
+    );
+    expect(res128xof.bytes).toHaveLength(32);
+
+    const res128 = await parallelTool.compute(
+      specFor("parallelhash", { [OPTION_HASH_VARIANT]: "128" }),
+      input,
+    );
+    expect(res128.bytes).toHaveLength(32);
+
+    // 256-bit variants default to 64 bytes (512 bits)
+    const res256xof = await parallelTool.compute(
+      specFor("parallelhash", { [OPTION_HASH_VARIANT]: "256xof" }),
+      input,
+    );
+    expect(res256xof.bytes).toHaveLength(64);
+
+    const res256 = await parallelTool.compute(
+      specFor("parallelhash", { [OPTION_HASH_VARIANT]: "256" }),
+      input,
+    );
+    expect(res256.bytes).toHaveLength(64);
+
+    // Sibling variant table rows also produce their declared sizes
+    const table = parallelTool.variants!(specFor("parallelhash"));
+    for (const row of table.rows) {
+      const stream = row.stream();
+      stream.update(input);
+      const res = stream.finish();
+      const expectedLen = row.id.includes("256") ? 64 : 32;
+      expect(res.bytes).toHaveLength(expectedLen);
+    }
+  });
+
   it("states each row's own output length, which is what settles a family", () => {
     // Across SHA-2's six widths the length alone identifies the row a 32-byte digest came from.
     const { columns, rows } = hashToolDefinition("sha256").variants!(specFor("sha256"));

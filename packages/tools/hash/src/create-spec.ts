@@ -1,4 +1,4 @@
-import { requireHashAlgorithm } from "./catalogue/algorithm-meta";
+import { requireHashAlgorithm, resolveVariant } from "./catalogue/algorithm-meta";
 import { OPTION_OUTPUT_LENGTH, OPTION_HASH_VARIANT, OPTION_PASSES, SPEC_VERSION } from "./pure";
 import type { HashSpec } from "./spec";
 
@@ -22,14 +22,9 @@ export function createSpec(options?: { algorithm?: string }): HashSpec {
   if (meta.outputLengths) seeded[OPTION_OUTPUT_LENGTH] = String(meta.outputLen);
   if (meta.passes) seeded[OPTION_PASSES] = String(meta.defaultPasses ?? meta.passes[0]!);
   if (meta.variants) {
-    if (algorithm.endsWith("256") && meta.variants.some((v) => v.id === "256")) {
-      seeded[OPTION_HASH_VARIANT] = "256";
-    } else if (algorithm.endsWith("128") && meta.variants.some((v) => v.id === "128")) {
-      seeded[OPTION_HASH_VARIANT] = "128";
-    } else if (meta.variants.some((v) => v.id === algorithm)) {
-      seeded[OPTION_HASH_VARIANT] = algorithm;
-    } else {
-      seeded[OPTION_HASH_VARIANT] = meta.defaultVariant ?? meta.variants[0]!.id;
+    const variant = resolveVariant(meta, algorithm);
+    if (variant !== undefined) {
+      seeded[OPTION_HASH_VARIANT] = variant;
     }
   }
 

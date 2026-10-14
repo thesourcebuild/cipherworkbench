@@ -445,7 +445,11 @@ function OptionControl({
             <input
               type="number"
               value={numeric}
-              placeholder={option.arg?.placeholder}
+              placeholder={
+                generateLength?.(option.id) !== undefined
+                  ? String(generateLength(option.id))
+                  : option.arg?.placeholder
+              }
               min={option.arg?.min}
               max={option.arg?.max}
               step={option.arg?.step}

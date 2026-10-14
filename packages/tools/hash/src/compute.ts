@@ -19,6 +19,7 @@ import {
   usesInputPanel,
   resolveOutputLen,
   resolvePasses,
+  resolveVariant,
   type HashAlgorithmMeta,
 } from "./catalogue/algorithm-meta";
 import { hashCatalogueFor } from "./catalogue/options";
@@ -76,12 +77,7 @@ function resolve(spec: HashSpec): ResolvedSpec {
    * see `variantOutputLen`. Resolved against the algorithm's own list, so a variant left in the spec
    * after a tool switch cannot reach a binding that has never heard of it.
    */
-  let variant: string | undefined;
-  if (meta.variants) {
-    const requestedVariant = readHashVariant(spec.options);
-    const known = meta.variants.some((v) => v.id === requestedVariant);
-    variant = known ? requestedVariant : (meta.defaultVariant ?? meta.variants[0]!.id);
-  }
+  const variant = resolveVariant(meta, spec.algorithm, readHashVariant(spec.options));
   const params: HashParams = { outputLen: resolveOutputLen(meta, requested, variant) };
   if (variant !== undefined) params.variant = variant;
   // Guarded like every other parameter: a `passes` left in the spec after switching away from
@@ -1226,7 +1222,7 @@ const CONSOLIDATED_VARIANTS: Record<string, readonly ConsolidatedVariantDef[]> =
     {
       id: "turboshake256",
       label: "TurboSHAKE256",
-      outputLen: 32,
+      outputLen: 64,
       blockLen: 136,
       selected: (spec) =>
         spec.algorithm === "turboshake256" || readHashVariant(spec.options) === "256",
@@ -1244,7 +1240,7 @@ const CONSOLIDATED_VARIANTS: Record<string, readonly ConsolidatedVariantDef[]> =
     {
       id: "kt256",
       label: "KT256",
-      outputLen: 32,
+      outputLen: 64,
       blockLen: 136,
       selected: (spec) =>
         spec.algorithm === "kt256" || readHashVariant(spec.options) === "256",

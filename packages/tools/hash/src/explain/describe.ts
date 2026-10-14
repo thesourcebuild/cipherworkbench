@@ -3,6 +3,7 @@ import {
   requireHashAlgorithm,
   resolveOutputLen,
   resolvePasses,
+  resolveVariant,
 } from "../catalogue/algorithm-meta";
 import {
   readHashVariant,
@@ -26,7 +27,7 @@ export function describeSpec(spec: HashSpec): string {
   const length = resolveOutputLen(
     meta,
     hasVariableOutput(meta) ? readRequestedOutputLength(spec.options) : undefined,
-    meta.variants ? readHashVariant(spec.options) : undefined,
+    resolveVariant(meta, spec.algorithm, readHashVariant(spec.options)),
   );
   const iterations = readIterations(spec.options);
 
