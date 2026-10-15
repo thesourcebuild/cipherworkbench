@@ -48,6 +48,8 @@ const fromHex = (hex: string) =>
     ? new Uint8Array(0)
     : Uint8Array.from(hex.match(/../g)!.map((b) => parseInt(b, 16)));
 
+import { testInputsFor } from "../apps/web/app/test-inputs";
+
 function specFor(variant: string, options: AsymmetricSpec["options"] = {}): AsymmetricSpec {
   const base = createSpec({ variant });
   return { ...base, options: { ...base.options, ...options } };
@@ -1243,6 +1245,17 @@ describe("catalogue integrity", () => {
         } else {
           expect(definition.readsInputForSpec!(spec)).toBe(true);
         }
+      }
+    });
+
+    it(`${tool.id} testInputsFor returns empty when operation is generate`, () => {
+      const definition = asymmetricToolDefinition(tool.id);
+      const specGen = specFor(tool.id, { [OPTION_OPERATION]: "generate" });
+      expect(testInputsFor(definition, specGen)).toEqual([]);
+
+      if (tool.operations.includes("sign")) {
+        const specSign = specFor(tool.id, { [OPTION_OPERATION]: "sign" });
+        expect(testInputsFor(definition, specSign).length).toBeGreaterThan(0);
       }
     });
   }

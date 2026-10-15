@@ -178,7 +178,7 @@ export function ToolWorkbench({
     return tool.readsInput;
   }, [tool, spec]);
 
-  const testInputs = useMemo(() => (tool ? testInputsFor(tool) : []), [tool]);
+  const testInputs = useMemo(() => (tool ? testInputsFor(tool, spec) : []), [tool, spec]);
 
   useEffect(() => {
     if (!tool) return;
@@ -214,6 +214,17 @@ export function ToolWorkbench({
         "csr-signer",
         "csr",
       ].includes(tool.id),
+    [tool],
+  );
+
+  const isPasswordTool = useMemo(
+    () =>
+      Boolean(
+        tool?.family === "kdf" ||
+          tool?.family === "password-artifact" ||
+          tool?.catalogue.get("password") ||
+          tool?.catalogue.options.some((o) => o.kind === "password" || o.id === "password"),
+      ),
     [tool],
   );
 
@@ -655,11 +666,19 @@ export function ToolWorkbench({
                 {/* Absent when no runnable text sample exists, including every file-only artifact. */}
                 {testInputs.length > 0 && (
                   <Panel
-                    title={effectiveReadsInput ? "Test input" : "Sample passwords"}
+                    title={
+                      effectiveReadsInput
+                        ? "Test input"
+                        : isPasswordTool
+                          ? "Sample passwords"
+                          : "Test vectors"
+                    }
                     description={
                       effectiveReadsInput
                         ? "Load a known string into the box."
-                        : "Load a sample password or test vector into the fields."
+                        : isPasswordTool
+                          ? "Load a sample password or test vector into the fields."
+                          : "Load a sample test vector into the fields."
                     }
                     collapsible
                   >
@@ -667,6 +686,7 @@ export function ToolWorkbench({
                       input={input}
                       entries={testInputs}
                       effectiveReadsInput={effectiveReadsInput}
+                      isPasswordTool={isPasswordTool}
                       onChange={onInputChange}
                       onSelectSample={(chosen) => {
                         if (chosen.options) {
@@ -1225,19 +1245,27 @@ function TestInputPicker({
   input,
   entries,
   effectiveReadsInput = true,
+  isPasswordTool = false,
   onChange,
   onSelectSample,
 }: {
   input: InputState;
   entries: readonly ToolSample[];
   effectiveReadsInput?: boolean;
+  isPasswordTool?: boolean;
   onChange: (next: InputState) => void;
   onSelectSample?: (sample: ToolSample) => void;
 }) {
   return (
     <select
       data-ocs-test-input=""
-      aria-label={effectiveReadsInput ? "Test input" : "Sample passwords"}
+      aria-label={
+        effectiveReadsInput
+          ? "Test input"
+          : isPasswordTool
+            ? "Sample passwords"
+            : "Test vectors"
+      }
       value=""
       onChange={(event) => {
         const chosen = entries.find((entry) => entry.id === event.target.value);
@@ -1249,7 +1277,11 @@ function TestInputPicker({
       className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950"
     >
       <option value="" disabled>
-        {effectiveReadsInput ? "Choose a test input…" : "Choose a sample password…"}
+        {effectiveReadsInput
+          ? "Choose a test input…"
+          : isPasswordTool
+            ? "Choose a sample password…"
+            : "Choose a test vector…"}
       </option>
       {entries.map((entry) => (
         <option key={entry.id} value={entry.id} title={entry.note}>

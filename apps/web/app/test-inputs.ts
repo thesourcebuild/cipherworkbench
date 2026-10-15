@@ -1,4 +1,4 @@
-import type { ToolSample, ToolSourcePolicy } from "@ocs/engine";
+import type { ToolSample, ToolSourcePolicy, ToolSpecBase } from "@ocs/engine";
 
 /**
  * Canned inputs, for checking a tool against something known and for seeing how one behaves on more
@@ -92,10 +92,18 @@ export const TEST_INPUTS: readonly TestInput[] = [
  * back to unrelated prose.
  */
 export function testInputsFor(
-  tool: { samples?: readonly ToolSample[]; sourcePolicy?: ToolSourcePolicy; readsInput?: boolean },
+  tool: {
+    samples?: readonly ToolSample[];
+    sourcePolicy?: ToolSourcePolicy;
+    readsInput?: boolean;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    readsInputForSpec?: (spec: any) => boolean;
+  },
+  spec?: ToolSpecBase,
 ): readonly ToolSample[] {
   if (tool.samples !== undefined) return tool.samples;
-  if (tool.readsInput === false) return [];
+  const readsInput = spec && tool.readsInputForSpec ? tool.readsInputForSpec(spec) : tool.readsInput;
+  if (readsInput === false) return [];
   return tool.sourcePolicy?.semantics === undefined || tool.sourcePolicy.semantics === "bytes"
     ? TEST_INPUTS
     : [];

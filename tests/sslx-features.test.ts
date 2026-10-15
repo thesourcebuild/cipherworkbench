@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   gradeCertificate,
   auditCertificateExpiry,
@@ -97,15 +97,21 @@ describe("Multi-Host Certificate Expiry Auditor (Inspired by sslx expiry)", () =
   });
 
   it("flags certificates expiring soon (< 30 days) with warning status and high gauge", () => {
-    const report = auditCertificateExpiry(EXPIRING_SOON_CERTIFICATE_PEM);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-01T00:00:00Z"));
+    try {
+      const report = auditCertificateExpiry(EXPIRING_SOON_CERTIFICATE_PEM);
 
-    expect(report.totalCount).toBe(1);
-    const item = report.items[0]!;
-    expect(item.isExpired).toBe(false);
-    expect(item.daysRemaining).toBeLessThanOrEqual(30);
-    expect(["EXPIRING_SOON", "CRITICAL"]).toContain(item.status);
-    expect(item.percentElapsed).toBeGreaterThanOrEqual(80);
-    expect(item.subjectCn).toContain("api.expiring-soon.internal");
+      expect(report.totalCount).toBe(1);
+      const item = report.items[0]!;
+      expect(item.isExpired).toBe(false);
+      expect(item.daysRemaining).toBeLessThanOrEqual(30);
+      expect(["EXPIRING_SOON", "CRITICAL"]).toContain(item.status);
+      expect(item.percentElapsed).toBeGreaterThanOrEqual(80);
+      expect(item.subjectCn).toContain("api.expiring-soon.internal");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("audits enterprise multi-domain wildcard certificate and extracts SAN coverage", () => {
