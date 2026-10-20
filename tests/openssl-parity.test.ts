@@ -123,25 +123,56 @@ const DIGEST_MAP: readonly DigestMapping[] = [
   { id: "md5", aliases: ["md5", "RSA-MD5", "md5WithRSAEncryption", "ssl3-md5"] },
   {
     id: "ripemd",
-    aliases: ["ripemd160", "ripemd", "rmd160", "RSA-RIPEMD160", "ripemd160WithRSA"],
+    aliases: [
+      "ripemd160",
+      "ripemd-160",
+      "ripemd",
+      "rmd160",
+      "RSA-RIPEMD160",
+      "ripemd160WithRSA",
+    ],
   },
   {
     id: "sha1",
     // `RSA-SHA1-2` is OpenSSL's second OID for the same signature algorithm, and `ssl3-sha1`
     // differs from SHA-1 only inside SSLv3's MAC construction, not as a digest.
-    aliases: ["sha1", "RSA-SHA1", "RSA-SHA1-2", "sha1WithRSAEncryption", "ssl3-sha1"],
+    aliases: ["sha1", "sha-1", "RSA-SHA1", "RSA-SHA1-2", "sha1WithRSAEncryption", "ssl3-sha1"],
   },
-  { id: "sha224", aliases: ["sha224", "RSA-SHA224", "sha224WithRSAEncryption"] },
-  { id: "sha256", aliases: ["sha256", "RSA-SHA256", "sha256WithRSAEncryption"] },
-  { id: "sha384", aliases: ["sha384", "RSA-SHA384", "sha384WithRSAEncryption"] },
-  { id: "sha512", aliases: ["sha512", "RSA-SHA512", "sha512WithRSAEncryption"] },
+  {
+    id: "sha224",
+    aliases: ["sha224", "sha-224", "sha2-224", "RSA-SHA224", "sha224WithRSAEncryption"],
+  },
+  {
+    id: "sha256",
+    aliases: ["sha256", "sha-256", "sha2-256", "RSA-SHA256", "sha256WithRSAEncryption"],
+  },
+  {
+    id: "sha384",
+    aliases: ["sha384", "sha-384", "sha2-384", "RSA-SHA384", "sha384WithRSAEncryption"],
+  },
+  {
+    id: "sha512",
+    aliases: ["sha512", "sha-512", "sha2-512", "RSA-SHA512", "sha512WithRSAEncryption"],
+  },
   {
     id: "sha512-224",
-    aliases: ["sha512-224", "RSA-SHA512/224", "sha512-224WithRSAEncryption"],
+    aliases: [
+      "sha512-224",
+      "sha-512/224",
+      "sha2-512/224",
+      "RSA-SHA512/224",
+      "sha512-224WithRSAEncryption",
+    ],
   },
   {
     id: "sha512-256",
-    aliases: ["sha512-256", "RSA-SHA512/256", "sha512-256WithRSAEncryption"],
+    aliases: [
+      "sha512-256",
+      "sha-512/256",
+      "sha2-512/256",
+      "RSA-SHA512/256",
+      "sha512-256WithRSAEncryption",
+    ],
   },
   {
     id: "sha3-224",
@@ -160,14 +191,49 @@ const DIGEST_MAP: readonly DigestMapping[] = [
     aliases: ["sha3-512", "RSA-SHA3-512", "id-rsassa-pkcs1-v1_5-with-sha3-512"],
   },
   { id: "sm3", aliases: ["sm3", "RSA-SM3", "sm3WithRSAEncryption"] },
-  { id: "blake2b", aliases: ["blake2b512"], outputLength: 64 },
-  { id: "blake2s", aliases: ["blake2s256"], outputLength: 32 },
+  { id: "blake2b", aliases: ["blake2b512", "blake2b-512"], outputLength: 64 },
+  { id: "blake2s", aliases: ["blake2s256", "blake2s-256"], outputLength: 32 },
   // OpenSSL exposes SHAKE at one length each; ours is variable, so the length is requested.
-  { id: "shake", aliases: ["shake128"], outputLength: 16, variant: "128" },
-  { id: "shake", aliases: ["shake256"], outputLength: 32, variant: "256" },
+  { id: "shake", aliases: ["shake128", "shake-128"], outputLength: 16, variant: "128" },
+  { id: "shake", aliases: ["shake256", "shake-256"], outputLength: 32, variant: "256" },
+  // Keccak (original pre-FIPS padding, exposed in OpenSSL 3.2+).
+  { id: "keccak", aliases: ["keccak-224"], outputLength: 28 },
+  { id: "keccak", aliases: ["keccak-256"], outputLength: 32 },
+  { id: "keccak", aliases: ["keccak-384"], outputLength: 48 },
+  { id: "keccak", aliases: ["keccak-512"], outputLength: 64 },
   // MD5 ‖ SHA-1: the 36-byte TLS 1.0/1.1 handshake digest.
   { id: "md5-sha1", aliases: ["md5-sha1"] },
 ];
+
+/**
+ * Names exposed by OpenSSL's `crypto.getHashes()` that are accounted for but deliberately
+ * excluded from `DIGEST_MAP`:
+ *
+ * - KMAC variants (`keccak-kmac*`): KMAC is a Keyed-Hash Message Authentication Code (NIST SP 800-185).
+ *   It requires a secret key and is implemented under `@ocs/mac`, not as an unkeyed digest under `@ocs/hash`.
+ *   OpenSSL exposes it through EVP_MD provider registration.
+ * - Non-standard truncated SHA-256 (`sha-256/192`, `sha2-256/192`, `sha256-192`): 192-bit truncated
+ *   SHA-256 added in OpenSSL 3.2. FIPS 180-4 defines SHA-256 as 256-bit only; standard truncated
+ *   SHA-2 variants (SHA-224, SHA-512/224, SHA-512/256) are fully supported.
+ */
+const ACCOUNTED_OPENSSL_EXCLUSIONS: ReadonlySet<string> = new Set([
+  "keccak-kmac-128",
+  "keccak-kmac-256",
+  "keccak-kmac128",
+  "keccak-kmac256",
+  "sha-256/192",
+  "sha2-256/192",
+  "sha256-192",
+]);
+
+function isDigestSupported(name: string): boolean {
+  try {
+    createHash(name);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function ourDigest(mapping: DigestMapping, input: Uint8Array): Promise<string> {
   const tool = hashToolDefinition(mapping.id);
@@ -183,9 +249,12 @@ async function ourDigest(mapping: DigestMapping, input: Uint8Array): Promise<str
 
 describe("digests match OpenSSL", () => {
   for (const mapping of DIGEST_MAP) {
-    it(`${mapping.id} equals ${mapping.aliases[0]} on every input`, async () => {
+    const primaryAlias = mapping.aliases.find(isDigestSupported);
+    if (!primaryAlias) continue;
+
+    it(`${mapping.id} equals ${primaryAlias} on every input`, async () => {
       for (const input of INPUTS) {
-        const theirs = createHash(mapping.aliases[0]!).update(input.bytes).digest("hex");
+        const theirs = createHash(primaryAlias).update(input.bytes).digest("hex");
         expect(await ourDigest(mapping, input.bytes), `${mapping.id} over ${input.label}`).toBe(
           theirs,
         );
@@ -196,8 +265,10 @@ describe("digests match OpenSSL", () => {
   it("every alias OpenSSL lists is the same function as the one it is mapped to", () => {
     // One digest each is enough here: this is checking OpenSSL's aliasing, not our arithmetic.
     for (const mapping of DIGEST_MAP) {
-      const canonical = createHash(mapping.aliases[0]!).update("abc").digest("hex");
-      for (const alias of mapping.aliases) {
+      const supported = mapping.aliases.filter(isDigestSupported);
+      if (supported.length === 0) continue;
+      const canonical = createHash(supported[0]!).update("abc").digest("hex");
+      for (const alias of supported) {
         expect(createHash(alias).update("abc").digest("hex"), `${alias} vs ${mapping.id}`).toBe(
           canonical,
         );
@@ -208,7 +279,10 @@ describe("digests match OpenSSL", () => {
   it("accounts for every name in crypto.getHashes()", () => {
     // The gate. An OpenSSL upgrade that adds a digest fails here until someone decides
     // whether this app should offer it — rather than the claim of parity quietly going stale.
-    const mapped = new Set(DIGEST_MAP.flatMap((m) => m.aliases));
+    const mapped = new Set([
+      ...DIGEST_MAP.flatMap((m) => m.aliases),
+      ...ACCOUNTED_OPENSSL_EXCLUSIONS,
+    ]);
     const unaccounted = getHashes().filter((name) => !mapped.has(name));
     expect(unaccounted, "OpenSSL digest names this app does not account for").toEqual([]);
   });
@@ -384,8 +458,8 @@ describe("HMAC matches OpenSSL", () => {
 
   it("offers HMAC over every OpenSSL digest that has one", () => {
     // The gate for this half: a digest in DIGEST_MAP must either be offered for HMAC or be
-    // one of the two the construction does not apply to.
-    const noHmac = new Set(["shake", "shake128", "shake256", "md5-sha1"]);
+    // one of the algorithms the construction does not apply to (SHAKE/Keccak use KMAC per SP 800-185).
+    const noHmac = new Set(["shake", "shake128", "shake256", "md5-sha1", "keccak"]);
     const offered = new Set([
       ...HMAC_HASHES.map((h) => h.id),
       ...HMAC_HASHES.map((h) => LEGACY_HASH_ALIASES[h.id]).filter((id): id is string => Boolean(id)),

@@ -1,6 +1,6 @@
 {
   "name": "@ocs/config",
-  "version": "0.22.6",
+  "version": "0.22.7",
   "private": true,
   "files": ["tsconfig"],
   "exports": {
