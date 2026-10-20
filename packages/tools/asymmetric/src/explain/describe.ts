@@ -81,6 +81,45 @@ export function describeSpec(spec: AsymmetricSpec): string {
     }
   }
 
+  if (spec.variant === "bls12-381") {
+    switch (r.operation) {
+      case "generate":
+        return "Generates a fresh BLS12-381 keypair: a 32-byte secret key and a 48-byte G1 public key.";
+      case "sign":
+        return "Signs the input with BLS12-381, producing a 96-byte G2 signature.";
+      case "verify":
+        return "Checks a 96-byte BLS12-381 signature against the input and 48-byte G1 public key.";
+      default:
+        return "BLS12-381 Pairing-Friendly Signatures.";
+    }
+  }
+
+  if (spec.variant === "bip340-schnorr") {
+    switch (r.operation) {
+      case "generate":
+        return "Generates a fresh BIP-340 keypair: a 32-byte secret key and a 32-byte x-only public key.";
+      case "sign":
+        return "Signs the input with a 64-byte BIP-340 Schnorr signature over secp256k1.";
+      case "verify":
+        return "Checks a 64-byte BIP-340 Schnorr signature against the input and 32-byte x-only public key.";
+      default:
+        return "BIP-340 Schnorr Signatures.";
+    }
+  }
+
+  if (spec.variant === "ecvrf") {
+    switch (r.operation) {
+      case "generate":
+        return "Generates a fresh ECVRF keypair: a 32-byte secret key and a 32-byte public key.";
+      case "sign":
+        return "Evaluates ECVRF verifiable random output and produces an 80-byte VRF proof π (RFC 9381).";
+      case "verify":
+        return "Verifies an 80-byte ECVRF proof π against the input and 32-byte public key.";
+      default:
+        return "ECVRF (RFC 9381).";
+    }
+  }
+
   switch (r.operation) {
     case "generate":
       return spec.variant === "rsa"

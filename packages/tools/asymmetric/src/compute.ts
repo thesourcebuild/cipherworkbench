@@ -824,9 +824,14 @@ export async function computeAsymmetric(
     // The post-quantum tools come first, because they own their own keygen as well.
     if (r.paramSet) return pqOperate(r, input);
     if (r.tool.id === "paillier") {
-      const { paillierKeygen, paillierEncrypt, paillierDecrypt } = await import("@ocs/algos");
-      const kp = paillierKeygen();
+      const {
+        paillierKeygen,
+        paillierEncrypt,
+        paillierDecrypt,
+        paillierPrivateKeyFromLambda,
+      } = await import("@ocs/algos");
       if (r.operation === "generate") {
+        const kp = paillierKeygen();
         const nHex = kp.publicKey.n.toString(16);
         const lHex = kp.privateKey.lambda.toString(16);
         const muHex = kp.privateKey.mu.toString(16);
@@ -841,35 +846,100 @@ export async function computeAsymmetric(
         };
       }
       if (r.operation === "encrypt") {
+        const nHex = encodeHex(r.publicKey);
+        const n = BigInt("0x" + (nHex || "0"));
+        if (n === 0n) {
+          return { error: "Public modulus n must be non-zero." };
+        }
+        const n2 = n * n;
+        const g = n + 1n;
+        const pk = { n, n2, g };
+
         let m = 42n;
         if (input.length > 0) {
-          const hex = encodeHex(input.subarray(0, 16));
-          m = BigInt("0x" + (hex || "0"));
+          const text = new TextDecoder().decode(input).trim();
+          if (/^0x[0-9a-fA-F]+$/i.test(text)) {
+            m = BigInt(text);
+          } else if (/^\d+$/.test(text)) {
+            m = BigInt(text);
+          } else {
+            const maxBytes = Math.max(1, Math.floor(n.toString(16).length / 2) - 1);
+            const slice = input.subarray(0, maxBytes);
+            m = BigInt("0x" + (encodeHex(slice) || "0"));
+          }
         }
-        const c = paillierEncrypt(m % kp.publicKey.n, kp.publicKey);
+
+        const mMod = m % pk.n;
+        const c = paillierEncrypt(mMod, pk);
         const cHex = c.toString(16);
+        const cFormatted = "0x" + (cHex.length % 2 !== 0 ? "0" + cHex : cHex);
         return {
-          text: `0x${cHex}`,
-          bytes: new TextEncoder().encode(cHex),
+          text: cFormatted,
+          bytes: new TextEncoder().encode(cFormatted),
           fields: [
-            { label: "Plaintext integer m", value: m.toString() },
-            { label: "Ciphertext c = g^m * r^n mod n^2", value: "0x" + cHex },
+            { label: "Plaintext integer m", value: mMod.toString() },
+            { label: "Ciphertext c = g^m * r^n mod n^2", value: cFormatted },
           ],
         };
       }
       if (r.operation === "decrypt") {
-        let m = 42n;
-        if (input.length > 0) {
-          const hex = encodeHex(input.subarray(0, 16));
-          m = BigInt("0x" + (hex || "0"));
+        if (input.length === 0) {
+          return { error: "Enter a ciphertext c (in hex) to decrypt." };
         }
-        const c = paillierEncrypt(m % kp.publicKey.n, kp.publicKey);
-        const dec = paillierDecrypt(c, kp.privateKey);
-        return {
-          text: dec.toString(),
-          bytes: new TextEncoder().encode(dec.toString()),
-          fields: [{ label: "Decrypted plaintext", value: dec.toString() }],
-        };
+        const text = new TextDecoder().decode(input).trim();
+        let c: bigint;
+        try {
+          if (/^0x[0-9a-fA-F]+$/i.test(text)) {
+            c = BigInt(text);
+          } else if (/^[0-9a-fA-F]+$/i.test(text)) {
+            c = BigInt("0x" + text);
+          } else {
+            c = BigInt("0x" + encodeHex(input));
+          }
+        } catch {
+          return { error: "Invalid ciphertext format. Enter hex or integer value." };
+        }
+
+        const lambdaHex = encodeHex(r.privateKey);
+        const lambda = BigInt("0x" + (lambdaHex || "0"));
+        const nHex = encodeHex(r.publicKey);
+        const n = BigInt("0x" + (nHex || "0"));
+        if (lambda === 0n || n === 0n) {
+          return { error: "Private lambda (λ) and public modulus (n) must both be non-zero." };
+        }
+
+        try {
+          const sk = paillierPrivateKeyFromLambda(lambda, n);
+          const dec = paillierDecrypt(c, sk);
+
+          let decHex = dec.toString(16);
+          if (decHex.length % 2 !== 0) decHex = "0" + decHex;
+          let textValue: string | undefined;
+          try {
+            const decBytes = new Uint8Array(
+              decHex.match(/../g)?.map((h) => parseInt(h, 16)) ?? [],
+            );
+            const candidate = new TextDecoder("utf-8", { fatal: true }).decode(decBytes);
+            if (/^[\x20-\x7E\t\r\n]+$/.test(candidate)) {
+              textValue = candidate;
+            }
+          } catch {
+            // Not ASCII/UTF-8
+          }
+
+          return {
+            text: textValue ? `${dec.toString()} ("${textValue}")` : dec.toString(),
+            bytes: new TextEncoder().encode(dec.toString()),
+            fields: [
+              { label: "Decrypted integer m", value: dec.toString() },
+              ...(textValue ? [{ label: "Decrypted text", value: textValue }] : []),
+            ],
+          };
+        } catch (err) {
+          return {
+            error: `Decryption failed: ${err instanceof Error ? err.message : String(err)}`,
+          };
+        }
       }
     }
     if (r.tool.id === "shamir") {

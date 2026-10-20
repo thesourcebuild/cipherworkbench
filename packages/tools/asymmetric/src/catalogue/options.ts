@@ -55,15 +55,23 @@ const OPERATION_TEXT: Record<AsymmetricOperation, { label: string; summary: stri
  * no family asks for a control of its own. Five operations is the most any tool here has,
  * and a select handles five as readily as two.
  */
-function operationOption(operations: readonly AsymmetricOperation[]): Def {
+function operationOption(
+  operations: readonly AsymmetricOperation[],
+  choiceOverrides?: Partial<Record<AsymmetricOperation, { label: string; summary: string }>>,
+  textOverride?: { summary?: string; detail?: string },
+): Def {
   return {
     id: OPTION_OPERATION,
     label: "Operation",
     group: "operation",
     kind: "enum",
-    choices: operations.map((op) => ({ value: op, ...OPERATION_TEXT[op] })),
-    summary: "What to do. This decides which fields below apply.",
+    choices: operations.map((op) => ({
+      value: op,
+      ...(choiceOverrides?.[op] ?? OPERATION_TEXT[op]),
+    })),
+    summary: textOverride?.summary ?? "What to do. This decides which fields below apply.",
     detail:
+      textOverride?.detail ??
       "Generating a keypair ignores the input panel entirely and produces two values. Signing and encrypting read the input as the message. Verifying reads the input as the message and compares it against the signature field. Deriving a shared secret needs your private key and the other party's public key, and ignores the input.",
     order: 10,
   };
@@ -512,7 +520,28 @@ function pqLengths(toolId: string, pick: (set: PqParamSet) => number | undefined
  * `bytesLength` mismatch could not.
  */
 const PAILLIER_OPTIONS: readonly Def[] = [
-  operationOption(["generate", "encrypt", "decrypt"]),
+  operationOption(
+    ["generate", "encrypt", "decrypt"],
+    {
+      generate: {
+        label: "Generate keypair",
+        summary: "A fresh Paillier public modulus n and private keys (λ, μ)",
+      },
+      encrypt: {
+        label: "Encrypt",
+        summary: "Public modulus n in, homomorphic ciphertext c out",
+      },
+      decrypt: {
+        label: "Decrypt",
+        summary: "Ciphertext in, private key λ and public modulus n in, plaintext out",
+      },
+    },
+    {
+      summary: "What to do: generate a keypair, encrypt with additive homomorphism, or decrypt.",
+      detail:
+        "Paillier is an additively homomorphic cryptosystem. Encrypting computes c = (1 + m·n) · r^n mod n^2. Decrypting uses private key λ = lcm(p-1, q-1) and modulus n to recover m.",
+    },
+  ),
   rawPrivateKeyOption(
     ["decrypt"],
     { exact: [32, 64, 128, 256, 512, 1024] },
@@ -520,10 +549,10 @@ const PAILLIER_OPTIONS: readonly Def[] = [
   ),
   rawPublicKeyOption(
     "Public key",
-    ["encrypt"],
+    ["encrypt", "decrypt"],
     { exact: [32, 64, 128, 256, 512, 1024] },
     "Paillier public modulus n in hex.",
-    "The recipient's public modulus n.",
+    "The recipient's or matching public modulus n.",
   ),
 ];
 
@@ -628,9 +657,68 @@ function pqOptions(toolId: string): readonly Def[] {
   ];
 }
 
-const SECRET_SHARING_OPTIONS: readonly Def[] = [operationOption(["generate", "derive"])];
+const SHAMIR_OPTIONS: readonly Def[] = [
+  operationOption(
+    ["generate", "derive"],
+    {
+      generate: {
+        label: "Split secret",
+        summary: "Split input secret into N polynomial shares (threshold K)",
+      },
+      derive: {
+        label: "Combine shares",
+        summary: "Reconstruct secret from K threshold shares via Lagrange interpolation",
+      },
+    },
+    {
+      summary: "Whether to split a secret into shares or reconstruct it from shares.",
+      detail:
+        "Splitting evaluates a random polynomial over GF(256) with the secret as constant term to produce N shares. Combining uses Lagrange interpolation to reconstruct the secret from any K or more shares.",
+    },
+  ),
+];
 
-const PEDERSEN_OPTIONS: readonly Def[] = [operationOption(["generate", "derive"])];
+const SLIP39_OPTIONS: readonly Def[] = [
+  operationOption(
+    ["generate", "derive"],
+    {
+      generate: {
+        label: "Split secret",
+        summary: "Split master secret into SLIP-0039 Shamir Mnemonic share phrases",
+      },
+      derive: {
+        label: "Combine shares",
+        summary: "Reconstruct master secret from SLIP-0039 mnemonic share phrases",
+      },
+    },
+    {
+      summary: "Whether to split a secret into SLIP-0039 shares or reconstruct it.",
+      detail:
+        "Splitting produces 20-word mnemonic shares with 10-bit word encoding and 30-bit polynomial checksums per SLIP-0039. Combining validates checksums and reconstructs the master secret.",
+    },
+  ),
+];
+
+const PEDERSEN_OPTIONS: readonly Def[] = [
+  operationOption(
+    ["generate", "derive"],
+    {
+      generate: {
+        label: "Create commitment",
+        summary: "Commit to message m using a blinding factor r (C = g^m · h^r mod p)",
+      },
+      derive: {
+        label: "Verify commitment",
+        summary: "Verify opening: check that commitment C matches message m and blinding factor r",
+      },
+    },
+    {
+      summary: "Whether to create a commitment or verify an opened commitment.",
+      detail:
+        "Creating a commitment takes the message from the input panel, generates a blinding factor r, and computes C = g^m · h^r mod p. Verifying checks that commitment C opens correctly with message m and blinding factor r.",
+    },
+  ),
+];
 
 const CACHE = new Map<string, OptionCatalogue<AsymmetricOptionGroup>>();
 
@@ -658,8 +746,8 @@ export function asymmetricCatalogueFor(toolId: string): OptionCatalogue<Asymmetr
       mceliece: pqOptions("mceliece"),
       hqc: pqOptions("hqc"),
       "stateful-hash-sig": pqOptions("stateful-hash-sig"),
-      shamir: SECRET_SHARING_OPTIONS,
-      slip39: SECRET_SHARING_OPTIONS,
+      shamir: SHAMIR_OPTIONS,
+      slip39: SLIP39_OPTIONS,
       pedersen: PEDERSEN_OPTIONS,
       paillier: PAILLIER_OPTIONS,
       ntru: pqOptions("ntru"),

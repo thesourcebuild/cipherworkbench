@@ -109,7 +109,15 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
           spec.variant === "ecdsa" ? "ecdsa" : "ecdh",
           readCurve(spec.options, spec.variant),
         )
-      : undefined;
+      : spec.variant === "ed25519"
+        ? ED25519_CURVE
+        : spec.variant === "ecvrf"
+          ? ECVRF_CURVE
+          : spec.variant === "bls12-381"
+            ? BLS12381_CURVE
+            : spec.variant === "bip340-schnorr"
+              ? BIP340_CURVE
+              : undefined;
 
   const isPq = PQ_PARAM_SETS[spec.variant] !== undefined;
   const paramSet = isPq
@@ -187,20 +195,11 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
 
   if (paramSet) return resolvePqKeys(spec, base, paramSet);
 
+  if (spec.variant === "paillier") return resolvePaillierKeys(spec, base);
+
   return tool.usesPem
     ? resolvePemKeys(spec, base)
-    : resolveRawKeys(
-        spec,
-        base,
-        curve ??
-          (spec.variant === "ecvrf"
-            ? ECVRF_CURVE
-            : spec.variant === "bls12-381"
-              ? BLS12381_CURVE
-              : spec.variant === "bip340-schnorr"
-                ? BIP340_CURVE
-                : ED25519_CURVE),
-      );
+    : resolveRawKeys(spec, base, curve ?? ED25519_CURVE);
 }
 
 /** Which key each operation needs, so one table drives the requirement checks. */
@@ -359,7 +358,25 @@ function resolveRawKeys(
     if (result.bytes.length === 0) {
       return problem(OPTION_SIGNATURE, "Paste the signature to check.");
     }
-    if (base.signatureFormat === "compact" && spec.variant !== "ed25519") {
+    if (spec.variant === "bls12-381" && result.bytes.length !== 96) {
+      return problem(
+        OPTION_SIGNATURE,
+        `BLS12-381 signatures are 96 bytes (compressed G2 point); this one is ${result.bytes.length}.`,
+      );
+    }
+    if (spec.variant === "bip340-schnorr" && result.bytes.length !== 64) {
+      return problem(
+        OPTION_SIGNATURE,
+        `BIP-340 Schnorr signatures are 64 bytes; this one is ${result.bytes.length}.`,
+      );
+    }
+    if (spec.variant === "ecvrf" && result.bytes.length !== 80) {
+      return problem(
+        OPTION_SIGNATURE,
+        `An ECVRF proof is 80 bytes; this one is ${result.bytes.length}.`,
+      );
+    }
+    if (spec.variant === "ecdsa" && base.signatureFormat === "compact") {
       if (result.bytes.length !== curve.signatureLen) {
         return problem(
           OPTION_SIGNATURE,
@@ -470,6 +487,64 @@ function resolvePqKeys(
       );
     }
     base.signature = result.bytes;
+  }
+
+  return { ok: true, resolved: base };
+}
+
+const PAILLIER_KEY_LENGTHS = [32, 64, 128, 256, 512, 1024] as const;
+
+function resolvePaillierKeys(spec: AsymmetricSpec, base: ResolvedAsymmetric): ResolveResult {
+  if (base.operation === "encrypt") {
+    const result = readBytes(spec, OPTION_PUBLIC_KEY);
+    if (!result.ok) return problem(OPTION_PUBLIC_KEY, result.error);
+    if (result.bytes.length === 0) {
+      return problem(
+        OPTION_PUBLIC_KEY,
+        "Encrypting needs the recipient's public modulus n in hex. Switch to Generate to make one.",
+      );
+    }
+    if (!PAILLIER_KEY_LENGTHS.includes(result.bytes.length as (typeof PAILLIER_KEY_LENGTHS)[number])) {
+      return problem(
+        OPTION_PUBLIC_KEY,
+        `Paillier public modulus n must be 32, 64, 128, 256, 512 or 1024 bytes; this one is ${result.bytes.length}.`,
+      );
+    }
+    base.publicKey = result.bytes;
+  }
+
+  if (base.operation === "decrypt") {
+    const privResult = readBytes(spec, OPTION_PRIVATE_KEY);
+    if (!privResult.ok) return problem(OPTION_PRIVATE_KEY, privResult.error);
+    if (privResult.bytes.length === 0) {
+      return problem(
+        OPTION_PRIVATE_KEY,
+        "Decrypting needs the private key lambda (λ) in hex.",
+      );
+    }
+    if (!PAILLIER_KEY_LENGTHS.includes(privResult.bytes.length as (typeof PAILLIER_KEY_LENGTHS)[number])) {
+      return problem(
+        OPTION_PRIVATE_KEY,
+        `Paillier private key lambda must be 32, 64, 128, 256, 512 or 1024 bytes; this one is ${privResult.bytes.length}.`,
+      );
+    }
+    base.privateKey = privResult.bytes;
+
+    const pubResult = readBytes(spec, OPTION_PUBLIC_KEY);
+    if (!pubResult.ok) return problem(OPTION_PUBLIC_KEY, pubResult.error);
+    if (pubResult.bytes.length === 0) {
+      return problem(
+        OPTION_PUBLIC_KEY,
+        "Decrypting needs the matching public modulus n in hex.",
+      );
+    }
+    if (!PAILLIER_KEY_LENGTHS.includes(pubResult.bytes.length as (typeof PAILLIER_KEY_LENGTHS)[number])) {
+      return problem(
+        OPTION_PUBLIC_KEY,
+        `Paillier public modulus n must be 32, 64, 128, 256, 512 or 1024 bytes; this one is ${pubResult.bytes.length}.`,
+      );
+    }
+    base.publicKey = pubResult.bytes;
   }
 
   return { ok: true, resolved: base };

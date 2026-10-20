@@ -1931,3 +1931,150 @@ describe("OpenSSL Asymmetric Key CLI Parity", () => {
     );
   });
 });
+
+describe("Paillier Cryptosystem tool", () => {
+  const encoder = new TextEncoder();
+
+  it("resolves a 64-byte public key without Ed25519 length errors", () => {
+    const spec = specFor("paillier", {
+      [OPTION_OPERATION]: "encrypt",
+      [OPTION_PUBLIC_KEY]: "00".repeat(64),
+      publicKeyEncoding: "hex",
+    });
+    const result = resolveAsymmetric(spec);
+    expect(result.ok, result.ok ? undefined : result.problem).toBe(true);
+  });
+
+  it("reports a Paillier-specific error for invalid key lengths instead of mentioning Ed25519", () => {
+    const spec = specFor("paillier", {
+      [OPTION_OPERATION]: "encrypt",
+      [OPTION_PUBLIC_KEY]: "00".repeat(20),
+      publicKeyEncoding: "hex",
+    });
+    const result = resolveAsymmetric(spec);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.problem).toContain("Paillier public modulus n must be");
+      expect(result.problem).toContain("this one is 20");
+      expect(result.problem).not.toContain("Ed25519");
+    }
+  });
+
+  it("generates, encrypts with public modulus, and decrypts with private key", async () => {
+    const genResult = await run("paillier", { [OPTION_OPERATION]: "generate" });
+    const nHexField = genResult.fields?.find((f) => f.label.includes("Public modulus"));
+    const lambdaHexField = genResult.fields?.find((f) => f.label.includes("Private lambda"));
+    expect(nHexField).toBeDefined();
+    expect(lambdaHexField).toBeDefined();
+
+    const nHex = nHexField!.value.replace(/^0x/, "");
+    const lambdaHex = lambdaHexField!.value.replace(/^0x/, "");
+
+    const msg = "Hello Paillier";
+    const encResult = await run(
+      "paillier",
+      {
+        [OPTION_OPERATION]: "encrypt",
+        [OPTION_PUBLIC_KEY]: nHex,
+        publicKeyEncoding: "hex",
+      },
+      encoder.encode(msg),
+    );
+
+    const ciphertext = encResult.text!;
+    expect(ciphertext.startsWith("0x")).toBe(true);
+
+    const decResult = await run(
+      "paillier",
+      {
+        [OPTION_OPERATION]: "decrypt",
+        [OPTION_PRIVATE_KEY]: lambdaHex,
+        privateKeyEncoding: "hex",
+        [OPTION_PUBLIC_KEY]: nHex,
+        publicKeyEncoding: "hex",
+      },
+      encoder.encode(ciphertext),
+    );
+
+    expect(decResult.text).toContain(msg);
+    expect(decResult.fields?.find((f) => f.label === "Decrypted text")?.value).toBe(msg);
+  });
+});
+
+describe("BLS12-381, BIP-340, and ECVRF descriptions, resolution, and info", () => {
+  it.each([
+    ["bls12-381", "BLS12-381", "48-byte G1"],
+    ["bip340-schnorr", "BIP-340", "32-byte x-only"],
+    ["ecvrf", "ECVRF", "32-byte public key"],
+  ])("%s describes keypair generation with accurate algorithm terminology", (variant, expectedName, expectedDetails) => {
+    const spec = specFor(variant, { [OPTION_OPERATION]: "generate" });
+    const description = describeSpec(spec);
+    expect(description).toContain(expectedName);
+    expect(description).toContain(expectedDetails);
+    expect(description).not.toContain("Ed25519");
+    expect(description).not.toContain("undefined");
+  });
+
+  it.each([
+    ["bls12-381", "BLS12-381", "96-byte G2"],
+    ["bip340-schnorr", "BIP-340", "64-byte"],
+    ["ecvrf", "ECVRF", "80-byte VRF proof"],
+  ])("%s describes sign operation accurately without falling back to generic ECDSA", (variant, expectedName, expectedDetails) => {
+    const spec = specFor(variant, {
+      [OPTION_OPERATION]: "sign",
+      [OPTION_PRIVATE_KEY]: "00".repeat(32),
+      privateKeyEncoding: "hex",
+    });
+    const description = describeSpec(spec);
+    expect(description).toContain(expectedName);
+    expect(description).toContain(expectedDetails);
+    expect(description).not.toContain("ECDSA");
+    expect(description).not.toContain("undefined");
+  });
+
+  it.each([
+    ["bls12-381", "BLS12-381", "96-byte"],
+    ["bip340-schnorr", "BIP-340", "64-byte"],
+    ["ecvrf", "VRF proof", "80-byte"],
+  ])("%s describes verify operation accurately", (variant, expectedName, expectedDetails) => {
+    const spec = specFor(variant, {
+      [OPTION_OPERATION]: "verify",
+      [OPTION_PUBLIC_KEY]: "00".repeat(variant === "bls12-381" ? 48 : 32),
+      publicKeyEncoding: "hex",
+      [OPTION_SIGNATURE]: "00".repeat(variant === "bls12-381" ? 96 : variant === "ecvrf" ? 80 : 64),
+      signatureEncoding: "hex",
+    });
+    const description = describeSpec(spec);
+    expect(description).toContain(expectedName);
+    expect(description).toContain(expectedDetails);
+    expect(description).not.toContain("ECDSA");
+    expect(description).not.toContain("undefined");
+  });
+
+  it.each([
+    ["bls12-381", "BLS12-381", 48],
+    ["bip340-schnorr", "BIP-340 Schnorr", 32],
+    ["ecvrf", "ECVRF (RFC 9381)", 32],
+  ])("%s resolves r.curve properly", (variant, expectedCurveLabel, expectedPubLen) => {
+    const spec = specFor(variant, { [OPTION_OPERATION]: "generate" });
+    const res = resolveAsymmetric(spec);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.resolved.curve).toBeDefined();
+      expect(res.resolved.curve?.label).toBe(expectedCurveLabel);
+      expect(res.resolved.curve?.publicLen).toBe(expectedPubLen);
+    }
+  });
+
+  it.each([
+    ["bls12-381", "BLS12-381 Signature Scheme"],
+    ["bip340-schnorr", "BIP-340 Schnorr Signatures"],
+    ["ecvrf", "ECVRF (Elliptic Curve Verifiable Random Function)"],
+  ])("%s reports dedicated info fields", (variant, expectedAlgo) => {
+    const fields = asymmetricInfo(specFor(variant));
+    const algoField = fields.find((f) => f.label === "Algorithm");
+    expect(algoField).toBeDefined();
+    expect(algoField?.value).toBe(expectedAlgo);
+  });
+});
+

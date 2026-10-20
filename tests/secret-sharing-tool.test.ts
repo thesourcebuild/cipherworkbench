@@ -76,7 +76,32 @@ describe("secret-sharing and commitment catalogues", () => {
         expect(definition.readsInputForSpec?.(spec)).toBe(true);
       }
     });
+
+    it(`${tool.id} does not use keypair or shared secret labels for operations`, () => {
+      const catalogue = asymmetricCatalogueFor(tool.id);
+      const op = catalogue.get(OPTION_OPERATION);
+      expect(op?.choices).toBeDefined();
+      for (const choice of op!.choices!) {
+        expect(choice.label.toLowerCase()).not.toContain("keypair");
+        expect(choice.summary?.toLowerCase()).not.toContain("keypair");
+        expect(choice.label.toLowerCase()).not.toContain("shared secret");
+      }
+    });
   }
+
+  it("pedersen operation choices are 'Create commitment' and 'Verify commitment'", () => {
+    const catalogue = asymmetricCatalogueFor("pedersen");
+    const op = catalogue.get(OPTION_OPERATION);
+    expect(op?.choices?.map((c) => c.label)).toEqual(["Create commitment", "Verify commitment"]);
+  });
+
+  it("shamir and slip39 operation choices are 'Split secret' and 'Combine shares'", () => {
+    for (const toolId of ["shamir", "slip39"] as const) {
+      const catalogue = asymmetricCatalogueFor(toolId);
+      const op = catalogue.get(OPTION_OPERATION);
+      expect(op?.choices?.map((c) => c.label)).toEqual(["Split secret", "Combine shares"]);
+    }
+  });
 });
 
 describe("secret-sharing and commitment descriptions", () => {

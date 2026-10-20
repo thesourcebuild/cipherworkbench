@@ -274,7 +274,7 @@ export function asymmetricInfo(spec: AsymmetricSpec): ToolResultField[] {
       },
       {
         label: "Modulus",
-        value: "2048-bit composite modulus n = p × q",
+        value: "Composite modulus n = p × q (512 to 8192 bits)",
       },
     );
     return fields;
@@ -344,6 +344,98 @@ export function asymmetricInfo(spec: AsymmetricSpec): ToolResultField[] {
       {
         label: "Homomorphism",
         value: "Additively homomorphic: C(m₁ + m₂, r₁ + r₂) = C(m₁, r₁) · C(m₂, r₂)",
+      },
+    );
+    return fields;
+  }
+
+  // 8. BLS12-381
+  if (spec.variant === "bls12-381") {
+    fields.push(
+      {
+        label: "Algorithm",
+        value: "BLS12-381 Signature Scheme",
+        hint: meta.summary,
+      },
+      {
+        label: "Curve",
+        value: "BLS12-381 (Pairing-friendly elliptic curve)",
+      },
+      {
+        label: "Public key",
+        value: "48 bytes (compressed G1 point)",
+      },
+      {
+        label: "Signature",
+        value: "96 bytes (compressed G2 point)",
+      },
+      {
+        label: "Pairing",
+        value: "e: G1 × G2 → GT (optimal Ate pairing)",
+      },
+      {
+        label: "Standards",
+        value: "RFC 9380 (Hashing to Curves), Ethereum PoS, Chia, Filecoin",
+      },
+    );
+    return fields;
+  }
+
+  // 9. BIP-340 Schnorr
+  if (spec.variant === "bip340-schnorr") {
+    fields.push(
+      {
+        label: "Algorithm",
+        value: "BIP-340 Schnorr Signatures",
+        hint: meta.summary,
+      },
+      {
+        label: "Curve",
+        value: "secp256k1 (Koblitz curve y² = x³ + 7 mod p)",
+      },
+      {
+        label: "Public key",
+        value: "32 bytes (x-only coordinate)",
+      },
+      {
+        label: "Signature",
+        value: "64 bytes (32-byte R.x || 32-byte s)",
+      },
+      {
+        label: "Batch verification",
+        value: "Linearity enables O(1) batch verification and MuSig2 aggregation",
+      },
+      {
+        label: "Standards",
+        value: "BIP-340, Bitcoin Taproot (BIP-341/342)",
+      },
+    );
+    return fields;
+  }
+
+  // 10. ECVRF
+  if (spec.variant === "ecvrf") {
+    fields.push(
+      {
+        label: "Algorithm",
+        value: "ECVRF (Elliptic Curve Verifiable Random Function)",
+        hint: meta.summary,
+      },
+      {
+        label: "Suite",
+        value: "ECVRF-EDWARDS25519-SHA512-TAI (RFC 9381 §5.1)",
+      },
+      {
+        label: "Public key",
+        value: "32 bytes (compressed Edwards25519 point)",
+      },
+      {
+        label: "VRF Proof (π)",
+        value: "80 bytes (32-byte Gamma || 16-byte challenge c || 32-byte response s)",
+      },
+      {
+        label: "Standards",
+        value: "RFC 9381 §5.1",
       },
     );
     return fields;

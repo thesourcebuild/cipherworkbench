@@ -69,10 +69,10 @@ function modPow(base: bigint, exp: bigint, mod: bigint): bigint {
 }
 
 /**
- * Standard test primes for deterministic keypair construction.
+ * Standard test primes (256-bit) for deterministic keypair construction.
  */
-export const PAILLIER_DEFAULT_P = 0xee56a646c2eb4de72b43b6ef16e5cd6786cbb3d8c27dcad69a84a62176b64d1fn;
-export const PAILLIER_DEFAULT_Q = 0xf5529f7cfb8e0b6863ecad124c13a693c1bb02db7c27633e9b7201b17b6a12b9n;
+export const PAILLIER_DEFAULT_P = 0x80000000000000000000000000000000123456789abcdef0123456789abcdf41n;
+export const PAILLIER_DEFAULT_Q = 0x80000000000000000000000000000000fedcba9876543210fedcba987654340dn;
 
 /**
  * Creates a Paillier keypair from two distinct prime integers.
@@ -90,6 +90,17 @@ export function paillierKeygen(p: bigint = PAILLIER_DEFAULT_P, q: bigint = PAILL
   const privateKey: PaillierPrivateKey = { lambda, mu, publicKey };
 
   return { publicKey, privateKey };
+}
+
+/**
+ * Reconstructs a Paillier private key from lambda and public modulus n.
+ */
+export function paillierPrivateKeyFromLambda(lambda: bigint, n: bigint): PaillierPrivateKey {
+  const n2 = n * n;
+  const g = n + 1n;
+  const mu = modInverse(lambda, n);
+  const publicKey: PaillierPublicKey = { n, n2, g };
+  return { lambda, mu, publicKey };
 }
 
 /**
