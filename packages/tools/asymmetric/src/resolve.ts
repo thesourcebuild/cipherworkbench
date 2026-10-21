@@ -24,6 +24,8 @@ import {
   OPTION_PUBLIC_KEY,
   OPTION_PARAM_SET,
   OPTION_SIGNATURE,
+  OPTION_BLINDING_FACTOR,
+  OPTION_COMMITMENT,
   readCurve,
   readEncryptionScheme,
   readHash,
@@ -152,13 +154,17 @@ export function resolveAsymmetric(spec: AsymmetricSpec): ResolveResult {
     publicKeyText: "",
   };
 
+  if (spec.variant === "pedersen") {
+    return resolvePedersen(spec, base);
+  }
+
   // Generating a keypair reads nothing else, and refusing it for a missing key would make
   // the one operation that fixes a missing key unreachable.
   if (operation === "generate") return { ok: true, resolved: base };
 
-  // Secret sharing and commitments consume their operation data from the workbench input.
-  // Their "derive" operation is reconstruction/verification, not key agreement.
-  if (spec.variant === "shamir" || spec.variant === "slip39" || spec.variant === "pedersen") {
+  // Secret sharing consumes its operation data from the workbench input.
+  // Its "derive" operation is reconstruction, not key agreement.
+  if (spec.variant === "shamir" || spec.variant === "slip39") {
     return { ok: true, resolved: base };
   }
 
@@ -549,3 +555,19 @@ function resolvePaillierKeys(spec: AsymmetricSpec, base: ResolvedAsymmetric): Re
 
   return { ok: true, resolved: base };
 }
+
+function resolvePedersen(spec: AsymmetricSpec, base: ResolvedAsymmetric): ResolveResult {
+  const catalogue = asymmetricCatalogueFor("pedersen");
+  const blindResult = decodeBytesOption(catalogue, spec.options, OPTION_BLINDING_FACTOR);
+  if (!blindResult.ok) return problem(OPTION_BLINDING_FACTOR, blindResult.error);
+  base.privateKey = blindResult.bytes;
+
+  if (base.operation === "derive") {
+    const commResult = decodeBytesOption(catalogue, spec.options, OPTION_COMMITMENT);
+    if (!commResult.ok) return problem(OPTION_COMMITMENT, commResult.error);
+    base.publicKey = commResult.bytes;
+  }
+
+  return { ok: true, resolved: base };
+}
+

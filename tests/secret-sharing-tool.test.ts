@@ -170,12 +170,54 @@ describe("secret-sharing and commitment compute", () => {
 
   it("creates and verifies a Pedersen commitment through both operations", async () => {
     const generated = await compute("pedersen", "generate", encoder.encode("42"));
-    const verified = await compute("pedersen", "derive", new Uint8Array(0));
+    const verifiedDemo = await compute("pedersen", "derive", new Uint8Array(0));
 
     expect(generated.text).toContain("Commitment (C)");
+    const commHex = generated.fields?.find((f) => f.label === "Commitment (C)")?.value.replace(/^0x/, "");
+    const rHex = generated.fields?.find((f) => f.label === "Blinding factor (r)")?.value.replace(/^0x/, "");
+    expect(commHex).toBeDefined();
+    expect(rHex).toBeDefined();
+    if (!commHex || !rHex) throw new Error("Missing generated commitment or blinding factor in fields");
+
     expect(
       generated.fields?.find((field) => field.label === "Blinding factor (r)")?.secret,
     ).toBe(true);
-    expect(verified.text).toBe("COMMITMENT VERIFIED");
+    expect(verifiedDemo.text).toBe("COMMITMENT VERIFIED");
+
+    // Rejects non-empty input if commitment and blinding factor are missing
+    const definition = asymmetricToolDefinition("pedersen");
+    const missingKeys = await definition.compute(
+      specFor("pedersen", { [OPTION_OPERATION]: "derive" }),
+      encoder.encode("123456789"),
+    );
+    expect(missingKeys.error).toContain("Verification requires both the commitment (C) and blinding factor (r)");
+
+    // Real verification with options provided
+    const verifiedReal = await definition.compute(
+      specFor("pedersen", {
+        [OPTION_OPERATION]: "derive",
+        commitment: commHex,
+        blindingFactor: rHex,
+      }),
+      encoder.encode("42"),
+    );
+    expect(verifiedReal.text).toBe("COMMITMENT VERIFIED");
+    expect(verifiedReal.fields?.find((f) => f.label === "Status")?.value).toBe(
+      "Valid commitment opening verified.",
+    );
+
+    // Tampered message returns COMMITMENT INVALID
+    const verifiedTampered = await definition.compute(
+      specFor("pedersen", {
+        [OPTION_OPERATION]: "derive",
+        commitment: commHex,
+        blindingFactor: rHex,
+      }),
+      encoder.encode("43"),
+    );
+    expect(verifiedTampered.text).toBe("COMMITMENT INVALID");
+    expect(verifiedTampered.fields?.find((f) => f.label === "Status")?.value).toContain(
+      "Verification failed",
+    );
   });
 });

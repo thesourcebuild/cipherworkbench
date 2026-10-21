@@ -802,6 +802,61 @@ function pqOperate(r: ResolvedAsymmetric, input: Uint8Array): ToolResult {
   };
 }
 
+function parsePedersenOpening(text: string): {
+  commitment?: bigint;
+  blindingFactor?: bigint;
+  message?: Uint8Array;
+} {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    try {
+      const json = JSON.parse(trimmed);
+      const cStr = json.commitment ?? json.c ?? json["Commitment (C)"];
+      const rStr = json.blindingFactor ?? json.r ?? json["Blinding factor (r)"];
+      const mVal = json.message ?? json.m ?? json["Message (m)"];
+      const c = cStr ? parseBigIntOrHex(String(cStr)) : undefined;
+      const r = rStr ? parseBigIntOrHex(String(rStr)) : undefined;
+      const m = mVal !== undefined ? new TextEncoder().encode(String(mVal)) : undefined;
+      return { commitment: c, blindingFactor: r, message: m };
+    } catch {
+      // ignore JSON parse error
+    }
+  }
+
+  const lines = text.split(/[\r\n]+/);
+  let c: bigint | undefined;
+  let r: bigint | undefined;
+  let m: Uint8Array | undefined;
+
+  for (const line of lines) {
+    const colon = line.indexOf(":");
+    if (colon === -1) continue;
+    const key = line.slice(0, colon).toLowerCase().trim();
+    const val = line.slice(colon + 1).trim();
+    if (key.includes("commitment") || key === "c") {
+      c = parseBigIntOrHex(val);
+    } else if (key.includes("blinding") || key === "r") {
+      r = parseBigIntOrHex(val);
+    } else if (key.includes("message") || key === "m") {
+      m = new TextEncoder().encode(val);
+    }
+  }
+
+  return { commitment: c, blindingFactor: r, message: m };
+}
+
+function parseBigIntOrHex(str: string): bigint | undefined {
+  const clean = str.trim().replace(/^0x/i, "");
+  if (/^[0-9a-fA-F]+$/.test(clean)) {
+    try {
+      return BigInt("0x" + clean);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 /**
  * The family's entry point.
  *
@@ -1096,40 +1151,100 @@ export async function computeAsymmetric(
       }
     }
     if (r.tool.id === "pedersen") {
-      const { pedersenCommit, pedersenVerify } = await import("@ocs/algos");
+      const { pedersenCommit, pedersenVerify, bytesToBigInt, bigIntToBytes } = await import(
+        "@ocs/algos"
+      );
       if (r.operation === "generate") {
-        const m = input.length > 0 ? input : new TextEncoder().encode("42");
-        const rBuf = new Uint8Array(32);
-        globalThis.crypto.getRandomValues(rBuf);
+        const m = input;
+        const rBuf =
+          r.privateKey.length > 0
+            ? r.privateKey
+            : globalThis.crypto.getRandomValues(new Uint8Array(32));
         const comm = pedersenCommit(m, rBuf);
+        const commHex = "0x" + comm.commitment.toString(16).padStart(64, "0");
+        const rHex = "0x" + comm.blindingFactor.toString(16).padStart(64, "0");
         return {
-          text: `Commitment (C): 0x${comm.commitment.toString(16)}`,
-          bytes: new TextEncoder().encode(comm.commitment.toString(16)),
+          text: `Commitment (C): ${commHex}`,
+          bytes: bigIntToBytes(comm.commitment, 32),
           fields: [
-            { label: "Scheme", value: "Pedersen Commitment (C = g^m * h^r mod p)" },
-            { label: "Commitment (C)", value: "0x" + comm.commitment.toString(16) },
+            { label: "Scheme", value: "Pedersen Commitment (C = g^m · h^r mod p)" },
+            { label: "Commitment (C)", value: commHex },
             { label: "Message (m)", value: comm.message.toString() },
             {
               label: "Blinding factor (r)",
-              value: "0x" + comm.blindingFactor.toString(16),
+              value: rHex,
               secret: true,
+              hint: KEEP_IT_HINT,
             },
           ],
         };
       }
       if (r.operation === "derive") {
-        const m = 42n;
-        const rVal = 1337n;
-        const comm = pedersenCommit(m, rVal);
-        const valid = pedersenVerify(comm.commitment, m, rVal);
+        let commBigInt: bigint | undefined =
+          r.publicKey.length > 0 ? bytesToBigInt(r.publicKey) : undefined;
+        let rBigInt: bigint | undefined =
+          r.privateKey.length > 0 ? bytesToBigInt(r.privateKey) : undefined;
+        let messageBytes: Uint8Array = input;
+
+        if (commBigInt === undefined || rBigInt === undefined) {
+          const parsed = parsePedersenOpening(new TextDecoder().decode(input));
+          if (parsed.commitment !== undefined) commBigInt = parsed.commitment;
+          if (parsed.blindingFactor !== undefined) rBigInt = parsed.blindingFactor;
+          if (parsed.message !== undefined) messageBytes = parsed.message;
+        }
+
+        // Demo fallback only when input is empty and neither key was supplied
+        if (commBigInt === undefined && rBigInt === undefined && input.length === 0) {
+          const demoM = 42n;
+          const demoR = 1337n;
+          const demoComm = pedersenCommit(demoM, demoR);
+          const valid = pedersenVerify(demoComm.commitment, demoM, demoR);
+          return {
+            text: valid ? "COMMITMENT VERIFIED" : "COMMITMENT INVALID",
+            fields: [
+              {
+                label: "Status",
+                value: "Valid commitment opening verified (demo mode: m=42, r=1337).",
+              },
+              {
+                label: "Commitment (C)",
+                value: "0x" + demoComm.commitment.toString(16).padStart(64, "0"),
+              },
+              { label: "Message (m)", value: "42" },
+              { label: "Blinding factor (r)", value: "0x539", secret: true },
+            ],
+          };
+        }
+
+        if (commBigInt === undefined || rBigInt === undefined) {
+          return {
+            error:
+              "Verification requires both the commitment (C) and blinding factor (r). Enter them in Settings or paste the commitment opening.",
+          };
+        }
+
+        const valid = pedersenVerify(commBigInt, messageBytes, rBigInt);
+        const expected = pedersenCommit(messageBytes, rBigInt);
+        const commHex = "0x" + commBigInt.toString(16).padStart(64, "0");
+        const expectedHex = "0x" + expected.commitment.toString(16).padStart(64, "0");
+        const rHex = "0x" + rBigInt.toString(16).padStart(64, "0");
+
         return {
           text: valid ? "COMMITMENT VERIFIED" : "COMMITMENT INVALID",
           fields: [
             {
               label: "Status",
-              value: valid ? "Valid commitment opening verified." : "Verification failed.",
+              value: valid
+                ? "Valid commitment opening verified."
+                : "Verification failed: commitment does not open to the supplied message and blinding factor.",
             },
-            { label: "Commitment (C)", value: "0x" + comm.commitment.toString(16) },
+            { label: "Commitment (C)", value: commHex },
+            ...(valid
+              ? [
+                  { label: "Message (m)", value: expected.message.toString() },
+                  { label: "Blinding factor (r)", value: rHex, secret: true },
+                ]
+              : [{ label: "Expected (C')", value: expectedHex }]),
           ],
         };
       }

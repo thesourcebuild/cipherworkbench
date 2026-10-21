@@ -13,6 +13,8 @@ import {
   OPTION_SCHEME,
   OPTION_SIGNATURE,
   OPTION_SIGNATURE_FORMAT,
+  OPTION_BLINDING_FACTOR,
+  OPTION_COMMITMENT,
   TAG_RSA_OAEP,
 } from "../pure";
 import {
@@ -718,6 +720,33 @@ const PEDERSEN_OPTIONS: readonly Def[] = [
         "Creating a commitment takes the message from the input panel, generates a blinding factor r, and computes C = g^m · h^r mod p. Verifying checks that commitment C opens correctly with message m and blinding factor r.",
     },
   ),
+  {
+    id: OPTION_BLINDING_FACTOR,
+    label: "Blinding factor (r)",
+    group: "keys",
+    kind: "bytes",
+    bytesLength: { min: 1, max: 32, generate: 32 },
+    defaultBytesEncoding: "hex",
+    secret: true,
+    availableOn: ["generate", "derive"],
+    summary: "Secret scalar r, as hex or Base64.",
+    detail:
+      "The secret blinding factor r in C = g^m · h^r mod p. On Create commitment, leave empty to generate a fresh random 32-byte blinding factor, or enter a specific scalar. On Verify commitment, enter the blinding factor used to open the commitment.",
+    order: 10,
+  },
+  {
+    id: OPTION_COMMITMENT,
+    label: "Commitment (C)",
+    group: "material",
+    kind: "bytes",
+    bytesLength: { min: 1, max: 32 },
+    defaultBytesEncoding: "hex",
+    availableOn: ["derive"],
+    summary: "The commitment value C to verify against.",
+    detail:
+      "The commitment C = g^m · h^r mod p previously computed, as hex or Base64.",
+    order: 20,
+  },
 ];
 
 const CACHE = new Map<string, OptionCatalogue<AsymmetricOptionGroup>>();

@@ -92,10 +92,21 @@ export function pedersenAdd(
   return { commitment, message, blindingFactor };
 }
 
-function bytesToBigInt(bytes: Uint8Array): bigint {
+export function bytesToBigInt(bytes: Uint8Array): bigint {
   let val = 0n;
   for (let i = 0; i < bytes.length; i++) {
     val = (val << 8n) | BigInt(bytes[i]!);
   }
   return val;
 }
+
+export function bigIntToBytes(val: bigint, length: number = 32): Uint8Array {
+  const buf = new Uint8Array(length);
+  let v = val;
+  for (let i = length - 1; i >= 0; i--) {
+    buf[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+  return buf;
+}
+

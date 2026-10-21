@@ -31,6 +31,8 @@ export const OPTION_SIGNATURE = "signature";
 export const OPTION_SIGNATURE_FORMAT = "signatureFormat";
 export const OPTION_OAEP_LABEL = "oaepLabel";
 export const OPTION_PARAM_SET = "paramSet";
+export const OPTION_BLINDING_FACTOR = "blindingFactor";
+export const OPTION_COMMITMENT = "commitment";
 
 /**
  * Uniform hint displayed on public key fields across all asymmetric algorithms and formats.
