@@ -5,6 +5,7 @@ const content: TutorialContent = {
     "Anyone can print a badge that says 'Bob'. A useful badge needs more: Bob's identity, Bob's public key, an expiry date, and a tamper-resistant signature from an issuer Alice already trusts. A digital certificate is that signed badge. A certificate chain lets an offline root authority delegate day-to-day issuance to intermediate authorities without exposing the root key.",
   problem:
     "Anyone can generate a keypair and claim the public key belongs to `bank.example`. If Alice accepts the first key she receives, Mallory can substitute her own key, decrypt and relay the traffic, and impersonate Bob to Alice. How can Alice authenticate Bob's public key before trusting it?",
+  mechanismDiagram: "trust-triangle",
   visualization: { kind: "cryptographic-flow", id: "certificate" },
   steps: [
     {

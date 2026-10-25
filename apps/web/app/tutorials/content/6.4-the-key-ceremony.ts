@@ -5,6 +5,7 @@ const content: TutorialContent = {
     "The Vatican elects a new Pope through an elaborate ritual in a sealed room with no outside communication. Witnesses watch every step, the ballots are burned with coloured smoke to signal results, and the new Pope only appears publicly after a formal process involving multiple independent verifiers. Root CA key ceremonies are cryptography's equivalent — maximum paranoia to protect the most trusted key in the world.",
   problem:
     "Every HTTPS certificate on the internet chains back to a small set of Root CA private keys. If any one of these is compromised, every TLS connection globally can be forged. How do you protect a private key that must never touch a network, never exist on a single person's device, and must survive for 20 years?",
+  mechanismDiagram: "root-store",
   steps: [
     {
       title: "Step 1: What a Root CA Key Is",

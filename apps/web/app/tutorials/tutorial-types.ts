@@ -39,7 +39,10 @@ export type MechanismDiagramId =
   | "symmetric"
   | "rsa"
   | "certificate-chain"
-  | "mtls";
+  | "mtls"
+  | "passport-analogy"
+  | "root-store"
+  | "trust-triangle";
 export type CryptographicFlowId =
   "crc" | "hash" | "hmac" | "symmetric" | "ecdh" | "rsa" | "certificate";
 

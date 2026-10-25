@@ -1625,8 +1625,307 @@ function CertificateHierarchyTierVisual() {
   );
 }
 
+function RootStoreDistributionVisual() {
+  const [selectedOS, setSelectedOS] = useState<string>("all");
+
+  const OS_STORES = [
+    {
+      id: "windows",
+      name: "Microsoft Windows",
+      shortName: "Windows",
+      storeType: "Crypt32",
+      icon: "🪟",
+      desc: "Windows Root Certificate Program (stored in Crypt32 registry & certmgr.msc).",
+      updater: "Updated via Windows Update automatically as Microsoft adds/removes trusted CAs.",
+    },
+    {
+      id: "apple",
+      name: "Apple (macOS / iOS)",
+      shortName: "Apple",
+      storeType: "Keychain",
+      icon: "🍎",
+      desc: "Apple Trust Store (managed by System Security Framework and Keychain Access).",
+      updater: "Bundled directly into iOS and macOS system security updates.",
+    },
+    {
+      id: "linux",
+      name: "Linux Distributions",
+      shortName: "Linux",
+      storeType: "ca-certificates",
+      icon: "🐧",
+      desc: "Managed via ca-certificates package (located at /etc/ssl/certs / OpenSSL anchors).",
+      updater: "Debian, Ubuntu, Fedora package managers update the bundle via apt/dnf.",
+    },
+    {
+      id: "chrome",
+      name: "Google Chrome",
+      shortName: "Chrome",
+      storeType: "Chrome Store",
+      icon: "🌐",
+      desc: "Chrome Root Store (CRS), independently curated across desktop & Android.",
+      updater: "Updated dynamically via Chrome component updates without requiring OS reboots.",
+    },
+    {
+      id: "firefox",
+      name: "Mozilla Firefox",
+      shortName: "Firefox",
+      storeType: "Mozilla NSS",
+      icon: "🦊",
+      desc: "Mozilla Network Security Services (NSS) — the most open, community-audited store.",
+      updater: "Maintains its own independent root list; powers Firefox, Thunderbird, and Tor Browser.",
+    },
+    {
+      id: "android",
+      name: "Google Android",
+      shortName: "Android",
+      storeType: "System CA",
+      icon: "🤖",
+      desc: "Android System CA Store (/system/etc/security/cacerts).",
+      updater: "Updated via Google Play System Updates (Project Mainline) on Android 10+.",
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Top Banner & Context */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-200 bg-violet-50/60 p-3 text-xs dark:border-violet-900/60 dark:bg-violet-950/30">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600 text-sm font-bold text-white shadow-xs">
+            🔐
+          </span>
+          <div>
+            <h4 className="font-bold text-violet-950 dark:text-violet-200">
+              How Root Certificates Are Born &amp; Distributed
+            </h4>
+            <p className="text-[11px] text-violet-800/90 dark:text-violet-300/90">
+              Root CAs have no parent authority. They self-sign their own keys and are shipped inside operating system software.
+            </p>
+          </div>
+        </div>
+
+        <span className="rounded-full bg-violet-200/80 px-2.5 py-0.5 text-[10px] font-bold text-violet-900 dark:bg-violet-900/80 dark:text-violet-200">
+          The Ultimate Trust Anchor
+        </span>
+      </div>
+
+      {/* Main Visual Canvas: 3-Stage Balanced Pipeline */}
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 sm:p-5 dark:border-white/10 dark:bg-slate-900/40">
+        <div className="grid gap-4 lg:grid-cols-3 items-stretch">
+          {/* Column 1: CA Data Center & Vault (Creation) */}
+          <div className="flex flex-col justify-between rounded-xl border border-purple-200 bg-white p-4 shadow-xs dark:border-purple-900/60 dark:bg-slate-900">
+            <div>
+              <div className="flex items-center gap-3 border-b border-purple-100 pb-3 dark:border-purple-900/40">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-xl dark:bg-purple-950">
+                  🏛️
+                </span>
+                <div>
+                  <span className="inline-block rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                    Stage 1 · Offline Vault
+                  </span>
+                  <h4 className="mt-0.5 text-sm font-bold text-slate-900 dark:text-white">
+                    VeriSign CA Data Center
+                  </h4>
+                </div>
+              </div>
+
+              {/* Private Key Box */}
+              <div className="mt-4 rounded-xl border-2 border-purple-300 bg-purple-50/70 p-3.5 dark:border-purple-700 dark:bg-purple-950/40">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-950 dark:text-purple-200">
+                    Root CA Private Key
+                  </span>
+                  <span className="text-base">🗝️</span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-purple-900/90 dark:text-purple-300/90">
+                  Generated inside an air-gapped Hardware Security Module (HSM). Never touches any network.
+                </p>
+                <div className="mt-2.5 flex items-center justify-between text-[10px] font-semibold text-purple-800 dark:text-purple-300">
+                  <span className="rounded bg-purple-200/80 px-2 py-0.5 dark:bg-purple-900 dark:text-purple-200">
+                    FIPS 140-2 Level 3/4
+                  </span>
+                  <span>M-of-N Shamir Cards</span>
+                </div>
+              </div>
+
+              {/* Self-sign Action indicator */}
+              <div className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-dashed border-purple-400 bg-purple-50/60 p-2.5 text-xs font-bold text-purple-800 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
+                <span>✍️ Self-signs certificate</span>
+                <span className="text-sm">➔</span>
+              </div>
+            </div>
+
+            <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              The master key remains permanently locked inside an offline vault, awakened only during formal audited Key Ceremonies.
+            </p>
+          </div>
+
+          {/* Column 2: The Self-Signed Root Certificate Card */}
+          <div className="flex flex-col justify-between rounded-xl border-2 border-purple-300/80 bg-white p-4 shadow-xs ring-1 ring-purple-400/20 dark:border-purple-700/80 dark:bg-slate-900">
+            <div>
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-xl dark:bg-amber-950">
+                  📜
+                </span>
+                <div>
+                  <span className="inline-block rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                    Stage 2 · Trust Anchor
+                  </span>
+                  <h4 className="mt-0.5 text-sm font-bold text-slate-900 dark:text-white">
+                    VeriSign Root Certificate
+                  </h4>
+                </div>
+              </div>
+
+              {/* 3 Structured Sections matching the diagram */}
+              <div className="mt-3 space-y-2">
+                {/* 1. Distinguished Name (Green) */}
+                <div className="rounded-xl border border-emerald-300 bg-emerald-50/80 p-2.5 dark:border-emerald-800 dark:bg-emerald-950/40">
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                    VeriSign Distinguished Name
+                  </span>
+                  <p className="mt-0.5 font-mono text-xs font-bold text-emerald-950 dark:text-emerald-200">
+                    CN=VeriSign Class 3 Root CA
+                  </p>
+                  <p className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                    Issuer: CN=VeriSign Class 3 Root CA (Self)
+                  </p>
+                </div>
+
+                {/* 2. Public Key (Yellow/Amber) */}
+                <div className="rounded-xl border border-amber-300 bg-amber-50/80 p-2.5 dark:border-amber-800 dark:bg-amber-950/40">
+                  <div className="flex items-center justify-between">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                      Root CA Public Key
+                    </span>
+                    <span className="text-sm">🔑</span>
+                  </div>
+                  <p className="mt-0.5 font-mono text-xs font-bold text-amber-950 dark:text-amber-200">
+                    RSA 4096-bit (e=65537)
+                  </p>
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400">
+                    Distributed to verify Intermediate CA signatures
+                  </p>
+                </div>
+
+                {/* 3. Signature (Red/Rose) */}
+                <div className="rounded-xl border border-rose-300 bg-rose-50/80 p-2.5 dark:border-rose-800 dark:bg-rose-950/40">
+                  <div className="flex items-center justify-between">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-rose-800 dark:text-rose-300">
+                      Root CA Signature
+                    </span>
+                    <span className="text-sm">🏷️</span>
+                  </div>
+                  <p className="mt-0.5 font-mono text-xs font-bold text-rose-950 dark:text-rose-200">
+                    SHA-256 with RSA Signature
+                  </p>
+                  <p className="text-[10px] text-rose-700 dark:text-rose-400">
+                    Signed with Root CA&apos;s <strong>OWN</strong> private key
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/60 p-2 text-center text-[10px] font-bold text-purple-900 dark:border-purple-900/60 dark:bg-purple-950/40 dark:text-purple-300">
+              <span>⚓</span> Definition of Root: Issuer == Subject
+            </div>
+          </div>
+
+          {/* Column 3: OS & Browser Trust Stores (Distribution) */}
+          <div className="flex flex-col justify-between rounded-xl border border-sky-200 bg-white p-4 shadow-xs dark:border-sky-900/60 dark:bg-slate-900">
+            <div>
+              <div className="flex items-center gap-3 border-b border-sky-100 pb-3 dark:border-sky-900/40">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-xl dark:bg-sky-950">
+                  💻
+                </span>
+                <div>
+                  <span className="inline-block rounded bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                    Stage 3 · Factory Pre-Installed
+                  </span>
+                  <h4 className="mt-0.5 text-sm font-bold text-slate-900 dark:text-white">
+                    OS &amp; Browser Trust Stores
+                  </h4>
+                </div>
+              </div>
+
+              <p className="mt-3 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+                Operating systems and browsers ship with a <strong>pre-installed list</strong> of trusted root certificates before leaving the factory.
+              </p>
+
+              {/* Ecosystem Grid */}
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {OS_STORES.map((os) => (
+                  <button
+                    key={os.id}
+                    type="button"
+                    onClick={() => setSelectedOS(selectedOS === os.id ? "all" : os.id)}
+                    className={cn(
+                      "flex flex-col items-center justify-center rounded-lg border p-2 text-center transition-all",
+                      selectedOS === os.id
+                        ? "border-sky-500 bg-sky-50 shadow-xs ring-2 ring-sky-500/20 dark:border-sky-500 dark:bg-sky-950/60"
+                        : "border-slate-200 bg-slate-50/70 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800",
+                    )}
+                  >
+                    <span className="text-xl">{os.icon}</span>
+                    <span className="mt-1 text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {os.shortName}
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {os.storeType}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* OS detail tooltip */}
+              {selectedOS !== "all" && (
+                <div className="mt-3 rounded-lg border border-sky-300 bg-sky-50 p-2.5 text-[11px] text-sky-950 dark:border-sky-800 dark:bg-sky-950/70 dark:text-sky-200">
+                  {(() => {
+                    const os = OS_STORES.find((o) => o.id === selectedOS);
+                    if (!os) return null;
+                    return (
+                      <>
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <span>{os.icon}</span> {os.name} Store:
+                        </div>
+                        <p className="mt-1 text-slate-700 dark:text-slate-300">{os.desc}</p>
+                        <p className="mt-1 text-[10px] font-semibold text-sky-700 dark:text-sky-300">
+                          🔄 {os.updater}
+                        </p>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 rounded-lg bg-slate-50 p-2 text-[10px] leading-relaxed text-slate-600 dark:bg-slate-800/60 dark:text-slate-300 border-t border-slate-100 dark:border-slate-800">
+              <strong className="text-slate-900 dark:text-white">Why servers omit root certs: </strong>
+              Clients never trust a Root CA sent over the network—only roots already in this local database are trusted.
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Takeaway Card: Answering the user's core question */}
+        <div className="mt-4 rounded-xl border border-amber-300/80 bg-amber-50/70 p-3.5 text-xs text-amber-950 dark:border-amber-800/80 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 text-base">💡</span>
+            <div className="space-y-1">
+              <strong className="block text-amber-900 dark:text-amber-100 font-bold">
+                Why does self-signing work for a Root CA?
+              </strong>
+              <p className="leading-relaxed">
+                If anyone can create a self-signed certificate on their laptop claiming to be &quot;VeriSign&quot;, why doesn&apos;t that break security? Because your computer does <strong>NOT</strong> trust the signature itself—your computer trusts the <strong>pre-installed public key</strong> that was audited and shipped inside Windows, macOS, Linux, Chrome, and Firefox before the computer ever connected to the internet!
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CertificateChainDiagram() {
-  const [activeTab, setActiveTab] = useState<"fields" | "hierarchy">("fields");
+  const [activeTab, setActiveTab] = useState<"fields" | "hierarchy" | "root-store">("fields");
   const [pathFilter, setPathFilter] = useState<CertificatePathFilter>("all");
 
   return (
@@ -1670,6 +1969,18 @@ function CertificateChainDiagram() {
             )}
           >
             🏛️ Trust Tiers &amp; Blast Radius
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("root-store")}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-semibold transition-all",
+              activeTab === "root-store"
+                ? "bg-white text-purple-800 shadow-xs dark:bg-slate-700 dark:text-purple-300"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
+            )}
+          >
+            💾 Root Store Distribution (OS &amp; Browsers)
           </button>
         </div>
 
@@ -1767,8 +2078,10 @@ function CertificateChainDiagram() {
             </div>
           </div>
         </>
-      ) : (
+      ) : activeTab === "hierarchy" ? (
         <CertificateHierarchyTierVisual />
+      ) : (
+        <RootStoreDistributionVisual />
       )}
     </DiagramFrame>
   );
@@ -1882,9 +2195,11 @@ function MtlsDiagram() {
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                 Bob sends his <strong>Server Certificate</strong> and proves ownership with his private key. Alice checks his identity against her Root CA store.
               </p>
-              <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                Alice confirms: &quot;I am connected to Bob&apos;s real server.&quot;
+              <div className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                <p className="leading-snug">
+                  Alice confirms: &quot;I am connected to Bob&apos;s real server.&quot;
+                </p>
               </div>
             </div>
 
@@ -1900,9 +2215,11 @@ function MtlsDiagram() {
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                   Bob asks <code>CertificateRequest</code>. Alice returns her <strong>Client Certificate</strong> and signs the session transcript in <code>CertificateVerify</code>.
                 </p>
-                <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
-                  <span className="inline-block h-2 w-2 rounded-full bg-purple-500" />
-                  Bob confirms: &quot;Alice holds the authorized client key.&quot;
+                <div className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
+                  <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-purple-500" />
+                  <p className="leading-snug">
+                    Bob confirms: &quot;Alice holds the authorized client key.&quot;
+                  </p>
                 </div>
               </div>
             ) : (
@@ -1916,9 +2233,11 @@ function MtlsDiagram() {
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                   The client sends no certificate. Bob has <strong>no cryptographic proof</strong> of who Alice is at the connection layer.
                 </p>
-                <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
-                  <span className="inline-block h-2 w-2 rounded-full bg-rose-500" />
-                  Bob must ask for passwords, cookies, or API keys in HTTP.
+                <div className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
+                  <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-rose-500" />
+                  <p className="leading-snug">
+                    Bob must ask for passwords, cookies, or API keys in HTTP.
+                  </p>
                 </div>
               </div>
             )}
@@ -1992,6 +2311,790 @@ function MtlsDiagram() {
   );
 }
 
+type AnalogyRole = "all" | "subject" | "credential" | "verifier" | "trust-anchor" | "verification";
+
+function PassportAnalogyDiagram() {
+  const [activeTab, setActiveTab] = useState<"both" | "physical" | "digital">("both");
+  const [highlightedRole, setHighlightedRole] = useState<AnalogyRole>("all");
+
+  const isRoleActive = (role: AnalogyRole) => highlightedRole === "all" || highlightedRole === role;
+
+  return (
+    <DiagramFrame
+      id="passport-analogy"
+      eyebrow="Real-World Mental Model · X.509 Identity Binding"
+      title="Passports vs. Digital Certificates: How Identity is Proven"
+      property="Third-Party Trust & Signature Verification"
+      tone="sky"
+      caption={
+        <>
+          You never trust an unknown stranger or an arbitrary web server on their word alone.
+          In both worlds, a neutral authority (a government or a Certificate Authority) signs the credential.
+          The verifier checks that signature using a pre-installed, trusted master key.
+        </>
+      }
+    >
+      {/* View Filter & Role Highlighter Tabs */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 dark:border-white/10">
+        <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/80">
+          <button
+            type="button"
+            onClick={() => setActiveTab("both")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
+              activeTab === "both"
+                ? "bg-sky-600 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
+            )}
+          >
+            👥 Side-by-Side View
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("physical")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
+              activeTab === "physical"
+                ? "bg-sky-600 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
+            )}
+          >
+            🛂 1. Physical World (Passport)
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("digital")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
+              activeTab === "digital"
+                ? "bg-sky-600 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
+            )}
+          >
+            🔒 2. Digital Web (SSL Handshake)
+          </button>
+        </div>
+
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          Click any role below to highlight the 1-to-1 parallel
+        </span>
+      </div>
+
+      <div className="space-y-6">
+        {/* ROW 1: Physical World (Passport Check) */}
+        {(activeTab === "both" || activeTab === "physical") && (
+          <div className="relative rounded-2xl border border-sky-200 bg-sky-50/30 p-4 sm:p-5 dark:border-sky-900/60 dark:bg-sky-950/20">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-800 dark:bg-sky-900/80 dark:text-sky-300">
+                <span>🛂</span> PHYSICAL WORLD: Border Control Checkpoint
+              </span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                Sovereign Trust Model
+              </span>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-12 items-stretch">
+              {/* Left: Bob (Traveler) */}
+              <div
+                className={cn(
+                  "lg:col-span-3 flex flex-col items-center justify-between rounded-xl border bg-white p-3.5 text-center shadow-xs transition-all dark:bg-slate-900",
+                  isRoleActive("subject")
+                    ? "border-sky-400 ring-2 ring-sky-400/40 dark:border-sky-500"
+                    : "border-slate-200 dark:border-slate-800 opacity-80",
+                )}
+              >
+                {/* Speech Bubble */}
+                <div className="relative mb-2 w-full rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-2 text-xs font-semibold text-sky-900 dark:border-sky-800 dark:bg-sky-950/70 dark:text-sky-200">
+                  &ldquo;Here is my passport that proves my identity&rdquo;
+                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-2 w-2 rotate-45 border-b border-r border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950" />
+                </div>
+
+                <div className="my-2 flex flex-col items-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-2xl dark:bg-sky-950">
+                    🧑‍💼
+                  </span>
+                  <h4 className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
+                    Bob
+                  </h4>
+                  <p className="text-[11px] font-semibold text-sky-700 dark:text-sky-300">
+                    Traveler / Citizen
+                  </p>
+                </div>
+
+                <div className="w-full rounded-md bg-slate-50 p-2 text-[10px] text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+                  <span className="font-bold uppercase tracking-wider text-slate-400">Role:</span> Subject (Holder)
+                </div>
+              </div>
+
+              {/* Center: Transmission & Verification Loop */}
+              <div className="lg:col-span-6 flex flex-col justify-between space-y-3">
+                {/* Step 1: Presentation */}
+                <div
+                  className={cn(
+                    "rounded-xl border bg-white p-3.5 shadow-xs transition-all dark:bg-slate-900",
+                    isRoleActive("credential")
+                      ? "border-sky-400 ring-2 ring-sky-400/40 dark:border-sky-500"
+                      : "border-slate-200 dark:border-slate-800",
+                  )}
+                >
+                  <div className="flex items-center justify-between text-xs font-bold text-sky-800 dark:text-sky-300">
+                    <span className="flex items-center gap-1.5">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 text-xs font-bold dark:bg-sky-950">1</span>
+                      Bob&apos;s Passport with Embedded Data Chip
+                    </span>
+                    <span className="rounded bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                      Presents ➔
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-xl dark:bg-amber-950">
+                      🛂
+                    </span>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                      Contains Bob&apos;s photo, biometric data, and an official digital signature sealed by the issuing nation&apos;s government.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 2: Verification Loop */}
+                <div
+                  className={cn(
+                    "rounded-xl border bg-rose-50/40 p-3.5 shadow-xs transition-all dark:bg-rose-950/20",
+                    isRoleActive("verification")
+                      ? "border-rose-400 ring-2 ring-rose-400/40 dark:border-rose-500"
+                      : "border-rose-200 dark:border-rose-900/50",
+                  )}
+                >
+                  <div className="flex items-center justify-between text-xs font-bold text-rose-800 dark:text-rose-300">
+                    <span className="flex items-center gap-1.5">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-xs font-bold dark:bg-rose-950">2</span>
+                      Verification Loop
+                    </span>
+                    <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                      ◀ verify
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
+                    The border computer reads the passport chip and verifies the cryptographic signature against the recognized nation&apos;s public keys.
+                  </p>
+                  <div className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                    <p className="leading-snug">
+                      Signature authentic: Border officer confirms Bob&apos;s identity is genuine.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Border Control Officer */}
+              <div
+                className={cn(
+                  "lg:col-span-3 flex flex-col items-center justify-between rounded-xl border bg-white p-3.5 text-center shadow-xs transition-all dark:bg-slate-900",
+                  isRoleActive("verifier") || isRoleActive("trust-anchor")
+                    ? "border-sky-400 ring-2 ring-sky-400/40 dark:border-sky-500"
+                    : "border-slate-200 dark:border-slate-800 opacity-80",
+                )}
+              >
+                {/* Speech Bubble */}
+                <div className="relative mb-2 w-full rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-2 text-xs font-semibold text-sky-900 dark:border-sky-800 dark:bg-sky-950/70 dark:text-sky-200">
+                  &ldquo;We accept your country&apos;s passports and can verify your identity&rdquo;
+                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-2 w-2 rotate-45 border-b border-r border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950" />
+                </div>
+
+                <div className="my-2 flex flex-col items-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-2xl dark:bg-sky-950">
+                    👮‍♂️
+                  </span>
+                  <h4 className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
+                    Border Officer
+                  </h4>
+                  <p className="text-[11px] font-semibold text-sky-700 dark:text-sky-300">
+                    Customs / Passport Control
+                  </p>
+                </div>
+
+                <div
+                  className={cn(
+                    "w-full rounded-lg p-2 text-left text-xs transition-all",
+                    isRoleActive("trust-anchor")
+                      ? "border border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/50"
+                      : "bg-slate-50 dark:bg-slate-800/60",
+                  )}
+                >
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Trust Anchor:
+                  </span>
+                  <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                    Sovereign Trust Registry
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Database of recognized issuing governments
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ROW 2: Digital Web (SSL/TLS Certificate Check) */}
+        {(activeTab === "both" || activeTab === "digital") && (
+          <div className="relative rounded-2xl border border-emerald-200 bg-emerald-50/30 p-4 sm:p-5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-900/80 dark:text-emerald-300">
+                <span>🔒</span> DIGITAL WEB: SSL/TLS Handshake
+              </span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                Public Key Infrastructure (PKI)
+              </span>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-12 items-stretch">
+              {/* Left: abcd.com (Server) */}
+              <div
+                className={cn(
+                  "lg:col-span-3 flex flex-col items-center justify-between rounded-xl border bg-white p-3.5 text-center shadow-xs transition-all dark:bg-slate-900",
+                  isRoleActive("subject")
+                    ? "border-emerald-400 ring-2 ring-emerald-400/40 dark:border-emerald-500"
+                    : "border-slate-200 dark:border-slate-800 opacity-80",
+                )}
+              >
+                {/* Speech Bubble */}
+                <div className="relative mb-2 w-full rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-2 text-xs font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-200">
+                  &ldquo;Here is my SSL certificate that proves my identity&rdquo;
+                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-2 w-2 rotate-45 border-b border-r border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950" />
+                </div>
+
+                <div className="my-2 flex flex-col items-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-2xl dark:bg-emerald-950">
+                    🖥️
+                  </span>
+                  <h4 className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
+                    abcd.com
+                  </h4>
+                  <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    Website / API Host
+                  </p>
+                </div>
+
+                <div className="w-full rounded-md bg-slate-50 p-2 text-[10px] text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+                  <span className="font-bold uppercase tracking-wider text-slate-400">Role:</span> Subject (Server)
+                </div>
+              </div>
+
+              {/* Center: Transmission & Verification Loop */}
+              <div className="lg:col-span-6 flex flex-col justify-between space-y-3">
+                {/* Step 1: Presentation */}
+                <div
+                  className={cn(
+                    "rounded-xl border bg-white p-3.5 shadow-xs transition-all dark:bg-slate-900",
+                    isRoleActive("credential")
+                      ? "border-emerald-400 ring-2 ring-emerald-400/40 dark:border-emerald-500"
+                      : "border-slate-200 dark:border-slate-800",
+                  )}
+                >
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    <span className="flex items-center gap-1.5">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold dark:bg-emerald-950">1</span>
+                      Website&apos;s SSL Certificate issued by VeriSign / CA
+                    </span>
+                    <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                      TLS Handshake ➔
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-xl dark:bg-emerald-950">
+                      📜
+                    </span>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                      Contains the server&apos;s public key, domain name (<code>abcd.com</code>), and a cryptographic digital signature signed by the CA.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 2: Verification Loop */}
+                <div
+                  className={cn(
+                    "rounded-xl border bg-rose-50/40 p-3.5 shadow-xs transition-all dark:bg-rose-950/20",
+                    isRoleActive("verification")
+                      ? "border-rose-400 ring-2 ring-rose-400/40 dark:border-rose-500"
+                      : "border-rose-200 dark:border-rose-900/50",
+                  )}
+                >
+                  <div className="flex items-center justify-between text-xs font-bold text-rose-800 dark:text-rose-300">
+                    <span className="flex items-center gap-1.5">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-xs font-bold dark:bg-rose-950">2</span>
+                      Verification Loop
+                    </span>
+                    <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                      ◀ verify
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
+                    The browser extracts the CA signature and verifies it against the CA&apos;s public key located in the operating system&apos;s Root CA store.
+                  </p>
+                  <div className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                    <p className="leading-snug">
+                      Signature authentic: Browser confirms it is safely connected to real <code>abcd.com</code>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Client Browser (Alice) */}
+              <div
+                className={cn(
+                  "lg:col-span-3 flex flex-col items-center justify-between rounded-xl border bg-white p-3.5 text-center shadow-xs transition-all dark:bg-slate-900",
+                  isRoleActive("verifier") || isRoleActive("trust-anchor")
+                    ? "border-emerald-400 ring-2 ring-emerald-400/40 dark:border-emerald-500"
+                    : "border-slate-200 dark:border-slate-800 opacity-80",
+                )}
+              >
+                {/* Speech Bubble */}
+                <div className="relative mb-2 w-full rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-2 text-xs font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-200">
+                  &ldquo;I have your issuer&apos;s public key and can verify your identity&rdquo;
+                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-2 w-2 rotate-45 border-b border-r border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950" />
+                </div>
+
+                <div className="my-2 flex flex-col items-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-2xl dark:bg-emerald-950">
+                    💻
+                  </span>
+                  <h4 className="mt-2 text-sm font-bold text-slate-900 dark:text-white">
+                    Client Browser
+                  </h4>
+                  <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    Chrome / Safari / Firefox
+                  </p>
+                </div>
+
+                <div
+                  className={cn(
+                    "w-full rounded-lg p-2 text-left text-xs transition-all",
+                    isRoleActive("trust-anchor")
+                      ? "border border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/50"
+                      : "bg-slate-50 dark:bg-slate-800/60",
+                  )}
+                >
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Trust Anchor:
+                  </span>
+                  <p className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                    Root Certificate Store
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Pre-installed CA public keys (VeriSign, DigiCert, etc.)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Interactive 1-to-1 Mapping Matrix */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-white/10 dark:bg-slate-900">
+          <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Interactive Concept Mapping (Click to Highlight in Diagram)
+          </h4>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            {[
+              {
+                id: "subject" as AnalogyRole,
+                label: "1. The Subject",
+                phys: "Traveler (Bob)",
+                dig: "Web Server (abcd.com)",
+              },
+              {
+                id: "credential" as AnalogyRole,
+                label: "2. The Credential",
+                phys: "Biometric Passport",
+                dig: "X.509 SSL Certificate",
+              },
+              {
+                id: "verifier" as AnalogyRole,
+                label: "3. The Verifier",
+                phys: "Border Control Officer",
+                dig: "Client Browser (Alice)",
+              },
+              {
+                id: "trust-anchor" as AnalogyRole,
+                label: "4. Trust Anchor",
+                phys: "Treaty Government Keys",
+                dig: "OS/Browser Root Store",
+              },
+              {
+                id: "verification" as AnalogyRole,
+                label: "5. Signature Check",
+                phys: "Chip Signature Verified",
+                dig: "RSA/ECDSA Signature Valid",
+              },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setHighlightedRole(highlightedRole === item.id ? "all" : item.id)}
+                className={cn(
+                  "rounded-lg border p-2.5 text-left text-xs transition-all",
+                  highlightedRole === item.id
+                    ? "border-sky-500 bg-sky-50 shadow-xs ring-2 ring-sky-500/20 dark:border-sky-500 dark:bg-sky-950/60"
+                    : "border-slate-200 bg-slate-50/60 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800/40 dark:hover:bg-slate-800",
+                )}
+              >
+                <span className="block font-bold text-slate-900 dark:text-white">
+                  {item.label}
+                </span>
+                <div className="mt-1 space-y-0.5 text-[11px]">
+                  <p className="text-sky-700 dark:text-sky-300">
+                    <span className="font-medium text-slate-400">🛂 </span>{item.phys}
+                  </p>
+                  <p className="text-emerald-700 dark:text-emerald-300">
+                    <span className="font-medium text-slate-400">🔒 </span>{item.dig}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+            <span>
+              💡 <strong>Core Takeaway:</strong> You never need to have met the subject in advance. You only need to trust the <em>authority that signed their credential</em>.
+            </span>
+            {highlightedRole !== "all" && (
+              <button
+                type="button"
+                onClick={() => setHighlightedRole("all")}
+                className="text-xs font-semibold text-sky-600 hover:underline dark:text-sky-400"
+              >
+                Reset highlights
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </DiagramFrame>
+  );
+}
+
+function RootStoreDiagram() {
+  return (
+    <DiagramFrame
+      id="root-store"
+      eyebrow="X.509 PKI · The Ultimate Trust Anchor"
+      title="Root CA Creation & Operating System Trust Stores"
+      property="Pre-Distributed Trust Anchor"
+      tone="violet"
+      caption={
+        <>
+          Root CAs have no parent authority to vouch for them—they self-sign their own certificates.
+          Client devices trust a Root CA not because of its signature, but because its public certificate
+          was vetted and pre-installed directly into the operating system or browser trust store.
+        </>
+      }
+    >
+      <RootStoreDistributionVisual />
+    </DiagramFrame>
+  );
+}
+
+function TrustTriangleDiagram() {
+  const [activeTab, setActiveTab] = useState<"both" | "triangle" | "crypto">("both");
+  const [activeParty, setActiveParty] = useState<"all" | "ca" | "browser" | "server">("all");
+
+  return (
+    <DiagramFrame
+      id="trust-triangle"
+      eyebrow="X.509 PKI · Transitive Trust Architecture"
+      title="The Triangle of Trust: How Browsers Trust Unknown Websites"
+      property="Transitive Authentication via Neutral Authority"
+      tone="sky"
+      caption={
+        <>
+          Alice&apos;s browser has never communicated with Bob&apos;s server before. Encryption alone cannot
+          defeat an imposter like Mallory. Public Key Infrastructure introduces a trusted third party
+          (Trent, the Root CA): because Alice directly trusts Trent, and Trent directly certifies Bob,
+          Alice can mathematically trust Bob!
+        </>
+      }
+    >
+      {/* View Switcher */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 dark:border-white/10">
+        <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/80">
+          <button
+            type="button"
+            onClick={() => setActiveTab("both")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
+              activeTab === "both"
+                ? "bg-sky-600 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
+            )}
+          >
+            👥 Side-by-Side View
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("triangle")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
+              activeTab === "triangle"
+                ? "bg-sky-600 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
+            )}
+          >
+            🔺 1. The Triangle of Trust (Concept)
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("crypto")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
+              activeTab === "crypto"
+                ? "bg-sky-600 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
+            )}
+          >
+            🔐 2. Cryptographic Mechanism (Keys)
+          </button>
+        </div>
+
+        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          Transitive Trust Model · RFC 5280
+        </span>
+      </div>
+
+      <div className="grid gap-5 items-stretch lg:grid-cols-12">
+        {/* Left Side: The Triangle of Trust (Concept) */}
+        {(activeTab === "both" || activeTab === "triangle") && (
+          <div
+            className={cn(
+              "flex flex-col justify-between rounded-2xl border border-sky-200 bg-sky-50/30 p-4 sm:p-5 shadow-xs transition-all dark:border-sky-900/60 dark:bg-sky-950/20",
+              activeTab === "both" ? "lg:col-span-6" : "lg:col-span-12",
+            )}
+          >
+            <div>
+              <div className="flex items-center justify-between border-b border-sky-100 pb-3 dark:border-sky-900/40">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-800 dark:bg-sky-900/80 dark:text-sky-300">
+                  <span>🔺</span> THE TRUST TRIANGLE
+                </span>
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  Transitive Faith
+                </span>
+              </div>
+
+              <p className="mt-3 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                The browser trusts the web page, because each <strong>trusts the same Root Certification Authority (CA)</strong>.
+              </p>
+
+              {/* Triangle Diagram Canvas */}
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                {/* Top of Triangle: Root CA */}
+                <div className="flex flex-col items-center text-center">
+                  <div
+                    onClick={() => setActiveParty(activeParty === "ca" ? "all" : "ca")}
+                    className={cn(
+                      "cursor-pointer rounded-2xl border p-3 text-center transition-all",
+                      activeParty === "ca"
+                        ? "border-purple-500 bg-purple-50 shadow-md ring-2 ring-purple-500/20 dark:border-purple-500 dark:bg-purple-950/60"
+                        : "border-purple-200 bg-purple-50/60 hover:bg-purple-100 dark:border-purple-900/60 dark:bg-purple-950/30",
+                    )}
+                  >
+                    <span className="flex h-12 w-12 mx-auto items-center justify-center rounded-xl bg-purple-100 text-2xl dark:bg-purple-950">
+                      🛡️
+                    </span>
+                    <h5 className="mt-1 text-xs font-bold text-purple-950 dark:text-purple-200">
+                      Root CA (Trent)
+                    </h5>
+                    <span className="text-[10px] text-purple-700 dark:text-purple-300">
+                      Trusted Third Party
+                    </span>
+                  </div>
+                </div>
+
+                {/* Diagonal Trust Connectors */}
+                <div className="my-2 grid grid-cols-2 gap-4 text-center">
+                  <div className="flex flex-col items-center justify-center rounded-lg bg-sky-50/80 p-2 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
+                    <span className="text-sm font-bold">⇗ ⇙ Direct Trust</span>
+                    <span className="text-[10px] text-sky-700 dark:text-sky-300">
+                      Pre-installed in Root Store
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center rounded-lg bg-emerald-50/80 p-2 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+                    <span className="text-sm font-bold">⇖ ⇘ Direct Trust</span>
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                      Issues Vetted Certificate
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bottom of Triangle: Browser & Website */}
+                <div className="flex items-center justify-between gap-3">
+                  {/* Bottom Left: Browser */}
+                  <div
+                    onClick={() => setActiveParty(activeParty === "browser" ? "all" : "browser")}
+                    className={cn(
+                      "flex-1 cursor-pointer rounded-xl border p-3 text-center transition-all",
+                      activeParty === "browser"
+                        ? "border-sky-500 bg-sky-50 shadow-md ring-2 ring-sky-500/20 dark:border-sky-500 dark:bg-sky-950/60"
+                        : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800/40",
+                    )}
+                  >
+                    <span className="text-2xl">💻</span>
+                    <h5 className="mt-1 text-xs font-bold text-slate-900 dark:text-white">
+                      Browser
+                    </h5>
+                    <span className="text-[10px] text-sky-700 dark:text-sky-300">
+                      Client (Alice)
+                    </span>
+                  </div>
+
+                  {/* Horizontal Third-Party Trust Connector */}
+                  <div className="flex flex-col items-center px-2 text-center">
+                    <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
+                      ◀ - - - - ▶
+                    </span>
+                    <span className="rounded bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                      Third-Party Trust
+                    </span>
+                    <span className="mt-0.5 text-[8px] text-slate-500 dark:text-slate-400">
+                      (Transitive)
+                    </span>
+                  </div>
+
+                  {/* Bottom Right: Website */}
+                  <div
+                    onClick={() => setActiveParty(activeParty === "server" ? "all" : "server")}
+                    className={cn(
+                      "flex-1 cursor-pointer rounded-xl border p-3 text-center transition-all",
+                      activeParty === "server"
+                        ? "border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-500/20 dark:border-emerald-500 dark:bg-emerald-950/60"
+                        : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800/40",
+                    )}
+                  >
+                    <span className="text-2xl">🖥️</span>
+                    <h5 className="mt-1 text-xs font-bold text-slate-900 dark:text-white">
+                      Website
+                    </h5>
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                      Server (Bob)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-sky-300 bg-white p-3 text-[11px] text-slate-600 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-300">
+              <strong className="text-sky-950 dark:text-sky-200">The Transitive Rule: </strong>
+              If <strong>Alice trusts Trent</strong>, and <strong>Trent signs for Bob</strong>, then <strong>Alice can safely trust Bob</strong> without ever having met him in person!
+            </div>
+          </div>
+        )}
+
+        {/* Right Side: Cryptographic Key Distribution Mechanism */}
+        {(activeTab === "both" || activeTab === "crypto") && (
+          <div
+            className={cn(
+              "flex flex-col justify-between rounded-2xl border border-purple-200 bg-purple-50/30 p-4 sm:p-5 shadow-xs transition-all dark:border-purple-900/60 dark:bg-purple-950/20",
+              activeTab === "both" ? "lg:col-span-6" : "lg:col-span-12",
+            )}
+          >
+            <div>
+              <div className="flex items-center justify-between border-b border-purple-100 pb-3 dark:border-purple-900/40">
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-800 dark:bg-purple-900/80 dark:text-purple-300">
+                  <span>🔐</span> CRYPTOGRAPHIC ARCHITECTURE
+                </span>
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  Key Distribution
+                </span>
+              </div>
+
+              {/* Root CA Certificate & Private Key Container */}
+              <div className="mt-3 grid gap-3 sm:grid-cols-12 items-center">
+                {/* The 3-band Root Certificate Card */}
+                <div className="sm:col-span-7 rounded-xl border border-slate-300 bg-white p-3 shadow-xs dark:border-slate-700 dark:bg-slate-900">
+                  <div className="text-center pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Root CA Certificate
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1.5 text-[10px]">
+                    <div className="rounded-md bg-emerald-50 p-1.5 font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
+                      Root CA Distinguished Name
+                    </div>
+                    <div className="flex items-center justify-between rounded-md bg-amber-50 p-1.5 font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
+                      <span>Root CA Public Key</span>
+                      <span>🔑</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md bg-rose-50 p-1.5 font-semibold text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
+                      <span>Root CA Signature</span>
+                      <span>🏷️</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Root Private Key & Self-Sign */}
+                <div className="sm:col-span-5 flex flex-col items-center justify-center rounded-xl border border-rose-200 bg-rose-50/70 p-3 text-center dark:border-rose-900/60 dark:bg-rose-950/40">
+                  <span className="text-[10px] font-bold text-rose-800 dark:text-rose-300">
+                    The private key never leaves the Root CA
+                  </span>
+                  <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-2 py-1 text-xs font-bold text-rose-900 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-200 shadow-xs">
+                    <span>🗝️</span>
+                    <span>Root CA Private Key</span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-rose-700 dark:text-rose-400">
+                    <span>◀ Self-Sign</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Distribution arrows to Browser & Website */}
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-center justify-center gap-2 text-center text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <span>🛡️</span>
+                  <span>Root CA distributes certificate (containing Public Key)</span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                  {/* Left: Distributed to Browser */}
+                  <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-2.5 text-center dark:border-sky-900/60 dark:bg-sky-950/30">
+                    <span className="text-lg">📜 🔑</span>
+                    <p className="mt-1 text-[11px] font-bold text-sky-900 dark:text-sky-200">
+                      To Browser:
+                    </p>
+                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
+                      Pre-installed in OS root store to verify future certificates
+                    </p>
+                  </div>
+
+                  {/* Right: Distributed to Website */}
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5 text-center dark:border-emerald-900/60 dark:bg-emerald-950/30">
+                    <span className="text-lg">📜 🏷️</span>
+                    <p className="mt-1 text-[11px] font-bold text-emerald-900 dark:text-emerald-200">
+                      To Website:
+                    </p>
+                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
+                      Signed website certificate installed on web server
+                    </p>
+                  </div>
+                </div>
+
+                {/* Handshake Connection */}
+                <div className="mt-3 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-2 text-center text-[10px] font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                  During TLS handshake: Browser uses Root CA&apos;s public key to verify Website&apos;s signed certificate.
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-4 border-t border-purple-100 pt-3 text-[11px] leading-relaxed text-slate-500 dark:border-purple-900/40 dark:text-slate-400">
+              The Root CA public key is the universal decoder ring. Both Alice and Bob hold it, so Bob can prove his credentials to Alice anywhere in the world.
+            </p>
+          </div>
+        )}
+      </div>
+    </DiagramFrame>
+  );
+}
+
 export function MechanismDiagramVisual({ id }: { id: MechanismDiagramId }) {
   switch (id) {
     case "crc":
@@ -2008,5 +3111,11 @@ export function MechanismDiagramVisual({ id }: { id: MechanismDiagramId }) {
       return <CertificateChainDiagram />;
     case "mtls":
       return <MtlsDiagram />;
+    case "passport-analogy":
+      return <PassportAnalogyDiagram />;
+    case "root-store":
+      return <RootStoreDiagram />;
+    case "trust-triangle":
+      return <TrustTriangleDiagram />;
   }
 }
