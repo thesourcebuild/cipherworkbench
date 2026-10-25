@@ -2798,8 +2798,11 @@ function RootStoreDiagram() {
 }
 
 function TrustTriangleDiagram() {
-  const [activeTab, setActiveTab] = useState<"both" | "triangle" | "crypto">("both");
+  const [activeMode, setActiveMode] = useState<"both" | "triangle" | "crypto">("both");
   const [activeParty, setActiveParty] = useState<"all" | "ca" | "browser" | "server">("all");
+
+  const isPartyActive = (party: "ca" | "browser" | "server") =>
+    activeParty === "all" || activeParty === party;
 
   return (
     <DiagramFrame
@@ -2817,279 +2820,698 @@ function TrustTriangleDiagram() {
         </>
       }
     >
-      {/* View Switcher */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 dark:border-white/10">
-        <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/80">
+      {/* View Switcher & Interactive Controls */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5 dark:border-white/10">
+        <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/80">
           <button
             type="button"
-            onClick={() => setActiveTab("both")}
+            onClick={() => setActiveMode("both")}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
-              activeTab === "both"
+              "rounded-lg px-2.5 py-1 text-xs font-bold transition-all",
+              activeMode === "both"
                 ? "bg-sky-600 text-white shadow-xs"
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
             )}
           >
-            👥 Side-by-Side View
+            👥 Full Architecture
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("triangle")}
+            onClick={() => setActiveMode("triangle")}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
-              activeTab === "triangle"
+              "rounded-lg px-2.5 py-1 text-xs font-bold transition-all",
+              activeMode === "triangle"
                 ? "bg-sky-600 text-white shadow-xs"
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
             )}
           >
-            🔺 1. The Triangle of Trust (Concept)
+            🔺 1. The Trust Triangle
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("crypto")}
+            onClick={() => setActiveMode("crypto")}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
-              activeTab === "crypto"
+              "rounded-lg px-2.5 py-1 text-xs font-bold transition-all",
+              activeMode === "crypto"
                 ? "bg-sky-600 text-white shadow-xs"
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200",
             )}
           >
-            🔐 2. Cryptographic Mechanism (Keys)
+            🔐 2. Cryptographic Mechanism
           </button>
         </div>
 
-        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-          Transitive Trust Model · RFC 5280
-        </span>
+        {/* Entity Highlight Filter */}
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-slate-500 dark:text-slate-400 mr-1 text-[11px] font-semibold">
+            Highlight:
+          </span>
+          <button
+            type="button"
+            onClick={() => setActiveParty("all")}
+            className={cn(
+              "rounded-md px-2 py-0.5 text-[11px] font-semibold transition-all",
+              activeParty === "all"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300",
+            )}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveParty(activeParty === "ca" ? "all" : "ca")}
+            className={cn(
+              "rounded-md px-2 py-0.5 text-[11px] font-semibold transition-all",
+              activeParty === "ca"
+                ? "bg-sky-600 text-white"
+                : "bg-sky-50 text-sky-700 hover:bg-sky-100 dark:bg-sky-950/60 dark:text-sky-300",
+            )}
+          >
+            🛡️ Root CA
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveParty(activeParty === "browser" ? "all" : "browser")}
+            className={cn(
+              "rounded-md px-2 py-0.5 text-[11px] font-semibold transition-all",
+              activeParty === "browser"
+                ? "bg-sky-600 text-white"
+                : "bg-sky-50 text-sky-700 hover:bg-sky-100 dark:bg-sky-950/60 dark:text-sky-300",
+            )}
+          >
+            💻 Browser
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveParty(activeParty === "server" ? "all" : "server")}
+            className={cn(
+              "rounded-md px-2 py-0.5 text-[11px] font-semibold transition-all",
+              activeParty === "server"
+                ? "bg-sky-600 text-white"
+                : "bg-sky-50 text-sky-700 hover:bg-sky-100 dark:bg-sky-950/60 dark:text-sky-300",
+            )}
+          >
+            🖥️ Website
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-5 items-stretch lg:grid-cols-12">
-        {/* Left Side: The Triangle of Trust (Concept) */}
-        {(activeTab === "both" || activeTab === "triangle") && (
-          <div
-            className={cn(
-              "flex flex-col justify-between rounded-2xl border border-sky-200 bg-sky-50/30 p-4 sm:p-5 shadow-xs transition-all dark:border-sky-900/60 dark:bg-sky-950/20",
-              activeTab === "both" ? "lg:col-span-6" : "lg:col-span-12",
-            )}
-          >
-            <div>
-              <div className="flex items-center justify-between border-b border-sky-100 pb-3 dark:border-sky-900/40">
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-800 dark:bg-sky-900/80 dark:text-sky-300">
-                  <span>🔺</span> THE TRUST TRIANGLE
-                </span>
-                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                  Transitive Faith
-                </span>
-              </div>
+      {/* Spacious, Balanced High-Fidelity Vector SVG Diagram */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2.5 sm:p-4 shadow-xs dark:border-slate-800 dark:bg-slate-950">
+        <svg
+          viewBox="0 0 1080 430"
+          className="w-full h-auto select-none font-sans"
+          aria-label="The Triangle of Trust and PKI Key Architecture"
+        >
+          <defs>
+            {/* Gradients */}
+            <linearGradient id="tt-shield-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="100%" stopColor="#0284c7" />
+            </linearGradient>
 
-              <p className="mt-3 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
-                The browser trusts the web page, because each <strong>trusts the same Root Certification Authority (CA)</strong>.
-              </p>
+            {/* Black Arrowheads */}
+            <marker
+              id="tt-arrow-black-end"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto"
+            >
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" className="fill-slate-900 dark:fill-white" />
+            </marker>
 
-              {/* Triangle Diagram Canvas */}
-              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                {/* Top of Triangle: Root CA */}
-                <div className="flex flex-col items-center text-center">
-                  <div
-                    onClick={() => setActiveParty(activeParty === "ca" ? "all" : "ca")}
-                    className={cn(
-                      "cursor-pointer rounded-2xl border p-3 text-center transition-all",
-                      activeParty === "ca"
-                        ? "border-purple-500 bg-purple-50 shadow-md ring-2 ring-purple-500/20 dark:border-purple-500 dark:bg-purple-950/60"
-                        : "border-purple-200 bg-purple-50/60 hover:bg-purple-100 dark:border-purple-900/60 dark:bg-purple-950/30",
-                    )}
-                  >
-                    <span className="flex h-12 w-12 mx-auto items-center justify-center rounded-xl bg-purple-100 text-2xl dark:bg-purple-950">
-                      🛡️
-                    </span>
-                    <h5 className="mt-1 text-xs font-bold text-purple-950 dark:text-purple-200">
-                      Root CA (Trent)
-                    </h5>
-                    <span className="text-[10px] text-purple-700 dark:text-purple-300">
-                      Trusted Third Party
-                    </span>
-                  </div>
-                </div>
+            <marker
+              id="tt-arrow-black-start"
+              viewBox="0 0 10 10"
+              refX="2"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto"
+            >
+              <path d="M 8 1.5 L 0 5 L 8 8.5 z" className="fill-slate-900 dark:fill-white" />
+            </marker>
 
-                {/* Diagonal Trust Connectors */}
-                <div className="my-2 grid grid-cols-2 gap-4 text-center">
-                  <div className="flex flex-col items-center justify-center rounded-lg bg-sky-50/80 p-2 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
-                    <span className="text-sm font-bold">⇗ ⇙ Direct Trust</span>
-                    <span className="text-[10px] text-sky-700 dark:text-sky-300">
-                      Pre-installed in Root Store
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-center justify-center rounded-lg bg-emerald-50/80 p-2 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                    <span className="text-sm font-bold">⇖ ⇘ Direct Trust</span>
-                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400">
-                      Issues Vetted Certificate
-                    </span>
-                  </div>
-                </div>
+            {/* Blue Distribution Arrowhead */}
+            <marker
+              id="tt-arrow-blue-end"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto"
+            >
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#0284c7" />
+            </marker>
 
-                {/* Bottom of Triangle: Browser & Website */}
-                <div className="flex items-center justify-between gap-3">
-                  {/* Bottom Left: Browser */}
-                  <div
-                    onClick={() => setActiveParty(activeParty === "browser" ? "all" : "browser")}
-                    className={cn(
-                      "flex-1 cursor-pointer rounded-xl border p-3 text-center transition-all",
-                      activeParty === "browser"
-                        ? "border-sky-500 bg-sky-50 shadow-md ring-2 ring-sky-500/20 dark:border-sky-500 dark:bg-sky-950/60"
-                        : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800/40",
-                    )}
-                  >
-                    <span className="text-2xl">💻</span>
-                    <h5 className="mt-1 text-xs font-bold text-slate-900 dark:text-white">
-                      Browser
-                    </h5>
-                    <span className="text-[10px] text-sky-700 dark:text-sky-300">
-                      Client (Alice)
-                    </span>
-                  </div>
+            {/* Red Self-Sign Arrowhead */}
+            <marker
+              id="tt-arrow-red-end"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto"
+            >
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#dc2626" />
+            </marker>
 
-                  {/* Horizontal Third-Party Trust Connector */}
-                  <div className="flex flex-col items-center px-2 text-center">
-                    <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
-                      ◀ - - - - ▶
-                    </span>
-                    <span className="rounded bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-300">
-                      Third-Party Trust
-                    </span>
-                    <span className="mt-0.5 text-[8px] text-slate-500 dark:text-slate-400">
-                      (Transitive)
-                    </span>
-                  </div>
+            {/* Gray Dashed Arrowheads */}
+            <marker
+              id="tt-arrow-gray-end"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto"
+            >
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#94a3b8" />
+            </marker>
 
-                  {/* Bottom Right: Website */}
-                  <div
-                    onClick={() => setActiveParty(activeParty === "server" ? "all" : "server")}
-                    className={cn(
-                      "flex-1 cursor-pointer rounded-xl border p-3 text-center transition-all",
-                      activeParty === "server"
-                        ? "border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-500/20 dark:border-emerald-500 dark:bg-emerald-950/60"
-                        : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800/40",
-                    )}
-                  >
-                    <span className="text-2xl">🖥️</span>
-                    <h5 className="mt-1 text-xs font-bold text-slate-900 dark:text-white">
-                      Website
-                    </h5>
-                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400">
-                      Server (Bob)
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <marker
+              id="tt-arrow-gray-start"
+              viewBox="0 0 10 10"
+              refX="2"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto"
+            >
+              <path d="M 8 1.5 L 0 5 L 8 8.5 z" fill="#94a3b8" />
+            </marker>
+          </defs>
 
-            <div className="mt-4 rounded-xl border border-sky-300 bg-white p-3 text-[11px] text-slate-600 dark:border-sky-800 dark:bg-slate-900 dark:text-slate-300">
-              <strong className="text-sky-950 dark:text-sky-200">The Transitive Rule: </strong>
-              If <strong>Alice trusts Trent</strong>, and <strong>Trent signs for Bob</strong>, then <strong>Alice can safely trust Bob</strong> without ever having met him in person!
-            </div>
+          {/* =========================================================================
+              LEFT HALF: THE TRIANGLE OF TRUST (CONCEPT)
+              Center axis: x = 220
+              ========================================================================= */}
+          <g opacity={activeMode === "crypto" ? 0.2 : 1} className="transition-opacity duration-200">
+            {/* Top Explanatory Text */}
+            <text x="220" y="32" textAnchor="middle" className="text-[13px] font-normal fill-slate-700 dark:fill-slate-300">
+              The browser trusts the web page,
+            </text>
+            <text x="220" y="50" textAnchor="middle" className="text-[13px] font-normal fill-slate-700 dark:fill-slate-300">
+              because each <tspan className="font-bold fill-slate-950 dark:fill-white">trusts</tspan> the same root
+            </text>
+            <text x="220" y="68" textAnchor="middle" className="text-[13px] font-normal fill-slate-700 dark:fill-slate-300">
+              Certification Authority (CA)
+            </text>
+
+            {/* Diagonal Double-Headed Arrow 1: Root CA <--> Browser */}
+            <line
+              x1="192"
+              y1="165"
+              x2="122"
+              y2="305"
+              className="stroke-slate-900 dark:stroke-white"
+              strokeWidth="2.2"
+              markerStart="url(#tt-arrow-black-start)"
+              markerEnd="url(#tt-arrow-black-end)"
+            />
+            {/* Rotated Direct Trust label along Left Diagonal */}
+            <g transform="translate(150, 235) rotate(-63)">
+              <text x="0" y="-6" textAnchor="middle" className="text-[12px] font-bold fill-slate-900 dark:fill-white">
+                Direct
+              </text>
+              <text x="0" y="8" textAnchor="middle" className="text-[12px] font-bold fill-slate-900 dark:fill-white">
+                Trust
+              </text>
+            </g>
+
+            {/* Diagonal Double-Headed Arrow 2: Root CA <--> Website */}
+            <line
+              x1="248"
+              y1="165"
+              x2="318"
+              y2="305"
+              className="stroke-slate-900 dark:stroke-white"
+              strokeWidth="2.2"
+              markerStart="url(#tt-arrow-black-start)"
+              markerEnd="url(#tt-arrow-black-end)"
+            />
+            {/* Rotated Direct Trust label along Right Diagonal */}
+            <g transform="translate(290, 235) rotate(63)">
+              <text x="0" y="-6" textAnchor="middle" className="text-[12px] font-bold fill-slate-900 dark:fill-white">
+                Direct
+              </text>
+              <text x="0" y="8" textAnchor="middle" className="text-[12px] font-bold fill-slate-900 dark:fill-white">
+                Trust
+              </text>
+            </g>
+
+            {/* Horizontal Dashed Double-Headed Arrow 3: Browser <--> Website */}
+            <line
+              x1="140"
+              y1="345"
+              x2="300"
+              y2="345"
+              className="stroke-slate-900 dark:stroke-white"
+              strokeWidth="2.2"
+              strokeDasharray="5 4"
+              markerStart="url(#tt-arrow-black-start)"
+              markerEnd="url(#tt-arrow-black-end)"
+            />
+            {/* Third-party Trust text centered cleanly above the dashed arrow */}
+            <text x="220" y="322" textAnchor="middle" className="text-[12.5px] font-bold fill-slate-900 dark:fill-white">
+              Third-party
+            </text>
+            <text x="220" y="338" textAnchor="middle" className="text-[12.5px] font-bold fill-slate-900 dark:fill-white">
+              Trust
+            </text>
+
+            {/* TOP APEX: Root CA */}
+            <g
+              transform="translate(220, 142)"
+              className="cursor-pointer transition-transform hover:scale-105"
+              onClick={() => setActiveParty(activeParty === "ca" ? "all" : "ca")}
+              opacity={isPartyActive("ca") ? 1 : 0.3}
+            >
+              {activeParty === "ca" && (
+                <circle cx="0" cy="0" r="44" fill="none" stroke="#0284c7" strokeWidth="2" strokeDasharray="3 3" />
+              )}
+              <text x="0" y="-38" textAnchor="middle" className="text-[14px] font-bold fill-slate-900 dark:fill-white">
+                Root CA
+              </text>
+              {/* Blue Shield */}
+              <path
+                d="M 0,-28 C 22,-28 28,-20 28,-6 C 28,16 14,32 0,38 C -14,32 -28,16 -28,-6 C -28,-20 -22,-28 0,-28 Z"
+                fill="url(#tt-shield-grad)"
+                stroke="#0369a1"
+                strokeWidth="1.8"
+              />
+              {/* Padlock */}
+              <path
+                d="M -6,-4 V -10 C -6,-13 6,-13 6,-10 V -4"
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="2.8"
+                strokeLinecap="round"
+              />
+              <rect x="-9" y="-4" width="18" height="14" rx="2.5" fill="#ffffff" />
+              <circle cx="0" cy="2" r="1.8" fill="#0284c7" />
+              <path d="M 0,2 V 5.5" stroke="#0284c7" strokeWidth="1.6" strokeLinecap="round" />
+            </g>
+
+            {/* BOTTOM LEFT: Browser (Alice) */}
+            <g
+              transform="translate(95, 340)"
+              className="cursor-pointer transition-transform hover:scale-105"
+              onClick={() => setActiveParty(activeParty === "browser" ? "all" : "browser")}
+              opacity={isPartyActive("browser") ? 1 : 0.3}
+            >
+              {activeParty === "browser" && (
+                <circle cx="0" cy="0" r="40" fill="none" stroke="#0284c7" strokeWidth="2" strokeDasharray="3 3" />
+              )}
+              <circle cx="-14" cy="-20" r="12" fill="#0284c7" />
+              <path d="M -30,16 C -30,-6 2,-6 2,16 Z" fill="#0284c7" />
+              {/* Laptop */}
+              <path d="M -8,16 L 1,-6 L 19,-6 L 10,16 Z" fill="#0369a1" stroke="#38bdf8" strokeWidth="1.2" />
+              <circle cx="10" cy="5" r="2.5" fill="#ffffff" opacity="0.9" />
+              <path d="M -12,16 L 24,16 L 21,18.5 L -14,18.5 Z" fill="#94a3b8" />
+              <text x="-4" y="42" textAnchor="middle" className="text-[14px] font-bold fill-slate-900 dark:fill-white">
+                Browser
+              </text>
+            </g>
+
+            {/* BOTTOM RIGHT: Website (Bob) */}
+            <g
+              transform="translate(345, 340)"
+              className="cursor-pointer transition-transform hover:scale-105"
+              onClick={() => setActiveParty(activeParty === "server" ? "all" : "server")}
+              opacity={isPartyActive("server") ? 1 : 0.3}
+            >
+              {activeParty === "server" && (
+                <circle cx="0" cy="0" r="40" fill="none" stroke="#0284c7" strokeWidth="2" strokeDasharray="3 3" />
+              )}
+              {/* 3D Server Tower */}
+              <path d="M -19,-22 L 5,-32 L 22,-22 L -2,-12 Z" fill="#38bdf8" stroke="#0284c7" strokeWidth="1.2" />
+              <path d="M 22,-22 L 22,16 L -2,26 L -2,-12 Z" fill="#0284c7" stroke="#0369a1" strokeWidth="1.2" />
+              <path d="M -19,-22 L -2,-12 L -2,26 L -19,16 Z" fill="#0369a1" stroke="#0284c7" strokeWidth="1.2" />
+              <rect x="-16" y="-7" width="11" height="6" rx="1" fill="#0f172a" opacity="0.7" />
+              <circle cx="-7" cy="-4" r="1.2" fill="#4ade80" />
+              <rect x="-16" y="4" width="11" height="6" rx="1" fill="#0f172a" opacity="0.7" />
+              <circle cx="-7" cy="7" r="1.2" fill="#38bdf8" />
+              <text x="2" y="42" textAnchor="middle" className="text-[14px] font-bold fill-slate-900 dark:fill-white">
+                Website
+              </text>
+            </g>
+          </g>
+
+          {/* =========================================================================
+              CENTER VERTICAL DIVIDER LINE
+              ========================================================================= */}
+          <line
+            x1="450"
+            y1="20"
+            x2="450"
+            y2="410"
+            className="stroke-slate-200 dark:stroke-slate-800"
+            strokeWidth="1.5"
+          />
+
+          {/* =========================================================================
+              RIGHT HALF: CRYPTOGRAPHIC ARCHITECTURE (KEYS & CERTS)
+              Central axis: x = 730
+              Browser: x = 540 (dx = -190)
+              Website: x = 920 (dx = +190)
+              Private key: centered at x = 960
+              ========================================================================= */}
+          <g opacity={activeMode === "triangle" ? 0.2 : 1} className="transition-opacity duration-200">
+            {/* Top Center: Root CA Certificate 3-Band Card (Centered at x = 730) */}
+            <g transform="translate(730, 110)">
+              {/* Outer Card Frame */}
+              <rect
+                x="-115"
+                y="-75"
+                width="230"
+                height="152"
+                rx="7"
+                className="fill-white stroke-slate-300 dark:fill-slate-900 dark:stroke-slate-700"
+                strokeWidth="1.5"
+              />
+              <text x="0" y="-52" textAnchor="middle" className="text-[14px] font-bold fill-slate-900 dark:fill-white">
+                Root CA Certificate
+              </text>
+
+              {/* Band 1: Distinguished Name (Green, centered at y = -26) */}
+              <g transform="translate(0, -26)">
+                <rect
+                  x="-105"
+                  y="-13"
+                  width="210"
+                  height="26"
+                  rx="4"
+                  fill="#dcfce7"
+                  stroke="#86efac"
+                  strokeWidth="1.2"
+                />
+                <text x="0" y="5" textAnchor="middle" className="text-[11px] font-semibold fill-emerald-950">
+                  Root CA Distinguished Name
+                </text>
+              </g>
+
+              {/* Band 2: Public Key (Yellow, centered at y = 8) */}
+              <g transform="translate(0, 8)">
+                <rect
+                  x="-105"
+                  y="-13"
+                  width="210"
+                  height="26"
+                  rx="4"
+                  fill="#fef9c3"
+                  stroke="#fde047"
+                  strokeWidth="1.2"
+                />
+                <text x="-15" y="5" textAnchor="middle" className="text-[11.5px] font-semibold fill-amber-950">
+                  Root CA Public Key
+                </text>
+                {/* Golden Key Icon - cleanly inside yellow band */}
+                <g transform="translate(75, 0)">
+                  <circle cx="-5" cy="0" r="4.5" fill="#fef08a" stroke="#b45309" strokeWidth="1.2" />
+                  <circle cx="-5" cy="0" r="1.8" fill="none" stroke="#b45309" strokeWidth="1.1" />
+                  <path d="M -0.5,0 H 9 M 5,0 V 3 M 8,0 V 3" stroke="#b45309" strokeWidth="1.3" strokeLinecap="round" />
+                </g>
+              </g>
+
+              {/* Band 3: Signature (Salmon/Red, centered at y = 42, absolute y = 110 + 42 = 152) */}
+              <g transform="translate(0, 42)">
+                <rect
+                  x="-105"
+                  y="-13"
+                  width="210"
+                  height="26"
+                  rx="4"
+                  fill="#fee2e2"
+                  stroke="#fca5a5"
+                  strokeWidth="1.2"
+                />
+                <text x="-15" y="5" textAnchor="middle" className="text-[11.5px] font-semibold fill-rose-950">
+                  Root CA Signature
+                </text>
+                {/* Red Wax Ribbon Seal - cleanly inside salmon band */}
+                <g transform="translate(75, 0)">
+                  <path d="M -3,3 L -5,9 L 0,7.5 L 5,9 L 3,3 Z" fill="#dc2626" stroke="#991b1b" strokeWidth="0.8" />
+                  <circle cx="0" cy="-1.5" r="6.5" fill="#ef4444" stroke="#b91c1c" strokeWidth="1.1" />
+                  <circle cx="0" cy="-1.5" r="3.5" fill="none" stroke="#fecaca" strokeWidth="0.8" strokeDasharray="1.5 1" />
+                </g>
+              </g>
+            </g>
+
+            {/* Top Right: Root CA Private Key Box & Warning (Centered at x = 960) */}
+            <g transform="translate(960, 42)">
+              <text x="0" y="0" textAnchor="middle" className="text-[11.5px] font-bold fill-rose-800 dark:fill-rose-300">
+                The private key
+              </text>
+              <text x="0" y="14" textAnchor="middle" className="text-[11.5px] font-bold fill-rose-800 dark:fill-rose-300">
+                never leaves the
+              </text>
+              <text x="0" y="28" textAnchor="middle" className="text-[11.5px] font-bold fill-rose-800 dark:fill-rose-300">
+                Root CA
+              </text>
+
+              {/* Pink Key Box (width = 144, height = 36, y = 46..82, center y = 64, absolute y = 42 + 64 = 106) */}
+              <g transform="translate(0, 64)">
+                <rect
+                  x="-72"
+                  y="-18"
+                  width="144"
+                  height="36"
+                  rx="6"
+                  fill="#ffe4e6"
+                  stroke="#fb7185"
+                  strokeWidth="1.4"
+                />
+                {/* Pink Key Icon */}
+                <g transform="translate(-48, 0)">
+                  <circle cx="-4" cy="0" r="4.5" fill="#fecdd3" stroke="#e11d48" strokeWidth="1.2" />
+                  <circle cx="-4" cy="0" r="1.8" fill="none" stroke="#e11d48" strokeWidth="1.1" />
+                  <path d="M 0.5,0 H 9 M 5,0 V 3 M 8,0 V 3" stroke="#e11d48" strokeWidth="1.3" strokeLinecap="round" />
+                </g>
+                <text x="12" y="-1" textAnchor="middle" className="text-[10.5px] font-bold fill-rose-950">
+                  Root CA
+                </text>
+                <text x="12" y="11" textAnchor="middle" className="text-[10.5px] font-bold fill-rose-950">
+                  Private Key
+                </text>
+              </g>
+
+              {/* Self-Sign Arrow:
+                  Starts at bottom center of pink box: (0, 82) -> absolute (960, 124).
+                  Drops to y = 110 -> absolute y = 152 (EXACT vertical center of Signature band!).
+                  Turns left to x = -118 -> absolute x = 842 (penetrates outer border right into the Signature band!).
+                  Marker points directly into the Signature band! */}
+              <path
+                d="M 0,82 V 110 H -118"
+                fill="none"
+                stroke="#dc2626"
+                strokeWidth="2.2"
+                markerEnd="url(#tt-arrow-red-end)"
+              />
+              <text x="-56" y="128" textAnchor="middle" className="text-[12px] font-bold fill-rose-700 dark:fill-rose-400">
+                Self-Sign
+              </text>
+            </g>
+
+            {/* Center Shield under Certificate (Centered at x = 730, y = 195) */}
+            <g
+              transform="translate(730, 195)"
+              className="cursor-pointer transition-transform hover:scale-105"
+              onClick={() => setActiveParty(activeParty === "ca" ? "all" : "ca")}
+              opacity={isPartyActive("ca") ? 1 : 0.3}
+            >
+              <path
+                d="M 0,-28 C 22,-28 28,-20 28,-6 C 28,16 14,32 0,38 C -14,32 -28,16 -28,-6 C -28,-20 -22,-28 0,-28 Z"
+                fill="url(#tt-shield-grad)"
+                stroke="#0369a1"
+                strokeWidth="1.8"
+              />
+              <path
+                d="M -5,-3 V -9 C -5,-12 5,-12 5,-9 V -3"
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+              />
+              <rect x="-8" y="-3" width="16" height="13" rx="2" fill="#ffffff" />
+              <circle cx="0" cy="2" r="1.6" fill="#0284c7" />
+              <path d="M 0,2 V 5" stroke="#0284c7" strokeWidth="1.4" strokeLinecap="round" />
+            </g>
+
+            {/* Symmetrical Blue Distribution Arrows from Shield to Browser & Website Certificates */}
+            {/* Left arrow: from (704, 206) to (540, 246) -> dx = 164, dy = 40 */}
+            <line
+              x1="704"
+              y1="206"
+              x2="540"
+              y2="246"
+              stroke="#0284c7"
+              strokeWidth="2.2"
+              markerEnd="url(#tt-arrow-blue-end)"
+            />
+            {/* Right arrow: from (756, 206) to (920, 246) -> dx = 164, dy = 40 */}
+            <line
+              x1="756"
+              y1="206"
+              x2="920"
+              y2="246"
+              stroke="#0284c7"
+              strokeWidth="2.2"
+              markerEnd="url(#tt-arrow-blue-end)"
+            />
+
+            {/* BROWSER'S CERTIFICATE (Seated directly above Browser at x = 540, y = 275) */}
+            <g transform="translate(540, 275)">
+              {/* Green document with folded corner */}
+              <rect x="-18" y="-22" width="36" height="44" rx="3" fill="#ffffff" stroke="#22c55e" strokeWidth="1.8" />
+              <path d="M 6,-22 L 18,-10 L 6,-10 Z" fill="#bbf7d0" stroke="#22c55e" strokeWidth="1" />
+              {/* Red seal ribbon */}
+              <g transform="translate(-5, 8)">
+                <path d="M -2,2 L -3.5,6 L 0,5 L 3.5,6 L 2,2 Z" fill="#dc2626" stroke="#991b1b" strokeWidth="0.6" />
+                <circle cx="0" cy="-1" r="5" fill="#ef4444" stroke="#b91c1c" strokeWidth="0.8" />
+              </g>
+              {/* Gold key icon */}
+              <g transform="translate(7, 6)">
+                <circle cx="-3" cy="0" r="3" fill="#fef08a" stroke="#ca8a04" strokeWidth="1" />
+                <path d="M 0,0 H 6 M 3.5,0 V 2.5 M 5.5,0 V 2.5" stroke="#ca8a04" strokeWidth="1.1" strokeLinecap="round" />
+              </g>
+            </g>
+
+            {/* WEBSITE'S CERTIFICATE (Seated directly above Website at x = 920, y = 275) */}
+            <g transform="translate(920, 275)">
+              {/* Green document with folded corner */}
+              <rect x="-18" y="-22" width="36" height="44" rx="3" fill="#ffffff" stroke="#22c55e" strokeWidth="1.8" />
+              <path d="M 6,-22 L 18,-10 L 6,-10 Z" fill="#bbf7d0" stroke="#22c55e" strokeWidth="1" />
+              {/* Red seal ribbon */}
+              <g transform="translate(-5, 8)">
+                <path d="M -2,2 L -3.5,6 L 0,5 L 3.5,6 L 2,2 Z" fill="#dc2626" stroke="#991b1b" strokeWidth="0.6" />
+                <circle cx="0" cy="-1" r="5" fill="#ef4444" stroke="#b91c1c" strokeWidth="0.8" />
+              </g>
+              {/* Gold key icon */}
+              <g transform="translate(7, 6)">
+                <circle cx="-3" cy="0" r="3" fill="#fef08a" stroke="#ca8a04" strokeWidth="1" />
+                <path d="M 0,0 H 6 M 3.5,0 V 2.5 M 5.5,0 V 2.5" stroke="#ca8a04" strokeWidth="1.1" strokeLinecap="round" />
+              </g>
+            </g>
+
+            {/* Horizontal Dashed Connection directly connecting Browser & Website Certificates at y = 275 */}
+            {/* Left dashed arrow: from x = 638 to x = 566 */}
+            <line
+              x1="638"
+              y1="275"
+              x2="566"
+              y2="275"
+              stroke="#94a3b8"
+              strokeWidth="2"
+              strokeDasharray="4 3"
+              markerEnd="url(#tt-arrow-gray-end)"
+            />
+            {/* Clean Pill Background for Text (Centered at x = 730, y = 275) */}
+            <g transform="translate(730, 275)">
+              <rect
+                x="-88"
+                y="-25"
+                width="176"
+                height="50"
+                rx="7"
+                className="fill-slate-50 stroke-slate-200 dark:fill-slate-900 dark:stroke-slate-800"
+                strokeWidth="1.2"
+              />
+              <text x="0" y="-8" textAnchor="middle" className="text-[11px] font-bold fill-slate-900 dark:fill-white">
+                Root CA Certificate
+              </text>
+              <text x="0" y="5" textAnchor="middle" className="text-[9.5px] fill-slate-500 dark:text-slate-400">
+                that includes the
+              </text>
+              <text x="0" y="17" textAnchor="middle" className="text-[10px] font-semibold fill-slate-800 dark:fill-slate-200">
+                Root CA public key
+              </text>
+            </g>
+            {/* Right dashed arrow: from x = 822 to x = 894 */}
+            <line
+              x1="822"
+              y1="275"
+              x2="894"
+              y2="275"
+              stroke="#94a3b8"
+              strokeWidth="2"
+              strokeDasharray="4 3"
+              markerEnd="url(#tt-arrow-gray-end)"
+            />
+
+            {/* Bottom Left: Browser (Placed directly under Certificate at x = 540, y = 340) */}
+            <g
+              transform="translate(540, 340)"
+              className="cursor-pointer transition-transform hover:scale-105"
+              onClick={() => setActiveParty(activeParty === "browser" ? "all" : "browser")}
+              opacity={isPartyActive("browser") ? 1 : 0.3}
+            >
+              <circle cx="-14" cy="-20" r="12" fill="#0284c7" />
+              <path d="M -30,16 C -30,-6 2,-6 2,16 Z" fill="#0284c7" />
+              <path d="M -8,16 L 1,-6 L 19,-6 L 10,16 Z" fill="#0369a1" stroke="#38bdf8" strokeWidth="1.2" />
+              <circle cx="10" cy="5" r="2.5" fill="#ffffff" opacity="0.9" />
+              <path d="M -12,16 L 24,16 L 21,18.5 L -14,18.5 Z" fill="#94a3b8" />
+              <text x="-4" y="42" textAnchor="middle" className="text-[14px] font-bold fill-slate-900 dark:fill-white">
+                Browser
+              </text>
+            </g>
+
+            {/* Bottom Right: Website (Placed directly under Certificate at x = 920, y = 340) */}
+            <g
+              transform="translate(920, 340)"
+              className="cursor-pointer transition-transform hover:scale-105"
+              onClick={() => setActiveParty(activeParty === "server" ? "all" : "server")}
+              opacity={isPartyActive("server") ? 1 : 0.3}
+            >
+              <path d="M -19,-22 L 5,-32 L 22,-22 L -2,-12 Z" fill="#38bdf8" stroke="#0284c7" strokeWidth="1.2" />
+              <path d="M 22,-22 L 22,16 L -2,26 L -2,-12 Z" fill="#0284c7" stroke="#0369a1" strokeWidth="1.2" />
+              <path d="M -19,-22 L -2,-12 L -2,26 L -19,16 Z" fill="#0369a1" stroke="#0284c7" strokeWidth="1.2" />
+              <rect x="-16" y="-7" width="11" height="6" rx="1" fill="#0f172a" opacity="0.7" />
+              <circle cx="-7" cy="-4" r="1.2" fill="#4ade80" />
+              <rect x="-16" y="4" width="11" height="6" rx="1" fill="#0f172a" opacity="0.7" />
+              <circle cx="-7" cy="7" r="1.2" fill="#38bdf8" />
+              <text x="2" y="42" textAnchor="middle" className="text-[14px] font-bold fill-slate-900 dark:fill-white">
+                Website
+              </text>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      {/* Explanatory 3-Pillar Breakdown */}
+      <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+        <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs dark:border-sky-900/60 dark:bg-sky-950/30">
+          <div className="flex items-center gap-1.5 font-bold text-sky-900 dark:text-sky-200">
+            <span>🛡️</span> 1. Direct Trust (Diagonals)
           </div>
-        )}
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+            <strong>Alice</strong> directly trusts Trent because his Root Certificate is pre-installed in her OS root store. <strong>Bob</strong> directly trusts Trent by applying for and receiving a certified badge.
+          </p>
+        </div>
 
-        {/* Right Side: Cryptographic Key Distribution Mechanism */}
-        {(activeTab === "both" || activeTab === "crypto") && (
-          <div
-            className={cn(
-              "flex flex-col justify-between rounded-2xl border border-purple-200 bg-purple-50/30 p-4 sm:p-5 shadow-xs transition-all dark:border-purple-900/60 dark:bg-purple-950/20",
-              activeTab === "both" ? "lg:col-span-6" : "lg:col-span-12",
-            )}
-          >
-            <div>
-              <div className="flex items-center justify-between border-b border-purple-100 pb-3 dark:border-purple-900/40">
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-800 dark:bg-purple-900/80 dark:text-purple-300">
-                  <span>🔐</span> CRYPTOGRAPHIC ARCHITECTURE
-                </span>
-                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                  Key Distribution
-                </span>
-              </div>
-
-              {/* Root CA Certificate & Private Key Container */}
-              <div className="mt-3 grid gap-3 sm:grid-cols-12 items-center">
-                {/* The 3-band Root Certificate Card */}
-                <div className="sm:col-span-7 rounded-xl border border-slate-300 bg-white p-3 shadow-xs dark:border-slate-700 dark:bg-slate-900">
-                  <div className="text-center pb-2 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white">
-                      Root CA Certificate
-                    </span>
-                  </div>
-                  <div className="mt-2 space-y-1.5 text-[10px]">
-                    <div className="rounded-md bg-emerald-50 p-1.5 font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">
-                      Root CA Distinguished Name
-                    </div>
-                    <div className="flex items-center justify-between rounded-md bg-amber-50 p-1.5 font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
-                      <span>Root CA Public Key</span>
-                      <span>🔑</span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-md bg-rose-50 p-1.5 font-semibold text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
-                      <span>Root CA Signature</span>
-                      <span>🏷️</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Root Private Key & Self-Sign */}
-                <div className="sm:col-span-5 flex flex-col items-center justify-center rounded-xl border border-rose-200 bg-rose-50/70 p-3 text-center dark:border-rose-900/60 dark:bg-rose-950/40">
-                  <span className="text-[10px] font-bold text-rose-800 dark:text-rose-300">
-                    The private key never leaves the Root CA
-                  </span>
-                  <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-2 py-1 text-xs font-bold text-rose-900 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-200 shadow-xs">
-                    <span>🗝️</span>
-                    <span>Root CA Private Key</span>
-                  </div>
-                  <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-rose-700 dark:text-rose-400">
-                    <span>◀ Self-Sign</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Distribution arrows to Browser & Website */}
-              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex items-center justify-center gap-2 text-center text-xs font-bold text-slate-700 dark:text-slate-300">
-                  <span>🛡️</span>
-                  <span>Root CA distributes certificate (containing Public Key)</span>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                  {/* Left: Distributed to Browser */}
-                  <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-2.5 text-center dark:border-sky-900/60 dark:bg-sky-950/30">
-                    <span className="text-lg">📜 🔑</span>
-                    <p className="mt-1 text-[11px] font-bold text-sky-900 dark:text-sky-200">
-                      To Browser:
-                    </p>
-                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
-                      Pre-installed in OS root store to verify future certificates
-                    </p>
-                  </div>
-
-                  {/* Right: Distributed to Website */}
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5 text-center dark:border-emerald-900/60 dark:bg-emerald-950/30">
-                    <span className="text-lg">📜 🏷️</span>
-                    <p className="mt-1 text-[11px] font-bold text-emerald-900 dark:text-emerald-200">
-                      To Website:
-                    </p>
-                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
-                      Signed website certificate installed on web server
-                    </p>
-                  </div>
-                </div>
-
-                {/* Handshake Connection */}
-                <div className="mt-3 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-2 text-center text-[10px] font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                  During TLS handshake: Browser uses Root CA&apos;s public key to verify Website&apos;s signed certificate.
-                </div>
-              </div>
-            </div>
-
-            <p className="mt-4 border-t border-purple-100 pt-3 text-[11px] leading-relaxed text-slate-500 dark:border-purple-900/40 dark:text-slate-400">
-              The Root CA public key is the universal decoder ring. Both Alice and Bob hold it, so Bob can prove his credentials to Alice anywhere in the world.
-            </p>
+        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3 text-xs dark:border-amber-900/60 dark:bg-amber-950/30">
+          <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-200">
+            <span>🤝</span> 2. Third-Party Trust (Horizontal)
           </div>
-        )}
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+            Alice and Bob have never met. By introducing Trent as an impartial intermediary, Alice derives <strong>transitive trust</strong>: if Trent vouchsafes Bob, Alice safely accepts Bob&apos;s identity.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3 text-xs dark:border-rose-900/60 dark:bg-rose-950/30">
+          <div className="flex items-center gap-1.5 font-bold text-rose-900 dark:text-rose-200">
+            <span>🗝️</span> 3. Cryptographic Grounding
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+            Trent&apos;s private key never leaves the secure vault and signs certificates. During the TLS handshake, Alice decrypts Bob&apos;s signature using Trent&apos;s public key, preventing any imposter from spoofing Bob.
+          </p>
+        </div>
       </div>
     </DiagramFrame>
   );
