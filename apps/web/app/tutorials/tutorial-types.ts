@@ -32,7 +32,14 @@ export interface TutorialAfterTimeline {
 export type TutorialDifficulty = "Beginner" | "Intermediate" | "Advanced";
 export type TlsTutorialVersion = "SSL 3.0" | "1.1" | "1.2" | "1.3";
 export type DtlsTutorialVersion = "1.0" | "1.2" | "1.3";
-export type MechanismDiagramId = "crc" | "hash" | "hmac" | "symmetric" | "rsa";
+export type MechanismDiagramId =
+  | "crc"
+  | "hash"
+  | "hmac"
+  | "symmetric"
+  | "rsa"
+  | "certificate-chain"
+  | "mtls";
 export type CryptographicFlowId =
   "crc" | "hash" | "hmac" | "symmetric" | "ecdh" | "rsa" | "certificate";
 

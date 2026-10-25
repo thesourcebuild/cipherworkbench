@@ -33,6 +33,7 @@ const TUTORIAL_CONTENT_LOADERS: Record<string, () => Promise<{ default: Tutorial
   "5.3-asking-for-permission-csr": () => import("./content/5.3-asking-for-permission-csr"),
   "5.4-when-trust-breaks-revocation": () => import("./content/5.4-when-trust-breaks-revocation"),
   "5.5-automated-trust-acme": () => import("./content/5.5-automated-trust-acme"),
+  "5.7-mutual-tls-mtls": () => import("./content/5.7-mutual-tls-mtls"),
   "6.0-overview-secure-transport": () => import("./content/6.0-overview-secure-transport"),
   "5.3-the-password-vault": () => import("./content/5.3-the-password-vault"),
   "5.4-the-pirate-treasure-chest": () => import("./content/5.4-the-pirate-treasure-chest"),

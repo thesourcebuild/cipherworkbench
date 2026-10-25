@@ -459,6 +459,21 @@ export const TUTORIAL_CONCEPTS_META: readonly TutorialConceptMeta[] = [
         summary:
           "Root CA private keys secure every HTTPS connection on earth. If Mallory steals one, she can forge certificates for any website. This is how the internet protects them: Hardware Security Modules, air-gapped ceremonies, M-of-N Shamir activation, and Certificate Transparency logs.",
       },
+      {
+        id: "5.7-mutual-tls-mtls",
+        number: "5.7",
+        title: "The Two-Way Passport: Mutual TLS (mTLS) & Zero Trust",
+        subtitle:
+          "How servers authenticate clients, why API keys are obsolete, and how TLS handshakes enforce two-way cryptographic identity",
+        conceptId: "certificates",
+        family: "certificates",
+        toolId: "cert-creator",
+        difficulty: "Intermediate",
+        readTime: "6 min",
+        characters: ["Alice", "Bob", "Mallory", "Trent"],
+        summary:
+          "Normal HTTPS authenticates the server, leaving clients to authenticate with fragile bearer tokens or static API keys. Mutual TLS (mTLS) transforms the connection into a bilateral cryptographic contract: the server requests client credentials via CertificateRequest, and the client mathematically proves possession of its private key using CertificateVerify over the entire handshake transcript.",
+      },
     ],
   },
   {

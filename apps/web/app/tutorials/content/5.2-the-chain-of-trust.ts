@@ -5,6 +5,7 @@ const content: TutorialContent = {
     "A sovereign monarch (Root CA) never sits in a port terminal stamping individual travel visas day in and day out — if the royal seal were lost or stolen, the entire realm would fall into chaos. Instead, the monarch commissions trusted Ministers of State (Intermediate CAs) with a royal charter. The ministers issue travel visas (Leaf certificates) to merchants. A border inspector (your browser) confirms that the visa was stamped by an authorized minister, whose credentials trace directly back to the monarch listed in their official Royal Registry (the local Trust Store).",
   problem:
     "If a Certificate Authority signed millions of everyday website certificates directly with its Root private key, an online server breach would invalidate trust across billions of smartphones, computers, and servers worldwide. How does the internet isolate risk while building a scalable chain of trust?",
+  mechanismDiagram: "certificate-chain",
   steps: [
     {
       title: "Step 1: The fragility of a single-tier PKI",

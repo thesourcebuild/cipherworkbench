@@ -338,6 +338,7 @@ describe("section 5 (certificates) tutorial sequence", () => {
       "5.4-when-trust-breaks-revocation",
       "5.5-automated-trust-acme",
       "6.4-the-key-ceremony",
+      "5.7-mutual-tls-mtls",
     ]);
     expect(certTutorials.map((tutorial) => tutorial.number)).toEqual([
       "5.0",
@@ -347,6 +348,7 @@ describe("section 5 (certificates) tutorial sequence", () => {
       "5.4",
       "5.5",
       "5.6",
+      "5.7",
     ]);
   });
 
@@ -356,6 +358,7 @@ describe("section 5 (certificates) tutorial sequence", () => {
     "5.3-asking-for-permission-csr",
     "5.4-when-trust-breaks-revocation",
     "5.5-automated-trust-acme",
+    "5.7-mutual-tls-mtls",
   ])("loads %s with valid tutorial content", async (id) => {
     const content = await loadTutorialContent(id);
     expect(content).toBeDefined();

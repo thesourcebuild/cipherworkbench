@@ -6,6 +6,7 @@ const content: TutorialContent = {
     "Imagine arriving at an international border checkpoint. You show an ID badge claiming you are Bob. Anyone could print a plastic badge with the name 'Bob', so the border officer refuses to accept it on your word alone. Instead, you present a government-issued passport: your name and photo are bound together under an official holographic seal and digital signature from a sovereign state that the border officer already trusts.\n\nIn cryptography, a **Digital Certificate (X.509)** is that passport. It binds a server's public key to its real-world domain identity under the trusted digital signature of a Certificate Authority (CA).",
   problem:
     "If an asymmetric public key is just a number, how can Alice's browser verify that the public key she received over the internet really belongs to google.com and not to an imposter in the middle?",
+  mechanismDiagram: "certificate-chain",
   steps: [
     {
       title: "What It Is: The Core Nature of PKI & Certificates",
