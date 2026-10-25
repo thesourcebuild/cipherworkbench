@@ -21,10 +21,10 @@ const content: TutorialContent = {
       title: "What It Does: The Identity Binding & Trust Chain Mechanism",
       speaker: "Bob",
       content:
-        "When Bob sets up a secure website, he creates a key pair and submits a Certificate Signing Request (CSR) to a Certificate Authority (Trent). Trent verifies that Bob truly controls the domain (e.g., via ACME automated DNS or HTTP challenges). Trent then signs an X.509 certificate that packages Bob's public key, domain names (Subject Alternative Names), and validity dates. When Alice visits Bob's website, her browser walks the cryptographic signature chain backward until it reaches a trusted Root CA stored inside her operating system.",
+        "When Bob sets up a secure website, he creates a key pair and submits a Certificate Signing Request (CSR) to a Certificate Authority (Trent). Trent verifies that Bob truly controls the domain (e.g., via automated ACME DNS or HTTP challenges). Trent then signs an X.509 certificate packaging Bob's public key, domain names (Subject Alternative Names), and validity dates.\n\nWhen Alice visits Bob's website, her browser builds and validates a certificate path: it walks signatures upward (fetching missing intermediates via Authority Information Access / AIA if needed) until it anchors at a trusted Root CA in the browser's or OS's root store (such as the Chrome Root Store, Mozilla NSS, or Apple/Windows Keychain). The browser also verifies validity dates, name constraints, revocation status, and requires Certificate Transparency (CT) log proofs before trusting the connection.",
       callout: {
         type: "info",
-        text: "A certificate chain typically has three tiers: Root CA (stored offline in a vault) -> Intermediate CA (issues daily certificates) -> End-Entity / Leaf Certificate (installed on Bob's web server).",
+        text: "A certificate chain typically has three tiers: Root CA (stored offline in a secure vault) -> Intermediate CA (issues daily certificates) -> End-Entity / Leaf Certificate (installed on Bob's web server).",
       },
     },
     {
