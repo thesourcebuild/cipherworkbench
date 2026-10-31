@@ -176,7 +176,7 @@ describe("TLS handshake tutorial variants", () => {
   });
 
   it.each(Object.entries(EXPECTED_TLS_VERSIONS))(
-    "loads %s with its six-event visual timeline",
+    "loads %s with its visual timeline",
     async (id, version) => {
       const content = await loadTutorialContent(id);
       const visual = TLS_VERSION_VISUALS[version];
@@ -205,16 +205,18 @@ describe("TLS handshake tutorial variants", () => {
 
   it("keeps protocol timelines independently numbered with their natural event counts", () => {
     expect(Object.values(TLS_VERSION_VISUALS).map((visual) => visual.flights.length)).toEqual([
-      6, 6, 6, 6,
+      6, 6, 6, 4,
     ]);
     expect(Object.values(DTLS_VERSION_VISUALS).map((visual) => visual.flights.length)).toEqual([
       6, 6, 7,
     ]);
 
     for (const visual of Object.values(TLS_VERSION_VISUALS)) {
-      expect(visual.flights.map((flight) => flight.step)).toEqual([1, 2, 3, 4, 5, 6]);
-      expect(visual.flights.map((flight) => flight.title)).toContain("HTTP request");
-      expect(visual.flights.map((flight) => flight.title)).toContain("HTTP response");
+      expect(visual.flights.map((flight) => flight.step)).toEqual(
+        Array.from({ length: visual.flights.length }, (_, index) => index + 1),
+      );
+      expect(visual.flights.map((flight) => flight.title).join(" ")).toContain("HTTP request");
+      expect(visual.flights.map((flight) => flight.title).join(" ")).toContain("HTTP response");
       expect(visual.flights.every((flight) => !("badge" in flight))).toBe(true);
     }
 

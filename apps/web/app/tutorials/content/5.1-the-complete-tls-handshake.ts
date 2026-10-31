@@ -18,46 +18,30 @@ const content: TutorialContent = {
       },
     },
     {
-      title: "Step 2: ServerHello",
+      title: "Step 2: Server flight: parameters & authentication",
       speaker: "Bob",
       content:
-        "Bob replies with a plaintext `ServerHello` selecting TLS 1.3, one cipher suite, and a compatible ephemeral key share. Alice and Bob combine the two ephemeral shares to compute the same (EC)DHE shared secret.\n\nTLS feeds that shared secret and the handshake transcript into HKDF. It first derives separate **client handshake** and **server handshake** traffic secrets, then distinct AEAD keys and IVs for each direction. The ECDHE output is an input to this schedule; it is not itself the TLS `master_secret`.",
-      callout: {
-        type: "info",
-        text: "If Alice did not send a usable key share, Bob can send `HelloRetryRequest`. That adds another ClientHello and another network round trip before the normal flow continues.",
-      },
-    },
-    {
-      title: "Step 3: Encrypted server authentication",
-      speaker: "Bob",
-      content:
-        "Everything after `ServerHello` is encrypted with server handshake keys. Bob sends:\n\n1. `EncryptedExtensions` — negotiated options that do not belong in `ServerHello`.\n2. `Certificate` — the server certificate chain.\n3. `CertificateVerify` — a signature over the handshake transcript, proving possession of the certificate private key and binding that identity to this exact exchange.\n4. `Finished` — an HMAC-based authenticator over the transcript.\n\nThe certificate and signature are **not fields inside ServerHello**; they are separate encrypted handshake messages.",
+        "Bob replies with a single flight combining parameter selection and encrypted authentication:\n\n1. `ServerHello` (plaintext) — selects TLS 1.3, one cipher suite, and returns Bob's ephemeral key share. Alice and Bob combine shares to derive the shared secret and handshake traffic keys via HKDF.\n2. `EncryptedExtensions` — parameters that do not belong in plaintext `ServerHello`.\n3. `Certificate` — Bob's certificate chain.\n4. `CertificateVerify` — a signature over the entire transcript using Bob's certificate private key, binding his identity to this session.\n5. `Finished` — an HMAC authenticator confirming transcript integrity.\n\nEverything after `ServerHello` is encrypted under server handshake keys. Because Bob sends all of this in one return flight, server authentication completes in **one round trip**.",
       callout: {
         type: "security",
-        text: "An attacker cannot silently swap a key share, cipher choice, certificate, or extension: transcript authentication makes Alice and Bob detect any mismatch before accepting the connection.",
+        text: "An attacker cannot silently swap a key share, cipher choice, certificate, or extension: transcript authentication makes Alice and Bob detect any mismatch before accepting the connection. If Alice did not send a usable key share, Bob replies with HelloRetryRequest, adding one round trip.",
       },
     },
     {
-      title: "Step 4: Client completion",
+      title: "Step 3: Client completion & HTTP request",
       speaker: "Alice",
       content:
-        "Alice validates the certificate chain to a trusted root, validity dates, constraints, key usage, and the requested website hostname. She then verifies `CertificateVerify` and Bob's `Finished` value.\n\nA valid certificate chain alone is not enough: the hostname must match, the signature must bind the certificate key to this handshake, and `Finished` must authenticate the same transcript Alice observed.\n\nAlice sends her encrypted `Finished` using the client handshake keys, completing her side of the handshake.",
+        "Alice validates Bob's certificate chain to a trusted root, checks the hostname, verifies `CertificateVerify`, and confirms Bob's `Finished` value.\n\nShe then sends her own `Finished` message using client handshake keys, sealing the handshake. In the **exact same flight**, Alice immediately follows with her HTTP request encrypted with client application traffic keys (`GET / HTTP/1.1` via AES-GCM or ChaCha20-Poly1305).\n\nAlice does not need to wait for another round trip before sending application data: data flows immediately after 1 RTT.",
       callout: {
         type: "security",
         text: "In a full certificate-authenticated (EC)DHE handshake, erasing the ephemeral private keys gives forward secrecy: later theft of Bob's certificate private key does not reveal recorded sessions.",
       },
     },
     {
-      title: "Step 5: HTTP request",
-      speaker: "Alice",
-      content:
-        "Alice may immediately follow her `Finished` with an HTTP request protected by client application traffic keys. TLS 1.3 record protection uses an AEAD cipher: AES-GCM, ChaCha20-Poly1305, or AES-CCM. Eve can still observe sizes and timing.",
-    },
-    {
-      title: "Step 6: HTTP response",
+      title: "Step 4: HTTP response",
       speaker: "Bob",
       content:
-        "Bob's HTTP response uses a separate server application traffic key. Mallory can alter or drop packets, but altered ciphertext fails authentication and is rejected rather than accepted as valid data.",
+        "Bob verifies Alice's `Finished` message and processes the HTTP request. His HTTP response uses a separate server application traffic key. Mallory can alter or drop packets, but altered ciphertext fails AEAD authentication and is rejected rather than accepted as valid data.",
     },
   ],
   afterTimeline: {
