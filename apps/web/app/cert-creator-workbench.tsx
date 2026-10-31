@@ -358,6 +358,16 @@ function ekuExtension(options: CertificateCommandOptions, clientOnly = false): s
   return usages.join(",");
 }
 
+function basicConstraintsExtension(isCa: boolean): string {
+  return isCa ? "critical,CA:TRUE" : "CA:FALSE";
+}
+
+function keyUsageExtension(keyType: string, isCa: boolean): string {
+  if (isCa) return "critical,digitalSignature,keyCertSign,cRLSign";
+  if (keyType.startsWith("rsa-")) return "critical,digitalSignature,keyEncipherment";
+  return "critical,digitalSignature";
+}
+
 function passwordEnvironmentCommand(password: string, shell: CommandShell): ShellCommand {
   if (shell === "powershell") {
     return {
@@ -1283,7 +1293,7 @@ https.createServer(options, app).listen(8443, () => {
                     {
                       comment: "macOS",
                       parts: [
-                        `sudo security add-trusted-cert -d -r trustAsRoot -p ssl -k /Library/Keychains/System.keychain ${leafCertFile}`,
+                        `sudo security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain ${leafCertFile}`,
                       ],
                     },
                   ],
@@ -1372,7 +1382,7 @@ https.createServer(options, app).listen(8443, () => {
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Generate the private key for the certificate using RSA or ECDSA:
+              Generate the private key using the <strong>Generate Certificate</strong> button below, or run this equivalent OpenSSL command in your terminal:
             </p>
             <ShellCommandBlock
               title="OpenSSL — Step 1: Generate Private Key"
@@ -1395,17 +1405,26 @@ https.createServer(options, app).listen(8443, () => {
             </p>
             <ShellCommandBlock
               title="OpenSSL — Step 2: Generate CSR"
-              commands={shellVariants((shell) => [
-                {
-                  parts: [
-                    "openssl req -new",
-                    `-key ${leafKeyFile}`,
-                    `-out ${leafCsrFile}`,
-                    `-subj ${shellQuote(subject(commandOptions, commandOptions.commonName), shell)}`,
-                    `-addext ${shellQuote(`subjectAltName=${sanExtension(commandOptions.san)}`, shell)}`,
-                  ],
-                },
-              ])}
+              commands={shellVariants((shell) => {
+                const ku = keyUsageExtension(commandOptions.keyType, false);
+                const eku = ekuExtension(commandOptions);
+                return [
+                  {
+                    parts: [
+                      "openssl req -new",
+                      `-key ${leafKeyFile}`,
+                      `-out ${leafCsrFile}`,
+                      `-subj ${shellQuote(subject(commandOptions, commandOptions.commonName), shell)}`,
+                      `-addext ${shellQuote("basicConstraints=CA:FALSE", shell)}`,
+                      `-addext ${shellQuote(`keyUsage=${ku}`, shell)}`,
+                      `-addext ${shellQuote(`subjectAltName=${sanExtension(commandOptions.san)}`, shell)}`,
+                      ...(eku
+                        ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`]
+                        : []),
+                    ],
+                  },
+                ];
+              })}
             />
           </div>
         );
@@ -1414,12 +1433,13 @@ https.createServer(options, app).listen(8443, () => {
         return (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Self-sign the certificate using its own private key:
+              Equivalent OpenSSL command to self-sign the certificate using its private key with matching extensions:
             </p>
             <ShellCommandBlock
               title="OpenSSL — Step 2: Self-Sign Certificate"
               commands={shellVariants((shell) => {
                 const digest = digestFlag(commandOptions.keyType, commandOptions.hashType);
+                const ku = keyUsageExtension(commandOptions.keyType, commandOptions.isCa);
                 const eku = ekuExtension(commandOptions);
                 return [
                   {
@@ -1430,11 +1450,13 @@ https.createServer(options, app).listen(8443, () => {
                       `-days ${commandOptions.validityDays}`,
                       `-out ${leafCertFile}`,
                       `-subj ${shellQuote(subject(commandOptions, commandOptions.commonName), shell)}`,
+                      `-addext ${shellQuote(`basicConstraints=${basicConstraintsExtension(commandOptions.isCa)}`, shell)}`,
+                      `-addext ${shellQuote(`keyUsage=${ku}`, shell)}`,
                       `-addext ${shellQuote(`subjectAltName=${sanExtension(commandOptions.san)}`, shell)}`,
-                      `-addext ${shellQuote(`basicConstraints=critical,CA:${commandOptions.isCa ? "TRUE" : "FALSE"}`, shell)}`,
                       ...(eku
                         ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`]
                         : []),
+                      `-addext ${shellQuote("subjectKeyIdentifier=hash", shell)}`,
                     ],
                   },
                 ];
@@ -1492,11 +1514,12 @@ https.createServer(options, app).listen(8443, () => {
             <ShellCommandBlock
               title={`OpenSSL — Step ${leafCsrStep}: Generate the ${leafLabel} Key and CSR`}
               commands={shellVariants((shell) => {
-                const eku = ekuExtension(commandOptions);
                 const keyType =
                   creatorMode === "mtls-suite"
                     ? commandOptions.serverKeyType
                     : commandOptions.keyType;
+                const ku = keyUsageExtension(keyType, false);
+                const eku = ekuExtension(commandOptions);
                 return [
                   keyCommand(leafKeyFile, keyType, `Generate the ${leafLabel} private key`),
                   {
@@ -1506,6 +1529,8 @@ https.createServer(options, app).listen(8443, () => {
                       `-key ${leafKeyFile}`,
                       `-out ${leafCsrFile}`,
                       `-subj ${shellQuote(subject(commandOptions, commandOptions.commonName), shell)}`,
+                      `-addext ${shellQuote("basicConstraints=CA:FALSE", shell)}`,
+                      `-addext ${shellQuote(`keyUsage=${ku}`, shell)}`,
                       `-addext ${shellQuote(`subjectAltName=${sanExtension(commandOptions.san)}`, shell)}`,
                       ...(eku
                         ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`]
@@ -1643,6 +1668,7 @@ https.createServer(options, app).listen(8443, () => {
                   : "OpenSSL — Step 4: Generate the Client Key and CSR"
               }
               commands={shellVariants((shell) => {
+                const ku = keyUsageExtension(commandOptions.clientKeyType, false);
                 const eku = ekuExtension(commandOptions, true);
                 return [
                   keyCommand(
@@ -1657,6 +1683,8 @@ https.createServer(options, app).listen(8443, () => {
                       "-key client.key",
                       "-out client.csr",
                       `-subj ${shellQuote(subject(commandOptions, commandOptions.clientCommonName), shell)}`,
+                      `-addext ${shellQuote("basicConstraints=CA:FALSE", shell)}`,
+                      `-addext ${shellQuote(`keyUsage=${ku}`, shell)}`,
                       ...(eku
                         ? [`-addext ${shellQuote(`extendedKeyUsage=${eku}`, shell)}`]
                         : []),

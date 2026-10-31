@@ -49,7 +49,7 @@ case "$ACTION" in
   trust)
     echo "=== Trusting Self-Signed Certificate on macOS / Linux ==="
     if [ "$(uname)" = "Darwin" ]; then
-      sudo security add-trusted-cert -d -r trustAsRoot -k /Library/Keychains/System.keychain ./server.crt
+      sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ./server.crt
       echo "[SUCCESS] Certificate trusted in macOS System Keychain!"
     elif [ -d /usr/local/share/ca-certificates ]; then
       sudo cp ./server.crt /usr/local/share/ca-certificates/single-self-signed.crt

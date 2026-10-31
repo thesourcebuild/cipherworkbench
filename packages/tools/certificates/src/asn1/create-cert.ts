@@ -332,7 +332,7 @@ export async function createCertificate(
   // 2. Validity
   const now = new Date();
   const notBefore = new Date(now.getTime() - 5 * 60 * 1000); // 5 minutes back for clock skew leeway
-  const notAfter = new Date(now.getTime() + opts.validityDays * 24 * 60 * 60 * 1000);
+  const notAfter = new Date(notBefore.getTime() + opts.validityDays * 24 * 60 * 60 * 1000);
   const validityDer = encodeDerSequence([encodeDerTime(notBefore), encodeDerTime(notAfter)]);
 
   // 3. Serial Number
@@ -356,17 +356,27 @@ export async function createCertificate(
   const extensions: Uint8Array[] = [];
 
   // 4a. Basic Constraints (OID 2.5.29.19)
+  // Per RFC 5280 §4.2.1.9 & ITU-T X.690 §11.5 (DER):
+  // - critical: BOOLEAN DEFAULT FALSE -> MUST be omitted when FALSE, present only when TRUE (for CAs).
+  // - cA: BOOLEAN DEFAULT FALSE -> MUST be omitted when FALSE (end-entity is SEQUENCE {}), present only when TRUE.
   const basicConstraintsDer = opts.isCa
     ? opts.pathLenConstraint !== undefined
       ? encodeDerSequence([encodeDerBoolean(true), encodeDerInteger(opts.pathLenConstraint)])
       : encodeDerSequence([encodeDerBoolean(true)])
-    : encodeDerSequence([encodeDerBoolean(false)]);
+    : encodeDerSequence([]);
   extensions.push(
-    encodeDerSequence([
-      encodeDerOid("2.5.29.19"),
-      encodeDerBoolean(opts.isCa), // critical if CA
-      encodeDerOctetString(basicConstraintsDer),
-    ]),
+    encodeDerSequence(
+      opts.isCa
+        ? [
+            encodeDerOid("2.5.29.19"),
+            encodeDerBoolean(true), // critical if CA
+            encodeDerOctetString(basicConstraintsDer),
+          ]
+        : [
+            encodeDerOid("2.5.29.19"), // non-critical for end-entity (omitted per DER)
+            encodeDerOctetString(basicConstraintsDer),
+          ],
+    ),
   );
 
   // 4b. Key Usage (OID 2.5.29.15)

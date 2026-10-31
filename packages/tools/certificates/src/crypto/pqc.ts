@@ -2,6 +2,7 @@ import { ml_dsa44, ml_dsa65, ml_dsa87 } from "@noble/post-quantum/ml-dsa.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import {
   encodeDerBitString,
+  encodeDerBoolean,
   encodeDerContext,
   encodeDerInteger,
   encodeDerOctetString,
@@ -187,12 +188,18 @@ export async function createPqcCertificate(params: PqcCertParams): Promise<PqcCe
   // 1. Basic Constraints
   const isCa = params.isCa ?? false;
   extensions.push(
-    encodeDerSequence([
-      encodeDerOid("2.5.29.19"),
-      encodeDerOctetString(
-        encodeDerSequence(isCa ? [new Uint8Array([0x01, 0x01, 0xff])] : []),
-      ),
-    ]),
+    encodeDerSequence(
+      isCa
+        ? [
+            encodeDerOid("2.5.29.19"),
+            encodeDerBoolean(true),
+            encodeDerOctetString(encodeDerSequence([encodeDerBoolean(true)])),
+          ]
+        : [
+            encodeDerOid("2.5.29.19"),
+            encodeDerOctetString(encodeDerSequence([])),
+          ],
+    ),
   );
 
   // 2. Key Usage

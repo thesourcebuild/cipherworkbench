@@ -429,6 +429,62 @@ describe("Certificate and CSR Creation", () => {
     expect(parsed.publicKey.algorithmName).toBe("Ed25519");
   });
 
+  it("encodes basicConstraints as strict DER without default values", async () => {
+    // 1. End-entity (isCa = false): critical must be omitted, cA=FALSE must be omitted (SEQUENCE {})
+    const leaf = await createCertificate({
+      commonName: "leaf.local",
+      keyType: "ecdsa-p256",
+      hashType: "sha256",
+      validityDays: 365,
+      isCa: false,
+    });
+
+    const leafAsn = parseAsn1(leaf.certDer);
+    const tbs = leafAsn.children[0]!;
+    const extContainer = tbs.children.find(
+      (c) => c.tagClass === 2 && c.tagNumber === 3,
+    );
+    expect(extContainer).toBeDefined();
+    const extSeq = extContainer!.children[0] ?? extContainer!;
+    const bcExt = extSeq.children.find(
+      (ext) => ext.children[0]?.asOid() === "2.5.29.19",
+    );
+    expect(bcExt).toBeDefined();
+    // In DER, critical defaults to FALSE, so it MUST be omitted: extension sequence has only [OID, OCTET_STRING]
+    expect(bcExt!.children.length).toBe(2);
+    // Value of basicConstraints is OCTET STRING containing empty SEQUENCE (30 00)
+    const bcOctets = bcExt!.children[1]!.valueBytes;
+    expect(Array.from(bcOctets)).toEqual([0x30, 0x00]);
+
+    // Validity interval is precisely 365 days
+    expect(leaf.notAfter.getTime() - leaf.notBefore.getTime()).toBe(365 * 24 * 60 * 60 * 1000);
+
+    // 2. CA (isCa = true): critical must be TRUE, cA=TRUE must be encoded
+    const ca = await createCertificate({
+      commonName: "ca.local",
+      keyType: "ecdsa-p256",
+      hashType: "sha256",
+      validityDays: 365,
+      isCa: true,
+    });
+    const caAsn = parseAsn1(ca.certDer);
+    const caTbs = caAsn.children[0]!;
+    const caExtContainer = caTbs.children.find(
+      (c) => c.tagClass === 2 && c.tagNumber === 3,
+    );
+    const caExtSeq = caExtContainer!.children[0] ?? caExtContainer!;
+    const caBcExt = caExtSeq.children.find(
+      (ext) => ext.children[0]?.asOid() === "2.5.29.19",
+    );
+    expect(caBcExt).toBeDefined();
+    // CA basicConstraints is marked critical, so sequence has [OID, BOOLEAN TRUE, OCTET_STRING]
+    expect(caBcExt!.children.length).toBe(3);
+    expect(caBcExt!.children[1]?.asBoolean()).toBe(true);
+    const caBcOctets = caBcExt!.children[2]!.valueBytes;
+    // SEQUENCE { BOOLEAN TRUE } = 30 03 01 01 ff
+    expect(Array.from(caBcOctets)).toEqual([0x30, 0x03, 0x01, 0x01, 0xff]);
+  });
+
   it("generates a valid ECDSA P-256 CSR and cryptographically verifies self-signature", async () => {
     const created = await createCsr({
       commonName: "api.example.com",

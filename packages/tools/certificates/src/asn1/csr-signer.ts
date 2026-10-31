@@ -148,7 +148,7 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
   const validityDays = opts.validityDays ?? 365;
   const now = new Date();
   const notBefore = new Date(now.getTime() - 5 * 60 * 1000); // 5 min clock skew allowance
-  const notAfter = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
+  const notAfter = new Date(notBefore.getTime() + validityDays * 24 * 60 * 60 * 1000);
   const validityDer = encodeDerSequence([encodeDerTime(notBefore), encodeDerTime(notAfter)]);
 
   // 4. SAN Resolution (copy from CSR, override, or fallback to CN)
@@ -172,11 +172,12 @@ export async function signCsr(opts: SignCsrOptions): Promise<SignCsrResult> {
   const extensions: Uint8Array[] = [];
 
   // 5a. Basic Constraints (CA: FALSE)
+  // Per RFC 5280 §4.2.1.9 & ITU-T X.690 §11.5 (DER):
+  // End-entity basicConstraints is non-critical (omitted) and cA=FALSE is omitted (empty sequence).
   extensions.push(
     encodeDerSequence([
       encodeDerOid("2.5.29.19"),
-      encodeDerBoolean(true), // critical
-      encodeDerOctetString(encodeDerSequence([encodeDerBoolean(false)])),
+      encodeDerOctetString(encodeDerSequence([])),
     ]),
   );
 
