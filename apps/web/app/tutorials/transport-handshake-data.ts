@@ -270,7 +270,7 @@ export const TLS_VERSION_VISUALS: Record<TlsTutorialVersion, VersionVisual> = {
           "SNI + ALPN",
         ],
         protection: "plaintext",
-        note: "Alice offers capabilities and a fresh ephemeral public key.",
+        note: "Alice offers capabilities and an ephemeral public key (e.g. X25519 or hybrid X25519MLKEM768).",
       },
       {
         step: 2,

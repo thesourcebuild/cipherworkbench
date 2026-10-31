@@ -11,7 +11,7 @@ const content: TutorialContent = {
       title: "Step 1: ClientHello",
       speaker: "Alice",
       content:
-        "Alice's browser sends `ClientHello`, offering TLS 1.3, AEAD/HKDF cipher suites such as `TLS_AES_128_GCM_SHA256`, supported signature algorithms, key-exchange groups, and an ephemeral `key_share` (commonly X25519). Web connections also carry extensions such as SNI and ALPN.\n\nThe cipher-suite name selects the **record cipher and transcript hash**; it does not select the certificate algorithm or the key-exchange group.",
+        "Alice's browser sends `ClientHello`, offering TLS 1.3, AEAD/HKDF cipher suites such as `TLS_AES_128_GCM_SHA256`, supported signature algorithms, key-exchange groups, and an ephemeral `key_share` (commonly X25519 or modern hybrid post-quantum groups such as `X25519MLKEM768`). Web connections also carry extensions such as SNI and ALPN.\n\nThe cipher-suite name selects the **record cipher and transcript hash**; it does not select the certificate algorithm or the key-exchange group.",
       callout: {
         type: "warning",
         text: "The first ClientHello is normally visible on the network. TLS protects its integrity through the later transcript, but does not retroactively make its metadata secret. Encrypted ClientHello (ECH) is a separate extension designed to hide more of it.",
@@ -45,9 +45,9 @@ const content: TutorialContent = {
     },
   ],
   afterTimeline: {
-    title: "After the Timeline: Session tickets make later connections faster",
+    title: "After the Timeline: Session tickets, Post-Quantum keys & shrinking lifespans",
     content:
-      "After the handshake, Bob can send one or more `NewSessionTicket` messages. A later connection can use that ticket as a pre-shared key (PSK) for resumption, optionally combined with a new (EC)DHE exchange for fresh forward secrecy.\n\nTLS 1.3 also permits **0-RTT early data** on resumed sessions. It arrives before the new handshake is authenticated, can be replayed, and does not gain forward secrecy from the new key exchange. Applications must restrict it to replay-safe operations.",
+      "After the handshake, Bob can send one or more `NewSessionTicket` messages. A later connection can use that ticket as a pre-shared key (PSK) for resumption, optionally combined with a new (EC)DHE exchange for fresh forward secrecy.\n\nTLS 1.3 also permits **0-RTT early data** on resumed sessions. It arrives before the new handshake is authenticated, can be replayed, and does not gain forward secrecy from the new key exchange. Applications must restrict it to replay-safe operations.\n\n### Modern Evolution: PQC & Automated Lifecycles\n\n* **Post-Quantum Cryptography (PQC):** Modern browsers and servers deploy hybrid key exchange (such as `X25519MLKEM768`, combining classical X25519 with ML-KEM-768 / Kyber). Even with traditional certificates, hybrid key exchange ensures recorded ciphertext cannot be decrypted decades later by future quantum computers (\"Store Now, Decrypt Later\").\n* **Shrinking Certificate Lifespans:** CA/Browser Forum rules have dropped public TLS certificate validity to 398 days, with an industry roadmap targeting **47 days by 2029**. Manual renewal is unsustainable; automated ACME workflows and dedicated private PKIs (especially as public CAs sunset `clientAuth` for mTLS) are now critical operational requirements.",
     callout: {
       type: "warning",
       text: "Never treat 0-RTT as safe for non-idempotent actions such as charging a card, transferring money, or changing account state.",
@@ -55,10 +55,12 @@ const content: TutorialContent = {
   },
   takeaways: [
     "TLS 1.3 completes a normal certificate-authenticated handshake in one round trip; application data can follow the client's Finished.",
-    "`ServerHello` completes parameter selection and enables handshake encryption; the certificate, signature, and server Finished follow as separate encrypted messages.",
+    "`ServerHello` completes parameter selection and enables handshake encryption; the certificate, signature, and server Finished follow as separate encrypted messages in the same return flight.",
     "HKDF derives independent client/server handshake and application traffic secrets from the shared secret and transcript.",
     "Certificates establish trust and hostname identity, `CertificateVerify` proves private-key possession, and `Finished` authenticates the transcript.",
     "Full ephemeral (EC)DHE provides forward secrecy. PSK-only resumption and replayable 0-RTT require separate risk decisions.",
+    "Hybrid Post-Quantum key exchange (such as `X25519MLKEM768`) protects TLS 1.3 session confidentiality against future 'Store Now, Decrypt Later' quantum attacks.",
+    "Public TLS certificate lifespans are shortening toward 47 days by 2029, making automated issuance (ACME) and private PKIs essential operational requirements.",
     "TLS 1.3 was standardized in RFC 8446 in 2018 and removes static RSA/DH key exchange, CBC record suites, RC4, compression, and renegotiation.",
     "Only resumed sessions can offer 0-RTT early data; a normal full TLS 1.3 handshake is 1-RTT, and early data remains replayable.",
     "TLS provides connection confidentiality, authentication, and integrity—not protection for plaintext on a compromised client or server.",
