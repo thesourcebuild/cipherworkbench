@@ -170,9 +170,7 @@ function computeInWorker(
   return new Promise<ToolResult>((resolve, reject) => {
     let worker: Worker;
     try {
-      worker = new Worker(new URL("./compute.worker.ts", import.meta.url), {
-        type: "module",
-      });
+      worker = new Worker(new URL("./compute.worker.ts", import.meta.url));
     } catch (error) {
       reject(
         new WorkerUnavailableError("The compute worker failed to start.", { cause: error }),
@@ -244,8 +242,11 @@ function computeInWorker(
     // case the main-thread fallback exists for.
     worker.addEventListener("error", (event) => {
       cleanup();
+      console.warn("Compute worker error:", event);
       reject(
-        new WorkerUnavailableError(event.message || "The compute worker failed to start."),
+        new WorkerUnavailableError(
+          event.message || "The compute worker failed to start or load chunks.",
+        ),
       );
     });
 
@@ -263,9 +264,7 @@ function computeVariantsInWorker(
   return new Promise<Map<string, Uint8Array>>((resolve, reject) => {
     let worker: Worker;
     try {
-      worker = new Worker(new URL("./compute.worker.ts", import.meta.url), {
-        type: "module",
-      });
+      worker = new Worker(new URL("./compute.worker.ts", import.meta.url));
     } catch (error) {
       reject(
         new WorkerUnavailableError("The compute worker failed to start.", { cause: error }),
@@ -325,8 +324,11 @@ function computeVariantsInWorker(
 
     worker.addEventListener("error", (event) => {
       cleanup();
+      console.warn("Variants worker error:", event);
       reject(
-        new WorkerUnavailableError(event.message || "The compute worker failed to start."),
+        new WorkerUnavailableError(
+          event.message || "The compute worker failed to start or load chunks.",
+        ),
       );
     });
 
